@@ -2055,6 +2055,7 @@ function getPlannedMealsForWeek(weekStart) {
        state.mealOptions = data.filter(d => d.id && d.id.startsWith('mealOption_'));
 state.budgetExpenses = data.filter(d => d.id && d.id.startsWith('expense_'));
       state.weekBudgets = data.filter(d => d.id && d.id.startsWith('weekBudget_'));
+      state.freestyleMeals = data.filter(d => d.id && d.id.startsWith('freestyle_'));
         const budgetConfig = data.find(d => d.id === 'config_budgets');
         if (budgetConfig?.grocery) state.groceryBudget = budgetConfig.grocery;
         if (budgetConfig?.takeout) state.takeoutBudget = budgetConfig.takeout;
@@ -2783,7 +2784,7 @@ console.log('byMonth:', byMonth);
       `;
     }
 
-    function renderRecipeStats() {
+    tats() {
   // Add filter state if it doesn't exist
   if (state.showOnlyCookedRecipes === undefined) {
     state.showOnlyCookedRecipes = true; // Default to showing only cooked recipes
@@ -3245,17 +3246,37 @@ console.log('byMonth:', byMonth);
       `;
     }
 
-    function renderRecipes() {
+   function renderRecipes() {
       if (!state.recipes || !Array.isArray(state.recipes)) return '<div class="p-3">Loading...</div>';
       
-      let list = state.showTips 
-        ? state.recipes.filter(r => r.isTip)
-        : state.recipes.filter(r => !r.isDraft && !r.isTip);
+      // Default to 'user' tab
+      if (!state.recipeTab) state.recipeTab = 'user';
+      
+      // Count for each tab
+      const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
+      const tipsCount = state.recipes.filter(r => r.isTip).length;
+      const freestyleCount = (state.freestyleMeals || []).length;
+      const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
+      
+      // Handle freestyle tab separately
+      if (state.recipeTab === 'freestyle') {
+        return renderFreestyleMeals();
+      }
+      
+      // Filter based on active tab
+      let list;
+      if (state.recipeTab === 'tips') {
+        list = state.recipes.filter(r => r.isTip);
+      } else if (state.recipeTab === 'chefiq') {
+        list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq');
+      } else {
+        // user tab (default)
+        list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user');
+      }
 
       list = list.filter(r => {
         if (state.filterFavorites && !r.favorite) return false;
-        if (state.filterSourceType !== 'all' && r.sourceType !== state.filterSourceType) return false;
-        if (!state.showTips && state.selectedCategory !== 'All' && r.category !== state.selectedCategory) return false;
+        if (state.recipeTab !== 'tips' && state.selectedCategory !== 'All' && r.category !== state.selectedCategory) return false;
         if (state.searchTerm && !(r.title || '').toLowerCase().includes(state.searchTerm.toLowerCase())) return false;
         if (state.filterIngredientGroup !== 'all') {
           const recipeIngredients = recipeIngList(r);
@@ -3265,36 +3286,52 @@ console.log('byMonth:', byMonth);
         return true;
       });
 
-      const tipsCount = state.recipes.filter(r => r.isTip).length;
-      const publishedCount = state.recipes.filter(r => !r.isDraft && !r.isTip).length;
-
       return `
         <div class="p-2 max-w-7xl mx-auto">
           <!-- Compact Header -->
           <div class="flex items-center justify-between mb-2 gap-2">
-            <div class="flex items-center gap-2">
-              <button onclick="state.showTips = false; render();" 
+            <div class="flex items-center gap-1 flex-wrap">
+              <button onclick="state.recipeTab = 'user'; render();" 
                 class="px-2 py-1 rounded"
-                style="background:${!state.showTips ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
-                Recipes (${publishedCount})
+                style="background:${state.recipeTab === 'user' || !state.recipeTab ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                My Recipes (${userCount})
               </button>
-              <button onclick="state.showTips = true; render();" 
+              <button onclick="state.recipeTab = 'tips'; render();" 
                 class="px-2 py-1 rounded"
-                style="background:${state.showTips ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                style="background:${state.recipeTab === 'tips' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
                 Tips (${tipsCount})
+              </button>
+              <button onclick="state.recipeTab = 'freestyle'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'freestyle' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                Freestyle (${freestyleCount})
+              </button>
+              <button onclick="state.recipeTab = 'chefiq'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'chefiq' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                Chef IQ (${chefiqCount})
               </button>
             </div>
            <div class="flex gap-1">
-              <button type="button" onclick="openNewTip()"
-                class="px-3 py-1.5 rounded button-hover"
-                style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
-                + Tip
-              </button>
-              <button type="button" onclick="openNewRecipe()"
-                class="px-3 py-1.5 rounded button-hover"
-                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
-                + Recipe
-              </button>
+              ${state.recipeTab === 'tips' ? `
+                <button type="button" onclick="openNewTip()"
+                  class="px-3 py-1.5 rounded button-hover"
+                  style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                  + Tip
+                </button>
+              ` : state.recipeTab === 'freestyle' ? `
+                <button type="button" onclick="openNewFreestyle()"
+                  class="px-3 py-1.5 rounded button-hover"
+                  style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                  + Freestyle
+                </button>
+              ` : `
+                <button type="button" onclick="openNewRecipe()"
+                  class="px-3 py-1.5 rounded button-hover"
+                  style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                  + Recipe
+                </button>
+              `}
             </div>
           </div>
 
@@ -3311,21 +3348,15 @@ console.log('byMonth:', byMonth);
                 value="${esc(state.searchTerm)}"
                 oninput="handleRecipesPageSearch(this.value)"/>
               
-              <!-- Filter Row 1: Category & Source -->
+             <!-- Filter Row 1: Category & Ingredients -->
               <div class="flex gap-2 mb-2 flex-wrap">
-                ${!state.showTips ? `
+                ${state.recipeTab !== 'tips' ? `
                 <select onchange="state.selectedCategory=this.value; render();"
                   style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:${CONFIG.font_size * 0.75}px; padding:4px 8px; border-radius:4px; flex:1; min-width:100px;">
                   <option value="All" ${state.selectedCategory === 'All' ? 'selected' : ''}>All Categories</option>
                   ${MEAL_CATEGORIES.map(c => `<option value="${c}" ${state.selectedCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
                 ` : ''}
-                <select onchange="state.filterSourceType=this.value; render();"
-                  style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:${CONFIG.font_size * 0.75}px; padding:4px 8px; border-radius:4px; flex:1; min-width:100px;">
-                  <option value="all" ${state.filterSourceType === 'all' ? 'selected' : ''}>All Sources</option>
-                  <option value="chefiq" ${state.filterSourceType === 'chefiq' ? 'selected' : ''}>🤖 ChefIQ</option>
-                  <option value="user" ${state.filterSourceType === 'user' ? 'selected' : ''}>👤 User</option>
-                </select>
                 <select onchange="state.filterIngredientGroup=this.value; render();"
                   style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:${CONFIG.font_size * 0.75}px; padding:4px 8px; border-radius:4px; flex:1; min-width:100px;">
                   <option value="all" ${state.filterIngredientGroup === 'all' ? 'selected' : ''}>All Ingredients</option>
@@ -3380,6 +3411,334 @@ ${list.map(r => {
             </div>
           `}
         </div>`;
+    }
+   function renderFreestyleMeals() {
+      const freestyleMeals = state.freestyleMeals || [];
+      const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
+      const tipsCount = state.recipes.filter(r => r.isTip).length;
+      const freestyleCount = freestyleMeals.length;
+      const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
+      
+      return `
+        <div class="p-2 max-w-7xl mx-auto">
+          <!-- Compact Header -->
+          <div class="flex items-center justify-between mb-2 gap-2">
+            <div class="flex items-center gap-1 flex-wrap">
+              <button onclick="state.recipeTab = 'user'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                My Recipes (${userCount})
+              </button>
+              <button onclick="state.recipeTab = 'tips'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                Tips (${tipsCount})
+              </button>
+              <button onclick="state.recipeTab = 'freestyle'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                Freestyle (${freestyleCount})
+              </button>
+              <button onclick="state.recipeTab = 'chefiq'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                Chef IQ (${chefiqCount})
+              </button>
+            </div>
+            <button type="button" onclick="openNewFreestyle()"
+              class="px-3 py-1.5 rounded button-hover"
+              style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+              + Freestyle
+            </button>
+          </div>
+
+          ${freestyleMeals.length === 0 ? `
+            <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
+              <div style="font-size:3rem; margin-bottom:1rem;">📸</div>
+              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No freestyle meals yet</div>
+              <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px; margin-bottom:1rem;">
+                Capture meals you've made - link recipes & tips for inspiration later
+              </div>
+              <button onclick="openNewFreestyle()" 
+                class="px-4 py-2 rounded button-hover"
+                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+                + Add Your First Freestyle Meal
+              </button>
+            </div>
+          ` : `
+            <div class="space-y-3">
+              ${freestyleMeals.sort((a, b) => new Date(b.date) - new Date(a.date)).map(meal => {
+                const linkedItems = (meal.linkedRecipes || []).map(id => {
+                  const recipe = getRecipeById(id);
+                  return recipe ? { ...recipe, type: recipe.isTip ? 'tip' : 'recipe' } : null;
+                }).filter(Boolean);
+                
+                return `
+                  <div class="rounded-lg overflow-hidden" style="background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.08);">
+                    ${meal.image_url ? `
+                      <div style="height:200px; overflow:hidden;">
+                        <img src="${esc(meal.image_url)}" style="width:100%; height:100%; object-fit:cover;" />
+                      </div>
+                    ` : ''}
+                    <div class="p-3">
+                      <div class="flex justify-between items-start mb-2">
+                        <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px;">
+                          ${new Date(meal.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                        </div>
+                        <div class="flex gap-1">
+                          <button onclick="editFreestyle('${meal.id}')" 
+                            class="px-2 py-1 rounded button-hover"
+                            style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">
+                            ✏️
+                          </button>
+                          <button onclick="if(confirm('Delete this freestyle meal?')) deleteFreestyle('${meal.id}')" 
+                            class="px-2 py-1 rounded button-hover"
+                            style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.7}px;">
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                      
+                      ${meal.notes ? `
+                        <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; margin-bottom:8px;">
+                          "${esc(meal.notes)}"
+                        </div>
+                      ` : ''}
+                      
+                      ${linkedItems.length > 0 ? `
+                        <div style="margin-top:8px;">
+                          <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.7}px; margin-bottom:4px;">🔗 Linked:</div>
+                          <div class="flex flex-wrap gap-1">
+                            ${linkedItems.map(item => `
+                              <span onclick="openRecipeView('${item.__backendId || item.id}')" 
+                                class="cursor-pointer px-2 py-1 rounded"
+                                style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                                ${item.type === 'tip' ? '📝' : '🍽️'} ${esc(item.title)}
+                              </span>
+                            `).join('')}
+                          </div>
+                        </div>
+                      ` : ''}
+                      
+                      ${meal.tags && meal.tags.length > 0 ? `
+                        <div style="margin-top:8px;">
+                          ${meal.tags.map(tag => `
+                            <span style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.75}px;">#${esc(tag)}</span>
+                          `).join(' ')}
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    function openNewFreestyle() {
+      state.freestyleForm = {
+        id: null,
+        date: new Date().toISOString().split('T')[0],
+        image_url: '',
+        notes: '',
+        linkedRecipes: [],
+        tags: []
+      };
+      state.currentView = 'freestyle-edit';
+      render();
+    }
+
+    function editFreestyle(id) {
+      const meal = (state.freestyleMeals || []).find(m => m.id === id);
+      if (!meal) return;
+      state.freestyleForm = { ...meal };
+      state.currentView = 'freestyle-edit';
+      render();
+    }
+
+    async function deleteFreestyle(id) {
+      const meal = (state.freestyleMeals || []).find(m => m.id === id);
+      if (!meal) return;
+      
+      state.freestyleMeals = state.freestyleMeals.filter(m => m.id !== id);
+      render();
+      
+      try {
+        await storage.delete(meal);
+        showToast('Freestyle meal deleted', 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to delete');
+      }
+    }
+
+    async function saveFreestyle() {
+      const form = state.freestyleForm;
+      if (!form) return;
+      
+      if (!form.image_url && !form.notes) {
+        showError('Please add a photo or notes');
+        return;
+      }
+      
+      const meal = {
+        id: form.id || `freestyle_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        type: 'freestyle',
+        date: form.date,
+        image_url: form.image_url || '',
+        notes: form.notes || '',
+        linkedRecipes: form.linkedRecipes || [],
+        tags: form.tags || []
+      };
+      
+      try {
+        if (form.id) {
+          await storage.update(meal);
+          state.freestyleMeals = state.freestyleMeals.map(m => m.id === meal.id ? meal : m);
+        } else {
+          await storage.create(meal);
+          state.freestyleMeals = [...(state.freestyleMeals || []), meal];
+        }
+        
+        state.freestyleForm = null;
+        state.currentView = 'recipes';
+        state.recipeTab = 'freestyle';
+        render();
+        showToast('Freestyle meal saved!', 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to save');
+      }
+    }
+
+    function renderFreestyleEdit() {
+      const form = state.freestyleForm || {};
+      const allRecipesAndTips = state.recipes.filter(r => !r.isDraft);
+      
+      return `
+        <div class="p-4 max-w-2xl mx-auto">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.3}px;">
+              ${form.id ? 'Edit' : 'New'} Freestyle Meal
+            </h2>
+            <div class="flex gap-2">
+              <button onclick="state.freestyleForm = null; state.currentView = 'recipes'; state.recipeTab = 'freestyle'; render();"
+                class="px-3 py-1.5 rounded button-hover"
+                style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color};">
+                Cancel
+              </button>
+              <button onclick="saveFreestyle()"
+                class="px-3 py-1.5 rounded button-hover"
+                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+                Save
+              </button>
+            </div>
+          </div>
+
+          <div class="rounded p-4" style="background:${CONFIG.surface_color};">
+            <!-- Date -->
+            <div class="mb-4">
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Date</label>
+              <input type="date" value="${form.date || ''}"
+                onchange="state.freestyleForm.date = this.value"
+                class="w-full px-3 py-2 rounded"
+                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+            </div>
+
+            <!-- Photo -->
+            <div class="mb-4">
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Photo</label>
+              ${form.image_url ? `
+                <div class="relative mb-2">
+                  <img src="${esc(form.image_url)}" class="w-full rounded" style="max-height:200px; object-fit:cover;" />
+                  <button onclick="state.freestyleForm.image_url = ''; render();"
+                    class="absolute top-2 right-2 px-2 py-1 rounded"
+                    style="background:rgba(220,38,38,0.9); color:white;">
+                    ✕
+                  </button>
+                </div>
+              ` : ''}
+              <input type="text" placeholder="Paste image URL..."
+                value="${esc(form.image_url || '')}"
+                onchange="state.freestyleForm.image_url = this.value; render();"
+                class="w-full px-3 py-2 rounded mb-2"
+                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+              <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.75}px;">
+                Or upload coming soon...
+              </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="mb-4">
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">What did you make/eat?</label>
+              <textarea 
+                placeholder="Describe your meal..."
+                onchange="state.freestyleForm.notes = this.value"
+                class="w-full px-3 py-2 rounded"
+                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); min-height:80px;"
+              >${esc(form.notes || '')}</textarea>
+            </div>
+
+            <!-- Link Recipes/Tips -->
+            <div class="mb-4">
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Link Recipes & Tips (optional)</label>
+              
+              ${(form.linkedRecipes || []).length > 0 ? `
+                <div class="flex flex-wrap gap-1 mb-2">
+                  ${form.linkedRecipes.map(id => {
+                    const item = getRecipeById(id);
+                    if (!item) return '';
+                    return `
+                      <span class="px-2 py-1 rounded flex items-center gap-1"
+                        style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                        ${item.isTip ? '📝' : '🍽️'} ${esc(item.title)}
+                        <button onclick="state.freestyleForm.linkedRecipes = state.freestyleForm.linkedRecipes.filter(r => r !== '${id}'); render();"
+                          style="color:#dc2626;">×</button>
+                      </span>
+                    `;
+                  }).join('')}
+                </div>
+              ` : ''}
+              
+              <select onchange="if(this.value) { state.freestyleForm.linkedRecipes = [...(state.freestyleForm.linkedRecipes || []), this.value]; this.value = ''; render(); }"
+                class="w-full px-3 py-2 rounded"
+                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);">
+                <option value="">+ Add recipe or tip...</option>
+                ${allRecipesAndTips
+                  .filter(r => !(form.linkedRecipes || []).includes(r.__backendId || r.id))
+                  .map(r => `
+                    <option value="${r.__backendId || r.id}">${r.isTip ? '📝' : '🍽️'} ${esc(r.title)}</option>
+                  `).join('')}
+              </select>
+            </div>
+
+            <!-- Tags -->
+            <div class="mb-4">
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Tags (optional)</label>
+              
+              ${(form.tags || []).length > 0 ? `
+                <div class="flex flex-wrap gap-1 mb-2">
+                  ${form.tags.map(tag => `
+                    <span class="px-2 py-1 rounded flex items-center gap-1"
+                      style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                      #${esc(tag)}
+                      <button onclick="state.freestyleForm.tags = state.freestyleForm.tags.filter(t => t !== '${tag}'); render();"
+                        style="color:white;">×</button>
+                    </span>
+                  `).join('')}
+                </div>
+              ` : ''}
+              
+              <input type="text" placeholder="Add tag and press Enter..."
+                onkeydown="if(event.key === 'Enter' && this.value.trim()) { state.freestyleForm.tags = [...(state.freestyleForm.tags || []), this.value.trim().toLowerCase()]; this.value = ''; render(); event.preventDefault(); }"
+                class="w-full px-3 py-2 rounded"
+                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+            </div>
+          </div>
+        </div>
+      `;
     }
 
     function renderIngredientGrid() {
@@ -5134,6 +5493,9 @@ function renderGroceryList() {
           break;
         case 'recipe-edit':
           content = renderRecipeEdit();
+          break;
+          case 'freestyle-edit':
+          content = renderFreestyleEdit();
           break;
         case 'recipe-view':
           content = renderRecipeView();
