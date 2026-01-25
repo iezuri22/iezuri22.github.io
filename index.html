@@ -9041,27 +9041,49 @@ function renderRecordingNeeds() {
       `;
     }
    // ===== COOKING TIMER =====
-   function playTimerSound() {
-      // Create audio context for reliable sound
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+   let alarmInterval = null;
+    let alarmAudioCtx = null;
+
+    function playTimerSound() {
+      // Play repeating alarm until stopped
+      stopTimerSound(); // Clear any existing alarm
       
-      // Play 3 beeps
-      [0, 0.3, 0.6].forEach(delay => {
-        const oscillator = audioCtx.createOscillator();
-        const gainNode = audioCtx.createGain();
+      alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      function playBeeps() {
+        if (!alarmAudioCtx) return;
         
-        oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        
-        oscillator.frequency.value = 800; // Hz
-        oscillator.type = 'sine';
-        
-        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime + delay);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + 0.2);
-        
-        oscillator.start(audioCtx.currentTime + delay);
-        oscillator.stop(audioCtx.currentTime + delay + 0.2);
-      });
+        [0, 0.2, 0.4].forEach(delay => {
+          const oscillator = alarmAudioCtx.createOscillator();
+          const gainNode = alarmAudioCtx.createGain();
+          
+          oscillator.connect(gainNode);
+          gainNode.connect(alarmAudioCtx.destination);
+          
+          oscillator.frequency.value = 880;
+          oscillator.type = 'sine';
+          
+          gainNode.gain.setValueAtTime(0.5, alarmAudioCtx.currentTime + delay);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, alarmAudioCtx.currentTime + delay + 0.15);
+          
+          oscillator.start(alarmAudioCtx.currentTime + delay);
+          oscillator.stop(alarmAudioCtx.currentTime + delay + 0.15);
+        });
+      }
+      
+      playBeeps();
+      alarmInterval = setInterval(playBeeps, 1000); // Repeat every second
+    }
+
+    function stopTimerSound() {
+      if (alarmInterval) {
+        clearInterval(alarmInterval);
+        alarmInterval = null;
+      }
+      if (alarmAudioCtx) {
+        alarmAudioCtx.close();
+        alarmAudioCtx = null;
+      }
     }
 
     // Pre-initialize audio on user interaction (needed for mobile)
@@ -9106,10 +9128,10 @@ function renderRecordingNeeds() {
       renderTimerWidget();
     }
 
-    function timerFinished(timer) {
+  function timerFinished(timer) {
       console.log('Timer finished!', timer.label);
       
-      // Play sound - use multiple beeps
+      // Play repeating sound
       try {
         console.log('Playing sound...');
         playTimerSound();
@@ -9122,12 +9144,33 @@ function renderRecordingNeeds() {
         new Notification('⏰ Timer Done!', { body: timer.label });
       }
       
-      // Show alert
-      showToast(`⏰ ${timer.label} is done!`, 'success');
-      
       // Remove from active timers
       state.activeTimers = state.activeTimers.filter(t => t.id !== timer.id);
+      
+      // Show alarm modal
+      showTimerAlarmModal(timer);
+    }
+
+    function showTimerAlarmModal(timer) {
+      openModal(`
+        <div style="color: #1a1a2e; text-align: center;">
+          <div style="font-size: 4rem; margin-bottom: 1rem;">⏰</div>
+          <h2 class="text-2xl font-bold mb-2">Timer Done!</h2>
+          <p class="text-lg mb-6">${esc(timer.label)}</p>
+          <button onclick="dismissAlarm()" 
+            class="px-8 py-4 text-xl font-bold rounded-lg"
+            style="background: #dc2626; color: white;">
+            Stop Alarm
+          </button>
+        </div>
+      `);
+    }
+
+    function dismissAlarm() {
+      stopTimerSound();
+      closeModal();
       renderTimerWidget();
+      showToast('Alarm dismissed', 'success');
     }
 
     function formatTime(seconds) {
