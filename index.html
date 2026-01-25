@@ -384,6 +384,8 @@ takeoutBudget: 50,
    inventory: [],
       expirationDefaults: {},
       receiptMappings: {},
+      purchaseHistory: [],
+      receipts: [],
       // Freestyle specific state
       freestyleViewMode: 'list',
       freestyleFilterTag: null,
@@ -748,17 +750,38 @@ async function saveReceiptExpense() {
       render();
 
       try {
+       const receiptId = `receipt_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const today = new Date().toISOString().split('T')[0];
+        
         // Save expense
         const expense = {
           id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`,
           type: 'grocery',
           amount: amount,
-          date: new Date().toISOString().split('T')[0],
+          date: today,
           note: note,
-          receipt_url: receiptScanState.imageUrl
+          receipt_url: receiptScanState.imageUrl,
+          receiptId: receiptId
         };
 
         await storage.create(expense);
+        
+        // Save receipt record with items
+        const receipt = {
+          id: receiptId,
+          date: today,
+          store: note || 'Unknown Store',
+          total: amount,
+          image_url: receiptScanState.imageUrl,
+          items: itemsToAdd.map(item => ({
+            name: item.name,
+            price: item.price,
+            category: item.category
+          })),
+          createdAt: new Date().toISOString()
+        };
+        
+        await storage.create(receipt);
 
         // Add items to inventory
         for (const item of itemsToAdd) {
@@ -1324,6 +1347,186 @@ async function saveReceiptExpense() {
       
       return 'Other';
     }
+   function renderPurchaseHistory() {
+      const history = state.purchaseHistory || [];
+      const receipts = state.receipts || [];
+      
+      // Group history by month
+      const historyByMonth = {};
+      history.forEach(item => {
+        const date = item.usedDate || item.purchaseDate;
+        if (!date) return;
+        const monthKey = date.slice(0, 7); // "2026-01"
+        if (!historyByMonth[monthKey]) historyByMonth[monthKey] = [];
+        historyByMonth[monthKey].push(item);
+      });
+      
+      // Sort months descending
+      const sortedMonths = Object.keys(historyByMonth).sort((a, b) => b.localeCompare(a));
+      
+      // Calculate stats
+      const totalItems = history.length;
+      const totalSpent = receipts.reduce((sum, r) => sum + (r.total || 0), 0);
+      const thisMonth = new Date().toISOString().slice(0, 7);
+      const thisMonthReceipts = receipts.filter(r => r.date?.startsWith(thisMonth));
+      const thisMonthSpent = thisMonthReceipts.reduce((sum, r) => sum + (r.total || 0), 0);
+      
+      return `
+        <div class="p-4 max-w-2xl mx-auto">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
+              Purchase History
+            </h2>
+          </div>
+
+          <!-- Stats -->
+          <div class="grid grid-cols-2 gap-3 mb-4">
+            <div class="p-3 rounded-lg" style="background:${CONFIG.surface_color};">
+              <div style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">This Month</div>
+              <div style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 1.3}px; font-weight:bold;">
+                $${thisMonthSpent.toFixed(0)}
+              </div>
+              <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.7}px;">
+                ${thisMonthReceipts.length} receipt${thisMonthReceipts.length !== 1 ? 's' : ''}
+              </div>
+            </div>
+            <div class="p-3 rounded-lg" style="background:${CONFIG.surface_color};">
+              <div style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">All Time</div>
+              <div style="color:${CONFIG.accent_color}; font-size:${CONFIG.font_size * 1.3}px; font-weight:bold;">
+                $${totalSpent.toFixed(0)}
+              </div>
+              <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.7}px;">
+                ${totalItems} item${totalItems !== 1 ? 's' : ''} purchased
+              </div>
+            </div>
+          </div>
+
+          <!-- Tabs -->
+          <div class="flex gap-2 mb-4">
+            <button onclick="state.historyTab = 'receipts'; render();"
+              class="px-3 py-1.5 rounded"
+              style="background:${(state.historyTab || 'receipts') === 'receipts' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+              Receipts
+            </button>
+            <button onclick="state.historyTab = 'items'; render();"
+              class="px-3 py-1.5 rounded"
+              style="background:${state.historyTab === 'items' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+              Used Items
+            </button>
+          </div>
+
+          ${(state.historyTab || 'receipts') === 'receipts' ? `
+            <!-- Receipts List -->
+            ${receipts.length === 0 ? `
+              <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
+                <div style="font-size:3rem; margin-bottom:1rem;">🧾</div>
+                <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No receipts yet</div>
+                <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px;">
+                  Scan a receipt to start tracking purchases
+                </div>
+              </div>
+            ` : `
+              <div class="space-y-3">
+                ${receipts.sort((a, b) => (b.date || '').localeCompare(a.date || '')).map(receipt => `
+                  <div class="p-3 rounded-lg" style="background:${CONFIG.surface_color};">
+                    <div class="flex items-start gap-3">
+                      ${receipt.image_url ? `
+                        <img src="${esc(receipt.image_url)}" 
+                             style="width:60px; height:60px; object-fit:cover; border-radius:8px; cursor:pointer;"
+                             onclick="window.open('${esc(receipt.image_url)}', '_blank')" />
+                      ` : `
+                        <div style="width:60px; height:60px; background:rgba(255,255,255,0.1); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                          🧾
+                        </div>
+                      `}
+                      <div class="flex-1">
+                        <div class="flex justify-between items-start">
+                          <div>
+                            <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px; font-weight:500;">
+                              ${esc(receipt.store || 'Unknown Store')}
+                            </div>
+                            <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.8}px;">
+                              ${receipt.date ? new Date(receipt.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : 'Unknown date'}
+                            </div>
+                          </div>
+                          <div style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:bold;">
+                            $${(receipt.total || 0).toFixed(2)}
+                          </div>
+                        </div>
+                        ${receipt.items && receipt.items.length > 0 ? `
+                          <div style="margin-top:8px;">
+                            <details>
+                              <summary style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px; cursor:pointer;">
+                                ${receipt.items.length} item${receipt.items.length !== 1 ? 's' : ''}
+                              </summary>
+                              <div class="mt-2 space-y-1">
+                                ${receipt.items.map(item => `
+                                  <div class="flex justify-between" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                                    <span style="opacity:0.8;">${esc(item.name)}</span>
+                                    <span style="opacity:0.6;">$${(item.price || 0).toFixed(2)}</span>
+                                  </div>
+                                `).join('')}
+                              </div>
+                            </details>
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          ` : `
+            <!-- Used Items List -->
+            ${history.length === 0 ? `
+              <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
+                <div style="font-size:3rem; margin-bottom:1rem;">📦</div>
+                <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No used items yet</div>
+                <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px;">
+                  Items you mark as "used" in inventory will appear here
+                </div>
+              </div>
+            ` : `
+              ${sortedMonths.map(month => {
+                const items = historyByMonth[month];
+                const monthName = new Date(month + '-01').toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                
+                return `
+                  <div class="mb-4">
+                    <h3 class="font-semibold mb-2" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
+                      ${monthName} (${items.length})
+                    </h3>
+                    <div class="space-y-2">
+                      ${items.sort((a, b) => (b.usedDate || '').localeCompare(a.usedDate || '')).map(item => `
+                        <div class="flex items-center gap-3 p-2 rounded" style="background:${CONFIG.surface_color};">
+                          ${item.image_url ? `
+                            <img src="${esc(item.image_url)}" 
+                                 style="width:40px; height:40px; object-fit:cover; border-radius:6px;" />
+                          ` : `
+                            <div style="width:40px; height:40px; background:rgba(255,255,255,0.1); border-radius:6px; display:flex; align-items:center; justify-content:center;">
+                              📦
+                            </div>
+                          `}
+                          <div class="flex-1">
+                            <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
+                              ${esc(item.name)}
+                            </div>
+                            <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.7}px;">
+                              Used ${item.usedDate ? new Date(item.usedDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}
+                              ${item.price ? ` • $${item.price.toFixed(2)}` : ''}
+                            </div>
+                          </div>
+                        </div>
+                      `).join('')}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            `}
+          `}
+        </div>
+      `;
+    }
 
  function renderInventory() {
       const inventory = getInventoryItems();
@@ -1456,8 +1659,27 @@ async function saveReceiptExpense() {
     }
 
     async function useInventoryItem(id) {
+      const item = state.inventory.find(i => i.id === id);
+      if (!item) return;
+      
       if (confirm('Mark this item as used/finished?')) {
+        // Move to history
+        const historyItem = {
+          id: `history_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          name: item.name,
+          category: item.category,
+          price: item.price,
+          quantity: item.quantity,
+          unit: item.unit,
+          image_url: item.image_url,
+          purchaseDate: item.purchaseDate,
+          usedDate: new Date().toISOString().split('T')[0],
+          originalId: item.id
+        };
+        
+        await storage.create(historyItem);
         await deleteInventoryItem(id);
+        showToast('Item moved to history', 'success');
       }
     }
    function editReceiptItem(index) {
@@ -3789,6 +4011,11 @@ const dataHandler = {
         mappings.forEach(d => {
           state.receiptMappings[d.rawText] = d.correctedName;
         });
+        // Load purchase history
+        state.purchaseHistory = data.filter(d => d.id && d.id.startsWith('history_'));
+        
+        // Load receipts
+        state.receipts = data.filter(d => d.id && d.id.startsWith('receipt_'));
         let planData = data.filter(d => d.date && d.id && d.id.startsWith('plan_'));
         
         // Migrate old plan format to new array format
@@ -3885,6 +4112,7 @@ function navigateTo(view) {
                <option value="budget-dashboard" ${state.currentView === 'budget-dashboard' ? 'selected' : ''}>📊 Budget</option>
              <option value="recording-needs" ${state.currentView === 'recording-needs' ? 'selected' : ''}>🎥 To Record</option>
                 <option value="inventory" ${state.currentView === 'inventory' ? 'selected' : ''}>📦 Inventory</option>
+                <option value="purchase-history" ${state.currentView === 'purchase-history' ? 'selected' : ''}>🧾 History</option>
               </select>
             </div>
             
@@ -7908,6 +8136,9 @@ function renderRecordingNeeds() {
           break;
           case 'inventory':
           content = renderInventory();
+          break;
+          case 'purchase-history':
+          content = renderPurchaseHistory();
           break;
         case 'grocery-select-meals':
           content = renderGrocerySelectMeals();
