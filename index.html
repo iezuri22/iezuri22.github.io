@@ -9041,6 +9041,37 @@ function renderRecordingNeeds() {
       `;
     }
    // ===== COOKING TIMER =====
+   function playTimerSound() {
+      // Create audio context for reliable sound
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      // Play 3 beeps
+      [0, 0.3, 0.6].forEach(delay => {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        
+        oscillator.frequency.value = 800; // Hz
+        oscillator.type = 'sine';
+        
+        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime + delay);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + 0.2);
+        
+        oscillator.start(audioCtx.currentTime + delay);
+        oscillator.stop(audioCtx.currentTime + delay + 0.2);
+      });
+    }
+
+    // Pre-initialize audio on user interaction (needed for mobile)
+    document.addEventListener('click', function initAudio() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioCtx.resume();
+      } catch (e) {}
+      document.removeEventListener('click', initAudio);
+    }, { once: true });
     function startTimer(minutes, label = 'Timer') {
       const timer = {
         id: `timer_${Date.now()}`,
@@ -9076,11 +9107,12 @@ function renderRecordingNeeds() {
     }
 
     function timerFinished(timer) {
-      // Play sound
+      // Play sound - use multiple beeps
       try {
-        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp+ZjXdwaICRm5yUhXFkZnuLmJuWhHBlZXqIlZiUgm9lZnmHk5eSgG5lZXmGkpWQf21lZXmFkZSPfm1lZXmEkJOOfWxlZXmEkJKNfGxlZXmDj5GMfGtlZXmDj5CLe2tlZXmCjpCKemtlZXmCjo+JeWplZXmBjY+IeGplZXmBjY6Hd2plZXmAjI6GdmplZXl/jI2FdWllZXl/i4yEdWllZXl+i4yDdGllZXl+iouCc2hlZXl9iouBcmhlZXl9ioqAcWhlZXl8iYl/cGhlZXl8iYl+b2dlZXl7iIh9bmZlZXl7iId8bWZlZXl6h4d7bGZlZXl6h4Z6a2ZlZXl5hoV5amZlZXl5hoV4aWZlZXl4hYR3aGVlZXh4hYN2Z2VlZXh3hIJ1ZmVlZXh3g4F0ZmVlZXh2g4BzZWVlZXh2gn9yZWVlZXh1gn5xZGVlZXh1gX1wZGVlZXh0gXxvY2VlZXh0gHtuY2VlZXhzgHptYmRlZXhzf3lsYmRlZXhyfnhrYWRlZXhyfnhqYWRlZXhxfXdpYGRlZXhxfHZoYGRlZXhwfHVnX2RlZXhwe3RmX2NlZXhve3RlXmNlZXhvem9jXWJhYnh1');
-        audio.play();
-      } catch (e) {}
+        playTimerSound();
+      } catch (e) {
+        console.error('Sound error:', e);
+      }
       
       // Browser notification
       if (Notification.permission === 'granted') {
