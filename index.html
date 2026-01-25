@@ -400,6 +400,9 @@ takeoutBudget: 50,
       receipts: [],
       draggedMeal: null,
       mealPlanTab: 'week',
+      chefChatOpen: false,
+      chefChatMessages: [],
+      chefChatLoading: false,
       notificationsEnabled: false,
       lastNotificationCheck: null,
       // Freestyle specific state
@@ -4268,6 +4271,14 @@ function navigateTo(view) {
                 <option value="inventory" ${state.currentView === 'inventory' ? 'selected' : ''}>📦 Inventory</option>
                <option value="purchase-history" ${state.currentView === 'purchase-history' ? 'selected' : ''}>🧾 History</option>
               </select>
+
+              <!-- Chef Chat Button -->
+              <button onclick="toggleChefChat()"
+                class="px-2 py-1 rounded button-hover"
+                style="background:rgba(255,255,255,0.1);"
+                title="Ask Chef Claude">
+                <span style="font-size:1.2rem;">🤖</span>
+              </button>
               
               <!-- Notification Bell -->
               ${(() => {
@@ -8961,6 +8972,150 @@ function renderRecordingNeeds() {
           ${renderReceiptModal()}
         </div>
       `;
+    }
+
+   // ===== CHEF CHAT =====
+    const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';
+
+    function toggleChefChat() {
+      state.chefChatOpen = !state.chefChatOpen;
+      renderChefChat();
+    }
+
+    function renderChefChat() {
+      // Remove existing chat if any
+      document.getElementById('chefChatModal')?.remove();
+      
+      if (!state.chefChatOpen) return;
+      
+      const chatHtml = `
+        <div id="chefChatModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style="background:rgba(0,0,0,0.5);">
+          <div class="w-full max-w-lg rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height:80vh;">
+            
+            <!-- Header -->
+            <div class="flex items-center justify-between p-4 border-b border-gray-700">
+              <div class="flex items-center gap-2">
+                <span style="font-size:1.5rem;">🤖</span>
+                <span style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">Chef Claude</span>
+              </div>
+              <button onclick="toggleChefChat()" class="p-1 rounded hover:bg-gray-700" style="color:${CONFIG.text_color};">
+                ✕
+              </button>
+            </div>
+            
+            <!-- Messages -->
+            <div id="chefChatMessages" class="flex-1 overflow-y-auto p-4 space-y-3" style="min-height:300px;">
+              ${state.chefChatMessages.length === 0 ? `
+                <div style="color:${CONFIG.text_color}; opacity:0.6; text-align:center; padding:2rem;">
+                  <div style="font-size:2rem; margin-bottom:0.5rem;">👨‍🍳</div>
+                  <div>Ask me anything about cooking!</div>
+                  <div style="font-size:${CONFIG.font_size * 0.85}px; margin-top:0.5rem;">
+                    "How long to cook chicken at 400°F?"<br>
+                    "What can I substitute for heavy cream?"<br>
+                    "Is my salmon done?"
+                  </div>
+                </div>
+              ` : state.chefChatMessages.map(msg => `
+                <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
+                  <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                    ${esc(msg.content).replace(/\n/g, '<br>')}
+                  </div>
+                </div>
+              `).join('')}
+              ${state.chefChatLoading ? `
+                <div class="flex justify-start">
+                  <div class="px-3 py-2 rounded-lg" style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};">
+                    <span class="animate-pulse">Thinking...</span>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+            
+            <!-- Input -->
+            <div class="p-4 border-t border-gray-700">
+              <div class="flex gap-2">
+                <input type="text" id="chefChatInput" 
+                  placeholder="Ask a cooking question..."
+                  class="flex-1 px-3 py-2 rounded-lg"
+                  style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.2);"
+                  onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChefMessage(); }"
+                  ${state.chefChatLoading ? 'disabled' : ''} />
+                <button onclick="sendChefMessage()" 
+                  class="px-4 py-2 rounded-lg"
+                  style="background:${CONFIG.primary_action_color}; color:white;"
+                  ${state.chefChatLoading ? 'disabled' : ''}>
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      document.body.insertAdjacentHTML('beforeend', chatHtml);
+      document.getElementById('chefChatInput')?.focus();
+      
+      // Scroll to bottom
+      const messagesDiv = document.getElementById('chefChatMessages');
+      if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    async function sendChefMessage() {
+      const input = document.getElementById('chefChatInput');
+      const message = input?.value.trim();
+      
+      if (!message || state.chefChatLoading) return;
+      
+      // Add user message
+      state.chefChatMessages.push({ role: 'user', content: message });
+      input.value = '';
+      state.chefChatLoading = true;
+      renderChefChat();
+      
+      try {
+        // Get recipe context (current recipes for context)
+        const recipeContext = state.recipes
+          .filter(r => !r.isDraft && !r.isTip)
+          .slice(0, 10)
+          .map(r => r.title)
+          .join(', ');
+        
+        const response = await fetch(CHEF_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: state.chefChatMessages.map(m => ({
+              role: m.role,
+              content: m.content
+            })),
+            recipeContext: recipeContext ? `User's saved recipes: ${recipeContext}` : null
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.content && data.content[0]?.text) {
+          state.chefChatMessages.push({
+            role: 'assistant',
+            content: data.content[0].text
+          });
+        } else if (data.error) {
+          state.chefChatMessages.push({
+            role: 'assistant',
+            content: 'Sorry, I encountered an error. Please try again.'
+          });
+          console.error('Chef API error:', data.error);
+        }
+      } catch (error) {
+        console.error('Chef chat error:', error);
+        state.chefChatMessages.push({
+          role: 'assistant',
+          content: 'Sorry, I couldn\'t connect. Please check your internet and try again.'
+        });
+      } finally {
+        state.chefChatLoading = false;
+        renderChefChat();
+      }
     }
 
     // ===== INITIALIZATION =====
