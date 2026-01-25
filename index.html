@@ -7311,9 +7311,25 @@ function setCurrentWeek() {
     }
 
     // ===== MEAL PLANNING HELPERS =====
-    function getRecipeSuggestions() {
-      const recipes = state.recipes.filter(r => !r.isDraft && !r.isTip && r.id?.startsWith('recipe_'));
+  function getRecipeSuggestions(filterTerm = '') {
+      let recipes = state.recipes.filter(r => !r.isDraft && !r.isTip && r.id?.startsWith('recipe_'));
       if (recipes.length === 0) return [];
+      
+      // Apply user's filter if provided
+      if (filterTerm) {
+        const term = filterTerm.toLowerCase();
+        recipes = recipes.filter(r => {
+          // Search in title
+          if (r.title?.toLowerCase().includes(term)) return true;
+          // Search in category
+          if (r.category?.toLowerCase().includes(term)) return true;
+          // Search in ingredients
+          if (r.ingredients?.some(ing => ing.item?.toLowerCase().includes(term))) return true;
+          // Search in tags
+          if (r.tags?.some(tag => tag.toLowerCase().includes(term))) return true;
+          return false;
+        });
+      }
       
       const usageMap = {};
       
@@ -7354,10 +7370,10 @@ function setCurrentWeek() {
       return scored.slice(0, 10);
     }
 
-    function showSuggestionsModal() {
-      const suggestions = getRecipeSuggestions();
+  function showSuggestionsModal(filterTerm = '') {
+      const suggestions = getRecipeSuggestions(filterTerm);
       
-      if (suggestions.length === 0) {
+      if (suggestions.length === 0 && !filterTerm) {
         showToast('No recipes to suggest. Add some recipes first!', 'info');
         return;
       }
@@ -7365,10 +7381,29 @@ function setCurrentWeek() {
       openModal(`
         <div style="color: #1a1a2e;">
           <h2 class="text-2xl font-bold mb-4">💡 Recipe Suggestions</h2>
-          <p class="mb-4 text-gray-600">Based on what you haven't made recently:</p>
           
-          <div class="space-y-3 max-h-96 overflow-y-auto">
-            ${suggestions.map(({ recipe, score, usage }) => {
+          <div class="mb-4">
+            <input type="text" id="suggestionFilter" 
+                   value="${esc(filterTerm)}"
+                   placeholder="What are you in the mood for? (e.g., chicken, quick, breakfast)"
+                   class="w-full px-3 py-2 border rounded"
+                   onkeyup="if(event.key === 'Enter') { closeModal(); showSuggestionsModal(this.value); }" />
+            <button onclick="closeModal(); showSuggestionsModal(document.getElementById('suggestionFilter').value);"
+                    class="mt-2 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 w-full">
+              Search
+            </button>
+          </div>
+          
+          <p class="mb-4 text-gray-600">
+            ${filterTerm ? `Showing recipes matching "${esc(filterTerm)}":` : 'Based on what you haven\'t made recently:'}
+          </p>
+        
+           <div class="space-y-3 max-h-96 overflow-y-auto">
+            ${suggestions.length === 0 ? `
+              <div class="text-center py-8 text-gray-500">
+                No recipes found matching "${esc(filterTerm)}". Try a different search term.
+              </div>
+            ` : suggestions.map(({ recipe, score, usage }) => {
               const neverUsed = usage.count === 0;
               const daysSince = usage.lastUsed ? 
                 Math.floor((new Date() - new Date(usage.lastUsed)) / (1000 * 60 * 60 * 24)) : null;
