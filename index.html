@@ -990,12 +990,21 @@ async function saveReceiptExpense() {
       await storage.update(updated);
     }
 
-    async function deleteInventoryItem(id) {
-      const item = state.recipes.find(r => r.id === id);
+  async function deleteInventoryItem(id) {
+      const item = state.inventory.find(i => i.id === id);
       if (!item) return;
       
       await storage.delete(item);
       showToast('Item removed', 'success');
+    }
+
+    async function confirmDeleteInventoryItem(id) {
+      const item = state.inventory.find(i => i.id === id);
+      if (!item) return;
+      
+      if (confirm(`Delete "${item.name}" permanently? This won't be saved to history.`)) {
+        await deleteInventoryItem(id);
+      }
     }
 
   function extractItemsFromReceipt(text) {
@@ -1628,7 +1637,7 @@ async function saveReceiptExpense() {
                             ${item.price ? ' • $' + item.price.toFixed(2) : ''}
                           </div>
                         </div>
-                        <div class="flex gap-1">
+                       <div class="flex gap-1">
                           <button onclick="toggleFrozen('${item.id}')"
                             class="px-2 py-1 rounded button-hover"
                             style="background:${item.isFrozen ? '#3b82f6' : 'rgba(255,255,255,0.1)'}; color:white; font-size:${CONFIG.font_size * 0.75}px;"
@@ -1645,6 +1654,12 @@ async function saveReceiptExpense() {
                             style="background:${CONFIG.primary_action_color}; color:white; font-size:${CONFIG.font_size * 0.75}px;"
                             title="Mark as used">
                             ✓
+                          </button>
+                          <button onclick="confirmDeleteInventoryItem('${item.id}')"
+                            class="px-2 py-1 rounded button-hover"
+                            style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.75}px;"
+                            title="Delete">
+                            🗑️
                           </button>
                         </div>
                       </div>
