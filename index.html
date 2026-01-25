@@ -9118,6 +9118,34 @@ function renderRecordingNeeds() {
       renderTimerWidget();
       showToast(`Timer started: ${label} (${minutes} min)`, 'success');
     }
+   function startTimerSeconds(totalSeconds, label = 'Timer') {
+      const timer = {
+        id: `timer_${Date.now()}`,
+        label: label,
+        duration: totalSeconds,
+        remaining: totalSeconds,
+        startedAt: Date.now(),
+        interval: null
+      };
+      
+      timer.interval = setInterval(() => {
+        timer.remaining = Math.max(0, timer.duration - Math.floor((Date.now() - timer.startedAt) / 1000));
+        renderTimerWidget();
+        
+        if (timer.remaining <= 0) {
+          clearInterval(timer.interval);
+          timerFinished(timer);
+        }
+      }, 1000);
+      
+      state.activeTimers.push(timer);
+      renderTimerWidget();
+      
+      const mins = Math.floor(totalSeconds / 60);
+      const secs = totalSeconds % 60;
+      const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      showToast(`Timer started: ${label} (${timeStr})`, 'success');
+    }
 
     function stopTimer(timerId) {
       const timer = state.activeTimers.find(t => t.id === timerId);
@@ -9221,10 +9249,17 @@ function renderRecordingNeeds() {
                    class="w-full px-3 py-2 border rounded" />
           </div>
           
-          <div class="mb-4">
-            <label class="block mb-2 font-semibold">Minutes:</label>
-            <input type="number" id="timerMinutes" value="10" min="1" max="180"
-                   class="w-full px-3 py-2 border rounded" />
+          <div class="mb-4 flex gap-4">
+            <div class="flex-1">
+              <label class="block mb-2 font-semibold">Minutes:</label>
+              <input type="number" id="timerMinutes" value="0" min="0" max="180"
+                     class="w-full px-3 py-2 border rounded" />
+            </div>
+            <div class="flex-1">
+              <label class="block mb-2 font-semibold">Seconds:</label>
+              <input type="number" id="timerSeconds" value="30" min="0" max="59"
+                     class="w-full px-3 py-2 border rounded" />
+            </div>
           </div>
           
           <div class="mb-4">
@@ -9253,12 +9288,20 @@ function renderRecordingNeeds() {
       `);
     }
 
-    function startTimerFromModal() {
+  function startTimerFromModal() {
       const label = document.getElementById('timerLabel')?.value || 'Timer';
-      const minutes = parseInt(document.getElementById('timerMinutes')?.value) || 10;
+      const minutes = parseInt(document.getElementById('timerMinutes')?.value) || 0;
+      const seconds = parseInt(document.getElementById('timerSeconds')?.value) || 0;
+      
+      const totalSeconds = (minutes * 60) + seconds;
+      
+      if (totalSeconds < 1) {
+        showError('Please set at least 1 second');
+        return;
+      }
       
       closeModal();
-      startTimer(minutes, label);
+      startTimerSeconds(totalSeconds, label);
     }
    // ===== FREQUENT ITEMS =====
     async function trackFrequentItem(itemName, category) {
