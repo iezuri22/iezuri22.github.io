@@ -560,6 +560,69 @@ externalMealTypes: [
       }
     };
 
+   // ===== PHOTO UPLOAD =====
+    async function uploadPhoto(file) {
+      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      if (!user) {
+        showError('Please log in to upload photos');
+        return null;
+      }
+
+      if (!file.type.startsWith('image/')) {
+        showError('Please select an image file');
+        return null;
+      }
+
+      if (file.size > 10 * 1024 * 1024) {
+        showError('Image must be less than 10MB');
+        return null;
+      }
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+
+      showToast('Uploading photo...', 'info');
+
+      try {
+        const { data, error } = await window.supabaseClient.storage
+          .from('meal-photos')
+          .upload(fileName, file, {
+            cacheControl: '3600',
+            upsert: false
+          });
+
+        if (error) {
+          console.error('Upload error:', error);
+          showError('Failed to upload photo: ' + error.message);
+          return null;
+        }
+
+        const { data: urlData } = window.supabaseClient.storage
+          .from('meal-photos')
+          .getPublicUrl(fileName);
+
+        showToast('Photo uploaded!', 'success');
+        return urlData.publicUrl;
+      } catch (e) {
+        console.error('Upload exception:', e);
+        showError('Failed to upload photo');
+        return null;
+      }
+    }
+
+    async function handleFreestylePhotoUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const url = await uploadPhoto(file);
+      if (url) {
+        state.freestyleForm.image_url = url;
+        render();
+      }
+      
+      event.target.value = '';
+    }
+
     // ===== UTILITIES =====
     function esc(s) {
       return String(s || '')
@@ -4193,7 +4256,7 @@ ${list.map(r => {
                 style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
             </div>
 
-           <!-- Photo -->
+          <!-- Photo -->
             <div class="mb-4">
               <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Photo</label>
               ${form.image_url ? `
@@ -4205,8 +4268,26 @@ ${list.map(r => {
                     ✕ Remove
                   </button>
                 </div>
-              ` : ''}
-              <input type="text" placeholder="Paste image URL..."
+              ` : `
+                <div class="mb-3 p-6 rounded border-2 border-dashed text-center cursor-pointer"
+                  style="border-color:rgba(255,255,255,0.2); background:rgba(0,0,0,0.1);"
+                  onclick="document.getElementById('freestylePhotoInput').click();">
+                  <div style="font-size:2rem; margin-bottom:8px; opacity:0.5;">📷</div>
+                  <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
+                    Tap to take or choose a photo
+                  </div>
+                  <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
+                    or paste a URL below
+                  </div>
+                </div>
+                <input type="file" 
+                  id="freestylePhotoInput" 
+                  accept="image/*" 
+                  capture="environment"
+                  onchange="handleFreestylePhotoUpload(event)"
+                  style="display:none;" />
+              `}
+              <input type="text" placeholder="Or paste image URL..."
                 value="${esc(form.image_url || '')}"
                 onchange="state.freestyleForm.image_url = this.value; render();"
                 class="w-full px-3 py-2 rounded"
