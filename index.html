@@ -708,18 +708,6 @@ function extractTotalFromReceipt(text) {
     }
       
 
-      // Fallback: find the largest dollar amount (likely the total)
-      const amounts = text.match(/\$?\d+\.\d{2}/g) || [];
-      const numbers = amounts.map(a => parseFloat(a.replace('$', '')));
-      const validNumbers = numbers.filter(n => n > 0 && n < 10000);
-      
-      if (validNumbers.length > 0) {
-        return Math.max(...validNumbers);
-      }
-
-      return null;
-    }
-
     function closeReceiptModal() {
       receiptScanState = {
         isScanning: false,
