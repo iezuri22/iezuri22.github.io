@@ -7635,39 +7635,44 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
           
           return `
             <div class="mb-4 rounded-xl p-3" style="background: linear-gradient(135deg, ${CONFIG.surface_color} 0%, rgba(102, 126, 234, 0.1) 100%); border: 1px solid rgba(255,255,255,0.08);">
-              <div class="flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                  <div>
-                    <span style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.8}px;">Budget</span>
-                    <div style="color:${isTotalOver ? '#ef4444' : '#22c55e'}; font-size:${CONFIG.font_size * 1.2}px; font-weight:bold;">
-                      $${weekExpenses.total.toFixed(0)} / $${totalBudget.toFixed(0)}
+              <div>
+                <!-- Top row: Budget info -->
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-3">
+                    <div>
+                      <span style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">Budget</span>
+                      <div style="color:${isTotalOver ? '#ef4444' : '#22c55e'}; font-size:${CONFIG.font_size * 1.1}px; font-weight:bold;">
+                        $${weekExpenses.total.toFixed(0)} / $${totalBudget.toFixed(0)}
+                      </div>
+                    </div>
+                    <div style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">
+                      🛒 $${weekExpenses.grocery.toFixed(0)}
+                    </div>
+                    <div style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">
+                      🍔 $${weekExpenses.takeout.toFixed(0)}
                     </div>
                   </div>
-                  <div style="color:${CONFIG.text_color}; opacity:0.5;">|</div>
-                  <div>
-                    <span style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">🛒 $${weekExpenses.grocery.toFixed(0)}</span>
-                  </div>
-                  <div>
-                    <span style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">🍔 $${weekExpenses.takeout.toFixed(0)}</span>
+                  <div class="flex gap-1">
+                    <button type="button" onclick="showManageExpensesModal()"
+                      class="px-2 py-1 rounded button-hover"
+                      style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">📋</button>
+                    <button type="button" onclick="showBudgetModal()"
+                      class="px-2 py-1 rounded button-hover"
+                      style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">⚙️</button>
                   </div>
                 </div>
-                <div class="flex gap-1">
+                <!-- Bottom row: Action buttons -->
+                <div class="flex gap-1 flex-wrap">
                   <button type="button" onclick="showAddExpenseModal('grocery')"
                     class="px-2 py-1 rounded button-hover"
                     style="background:#16a34a; color:white; font-size:${CONFIG.font_size * 0.7}px;">+ Grocery</button>
                   <button type="button" onclick="showAddExpenseModal('takeout')"
                     class="px-2 py-1 rounded button-hover"
                     style="background:#f59e0b; color:white; font-size:${CONFIG.font_size * 0.7}px;">+ Takeout</button>
-                 <button type="button" onclick="document.getElementById('receiptInput').click()"
+                  <button type="button" onclick="document.getElementById('receiptInput').click()"
                     class="px-2 py-1 rounded button-hover"
                     style="background:#8b5cf6; color:white; font-size:${CONFIG.font_size * 0.7}px;">📷 Scan</button>
                   <input type="file" id="receiptInput" accept="image/*" onchange="handleReceiptUpload(event)" style="display:none;" />
-                  <button type="button" onclick="showManageExpensesModal()"
-                    class="px-2 py-1 rounded button-hover"
-                    style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">📋 Manage</button>
-                  <button type="button" onclick="showBudgetModal()"
-                    class="px-2 py-1 rounded button-hover"
-                    style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">⚙️ Edit</button>
                 </div>
               </div>
             </div>
