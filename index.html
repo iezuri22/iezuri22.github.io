@@ -6749,7 +6749,18 @@ Step 3: Add wet ingredients..."
         : (r.instructions || '').trim();
       const sourceLabel = r.sourceType === 'chefiq' ? '🤖 ChefIQ Guided' : '👤 User-Created';
 
-      const rows = Array.isArray(r.ingredientsRows) ? r.ingredientsRows : [];
+      let rows = [];
+      if (Array.isArray(r.ingredientsRows) && r.ingredientsRows.length > 0) {
+        rows = r.ingredientsRows;
+      } else if (Array.isArray(r.ingredients) && r.ingredients.length > 0) {
+        // Handle imported recipes with old format
+        rows = r.ingredients.map(ing => ({
+          qty: ing.amount || '',
+          unit: ing.unit || '',
+          name: ing.item || ing.name || '',
+          group: ing.group || 'Other'
+        }));
+      }
       const grouped = {};
       rows.forEach(x => {
         const g = x.group || 'Other';
