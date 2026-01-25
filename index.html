@@ -232,6 +232,18 @@
     .toast {
       animation: slideIn 0.3s ease-out;
     }
+    .drag-over {
+      background: rgba(102, 126, 234, 0.3) !important;
+      border: 2px dashed #667eea !important;
+    }
+
+    [draggable="true"] {
+      cursor: grab;
+    }
+
+    [draggable="true"]:active {
+      cursor: grabbing;
+    }
 
     @keyframes slideIn {
       from {
@@ -386,6 +398,7 @@ takeoutBudget: 50,
       receiptMappings: {},
       purchaseHistory: [],
       receipts: [],
+      draggedMeal: null,
       notificationsEnabled: false,
       lastNotificationCheck: null,
       // Freestyle specific state
@@ -7216,7 +7229,245 @@ function setCurrentWeek() {
       state.currentWeekStartDate = sunday.toISOString().split('T')[0];
       render();
     }
-   function renderWeeklyPlan() {
+
+    // ===== DRAG AND DROP =====
+    function handleDragStart(e, date, meal, recipeId) {
+      state.draggedMeal = { date, meal, recipeId };
+      e.target.style.opacity = '0.5';
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', JSON.stringify({ date, meal, recipeId }));
+    }
+
+    function handleDragEnd(e) {
+      e.target.style.opacity = '1';
+      state.draggedMeal = null;
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      e.currentTarget.classList.add('drag-over');
+    }
+
+    function handleDragLeave(e) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    async function handleDrop(e, targetDate, targetMeal) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      
+      if (!state.draggedMeal) return;
+      
+      const { date: sourceDate, meal: sourceMeal, recipeId } = state.draggedMeal;
+      
+      if (sourceDate === targetDate && sourceMeal === targetMeal) {
+        state.draggedMeal = null;
+        return;
+      }
+      
+      state.isLoading = true;
+      render();
+      
+      try {
+        const sourcePlan = state.planData.find(p => p.date === sourceDate);
+        if (sourcePlan) {
+          const sourceMealKey = sourceMeal.toLowerCase();
+          sourcePlan[sourceMealKey] = (sourcePlan[sourceMealKey] || []).filter(id => id !== recipeId);
+          await storage.update(sourcePlan);
+        }
+        
+        let targetPlan = state.planData.find(p => p.date === targetDate);
+        const targetMealKey = targetMeal.toLowerCase();
+        
+        if (!targetPlan) {
+          targetPlan = {
+            id: `plan_${targetDate}`,
+            date: targetDate,
+            breakfast: [],
+            lunch: [],
+            dinner: []
+          };
+          targetPlan[targetMealKey] = [recipeId];
+          await storage.create(targetPlan);
+        } else {
+          if (!targetPlan[targetMealKey]) targetPlan[targetMealKey] = [];
+          if (!targetPlan[targetMealKey].includes(recipeId)) {
+            targetPlan[targetMealKey].push(recipeId);
+          }
+          await storage.update(targetPlan);
+        }
+        
+        showToast('Meal moved!', 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to move meal');
+      } finally {
+        state.draggedMeal = null;
+        state.isLoading = false;
+        render();
+      }
+    }
+
+    // ===== MEAL PLANNING HELPERS =====
+    function getRecipeSuggestions() {
+      const recipes = state.recipes.filter(r => !r.isDraft && !r.isTip && r.id?.startsWith('recipe_'));
+      if (recipes.length === 0) return [];
+      
+      const usageMap = {};
+      
+      state.planData.forEach(plan => {
+        ['breakfast', 'lunch', 'dinner'].forEach(meal => {
+          (plan[meal] || []).forEach(id => {
+            if (!usageMap[id]) {
+              usageMap[id] = { count: 0, lastUsed: null };
+            }
+            usageMap[id].count++;
+            if (!usageMap[id].lastUsed || plan.date > usageMap[id].lastUsed) {
+              usageMap[id].lastUsed = plan.date;
+            }
+          });
+        });
+      });
+      
+      const scored = recipes.map(recipe => {
+        const id = recipe.__backendId || recipe.id;
+        const usage = usageMap[id] || { count: 0, lastUsed: null };
+        
+        let score = 0;
+        
+        if (usage.count === 0) {
+          score = 1000;
+        } else {
+          if (usage.lastUsed) {
+            const daysSince = Math.floor((new Date() - new Date(usage.lastUsed)) / (1000 * 60 * 60 * 24));
+            score = daysSince;
+          }
+        }
+        
+        return { recipe, score, usage };
+      });
+      
+      scored.sort((a, b) => b.score - a.score);
+      
+      return scored.slice(0, 10);
+    }
+
+    function showSuggestionsModal() {
+      const suggestions = getRecipeSuggestions();
+      
+      if (suggestions.length === 0) {
+        showToast('No recipes to suggest. Add some recipes first!', 'info');
+        return;
+      }
+      
+      openModal(`
+        <div style="color: #1a1a2e;">
+          <h2 class="text-2xl font-bold mb-4">💡 Recipe Suggestions</h2>
+          <p class="mb-4 text-gray-600">Based on what you haven't made recently:</p>
+          
+          <div class="space-y-3 max-h-96 overflow-y-auto">
+            ${suggestions.map(({ recipe, score, usage }) => {
+              const neverUsed = usage.count === 0;
+              const daysSince = usage.lastUsed ? 
+                Math.floor((new Date() - new Date(usage.lastUsed)) / (1000 * 60 * 60 * 24)) : null;
+              
+              return `
+                <div class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
+                  ${recipe.image ? `
+                    <img src="${esc(recipe.image)}" 
+                         style="width:60px; height:60px; object-fit:cover; border-radius:8px;" />
+                  ` : `
+                    <div style="width:60px; height:60px; background:#f3f4f6; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                      🍽️
+                    </div>
+                  `}
+                  <div class="flex-1">
+                    <div class="font-semibold">${esc(recipe.title)}</div>
+                    <div class="text-sm text-gray-500">
+                      ${neverUsed ? '✨ Never made!' : 
+                        daysSince !== null ? `Last made ${daysSince} day${daysSince !== 1 ? 's' : ''} ago` : 
+                        `Made ${usage.count} time${usage.count !== 1 ? 's' : ''}`}
+                    </div>
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          
+          <div class="flex justify-end mt-4">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Close
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function copyLastWeekPlan() {
+      const currentWeekDates = getWeekDates(state.currentWeekStartDate);
+      
+      const lastWeekStart = new Date(state.currentWeekStartDate);
+      lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+      const lastWeekDates = getWeekDates(lastWeekStart.toISOString().split('T')[0]);
+      
+      const lastWeekPlans = lastWeekDates.map(date => 
+        state.planData.find(p => p.date === date)
+      ).filter(Boolean);
+      
+      if (lastWeekPlans.length === 0) {
+        showToast('No meals planned last week to copy', 'error');
+        return;
+      }
+      
+      if (!confirm('Copy last week\\'s meal plan to this week? This will overwrite any existing plans.')) {
+        return;
+      }
+      
+      state.isLoading = true;
+      render();
+      
+      try {
+        let copiedCount = 0;
+        
+        for (let i = 0; i < 7; i++) {
+          const lastWeekPlan = lastWeekPlans.find(p => p.date === lastWeekDates[i]);
+          if (!lastWeekPlan) continue;
+          
+          const currentDate = currentWeekDates[i];
+          const existingPlan = state.planData.find(p => p.date === currentDate);
+          
+          const newPlan = {
+            id: existingPlan?.id || `plan_${currentDate}`,
+            date: currentDate,
+            breakfast: [...(lastWeekPlan.breakfast || [])],
+            lunch: [...(lastWeekPlan.lunch || [])],
+            dinner: [...(lastWeekPlan.dinner || [])]
+          };
+          
+          if (existingPlan) {
+            await storage.update(newPlan);
+          } else {
+            await storage.create(newPlan);
+          }
+          
+          if (lastWeekPlan.breakfast?.length || lastWeekPlan.lunch?.length || lastWeekPlan.dinner?.length) {
+            copiedCount++;
+          }
+        }
+        
+        showToast(`Copied ${copiedCount} day${copiedCount !== 1 ? 's' : ''} from last week!`, 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to copy meal plan');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
+
+    function renderWeeklyPlan() {
       const dates = getWeekDates(state.currentWeekStartDate);
      const meals = ['Breakfast', 'Lunch', 'Dinner'];
 
@@ -7233,9 +7484,17 @@ function setCurrentWeek() {
               <button type="button" onclick="setCurrentWeek()"
                 class="px-2 py-1 rounded button-hover"
                 style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">This Week</button>
-              <button type="button" onclick="changeWeek(1)"
+             <button type="button" onclick="changeWeek(1)"
                 class="px-2 py-1 rounded button-hover"
                 style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Next →</button>
+              <button type="button" onclick="copyLastWeekPlan()"
+                class="px-2 py-1 rounded button-hover"
+                style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;"
+                title="Copy last week's meals">📋 Copy</button>
+              <button type="button" onclick="showSuggestionsModal()"
+                class="px-2 py-1 rounded button-hover"
+                style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;"
+                title="Get recipe suggestions">💡 Ideas</button>
             </div>
           </div>
 
@@ -7367,8 +7626,11 @@ ${weekExpenses.expenses.length > 0 ? '<details class="mt-2"><summary style="curs
                       <div class="p-3 rounded" style="background:rgba(255,255,255,0.03);">
                         <div style="color:${CONFIG.text_color}; opacity:.7; font-size:${CONFIG.font_size * .85}px; margin-bottom:8px;">${meal}</div>
                         
-                        ${hasRecipes ? `
-                          <div class="flex gap-2 mb-2" style="flex-wrap: wrap;">
+                     ${hasRecipes ? `
+                          <div class="flex gap-2 mb-2" style="flex-wrap: wrap;"
+                               ondragover="handleDragOver(event)"
+                               ondragleave="handleDragLeave(event)"
+                               ondrop="handleDrop(event, '${date}', '${meal}')">
                             ${recipeIds.map(recipeId => {
                               const r = getRecipeById(recipeId);
                               if (!r) return '';
@@ -7377,7 +7639,10 @@ ${weekExpenses.expenses.length > 0 ? '<details class="mt-2"><summary style="curs
                               const img = (r && !isExternal) ? recipeThumb(r) : '';
                               
                               return `
-                                <div class="flex-1" style="min-width: 0; max-width: 50%; background:rgba(255,255,255,0.05); border-radius:8px; padding:8px;">
+                                <div class="flex-1" style="min-width: 0; max-width: 50%; background:rgba(255,255,255,0.05); border-radius:8px; padding:8px;"
+                                     draggable="true"
+                                     ondragstart="handleDragStart(event, '${date}', '${meal}', '${recipeId}')"
+                                     ondragend="handleDragEnd(event)">
                                   <a href="${isExternal ? '#' : (recipeUrl(r) || '#')}" 
                                      ${isExternal ? '' : 'target="_blank" rel="noopener noreferrer"'}
                                      ${isExternal ? 'onclick="return false;"' : ''}
@@ -7414,8 +7679,11 @@ ${weekExpenses.expenses.length > 0 ? '<details class="mt-2"><summary style="curs
                               `;
                             }).join('')}
                           </div>
-                        ` : `
-                          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * .9}px; opacity:.5; margin-bottom:8px;">
+                      ` : `
+                          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * .9}px; opacity:.5; margin-bottom:8px; padding:20px; border-radius:8px;"
+                               ondragover="handleDragOver(event)"
+                               ondragleave="handleDragLeave(event)"
+                               ondrop="handleDrop(event, '${date}', '${meal}')">
                             No meals planned
                           </div>
                         `}
