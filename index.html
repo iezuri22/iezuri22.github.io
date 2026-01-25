@@ -381,6 +381,7 @@ const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Vegetables', 'Dinner', 'Appetize
 takeoutBudget: 50,
       freestyleMeals: [],
       recordingNeeds: [],
+      inventory: [],
       // Freestyle specific state
       freestyleViewMode: 'list',
       freestyleFilterTag: null,
@@ -731,9 +732,21 @@ async function saveReceiptExpense() {
       }
 
       state.isLoading = true;
+      
+      // Get checked items to add to inventory
+      const itemCheckboxes = document.querySelectorAll('[id^="receiptItem_"]:checked');
+      const itemsToAdd = Array.from(itemCheckboxes).map(cb => ({
+        name: cb.dataset.name,
+        price: parseFloat(cb.dataset.price),
+        category: cb.dataset.category,
+        fromReceipt: true
+      }));
+
+      closeReceiptModal();
       render();
 
       try {
+        // Save expense
         const expense = {
           id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`,
           type: 'grocery',
@@ -744,11 +757,285 @@ async function saveReceiptExpense() {
         };
 
         await storage.create(expense);
-        closeReceiptModal();
-        showToast('Grocery expense logged!', 'success');
+
+        // Add items to inventory
+        for (const item of itemsToAdd) {
+          await addInventoryItem(item);
+        }
+
+        const itemMsg = itemsToAdd.length > 0 ? ` + ${itemsToAdd.length} items added to inventory` : '';
+        showToast(`Grocery expense logged!${itemMsg}`, 'success');
       } catch (e) {
         console.error(e);
         showError('Failed to save expense');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
+
+   // ===== INVENTORY =====
+    function getInventoryItems() {
+      return state.recipes.filter(r => r.id?.startsWith('inventory_'));
+    }
+
+    async function addInventoryItem(item) {
+      const inventoryItem = {
+        id: `inventory_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        name: item.name,
+        quantity: item.quantity || 1,
+        unit: item.unit || '',
+        category: item.category || 'Other',
+        purchaseDate: item.purchaseDate || new Date().toISOString().split('T')[0],
+        expirationDate: item.expirationDate || null,
+        price: item.price || null,
+        fromReceipt: item.fromReceipt || false
+      };
+      
+      await storage.create(inventoryItem);
+      return inventoryItem;
+    }
+
+    async function updateInventoryItem(id, updates) {
+      const item = state.recipes.find(r => r.id === id);
+      if (!item) return;
+      
+      const updated = { ...item, ...updates };
+      await storage.update(updated);
+    }
+
+    async function deleteInventoryItem(id) {
+      const item = state.recipes.find(r => r.id === id);
+      if (!item) return;
+      
+      await storage.delete(item);
+      showToast('Item removed', 'success');
+    }
+
+    function extractItemsFromReceipt(text) {
+      const lines = text.split('\n');
+      const items = [];
+      
+      // Pattern to match item lines: typically "ITEM NAME" followed by price
+      const itemPattern = /^([A-Z][A-Z\s\-\/&]+[A-Z])\s+\$?(\d+\.?\d*)/;
+      const itemPattern2 = /^(\d+\s+)?([A-Z][A-Z\s\-\/&]+)\s+\$?(\d+\.\d{2})/;
+      
+      for (const line of lines) {
+        const trimmed = line.trim();
+        
+        // Skip common non-item lines
+        if (trimmed.match(/^(TOTAL|SUBTOTAL|TAX|BALANCE|CHANGE|CASH|CREDIT|DEBIT|VISA|MASTERCARD|THANK|SALE|TRANSACTION)/i)) {
+          continue;
+        }
+        
+        // Try to extract item and price
+        let match = trimmed.match(itemPattern) || trimmed.match(itemPattern2);
+        
+        if (match) {
+          const name = (match[1] || match[2]).trim();
+          const price = parseFloat(match[match.length - 1]);
+          
+          if (name.length > 2 && price > 0 && price < 500) {
+            items.push({
+              name: formatItemName(name),
+              price: price,
+              quantity: 1,
+              category: guessCategory(name)
+            });
+          }
+        }
+      }
+      
+      return items;
+    }
+
+    function formatItemName(name) {
+      // Convert "CHICKEN BREAST BNLS" to "Chicken Breast Bnls"
+      return name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function guessCategory(name) {
+      const lower = name.toLowerCase();
+      
+      if (lower.match(/chicken|beef|pork|salmon|fish|shrimp|turkey|sausage|meat|steak/)) return 'Meat & Seafood';
+      if (lower.match(/milk|cheese|yogurt|butter|cream|egg/)) return 'Dairy & Eggs';
+      if (lower.match(/bread|bagel|tortilla|roll/)) return 'Bakery';
+      if (lower.match(/apple|banana|orange|berry|fruit|grape|melon/)) return 'Produce';
+      if (lower.match(/lettuce|spinach|kale|carrot|broccoli|tomato|onion|potato|vegetable|greens|pepper|cucumber|squash|zucchini/)) return 'Produce';
+      if (lower.match(/frozen|ice cream/)) return 'Frozen';
+      if (lower.match(/soup|sauce|pasta|rice|bean|can/)) return 'Pantry';
+      if (lower.match(/chip|snack|cookie|cracker/)) return 'Snacks';
+      if (lower.match(/water|juice|soda|drink|coffee|tea/)) return 'Beverages';
+      
+      return 'Other';
+    }
+
+    function renderInventory() {
+      const inventory = getInventoryItems();
+      const categories = ['Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Other'];
+      
+      const grouped = {};
+      categories.forEach(cat => grouped[cat] = []);
+      
+      inventory.forEach(item => {
+        const cat = item.category || 'Other';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(item);
+      });
+
+      return `
+        <div class="p-4 max-w-2xl mx-auto">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
+              🏠 Inventory
+            </h2>
+            <button onclick="showAddInventoryModal()"
+              class="px-3 py-1.5 rounded button-hover"
+              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+              + Add Item
+            </button>
+          </div>
+
+          ${inventory.length === 0 ? `
+            <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
+              <div style="font-size:3rem; margin-bottom:1rem;">📦</div>
+              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No items in inventory</div>
+              <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px;">
+                Scan a receipt or add items manually
+              </div>
+            </div>
+          ` : `
+            ${categories.map(cat => {
+              const items = grouped[cat];
+              if (items.length === 0) return '';
+              
+              return `
+                <div class="mb-4">
+                  <h3 class="font-semibold mb-2" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
+                    ${cat} (${items.length})
+                  </h3>
+                  <div class="space-y-2">
+                    ${items.map(item => `
+                      <div class="flex items-center justify-between p-3 rounded" style="background:${CONFIG.surface_color};">
+                        <div>
+                          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px;">
+                            ${esc(item.name)}
+                          </div>
+                          <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px;">
+                            ${item.quantity || 1}${item.unit ? ' ' + item.unit : ''} 
+                            ${item.price ? ' • $' + item.price.toFixed(2) : ''}
+                            ${item.purchaseDate ? ' • Added ' + new Date(item.purchaseDate).toLocaleDateString() : ''}
+                          </div>
+                        </div>
+                        <div class="flex gap-2">
+                          <button onclick="useInventoryItem('${item.id}')"
+                            class="px-2 py-1 rounded button-hover"
+                            style="background:${CONFIG.primary_action_color}; color:white; font-size:${CONFIG.font_size * 0.75}px;">
+                            Used
+                          </button>
+                          <button onclick="deleteInventoryItem('${item.id}')"
+                            class="px-2 py-1 rounded button-hover"
+                            style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.75}px;">
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    `).join('')}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          `}
+        </div>
+      `;
+    }
+
+    async function useInventoryItem(id) {
+      if (confirm('Mark this item as used/finished?')) {
+        await deleteInventoryItem(id);
+      }
+    }
+
+    function showAddInventoryModal() {
+      openModal(`
+        <div style="color: #1a1a2e;">
+          <h2 class="text-2xl font-bold mb-4">📦 Add Inventory Item</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Item Name:</label>
+            <input type="text" id="inventoryName" 
+                   class="w-full px-3 py-2 border rounded" 
+                   placeholder="e.g., Chicken Breast" autofocus />
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block mb-2 font-semibold">Quantity:</label>
+              <input type="number" id="inventoryQty" value="1"
+                     class="w-full px-3 py-2 border rounded" min="1" />
+            </div>
+            <div>
+              <label class="block mb-2 font-semibold">Unit (optional):</label>
+              <input type="text" id="inventoryUnit"
+                     class="w-full px-3 py-2 border rounded" 
+                     placeholder="lbs, oz, etc." />
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Category:</label>
+            <select id="inventoryCategory" class="w-full px-3 py-2 border rounded">
+              <option value="Produce">Produce</option>
+              <option value="Meat & Seafood">Meat & Seafood</option>
+              <option value="Dairy & Eggs">Dairy & Eggs</option>
+              <option value="Bakery">Bakery</option>
+              <option value="Frozen">Frozen</option>
+              <option value="Pantry">Pantry</option>
+              <option value="Snacks">Snacks</option>
+              <option value="Beverages">Beverages</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveManualInventoryItem()"
+                    class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Add Item
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveManualInventoryItem() {
+      const name = document.getElementById('inventoryName').value.trim();
+      const quantity = parseInt(document.getElementById('inventoryQty').value) || 1;
+      const unit = document.getElementById('inventoryUnit').value.trim();
+      const category = document.getElementById('inventoryCategory').value;
+
+      if (!name) {
+        showError('Please enter an item name');
+        return;
+      }
+
+      closeModal();
+      state.isLoading = true;
+      render();
+
+      try {
+        await addInventoryItem({
+          name,
+          quantity,
+          unit,
+          category
+        });
+        showToast('Item added to inventory!', 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to add item');
       } finally {
         state.isLoading = false;
         render();
@@ -805,6 +1092,35 @@ function renderReceiptModal() {
                     </div>
                   `}
                 </div>
+                ${(() => {
+                  const extractedItems = extractItemsFromReceipt(receiptScanState.extractedText);
+                  if (extractedItems.length === 0) return '';
+                  
+                  return `
+                    <div class="mb-4">
+                      <label class="block mb-2" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                        Items Found (${extractedItems.length})
+                      </label>
+                      <div class="max-h-32 overflow-y-auto rounded p-2" style="background:rgba(0,0,0,0.2);">
+                        ${extractedItems.map((item, i) => `
+                          <label class="flex items-center gap-2 py-1 cursor-pointer">
+                            <input type="checkbox" checked 
+                              id="receiptItem_${i}"
+                              data-name="${esc(item.name)}"
+                              data-price="${item.price}"
+                              data-category="${item.category}" />
+                            <span style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                              ${esc(item.name)} - $${item.price.toFixed(2)}
+                            </span>
+                          </label>
+                        `).join('')}
+                      </div>
+                      <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
+                        Checked items will be added to inventory
+                      </div>
+                    </div>
+                  `;
+                })()}
 
                 <div class="mb-4">
                   <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
@@ -2547,7 +2863,8 @@ function navigateTo(view) {
                 <option value="recipe-stats" ${state.currentView === 'recipe-stats' ? 'selected' : ''}>👨‍🍳 Top Cooked</option>
                 <option value="grocery-list" ${state.currentView && state.currentView.includes('grocery') ? 'selected' : ''}>🛒 Grocery</option>
                <option value="budget-dashboard" ${state.currentView === 'budget-dashboard' ? 'selected' : ''}>📊 Budget</option>
-                <option value="recording-needs" ${state.currentView === 'recording-needs' ? 'selected' : ''}>🎥 To Record</option>
+             <option value="recording-needs" ${state.currentView === 'recording-needs' ? 'selected' : ''}>🎥 To Record</option>
+                <option value="inventory" ${state.currentView === 'inventory' ? 'selected' : ''}>📦 Inventory</option>
               </select>
             </div>
             
@@ -6568,6 +6885,9 @@ function renderRecordingNeeds() {
           break;
           case 'recording-needs':
           content = renderRecordingNeeds();
+          break;
+          case 'inventory':
+          content = renderInventory();
           break;
         case 'grocery-select-meals':
           content = renderGrocerySelectMeals();
