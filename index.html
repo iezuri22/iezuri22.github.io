@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="en" class="h-full">
 <head>
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meal Planner</title>
@@ -601,6 +602,231 @@ externalMealTypes: [
         };
         reader.readAsDataURL(file);
       });
+    }
+
+   // ===== RECEIPT SCANNING =====
+    let receiptScanState = {
+      isScanning: false,
+      imageUrl: null,
+      extractedText: '',
+      detectedTotal: null,
+      showModal: false
+    };
+
+    async function handleReceiptUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      receiptScanState.isScanning = true;
+      receiptScanState.showModal = true;
+      receiptScanState.extractedText = '';
+      receiptScanState.detectedTotal = null;
+      render();
+
+      try {
+        // Compress and upload the image
+        showToast('Compressing photo...', 'info');
+        const compressedFile = await compressImage(file, 1200, 0.8);
+        
+        showToast('Uploading receipt...', 'info');
+        const imageUrl = await uploadPhoto(compressedFile);
+        
+        if (!imageUrl) {
+          receiptScanState.isScanning = false;
+          render();
+          return;
+        }
+        
+        receiptScanState.imageUrl = imageUrl;
+        render();
+
+        // Run OCR
+        showToast('Reading receipt...', 'info');
+        const result = await Tesseract.recognize(imageUrl, 'eng', {
+          logger: m => {
+            if (m.status === 'recognizing text') {
+              const pct = Math.round(m.progress * 100);
+              document.getElementById('ocrProgress')?.style.setProperty('width', pct + '%');
+            }
+          }
+        });
+
+        receiptScanState.extractedText = result.data.text;
+        receiptScanState.detectedTotal = extractTotalFromReceipt(result.data.text);
+        receiptScanState.isScanning = false;
+        
+        showToast('Receipt scanned!', 'success');
+        render();
+
+      } catch (e) {
+        console.error('Receipt scan error:', e);
+        showError('Failed to scan receipt');
+        receiptScanState.isScanning = false;
+        render();
+      }
+      
+      event.target.value = '';
+    }
+
+    function extractTotalFromReceipt(text) {
+      // Common patterns for totals on receipts
+      const patterns = [
+        /total[:\s]*\$?\s*(\d+\.?\d*)/i,
+        /grand\s*total[:\s]*\$?\s*(\d+\.?\d*)/i,
+        /amount\s*due[:\s]*\$?\s*(\d+\.?\d*)/i,
+        /balance\s*due[:\s]*\$?\s*(\d+\.?\d*)/i,
+        /total\s*amount[:\s]*\$?\s*(\d+\.?\d*)/i,
+        /you\s*paid[:\s]*\$?\s*(\d+\.?\d*)/i,
+        /charge[:\s]*\$?\s*(\d+\.?\d*)/i,
+      ];
+
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          const amount = parseFloat(match[1]);
+          if (amount > 0 && amount < 10000) {
+            return amount;
+          }
+        }
+      }
+
+      // Fallback: find the largest dollar amount (likely the total)
+      const amounts = text.match(/\$?\d+\.\d{2}/g) || [];
+      const numbers = amounts.map(a => parseFloat(a.replace('$', '')));
+      const validNumbers = numbers.filter(n => n > 0 && n < 10000);
+      
+      if (validNumbers.length > 0) {
+        return Math.max(...validNumbers);
+      }
+
+      return null;
+    }
+
+    function closeReceiptModal() {
+      receiptScanState = {
+        isScanning: false,
+        imageUrl: null,
+        extractedText: '',
+        detectedTotal: null,
+        showModal: false
+      };
+      render();
+    }
+
+    async function saveReceiptExpense() {
+      const amountInput = document.getElementById('receiptAmount');
+      const noteInput = document.getElementById('receiptNote');
+      const amount = parseFloat(amountInput?.value);
+      const note = noteInput?.value || '';
+
+      if (!amount || amount <= 0) {
+        showError('Please enter a valid amount');
+        return;
+      }
+
+      const expense = {
+        id: 'expense_' + Date.now(),
+        type: 'grocery',
+        amount: amount,
+        date: new Date().toISOString().split('T')[0],
+        note: note,
+        receipt_url: receiptScanState.imageUrl,
+        createdAt: new Date().toISOString()
+      };
+
+      state.expenses.push(expense);
+      await saveExpenses();
+      
+      closeReceiptModal();
+      showToast('Expense saved!', 'success');
+    }
+
+    function renderReceiptModal() {
+      if (!receiptScanState.showModal) return '';
+
+      return `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.8);">
+          <div class="w-full max-w-md rounded-lg p-4 max-h-[90vh] overflow-y-auto" style="background:${CONFIG.surface_color};">
+            <div class="flex justify-between items-center mb-4">
+              <h3 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.2}px;">
+                Scan Receipt
+              </h3>
+              <button onclick="closeReceiptModal()" style="color:${CONFIG.text_color}; font-size:1.5rem;">&times;</button>
+            </div>
+
+            ${receiptScanState.isScanning ? `
+              <div class="text-center py-8">
+                <div style="color:${CONFIG.text_color}; margin-bottom:16px;">Reading receipt...</div>
+                <div class="w-full rounded-full h-2" style="background:rgba(255,255,255,0.1);">
+                  <div id="ocrProgress" class="h-2 rounded-full transition-all" style="background:${CONFIG.primary_action_color}; width:0%;"></div>
+                </div>
+              </div>
+            ` : `
+              ${receiptScanState.imageUrl ? `
+                <div class="mb-4">
+                  <img src="${receiptScanState.imageUrl}" class="w-full rounded" style="max-height:200px; object-fit:contain;" />
+                </div>
+
+                <div class="mb-4">
+                  <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                    Amount ${receiptScanState.detectedTotal ? '(detected)' : ''}
+                  </label>
+                  <div class="flex items-center gap-2">
+                    <span style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.2}px;">$</span>
+                    <input type="number" 
+                      id="receiptAmount" 
+                      step="0.01" 
+                      value="${receiptScanState.detectedTotal || ''}"
+                      placeholder="0.00"
+                      class="flex-1 px-3 py-2 rounded"
+                      style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:${CONFIG.font_size * 1.2}px;" />
+                  </div>
+                  ${receiptScanState.detectedTotal ? `
+                    <div style="color:${CONFIG.accent_color}; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
+                      Auto-detected from receipt
+                    </div>
+                  ` : `
+                    <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
+                      Couldn't detect total - please enter manually
+                    </div>
+                  `}
+                </div>
+
+                <div class="mb-4">
+                  <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                    Note (optional)
+                  </label>
+                  <input type="text" 
+                    id="receiptNote" 
+                    placeholder="e.g., Costco weekly groceries"
+                    class="w-full px-3 py-2 rounded"
+                    style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+                </div>
+
+                <details class="mb-4">
+                  <summary style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.8}px; cursor:pointer;">
+                    View extracted text
+                  </summary>
+                  <pre class="mt-2 p-2 rounded text-xs overflow-auto max-h-32" style="background:rgba(0,0,0,0.3); color:${CONFIG.text_color}; opacity:0.7; white-space:pre-wrap;">${esc(receiptScanState.extractedText || 'No text detected')}</pre>
+                </details>
+
+                <div class="flex gap-2">
+                  <button onclick="closeReceiptModal()"
+                    class="flex-1 py-2 rounded"
+                    style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};">
+                    Cancel
+                  </button>
+                  <button onclick="saveReceiptExpense()"
+                    class="flex-1 py-2 rounded font-semibold"
+                    style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+                    Save Expense
+                  </button>
+                </div>
+              ` : ''}
+            `}
+          </div>
+        </div>
+      `;
     }
 
    // ===== PHOTO UPLOAD =====
@@ -5357,7 +5583,7 @@ function setCurrentWeek() {
                   </div>
                 </div>
 
-                <!-- Quick Add Buttons -->
+               <!-- Quick Add Buttons -->
               <div class="flex gap-1">
                   <button type="button" onclick="showAddExpenseModal('grocery')"
                     class="flex-1 px-2 py-1 rounded button-hover"
@@ -5369,7 +5595,17 @@ function setCurrentWeek() {
                     style="background:#f59e0b; color:white; font-size:${CONFIG.font_size * 0.75}px; font-weight:600;">
                     + Takeout
                   </button>
+                  <button type="button" onclick="document.getElementById('receiptInput').click()"
+                    class="flex-1 px-2 py-1 rounded button-hover"
+                    style="background:#8b5cf6; color:white; font-size:${CONFIG.font_size * 0.75}px; font-weight:600;">
+                    📷 Scan
+                  </button>
                 </div>
+                <input type="file" 
+                  id="receiptInput" 
+                  accept="image/*"
+                  onchange="handleReceiptUpload(event)"
+                  style="display:none;" />
 
                <!-- Recent Expenses (Collapsible) -->
 ${weekExpenses.expenses.length > 0 ? '<details class="mt-2"><summary style="cursor:pointer; color:' + CONFIG.text_color + '; font-size:' + (CONFIG.font_size * 0.75) + 'px; opacity:0.7; list-style:none; display:flex; align-items:center; gap:4px;"><span>▶</span> Recent (' + weekExpenses.expenses.length + ')</summary><div class="mt-1 space-y-1 max-h-32 overflow-y-auto">' + weekExpenses.expenses.sort((a, b) => {
@@ -6347,6 +6583,7 @@ function renderRecordingNeeds() {
         <div style="background: ${CONFIG.background_color}; min-height: 100vh;">
           ${renderNav()}
           ${content}
+          ${renderReceiptModal()}
         </div>
       `;
     }
