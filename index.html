@@ -775,8 +775,8 @@ async function saveReceiptExpense() {
     }
 
    // ===== INVENTORY =====
-    function getInventoryItems() {
-      return state.recipes.filter(r => r.id?.startsWith('inventory_'));
+  function getInventoryItems() {
+      return state.inventory || [];
     }
 
     async function addInventoryItem(item) {
@@ -2997,7 +2997,7 @@ function getPlannedMealsForWeek(weekStart) {
 
 
 // ===== DATA HANDLER =====
-    const dataHandler = {
+const dataHandler = {
       onDataChanged(data) {
         // Skip if we're in the middle of an optimistic update
         if (state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil) {
@@ -3006,6 +3006,7 @@ function getPlannedMealsForWeek(weekStart) {
         }
         
         state.recipes = data.filter(d => d.id && d.id.startsWith('recipe_'));
+        state.inventory = data.filter(d => d.id && d.id.startsWith('inventory_'));
         let planData = data.filter(d => d.date && d.id && d.id.startsWith('plan_'));
         
         // Migrate old plan format to new array format
