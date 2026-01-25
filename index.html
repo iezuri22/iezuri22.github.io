@@ -3627,7 +3627,11 @@ ${list.map(r => {
       }
       
       // Sort by date descending
-      filteredMeals.sort((a, b) => new Date(b.date) - new Date(a.date));
+      filteredMeals.sort((a, b) => {
+  const dateDiff = new Date(b.date) - new Date(a.date);
+  if (dateDiff !== 0) return dateDiff;
+  return new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0);
+});
       
       const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
       const tipsCount = state.recipes.filter(r => r.isTip).length;
@@ -4879,7 +4883,11 @@ ${r.isTip ? `<div style="color:#667eea; font-weight:600; margin-top:8px;">📝 T
         </div>`;
     }
 function showManageExpensesModal() {
-      const expenses = state.budgetExpenses.sort((a, b) => new Date(b.date) - new Date(a.date));
+      const expenses = state.budgetExpenses.sort((a, b) => {
+  const dateDiff = new Date(b.date) - new Date(a.date);
+  if (dateDiff !== 0) return dateDiff;
+  return new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0);
+});
       
       openModal(`
         <div style="color: #1a1a2e;">
@@ -5364,7 +5372,11 @@ function setCurrentWeek() {
                 </div>
 
                <!-- Recent Expenses (Collapsible) -->
-${weekExpenses.expenses.length > 0 ? '<details class="mt-2"><summary style="cursor:pointer; color:' + CONFIG.text_color + '; font-size:' + (CONFIG.font_size * 0.75) + 'px; opacity:0.7; list-style:none; display:flex; align-items:center; gap:4px;"><span>▶</span> Recent (' + weekExpenses.expenses.length + ')</summary><div class="mt-1 space-y-1 max-h-32 overflow-y-auto">' + weekExpenses.expenses.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5).map(exp => { const [y,m,d] = exp.date.split("-"); const formattedDate = m + "/" + d + "/" + y; return '<div class="p-1.5 rounded flex items-center gap-2" style="background:rgba(255,255,255,0.03); font-size:' + (CONFIG.font_size * 0.75) + 'px;"><span>' + (exp.type === 'grocery' ? '🛒' : '🍔') + '</span><span style="color:' + CONFIG.text_color + '; font-weight:600;">$' + exp.amount.toFixed(0) + '</span><span style="color:' + CONFIG.text_color + '; opacity:0.6; font-size:' + (CONFIG.font_size * 0.7) + 'px;">' + formattedDate + (exp.note ? ' • ' + exp.note : '') + '</span></div>'; }).join('') + '</div></details>' : ''}
+${weekExpenses.expenses.length > 0 ? '<details class="mt-2"><summary style="cursor:pointer; color:' + CONFIG.text_color + '; font-size:' + (CONFIG.font_size * 0.75) + 'px; opacity:0.7; list-style:none; display:flex; align-items:center; gap:4px;"><span>▶</span> Recent (' + weekExpenses.expenses.length + ')</summary><div class="mt-1 space-y-1 max-h-32 overflow-y-auto">' + weekExpenses.expenses.sort((a, b) => {
+  const dateDiff = new Date(b.date) - new Date(a.date);
+  if (dateDiff !== 0) return dateDiff;
+  return new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0);
+}).slice(0, 5).map(exp => { const [y,m,d] = exp.date.split("-"); const formattedDate = m + "/" + d + "/" + y; return '<div class="p-1.5 rounded flex items-center gap-2" style="background:rgba(255,255,255,0.03); font-size:' + (CONFIG.font_size * 0.75) + 'px;"><span>' + (exp.type === 'grocery' ? '🛒' : '🍔') + '</span><span style="color:' + CONFIG.text_color + '; font-weight:600;">$' + exp.amount.toFixed(0) + '</span><span style="color:' + CONFIG.text_color + '; opacity:0.6; font-size:' + (CONFIG.font_size * 0.7) + 'px;">' + formattedDate + (exp.note ? ' • ' + exp.note : '') + '</span></div>'; }).join('') + '</div></details>' : ''}
               </div>
             `;
           })()}
