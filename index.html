@@ -404,6 +404,8 @@ takeoutBudget: 50,
       chefChatMessages: [],
       chefChatLoading: false,
       chefChatView: 'chat',
+      frequentItems: [],
+      activeTimers: [],
       notificationsEnabled: false,
       lastNotificationCheck: null,
       // Freestyle specific state
@@ -1084,7 +1086,11 @@ async function saveReceiptExpense() {
         fromReceipt: item.fromReceipt || false
       };
       
-      await storage.create(inventoryItem);
+     await storage.create(inventoryItem);
+      
+      // Track as frequent item
+      trackFrequentItem(item.name, item.category);
+      
       return inventoryItem;
     }
 
@@ -2231,9 +2237,26 @@ async function saveReceiptExpense() {
   function showAddInventoryModal() {
       const today = new Date().toISOString().split('T')[0];
       
+     const frequentItems = getFrequentItems(8);
+      
       openModal(`
         <div style="color: #1a1a2e;">
           <h2 class="text-2xl font-bold mb-4">📦 Add Inventory Item</h2>
+          
+          ${frequentItems.length > 0 ? `
+            <div class="mb-4">
+              <label class="block mb-2 font-semibold text-sm text-gray-600">Quick Add (frequently bought):</label>
+              <div class="flex flex-wrap gap-2">
+                ${frequentItems.map(item => `
+                  <button type="button" onclick="quickAddFrequentItem('${esc(item.name)}', '${esc(item.category)}')"
+                    class="px-3 py-1 rounded-full text-sm hover:opacity-80"
+                    style="background:#e0e7ff; color:#3730a3;">
+                    + ${esc(item.name)}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
           
           <div class="mb-4">
             <label class="block mb-2 font-semibold">Item Name:</label>
@@ -2323,6 +2346,27 @@ async function saveReceiptExpense() {
       
       // Set initial expiration suggestion
       setTimeout(updateSuggestedExpiration, 100);
+    }
+   async function quickAddFrequentItem(name, category) {
+      closeModal();
+      state.isLoading = true;
+      render();
+      
+      try {
+        await addInventoryItem({
+          name: name,
+          category: category,
+          quantity: 1,
+          purchaseDate: new Date().toISOString().split('T')[0]
+        });
+        showToast(`${name} added to inventory!`, 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to add item');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
     }
 
     function updateSuggestedExpiration() {
@@ -4169,6 +4213,8 @@ const dataHandler = {
         // Load chef chat history
         const chatHistory = data.find(d => d.id === 'chef_chat_history');
         state.chefChatMessages = chatHistory?.messages || [];
+        // Load frequent grocery items
+        state.frequentItems = data.filter(d => d.id?.startsWith('frequent_'));
         let planData = data.filter(d => d.date && d.id && d.id.startsWith('plan_'));
         
         // Migrate old plan format to new array format
@@ -4276,7 +4322,19 @@ function navigateTo(view) {
                <option value="purchase-history" ${state.currentView === 'purchase-history' ? 'selected' : ''}>🧾 History</option>
               </select>
 
-             
+             <!-- Timer Button -->
+              <button onclick="showTimerModal()"
+                class="px-2 py-1 rounded button-hover"
+                style="background:${state.activeTimers.length > 0 ? 'rgba(239, 68, 68, 0.2)' : 'transparent'};"
+                title="Set cooking timer">
+                <span style="font-size:1.2rem;">⏰</span>
+                ${state.activeTimers.length > 0 ? `
+                  <span class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold"
+                        style="background:#ef4444; color:white; min-width:18px; text-align:center;">
+                    ${state.activeTimers.length}
+                  </span>
+                ` : ''}
+              </button>
               
               <!-- Notification Bell -->
               ${(() => {
@@ -8982,6 +9040,177 @@ function renderRecordingNeeds() {
           ${renderChefChatButton()}
         </div>
       `;
+    }
+   // ===== COOKING TIMER =====
+    function startTimer(minutes, label = 'Timer') {
+      const timer = {
+        id: `timer_${Date.now()}`,
+        label: label,
+        duration: minutes * 60,
+        remaining: minutes * 60,
+        startedAt: Date.now(),
+        interval: null
+      };
+      
+      timer.interval = setInterval(() => {
+        timer.remaining = Math.max(0, timer.duration - Math.floor((Date.now() - timer.startedAt) / 1000));
+        renderTimerWidget();
+        
+        if (timer.remaining <= 0) {
+          clearInterval(timer.interval);
+          timerFinished(timer);
+        }
+      }, 1000);
+      
+      state.activeTimers.push(timer);
+      renderTimerWidget();
+      showToast(`Timer started: ${label} (${minutes} min)`, 'success');
+    }
+
+    function stopTimer(timerId) {
+      const timer = state.activeTimers.find(t => t.id === timerId);
+      if (timer?.interval) {
+        clearInterval(timer.interval);
+      }
+      state.activeTimers = state.activeTimers.filter(t => t.id !== timerId);
+      renderTimerWidget();
+    }
+
+    function timerFinished(timer) {
+      // Play sound
+      try {
+        const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdH2Onp+ZjXdwaICRm5yUhXFkZnuLmJuWhHBlZXqIlZiUgm9lZnmHk5eSgG5lZXmGkpWQf21lZXmFkZSPfm1lZXmEkJOOfWxlZXmEkJKNfGxlZXmDj5GMfGtlZXmDj5CLe2tlZXmCjpCKemtlZXmCjo+JeWplZXmBjY+IeGplZXmBjY6Hd2plZXmAjI6GdmplZXl/jI2FdWllZXl/i4yEdWllZXl+i4yDdGllZXl+iouCc2hlZXl9iouBcmhlZXl9ioqAcWhlZXl8iYl/cGhlZXl8iYl+b2dlZXl7iIh9bmZlZXl7iId8bWZlZXl6h4d7bGZlZXl6h4Z6a2ZlZXl5hoV5amZlZXl5hoV4aWZlZXl4hYR3aGVlZXh4hYN2Z2VlZXh3hIJ1ZmVlZXh3g4F0ZmVlZXh2g4BzZWVlZXh2gn9yZWVlZXh1gn5xZGVlZXh1gX1wZGVlZXh0gXxvY2VlZXh0gHtuY2VlZXhzgHptYmRlZXhzf3lsYmRlZXhyfnhrYWRlZXhyfnhqYWRlZXhxfXdpYGRlZXhxfHZoYGRlZXhwfHVnX2RlZXhwe3RmX2NlZXhve3RlXmNlZXhvem9jXWJhYnh1');
+        audio.play();
+      } catch (e) {}
+      
+      // Browser notification
+      if (Notification.permission === 'granted') {
+        new Notification('⏰ Timer Done!', { body: timer.label });
+      }
+      
+      // Show alert
+      showToast(`⏰ ${timer.label} is done!`, 'success');
+      
+      // Remove from active timers
+      state.activeTimers = state.activeTimers.filter(t => t.id !== timer.id);
+      renderTimerWidget();
+    }
+
+    function formatTime(seconds) {
+      const mins = Math.floor(seconds / 60);
+      const secs = seconds % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function renderTimerWidget() {
+      document.getElementById('timerWidget')?.remove();
+      
+      if (state.activeTimers.length === 0) return;
+      
+      const widgetHtml = `
+        <div id="timerWidget" class="fixed top-20 right-4 z-40 rounded-lg shadow-lg p-3" style="background:${CONFIG.surface_color}; min-width:150px;">
+          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px; font-weight:600; margin-bottom:8px;">
+            ⏰ Timers
+          </div>
+          ${state.activeTimers.map(timer => `
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <div>
+                <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">${esc(timer.label)}</div>
+                <div style="color:${timer.remaining < 60 ? '#ef4444' : CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 1.2}px; font-weight:bold;">
+                  ${formatTime(timer.remaining)}
+                </div>
+              </div>
+              <button onclick="stopTimer('${timer.id}')" 
+                class="px-2 py-1 rounded text-xs"
+                style="background:#dc2626; color:white;">
+                ✕
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      
+      document.body.insertAdjacentHTML('beforeend', widgetHtml);
+    }
+
+    function showTimerModal() {
+      openModal(`
+        <div style="color: #1a1a2e;">
+          <h2 class="text-2xl font-bold mb-4">⏰ Set Timer</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Timer Label:</label>
+            <input type="text" id="timerLabel" value="Cooking Timer"
+                   class="w-full px-3 py-2 border rounded" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Minutes:</label>
+            <input type="number" id="timerMinutes" value="10" min="1" max="180"
+                   class="w-full px-3 py-2 border rounded" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold text-sm text-gray-600">Quick presets:</label>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" onclick="document.getElementById('timerMinutes').value=1" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">1 min</button>
+              <button type="button" onclick="document.getElementById('timerMinutes').value=5" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">5 min</button>
+              <button type="button" onclick="document.getElementById('timerMinutes').value=10" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">10 min</button>
+              <button type="button" onclick="document.getElementById('timerMinutes').value=15" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">15 min</button>
+              <button type="button" onclick="document.getElementById('timerMinutes').value=20" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">20 min</button>
+              <button type="button" onclick="document.getElementById('timerMinutes').value=30" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">30 min</button>
+              <button type="button" onclick="document.getElementById('timerMinutes').value=45" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">45 min</button>
+              <button type="button" onclick="document.getElementById('timerMinutes').value=60" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300">60 min</button>
+            </div>
+          </div>
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="startTimerFromModal()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Start Timer
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function startTimerFromModal() {
+      const label = document.getElementById('timerLabel')?.value || 'Timer';
+      const minutes = parseInt(document.getElementById('timerMinutes')?.value) || 10;
+      
+      closeModal();
+      startTimer(minutes, label);
+    }
+   // ===== FREQUENT ITEMS =====
+    async function trackFrequentItem(itemName, category) {
+      const key = itemName.toLowerCase().trim();
+      const id = `frequent_${key.replace(/[^a-z0-9]/g, '_').slice(0, 50)}`;
+      
+      const existing = state.frequentItems.find(f => f.id === id);
+      
+      if (existing) {
+        existing.count = (existing.count || 1) + 1;
+        existing.lastUsed = new Date().toISOString();
+        await storage.update(existing);
+      } else {
+        const newItem = {
+          id: id,
+          name: itemName,
+          category: category || 'Other',
+          count: 1,
+          lastUsed: new Date().toISOString()
+        };
+        await storage.create(newItem);
+        state.frequentItems.push(newItem);
+      }
+    }
+
+    function getFrequentItems(limit = 10) {
+      return [...state.frequentItems]
+        .sort((a, b) => (b.count || 0) - (a.count || 0))
+        .slice(0, limit);
     }
 
    // ===== CHEF CHAT =====
