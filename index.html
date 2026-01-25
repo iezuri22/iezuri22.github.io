@@ -8976,6 +8976,21 @@ function renderRecordingNeeds() {
 
    // ===== CHEF CHAT =====
     const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';
+   function formatChefMessage(text) {
+      return text
+        // Bold: **text** or __text__
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/__(.+?)__/g, '<strong>$1</strong>')
+        // Italic: *text* or _text_
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/_(.+?)_/g, '<em>$1</em>')
+        // Numbered lists: 1. item
+        .replace(/^(\d+)\.\s+(.+)$/gm, '<div style="margin-left:1rem;">$1. $2</div>')
+        // Bullet lists: - item or • item
+        .replace(/^[-•]\s+(.+)$/gm, '<div style="margin-left:1rem;">• $1</div>')
+        // Line breaks
+        .replace(/\n/g, '<br>');
+    }
 
     function toggleChefChat() {
       state.chefChatOpen = !state.chefChatOpen;
@@ -9018,7 +9033,7 @@ function renderRecordingNeeds() {
               ` : state.chefChatMessages.map(msg => `
                 <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
                   <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
-                    ${esc(msg.content).replace(/\n/g, '<br>')}
+                    ${formatChefMessage(msg.content)}
                   </div>
                 </div>
               `).join('')}
