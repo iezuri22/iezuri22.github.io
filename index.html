@@ -4165,6 +4165,9 @@ const dataHandler = {
         
         // Load receipts
         state.receipts = data.filter(d => d.id && d.id.startsWith('receipt_'));
+        // Load chef chat history
+        const chatHistory = data.find(d => d.id === 'chef_chat_history');
+        state.chefChatMessages = chatHistory?.messages || [];
         let planData = data.filter(d => d.date && d.id && d.id.startsWith('plan_'));
         
         // Migrate old plan format to new array format
@@ -8976,6 +8979,34 @@ function renderRecordingNeeds() {
 
    // ===== CHEF CHAT =====
     const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';
+   async function saveChefChatHistory() {
+      // Keep only last 50 messages to save storage
+      const messagesToSave = state.chefChatMessages.slice(-50);
+      
+      const chatData = {
+        id: 'chef_chat_history',
+        messages: messagesToSave,
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Check if exists
+      const existing = await storage._data?.find(d => d.id === 'chef_chat_history');
+      
+      if (existing) {
+        await storage.update(chatData);
+      } else {
+        await storage.create(chatData);
+      }
+    }
+
+    function clearChefChatHistory() {
+      if (confirm('Clear all chat history with Chef Claude?')) {
+        state.chefChatMessages = [];
+        saveChefChatHistory();
+        renderChefChat();
+        showToast('Chat history cleared', 'success');
+      }
+    }
    function formatChefMessage(text) {
       return text
         // Bold: **text** or __text__
@@ -9007,15 +9038,22 @@ function renderRecordingNeeds() {
         <div id="chefChatModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style="background:rgba(0,0,0,0.5);">
           <div class="w-full max-w-lg rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height:80vh;">
             
-            <!-- Header -->
+           <!-- Header -->
             <div class="flex items-center justify-between p-4 border-b border-gray-700">
               <div class="flex items-center gap-2">
                 <span style="font-size:1.5rem;">🤖</span>
                 <span style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">Chef Claude</span>
               </div>
-              <button onclick="toggleChefChat()" class="p-1 rounded hover:bg-gray-700" style="color:${CONFIG.text_color};">
-                ✕
-              </button>
+              <div class="flex items-center gap-2">
+                ${state.chefChatMessages.length > 0 ? `
+                  <button onclick="clearChefChatHistory()" class="p-1 rounded hover:bg-gray-700" style="color:${CONFIG.text_color}; font-size:0.8rem;" title="Clear history">
+                    🗑️
+                  </button>
+                ` : ''}
+                <button onclick="toggleChefChat()" class="p-1 rounded hover:bg-gray-700" style="color:${CONFIG.text_color};">
+                  ✕
+                </button>
+              </div>
             </div>
             
             <!-- Messages -->
@@ -9127,11 +9165,11 @@ function renderRecordingNeeds() {
           role: 'assistant',
           content: 'Sorry, I couldn\'t connect. Please check your internet and try again.'
         });
-      } finally {
+     } finally {
         state.chefChatLoading = false;
         renderChefChat();
+        saveChefChatHistory();
       }
-    }
 
     // ===== INITIALIZATION =====
     async function init() {
