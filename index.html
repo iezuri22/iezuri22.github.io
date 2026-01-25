@@ -2199,8 +2199,7 @@ async function saveReceiptExpense() {
       const category = document.getElementById('editInvCategory').value;
       const expirationDate = document.getElementById('editInvExpiration').value;
       const isFrozen = document.getElementById('editInvFrozen').checked;
-      const imageUrl = document.getElementById('editInvImageUrl').value.trim();
-      const updateDefault = document.getElementById('editInvUpdateDefault').checked;
+     const imageUrl = document.getElementById('editInvImageUrl').value.trim();
       
       if (!name) {
         showError('Please enter an item name');
