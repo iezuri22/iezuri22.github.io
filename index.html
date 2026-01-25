@@ -9278,7 +9278,7 @@ function renderRecordingNeeds() {
         return;
       }
       
-      // Create recipe object
+     // Create recipe object
       const recipe = {
         id: `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         title: title,
@@ -9286,8 +9286,13 @@ function renderRecordingNeeds() {
         servings: servings,
         prepTime: prepTime,
         cookTime: cookTime,
-        ingredients: ingredientsData,
-        instructions: instructions,
+        ingredientsRows: ingredientsData.map(ing => ({
+          qty: ing.amount || '',
+          unit: ing.unit || '',
+          name: ing.item || '',
+          group: ing.group || 'Other'
+        })),
+        instructions: instructions.join('\n'),
         notes: notes,
         image: image || null,
         sourceUrl: sourceUrl,
