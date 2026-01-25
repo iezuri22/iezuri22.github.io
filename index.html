@@ -9093,8 +9093,7 @@ function renderRecordingNeeds() {
       render();
       showToast('Importing recipe...', 'info');
       
-     try {
-        // Use Chef Claude to fetch and extract recipe data
+      try {
         const response = await fetch(CHEF_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -9124,20 +9123,19 @@ function renderRecordingNeeds() {
         
         if (data.error) {
           showError(data.error);
+          state.isLoading = false;
+          render();
           return;
         }
         
         if (data.content && data.content[0]?.text) {
           const text = data.content[0].text;
           
-          // Extract JSON from response
           let recipeData;
           try {
-            // Clean up response - remove markdown code blocks if present
             let cleanText = text.trim();
             cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
             
-            // Try to find JSON in the response
             const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
               recipeData = JSON.parse(jsonMatch[0]);
@@ -9147,55 +9145,11 @@ function renderRecordingNeeds() {
           } catch (e) {
             console.error('Failed to parse recipe JSON:', e, text);
             showError('Could not parse recipe data. Please try a different URL.');
+            state.isLoading = false;
+            render();
             return;
           }
           
-          // Show preview modal
-          showImportPreviewModal(recipeData, url);
-        } else {
-          showError('Could not fetch recipe. Please try a different URL.');
-        }
-{
-  "title": "Recipe Name",
-  "category": "one of: Breakfast, Lunch, Dinner, Dessert, Snack, Beverage, Other",
-  "servings": number,
-  "prepTime": "e.g. 15 mins",
-  "cookTime": "e.g. 30 mins", 
-  "ingredients": [
-    {"item": "ingredient name", "amount": "quantity", "unit": "unit of measure", "group": "one of: Proteins, Vegetables, Carbs, Dairy, Fruits, Seasonings, Oils, Sweeteners, Other"}
-  ],
-  "instructions": ["Step 1", "Step 2", "Step 3"],
-  "notes": "any tips or notes",
-  "sourceUrl": "the original url"
-}
-
-URL to extract: ${url}`
-            }]
-          })
-        });
-        
-        const data = await response.json();
-        
-        if (data.content && data.content[0]?.text) {
-          const text = data.content[0].text;
-          
-          // Extract JSON from response
-          let recipeData;
-          try {
-            // Try to find JSON in the response
-            const jsonMatch = text.match(/\{[\s\S]*\}/);
-            if (jsonMatch) {
-              recipeData = JSON.parse(jsonMatch[0]);
-            } else {
-              throw new Error('No JSON found in response');
-            }
-          } catch (e) {
-            console.error('Failed to parse recipe JSON:', e, text);
-            showError('Could not parse recipe data. Please try a different URL.');
-            return;
-          }
-          
-          // Show preview modal
           showImportPreviewModal(recipeData, url);
         } else {
           showError('Could not fetch recipe. Please try a different URL.');
