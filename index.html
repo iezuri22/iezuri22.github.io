@@ -381,7 +381,8 @@ const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Vegetables', 'Dinner', 'Appetize
 takeoutBudget: 50,
       freestyleMeals: [],
       recordingNeeds: [],
-      inventory: [],
+     inventory: [],
+      expirationDefaults: {},
       // Freestyle specific state
       freestyleViewMode: 'list',
       freestyleFilterTag: null,
@@ -774,26 +775,187 @@ async function saveReceiptExpense() {
       }
     }
 
-   // ===== INVENTORY =====
-  function getInventoryItems() {
+  // ===== INVENTORY =====
+    
+    // AI-suggested expiration days by category/item
+    const DEFAULT_EXPIRATION_DAYS = {
+      // Produce
+      'leafy greens': 5,
+      'lettuce': 5,
+      'spinach': 5,
+      'kale': 7,
+      'berries': 5,
+      'strawberries': 5,
+      'blueberries': 7,
+      'bananas': 7,
+      'apples': 21,
+      'oranges': 21,
+      'lemons': 21,
+      'limes': 21,
+      'avocados': 5,
+      'tomatoes': 7,
+      'cucumbers': 7,
+      'carrots': 14,
+      'baby carrots': 14,
+      'broccoli': 7,
+      'cauliflower': 7,
+      'bell peppers': 7,
+      'onions': 30,
+      'garlic': 30,
+      'potatoes': 21,
+      'mushrooms': 7,
+      'zucchini': 7,
+      'squash': 14,
+      'asparagus': 5,
+      'green beans': 7,
+      'brussels sprouts': 7,
+      'celery': 14,
+      'corn': 3,
+      
+      // Meat & Seafood (refrigerated)
+      'chicken breast': 3,
+      'chicken thighs': 3,
+      'chicken': 3,
+      'ground beef': 3,
+      'steak': 5,
+      'pork chops': 5,
+      'bacon': 7,
+      'sausage': 5,
+      'salmon': 2,
+      'shrimp': 2,
+      'fish': 2,
+      
+      // Dairy
+      'milk': 10,
+      'eggs': 28,
+      'butter': 30,
+      'cheese': 21,
+      'yogurt': 14,
+      'cream cheese': 14,
+      'sour cream': 14,
+      
+      // Bakery
+      'bread': 7,
+      'bagels': 7,
+      'tortillas': 14,
+      
+      // Pantry (long shelf life)
+      'rice': 365,
+      'pasta': 365,
+      'canned beans': 730,
+      'olive oil': 365,
+      'soup': 365,
+      
+      // Default by category
+      '_Produce': 7,
+      '_Meat & Seafood': 3,
+      '_Dairy & Eggs': 14,
+      '_Bakery': 7,
+      '_Frozen': 180,
+      '_Pantry': 180,
+      '_Snacks': 60,
+      '_Beverages': 30,
+      '_Other': 30,
+      '_Uncategorized': 7
+    };
+
+    function getExpirationDays(itemName, category) {
+      const lowerName = itemName.toLowerCase();
+      
+      // Check user's custom defaults first
+      if (state.expirationDefaults[lowerName]) {
+        return state.expirationDefaults[lowerName];
+      }
+      
+      // Check AI defaults by item name
+      for (const [key, days] of Object.entries(DEFAULT_EXPIRATION_DAYS)) {
+        if (!key.startsWith('_') && lowerName.includes(key)) {
+          return days;
+        }
+      }
+      
+      // Fallback to category default
+      return DEFAULT_EXPIRATION_DAYS['_' + category] || 7;
+    }
+
+    function suggestExpirationDate(itemName, category, purchaseDate) {
+      const days = getExpirationDays(itemName, category);
+      const date = new Date(purchaseDate || new Date());
+      date.setDate(date.getDate() + days);
+      return date.toISOString().split('T')[0];
+    }
+
+    function getExpirationStatus(item) {
+      if (item.isFrozen) return 'frozen';
+      if (!item.expirationDate) return 'unknown';
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expDate = new Date(item.expirationDate);
+      const daysUntil = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+      
+      if (daysUntil < 0) return 'expired';
+      if (daysUntil <= 2) return 'expiring-soon';
+      if (daysUntil <= 5) return 'expiring';
+      return 'fresh';
+    }
+
+    function getExpirationColor(status) {
+      switch (status) {
+        case 'expired': return '#ef4444'; // red
+        case 'expiring-soon': return '#f97316'; // orange
+        case 'expiring': return '#eab308'; // yellow
+        case 'fresh': return '#22c55e'; // green
+        case 'frozen': return '#3b82f6'; // blue
+        default: return '#6b7280'; // gray
+      }
+    }
+
+    function getInventoryItems() {
       return state.inventory || [];
     }
 
-    async function addInventoryItem(item) {
+   async function addInventoryItem(item) {
+      const purchaseDate = item.purchaseDate || new Date().toISOString().split('T')[0];
+      const category = item.category || 'Uncategorized';
+      
       const inventoryItem = {
         id: `inventory_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         name: item.name,
         quantity: item.quantity || 1,
         unit: item.unit || '',
-        category: item.category || 'Other',
-        purchaseDate: item.purchaseDate || new Date().toISOString().split('T')[0],
-        expirationDate: item.expirationDate || null,
+        category: category,
+        purchaseDate: purchaseDate,
+        expirationDate: item.expirationDate || suggestExpirationDate(item.name, category, purchaseDate),
         price: item.price || null,
+        image_url: item.image_url || null,
+        isFrozen: item.isFrozen || false,
         fromReceipt: item.fromReceipt || false
       };
       
       await storage.create(inventoryItem);
       return inventoryItem;
+    }
+
+    async function saveExpirationDefault(itemName, days) {
+      const lowerName = itemName.toLowerCase();
+      const existingId = `expdefault_${lowerName.replace(/\s+/g, '_')}`;
+      
+      const existing = state.expirationDefaults[lowerName];
+      
+      const defaultItem = {
+        id: existingId,
+        itemName: lowerName,
+        days: days
+      };
+      
+      if (existing) {
+        await storage.update(defaultItem);
+      } else {
+        await storage.create(defaultItem);
+      }
+      
+      state.expirationDefaults[lowerName] = days;
     }
 
     async function updateInventoryItem(id, updates) {
@@ -1038,24 +1200,35 @@ async function saveReceiptExpense() {
       return 'Other';
     }
 
-    function renderInventory() {
+ function renderInventory() {
       const inventory = getInventoryItems();
-      const categories = ['Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Other'];
+      const categories = ['Uncategorized', 'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Other'];
       
       const grouped = {};
       categories.forEach(cat => grouped[cat] = []);
       
       inventory.forEach(item => {
-        const cat = item.category || 'Other';
+        const cat = item.category || 'Uncategorized';
         if (!grouped[cat]) grouped[cat] = [];
         grouped[cat].push(item);
       });
+
+      // Sort items in each category by expiration status
+      Object.keys(grouped).forEach(cat => {
+        grouped[cat].sort((a, b) => {
+          const statusOrder = { 'expired': 0, 'expiring-soon': 1, 'expiring': 2, 'fresh': 3, 'frozen': 4, 'unknown': 5 };
+          return (statusOrder[getExpirationStatus(a)] || 5) - (statusOrder[getExpirationStatus(b)] || 5);
+        });
+      });
+
+      // Count expiring items
+      const expiringCount = inventory.filter(i => ['expired', 'expiring-soon'].includes(getExpirationStatus(i))).length;
 
       return `
         <div class="p-4 max-w-2xl mx-auto">
           <div class="flex items-center justify-between mb-4">
             <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
-              🏠 Inventory
+              Inventory
             </h2>
             <button onclick="showAddInventoryModal()"
               class="px-3 py-1.5 rounded button-hover"
@@ -1063,6 +1236,14 @@ async function saveReceiptExpense() {
               + Add Item
             </button>
           </div>
+
+          ${expiringCount > 0 ? `
+            <div class="mb-4 p-3 rounded-lg" style="background:rgba(239, 68, 68, 0.2); border:1px solid rgba(239, 68, 68, 0.5);">
+              <div style="color:#fca5a5; font-size:${CONFIG.font_size * 0.9}px;">
+                ⚠️ ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon or expired
+              </div>
+            </div>
+          ` : ''}
 
           ${inventory.length === 0 ? `
             <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
@@ -1083,32 +1264,63 @@ async function saveReceiptExpense() {
                     ${cat} (${items.length})
                   </h3>
                   <div class="space-y-2">
-                    ${items.map(item => `
-                      <div class="flex items-center justify-between p-3 rounded" style="background:${CONFIG.surface_color};">
-                        <div>
-                          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px;">
+                    ${items.map(item => {
+                      const status = getExpirationStatus(item);
+                      const statusColor = getExpirationColor(status);
+                      const daysUntil = item.expirationDate ? 
+                        Math.ceil((new Date(item.expirationDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                      
+                      let statusText = '';
+                      if (item.isFrozen) statusText = '❄️ Frozen';
+                      else if (status === 'expired') statusText = '⚠️ Expired';
+                      else if (status === 'expiring-soon') statusText = `⚠️ ${daysUntil} day${daysUntil !== 1 ? 's' : ''} left`;
+                      else if (status === 'expiring') statusText = `${daysUntil} days left`;
+                      else if (daysUntil !== null) statusText = `${daysUntil} days left`;
+                      
+                      return `
+                      <div class="flex items-center gap-3 p-3 rounded" 
+                           style="background:${CONFIG.surface_color}; border-left:4px solid ${statusColor};">
+                        ${item.image_url ? `
+                          <img src="${esc(item.image_url)}" 
+                               style="width:50px; height:50px; object-fit:cover; border-radius:8px;" />
+                        ` : `
+                          <div style="width:50px; height:50px; background:rgba(255,255,255,0.1); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                            ${cat === 'Produce' ? '🥬' : cat === 'Meat & Seafood' ? '🥩' : cat === 'Dairy & Eggs' ? '🥛' : cat === 'Bakery' ? '🍞' : cat === 'Frozen' ? '🧊' : '📦'}
+                          </div>
+                        `}
+                        <div class="flex-1 min-w-0">
+                          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px; font-weight:500;">
                             ${esc(item.name)}
                           </div>
-                          <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px;">
+                          <div style="color:${statusColor}; font-size:${CONFIG.font_size * 0.75}px;">
+                            ${statusText}
+                          </div>
+                          <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.7}px;">
                             ${item.quantity || 1}${item.unit ? ' ' + item.unit : ''} 
                             ${item.price ? ' • $' + item.price.toFixed(2) : ''}
-                            ${item.purchaseDate ? ' • Added ' + new Date(item.purchaseDate).toLocaleDateString() : ''}
                           </div>
                         </div>
-                        <div class="flex gap-2">
+                        <div class="flex gap-1">
+                          <button onclick="toggleFrozen('${item.id}')"
+                            class="px-2 py-1 rounded button-hover"
+                            style="background:${item.isFrozen ? '#3b82f6' : 'rgba(255,255,255,0.1)'}; color:white; font-size:${CONFIG.font_size * 0.75}px;"
+                            title="${item.isFrozen ? 'Unfreeze' : 'Freeze'}">
+                            ❄️
+                          </button>
+                          <button onclick="showEditInventoryModal('${item.id}')"
+                            class="px-2 py-1 rounded button-hover"
+                            style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                            ✏️
+                          </button>
                           <button onclick="useInventoryItem('${item.id}')"
                             class="px-2 py-1 rounded button-hover"
-                            style="background:${CONFIG.primary_action_color}; color:white; font-size:${CONFIG.font_size * 0.75}px;">
-                            Used
-                          </button>
-                          <button onclick="deleteInventoryItem('${item.id}')"
-                            class="px-2 py-1 rounded button-hover"
-                            style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.75}px;">
-                            🗑️
+                            style="background:${CONFIG.primary_action_color}; color:white; font-size:${CONFIG.font_size * 0.75}px;"
+                            title="Mark as used">
+                            ✓
                           </button>
                         </div>
                       </div>
-                    `).join('')}
+                    `}).join('')}
                   </div>
                 </div>
               `;
@@ -1188,7 +1400,193 @@ async function saveReceiptExpense() {
       showToast('Item added!', 'success');
     }
 
-    function showAddInventoryModal() {
+   async function toggleFrozen(id) {
+      const item = state.inventory.find(i => i.id === id);
+      if (!item) return;
+      
+      const updated = { ...item, isFrozen: !item.isFrozen };
+      
+      // If unfreezing, recalculate expiration from today
+      if (item.isFrozen && !updated.isFrozen) {
+        updated.expirationDate = suggestExpirationDate(item.name, item.category, new Date().toISOString().split('T')[0]);
+      }
+      
+      await storage.update(updated);
+      showToast(updated.isFrozen ? 'Item frozen' : 'Item unfrozen', 'success');
+    }
+
+    function showEditInventoryModal(id) {
+      const item = state.inventory.find(i => i.id === id);
+      if (!item) return;
+      
+      const suggestedDays = getExpirationDays(item.name, item.category);
+      
+      openModal(`
+        <div style="color: #1a1a2e;">
+          <h2 class="text-2xl font-bold mb-4">Edit ${esc(item.name)}</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Item Name:</label>
+            <input type="text" id="editInvName" value="${esc(item.name)}"
+                   class="w-full px-3 py-2 border rounded" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Photo:</label>
+            ${item.image_url ? `
+              <img src="${esc(item.image_url)}" class="w-full h-32 object-cover rounded mb-2" />
+            ` : ''}
+            <div class="flex gap-2">
+              <input type="text" id="editInvImageUrl" value="${esc(item.image_url || '')}"
+                     class="flex-1 px-3 py-2 border rounded" placeholder="Paste image URL..." />
+              <button type="button" onclick="document.getElementById('editInvImageUpload').click()"
+                      class="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300">
+                📷 Upload
+              </button>
+              <input type="file" id="editInvImageUpload" accept="image/*" style="display:none;"
+                     onchange="handleEditInventoryImageUpload(event)" />
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block mb-2 font-semibold">Quantity:</label>
+              <input type="number" id="editInvQty" value="${item.quantity || 1}"
+                     class="w-full px-3 py-2 border rounded" min="1" />
+            </div>
+            <div>
+              <label class="block mb-2 font-semibold">Unit:</label>
+              <input type="text" id="editInvUnit" value="${esc(item.unit || '')}"
+                     class="w-full px-3 py-2 border rounded" placeholder="lbs, oz, etc." />
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Category:</label>
+            <select id="editInvCategory" class="w-full px-3 py-2 border rounded">
+              <option value="Uncategorized" ${item.category === 'Uncategorized' ? 'selected' : ''}>Uncategorized</option>
+              <option value="Produce" ${item.category === 'Produce' ? 'selected' : ''}>Produce</option>
+              <option value="Meat & Seafood" ${item.category === 'Meat & Seafood' ? 'selected' : ''}>Meat & Seafood</option>
+              <option value="Dairy & Eggs" ${item.category === 'Dairy & Eggs' ? 'selected' : ''}>Dairy & Eggs</option>
+              <option value="Bakery" ${item.category === 'Bakery' ? 'selected' : ''}>Bakery</option>
+              <option value="Frozen" ${item.category === 'Frozen' ? 'selected' : ''}>Frozen</option>
+              <option value="Pantry" ${item.category === 'Pantry' ? 'selected' : ''}>Pantry</option>
+              <option value="Snacks" ${item.category === 'Snacks' ? 'selected' : ''}>Snacks</option>
+              <option value="Beverages" ${item.category === 'Beverages' ? 'selected' : ''}>Beverages</option>
+              <option value="Other" ${item.category === 'Other' ? 'selected' : ''}>Other</option>
+            </select>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Expiration Date:</label>
+            <input type="date" id="editInvExpiration" value="${item.expirationDate || ''}"
+                   class="w-full px-3 py-2 border rounded" />
+            <div class="text-sm text-gray-500 mt-1">
+              AI suggests ${suggestedDays} days for this item
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="editInvUpdateDefault" />
+              <span class="text-sm">Set ${suggestedDays} days as my default for "${esc(item.name)}"</span>
+            </label>
+          </div>
+          
+          <div class="mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="editInvFrozen" ${item.isFrozen ? 'checked' : ''} />
+              <span>❄️ This item is frozen</span>
+            </label>
+          </div>
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveEditedInventoryItem('${item.id}')"
+                    class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Save Changes
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function handleEditInventoryImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      showToast('Uploading image...', 'info');
+      const compressed = await compressImage(file);
+      const url = await uploadPhoto(compressed);
+      
+      if (url) {
+        document.getElementById('editInvImageUrl').value = url;
+        showToast('Image uploaded!', 'success');
+      }
+      event.target.value = '';
+    }
+
+    async function saveEditedInventoryItem(id) {
+      const item = state.inventory.find(i => i.id === id);
+      if (!item) return;
+      
+      const name = document.getElementById('editInvName').value.trim();
+      const quantity = parseInt(document.getElementById('editInvQty').value) || 1;
+      const unit = document.getElementById('editInvUnit').value.trim();
+      const category = document.getElementById('editInvCategory').value;
+      const expirationDate = document.getElementById('editInvExpiration').value;
+      const isFrozen = document.getElementById('editInvFrozen').checked;
+      const imageUrl = document.getElementById('editInvImageUrl').value.trim();
+      const updateDefault = document.getElementById('editInvUpdateDefault').checked;
+      
+      if (!name) {
+        showError('Please enter an item name');
+        return;
+      }
+      
+      // Calculate days from purchase to expiration for default
+      if (updateDefault && expirationDate && item.purchaseDate) {
+        const purchaseMs = new Date(item.purchaseDate).getTime();
+        const expMs = new Date(expirationDate).getTime();
+        const days = Math.round((expMs - purchaseMs) / (1000 * 60 * 60 * 24));
+        if (days > 0) {
+          await saveExpirationDefault(name, days);
+          showToast(`Default expiration for "${name}" set to ${days} days`, 'info');
+        }
+      }
+      
+      const updated = {
+        ...item,
+        name,
+        quantity,
+        unit,
+        category,
+        expirationDate: expirationDate || null,
+        isFrozen,
+        image_url: imageUrl || null
+      };
+      
+      closeModal();
+      state.isLoading = true;
+      render();
+      
+      try {
+        await storage.update(updated);
+        showToast('Item updated!', 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to update item');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
+
+  function showAddInventoryModal() {
+      const today = new Date().toISOString().split('T')[0];
+      
       openModal(`
         <div style="color: #1a1a2e;">
           <h2 class="text-2xl font-bold mb-4">📦 Add Inventory Item</h2>
@@ -1197,7 +1595,22 @@ async function saveReceiptExpense() {
             <label class="block mb-2 font-semibold">Item Name:</label>
             <input type="text" id="inventoryName" 
                    class="w-full px-3 py-2 border rounded" 
-                   placeholder="e.g., Chicken Breast" autofocus />
+                   placeholder="e.g., Chicken Breast"
+                   oninput="updateSuggestedExpiration()" autofocus />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Photo (optional):</label>
+            <div class="flex gap-2">
+              <input type="text" id="inventoryImageUrl"
+                     class="flex-1 px-3 py-2 border rounded" placeholder="Paste image URL..." />
+              <button type="button" onclick="document.getElementById('inventoryImageUpload').click()"
+                      class="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300">
+                📷 Upload
+              </button>
+              <input type="file" id="inventoryImageUpload" accept="image/*" style="display:none;"
+                     onchange="handleAddInventoryImageUpload(event)" />
+            </div>
           </div>
           
           <div class="grid grid-cols-2 gap-4 mb-4">
@@ -1216,7 +1629,9 @@ async function saveReceiptExpense() {
           
           <div class="mb-4">
             <label class="block mb-2 font-semibold">Category:</label>
-            <select id="inventoryCategory" class="w-full px-3 py-2 border rounded">
+            <select id="inventoryCategory" class="w-full px-3 py-2 border rounded"
+                    onchange="updateSuggestedExpiration()">
+              <option value="Uncategorized">Uncategorized</option>
               <option value="Produce">Produce</option>
               <option value="Meat & Seafood">Meat & Seafood</option>
               <option value="Dairy & Eggs">Dairy & Eggs</option>
@@ -1227,6 +1642,27 @@ async function saveReceiptExpense() {
               <option value="Beverages">Beverages</option>
               <option value="Other">Other</option>
             </select>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Purchase Date:</label>
+            <input type="date" id="inventoryPurchaseDate" value="${today}"
+                   class="w-full px-3 py-2 border rounded"
+                   onchange="updateSuggestedExpiration()" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Expiration Date:</label>
+            <input type="date" id="inventoryExpiration"
+                   class="w-full px-3 py-2 border rounded" />
+            <div id="expirationSuggestion" class="text-sm text-gray-500 mt-1"></div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" id="inventoryFrozen" onchange="updateSuggestedExpiration()" />
+              <span>❄️ This item is frozen</span>
+            </label>
           </div>
           
           <div class="flex gap-2 justify-end">
@@ -1240,13 +1676,62 @@ async function saveReceiptExpense() {
           </div>
         </div>
       `);
+      
+      // Set initial expiration suggestion
+      setTimeout(updateSuggestedExpiration, 100);
     }
 
-    async function saveManualInventoryItem() {
+    function updateSuggestedExpiration() {
+      const name = document.getElementById('inventoryName')?.value || '';
+      const category = document.getElementById('inventoryCategory')?.value || 'Other';
+      const purchaseDate = document.getElementById('inventoryPurchaseDate')?.value;
+      const isFrozen = document.getElementById('inventoryFrozen')?.checked;
+      const expirationInput = document.getElementById('inventoryExpiration');
+      const suggestionDiv = document.getElementById('expirationSuggestion');
+      
+      if (!expirationInput || !suggestionDiv) return;
+      
+      if (isFrozen) {
+        suggestionDiv.textContent = '❄️ Frozen items don\'t expire';
+        expirationInput.value = '';
+        expirationInput.disabled = true;
+      } else {
+        expirationInput.disabled = false;
+        const days = getExpirationDays(name || category, category);
+        const suggestedDate = suggestExpirationDate(name || category, category, purchaseDate);
+        
+        if (!expirationInput.value) {
+          expirationInput.value = suggestedDate;
+        }
+        
+        suggestionDiv.textContent = `AI suggests ${days} days for ${name || category}`;
+      }
+    }
+
+    async function handleAddInventoryImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      showToast('Uploading image...', 'info');
+      const compressed = await compressImage(file);
+      const url = await uploadPhoto(compressed);
+      
+      if (url) {
+        document.getElementById('inventoryImageUrl').value = url;
+        showToast('Image uploaded!', 'success');
+      }
+      event.target.value = '';
+    }
+
+   async function saveManualInventoryItem() {
       const name = document.getElementById('inventoryName').value.trim();
       const quantity = parseInt(document.getElementById('inventoryQty').value) || 1;
       const unit = document.getElementById('inventoryUnit').value.trim();
       const category = document.getElementById('inventoryCategory').value;
+      const purchaseDate = document.getElementById('inventoryPurchaseDate').value;
+      const expirationDate = document.getElementById('inventoryExpiration').value;
+      const isFrozen = document.getElementById('inventoryFrozen').checked;
+      const imageUrl = document.getElementById('inventoryImageUrl')?.value.trim();
 
       if (!name) {
         showError('Please enter an item name');
@@ -1262,7 +1747,11 @@ async function saveReceiptExpense() {
           name,
           quantity,
           unit,
-          category
+          category,
+          purchaseDate,
+          expirationDate: isFrozen ? null : expirationDate,
+          isFrozen,
+          image_url: imageUrl || null
         });
         showToast('Item added to inventory!', 'success');
       } catch (e) {
@@ -3007,6 +3496,12 @@ const dataHandler = {
         
         state.recipes = data.filter(d => d.id && d.id.startsWith('recipe_'));
         state.inventory = data.filter(d => d.id && d.id.startsWith('inventory_'));
+        // Load expiration defaults
+        const expDefaults = data.filter(d => d.id && d.id.startsWith('expdefault_'));
+        state.expirationDefaults = {};
+        expDefaults.forEach(d => {
+          state.expirationDefaults[d.itemName] = d.days;
+        });
         let planData = data.filter(d => d.date && d.id && d.id.startsWith('plan_'));
         
         // Migrate old plan format to new array format
