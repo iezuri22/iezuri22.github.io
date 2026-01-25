@@ -1486,11 +1486,21 @@ async function saveReceiptExpense() {
             </div>
           </div>
           
-          <div class="mb-4">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" id="editInvUpdateDefault" />
-              <span class="text-sm">Set ${suggestedDays} days as my default for "${esc(item.name)}"</span>
-            </label>
+         <div class="mb-4 p-3 rounded" style="background:#f3f4f6;">
+            <label class="block mb-2 font-semibold text-sm">Default Expiration for "${esc(item.name)}":</label>
+            <div class="flex items-center gap-2">
+              <input type="number" id="editInvDefaultDays" value="${suggestedDays}"
+                     class="w-20 px-2 py-1 border rounded text-center" min="1" />
+              <span class="text-sm">days</span>
+              <button type="button" onclick="saveDefaultFromModal('${esc(item.name)}')"
+                      class="px-3 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600">
+                Save as Default
+              </button>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+              AI suggested ${DEFAULT_EXPIRATION_DAYS[item.name.toLowerCase()] || DEFAULT_EXPIRATION_DAYS['_' + item.category] || 7} days. 
+              ${state.expirationDefaults[item.name.toLowerCase()] ? `Your custom default: ${state.expirationDefaults[item.name.toLowerCase()]} days.` : ''}
+            </div>
           </div>
           
           <div class="mb-4">
@@ -1527,6 +1537,18 @@ async function saveReceiptExpense() {
       }
       event.target.value = '';
     }
+   async function saveDefaultFromModal(itemName) {
+      const daysInput = document.getElementById('editInvDefaultDays');
+      const days = parseInt(daysInput?.value);
+      
+      if (!days || days < 1) {
+        showError('Please enter a valid number of days');
+        return;
+      }
+      
+      await saveExpirationDefault(itemName, days);
+      showToast(`Default for "${itemName}" set to ${days} days`, 'success');
+    }
 
     async function saveEditedInventoryItem(id) {
       const item = state.inventory.find(i => i.id === id);
@@ -1544,17 +1566,6 @@ async function saveReceiptExpense() {
       if (!name) {
         showError('Please enter an item name');
         return;
-      }
-      
-      // Calculate days from purchase to expiration for default
-      if (updateDefault && expirationDate && item.purchaseDate) {
-        const purchaseMs = new Date(item.purchaseDate).getTime();
-        const expMs = new Date(expirationDate).getTime();
-        const days = Math.round((expMs - purchaseMs) / (1000 * 60 * 60 * 24));
-        if (days > 0) {
-          await saveExpirationDefault(name, days);
-          showToast(`Default expiration for "${name}" set to ${days} days`, 'info');
-        }
       }
       
       const updated = {
