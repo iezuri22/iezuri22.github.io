@@ -400,9 +400,10 @@ takeoutBudget: 50,
       receipts: [],
       draggedMeal: null,
       mealPlanTab: 'week',
-      chefChatOpen: false,
+     chefChatOpen: false,
       chefChatMessages: [],
       chefChatLoading: false,
+      chefChatView: 'chat',
       notificationsEnabled: false,
       lastNotificationCheck: null,
       // Freestyle specific state
@@ -9007,6 +9008,52 @@ function renderRecordingNeeds() {
         showToast('Chat history cleared', 'success');
       }
     }
+   function getChefChatHistory() {
+      // Group messages into conversations by date and topic
+      const conversations = [];
+      let currentConvo = null;
+      
+      state.chefChatMessages.forEach((msg, idx) => {
+        const msgDate = msg.timestamp ? new Date(msg.timestamp).toLocaleDateString() : 'Unknown';
+        
+        // Start a new conversation on each user message that follows an assistant message
+        // or if it's the first message
+        if (msg.role === 'user') {
+          const prevMsg = state.chefChatMessages[idx - 1];
+          
+          if (!currentConvo || (prevMsg && prevMsg.role === 'assistant')) {
+            // Get topic from first ~50 chars of user message
+            const topic = msg.content.slice(0, 50) + (msg.content.length > 50 ? '...' : '');
+            
+            currentConvo = {
+              date: msgDate,
+              topic: topic,
+              messages: [],
+              timestamp: msg.timestamp
+            };
+            conversations.push(currentConvo);
+          }
+        }
+        
+        if (currentConvo) {
+          currentConvo.messages.push(msg);
+        }
+      });
+      
+      // Group by date
+      const grouped = {};
+      conversations.forEach(convo => {
+        if (!grouped[convo.date]) {
+          grouped[convo.date] = [];
+        }
+        grouped[convo.date].push(convo);
+      });
+      
+      // Sort dates descending (newest first)
+      return Object.entries(grouped)
+        .sort((a, b) => new Date(b[0]) - new Date(a[0]))
+        .map(([date, convos]) => ({ date, conversations: convos }));
+    }
    function formatChefMessage(text) {
       return text
         // Bold: **text** or __text__
@@ -9038,7 +9085,7 @@ function renderRecordingNeeds() {
         <div id="chefChatModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4" style="background:rgba(0,0,0,0.5);">
           <div class="w-full max-w-lg rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height:80vh;">
             
-           <!-- Header -->
+          <!-- Header -->
             <div class="flex items-center justify-between p-4 border-b border-gray-700">
               <div class="flex items-center gap-2">
                 <span style="font-size:1.5rem;">🤖</span>
@@ -9046,6 +9093,12 @@ function renderRecordingNeeds() {
               </div>
               <div class="flex items-center gap-2">
                 ${state.chefChatMessages.length > 0 ? `
+                  <button onclick="state.chefChatView = state.chefChatView === 'history' ? 'chat' : 'history'; renderChefChat();" 
+                    class="p-1 px-2 rounded hover:bg-gray-700" 
+                    style="color:${CONFIG.text_color}; font-size:0.8rem; background:${state.chefChatView === 'history' ? 'rgba(255,255,255,0.1)' : 'transparent'};" 
+                    title="View history">
+                    📜 ${state.chefChatView === 'history' ? 'Back' : 'History'}
+                  </button>
                   <button onclick="clearChefChatHistory()" class="p-1 rounded hover:bg-gray-700" style="color:${CONFIG.text_color}; font-size:0.8rem;" title="Clear history">
                     🗑️
                   </button>
@@ -9058,30 +9111,68 @@ function renderRecordingNeeds() {
             
             <!-- Messages -->
             <div id="chefChatMessages" class="flex-1 overflow-y-auto p-4 space-y-3" style="min-height:300px;">
-              ${state.chefChatMessages.length === 0 ? `
-                <div style="color:${CONFIG.text_color}; opacity:0.6; text-align:center; padding:2rem;">
-                  <div style="font-size:2rem; margin-bottom:0.5rem;">👨‍🍳</div>
-                  <div>Ask me anything about cooking!</div>
-                  <div style="font-size:${CONFIG.font_size * 0.85}px; margin-top:0.5rem;">
-                    "How long to cook chicken at 400°F?"<br>
-                    "What can I substitute for heavy cream?"<br>
-                    "Is my salmon done?"
+              ${state.chefChatView === 'history' ? `
+                <!-- History View -->
+                ${(() => {
+                  const history = getChefChatHistory();
+                  if (history.length === 0) {
+                    return `<div style="color:${CONFIG.text_color}; opacity:0.6; text-align:center; padding:2rem;">No chat history yet</div>`;
+                  }
+                  
+                  return history.map(group => `
+                    <div class="mb-4">
+                      <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.8}px; margin-bottom:8px; font-weight:600;">
+                        ${group.date}
+                      </div>
+                      ${group.conversations.map((convo, idx) => `
+                        <details class="mb-2 rounded-lg" style="background:rgba(255,255,255,0.05);">
+                          <summary class="p-3 cursor-pointer" style="color:${CONFIG.text_color};">
+                            <span style="font-size:${CONFIG.font_size * 0.9}px;">${esc(convo.topic)}</span>
+                            <span style="opacity:0.5; font-size:${CONFIG.font_size * 0.75}px; margin-left:8px;">
+                              (${convo.messages.length} messages)
+                            </span>
+                          </summary>
+                          <div class="p-3 pt-0 space-y-2">
+                            ${convo.messages.map(msg => `
+                              <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
+                                <div class="max-w-xs px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                                  ${formatChefMessage(msg.content)}
+                                </div>
+                              </div>
+                            `).join('')}
+                          </div>
+                        </details>
+                      `).join('')}
+                    </div>
+                  `).join('');
+                })()}
+              ` : `
+                <!-- Chat View -->
+                ${state.chefChatMessages.length === 0 ? `
+                  <div style="color:${CONFIG.text_color}; opacity:0.6; text-align:center; padding:2rem;">
+                    <div style="font-size:2rem; margin-bottom:0.5rem;">👨‍🍳</div>
+                    <div>Ask me anything about cooking!</div>
+                    <div style="font-size:${CONFIG.font_size * 0.85}px; margin-top:0.5rem;">
+                      "How long to cook chicken at 400°F?"<br>
+                      "What can I substitute for heavy cream?"<br>
+                      "Is my salmon done?"
+                    </div>
                   </div>
-                </div>
-              ` : state.chefChatMessages.map(msg => `
-                <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
-                  <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
-                    ${formatChefMessage(msg.content)}
+                ` : state.chefChatMessages.map(msg => `
+                  <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
+                    <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                      ${formatChefMessage(msg.content)}
+                    </div>
                   </div>
-                </div>
-              `).join('')}
-              ${state.chefChatLoading ? `
-                <div class="flex justify-start">
-                  <div class="px-3 py-2 rounded-lg" style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};">
-                    <span class="animate-pulse">Thinking...</span>
+                `).join('')}
+                ${state.chefChatLoading ? `
+                  <div class="flex justify-start">
+                    <div class="px-3 py-2 rounded-lg" style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};">
+                      <span class="animate-pulse">Thinking...</span>
+                    </div>
                   </div>
-                </div>
-              ` : ''}
+                ` : ''}
+              `}
             </div>
             
             <!-- Input -->
@@ -9119,8 +9210,12 @@ function renderRecordingNeeds() {
       
       if (!message || state.chefChatLoading) return;
       
-      // Add user message
-      state.chefChatMessages.push({ role: 'user', content: message });
+     // Add user message
+      state.chefChatMessages.push({ 
+        role: 'user', 
+        content: message,
+        timestamp: new Date().toISOString()
+      });
       input.value = '';
       state.chefChatLoading = true;
       renderChefChat();
@@ -9150,12 +9245,14 @@ function renderRecordingNeeds() {
         if (data.content && data.content[0]?.text) {
           state.chefChatMessages.push({
             role: 'assistant',
-            content: data.content[0].text
+            content: data.content[0].text,
+            timestamp: new Date().toISOString()
           });
         } else if (data.error) {
           state.chefChatMessages.push({
             role: 'assistant',
-            content: 'Sorry, I encountered an error. Please try again.'
+            content: 'Sorry, I encountered an error. Please try again.',
+            timestamp: new Date().toISOString()
           });
           console.error('Chef API error:', data.error);
         }
@@ -9163,7 +9260,8 @@ function renderRecordingNeeds() {
         console.error('Chef chat error:', error);
         state.chefChatMessages.push({
           role: 'assistant',
-          content: 'Sorry, I couldn\'t connect. Please check your internet and try again.'
+          content: 'Sorry, I couldn\'t connect. Please check your internet and try again.',
+          timestamp: new Date().toISOString()
         });
      } finally {
         state.chefChatLoading = false;
