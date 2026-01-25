@@ -706,23 +706,7 @@ function extractTotalFromReceipt(text) {
 
       return null;
     }
-        /grand\s*total[:\s]*\$?\s*(\d+\.?\d*)/i,
-        /amount\s*due[:\s]*\$?\s*(\d+\.?\d*)/i,
-        /balance\s*due[:\s]*\$?\s*(\d+\.?\d*)/i,
-        /total\s*amount[:\s]*\$?\s*(\d+\.?\d*)/i,
-        /you\s*paid[:\s]*\$?\s*(\d+\.?\d*)/i,
-        /charge[:\s]*\$?\s*(\d+\.?\d*)/i,
-      ];
-
-      for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match && match[1]) {
-          const amount = parseFloat(match[1]);
-          if (amount > 0 && amount < 10000) {
-            return amount;
-          }
-        }
-      }
+      
 
       // Fallback: find the largest dollar amount (likely the total)
       const amounts = text.match(/\$?\d+\.\d{2}/g) || [];
