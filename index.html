@@ -7369,12 +7369,53 @@ function setCurrentWeek() {
       
       return scored.slice(0, 10);
     }
-   function filterSuggestions() {
+  function filterSuggestions() {
       const filterValue = document.getElementById('suggestionFilter')?.value || '';
-      closeModal();
-      setTimeout(() => {
-        showSuggestionsModal(filterValue);
-      }, 100);
+      state.suggestionFilter = filterValue;
+      
+      const suggestions = getRecipeSuggestions(filterValue);
+      const container = document.getElementById('suggestionsContainer');
+      
+      if (container) {
+        container.innerHTML = suggestions.length === 0 ? `
+          <div class="text-center py-8 text-gray-500">
+            No recipes found matching "${esc(filterValue)}". Try a different search term.
+          </div>
+        ` : suggestions.map(({ recipe, score, usage }) => {
+          const neverUsed = usage.count === 0;
+          const daysSince = usage.lastUsed ? 
+            Math.floor((new Date() - new Date(usage.lastUsed)) / (1000 * 60 * 60 * 24)) : null;
+          
+          return `
+            <div class="flex items-center gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
+              ${recipeThumb(recipe) ? `
+                <img src="${esc(recipeThumb(recipe))}" 
+                     style="width:60px; height:60px; object-fit:cover; border-radius:8px;" />
+              ` : `
+                <div style="width:60px; height:60px; background:#f3f4f6; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                  🍽️
+                </div>
+              `}
+              <div class="flex-1">
+                <div class="font-semibold">${esc(recipe.title)}</div>
+                <div class="text-sm text-gray-500">
+                  ${neverUsed ? '✨ Never made!' : 
+                    daysSince !== null ? 'Last made ' + daysSince + ' day' + (daysSince !== 1 ? 's' : '') + ' ago' : 
+                    'Made ' + usage.count + ' time' + (usage.count !== 1 ? 's' : '')}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+        
+        // Update the description text
+        const descEl = document.getElementById('suggestionsDescription');
+        if (descEl) {
+          descEl.textContent = filterValue ? 
+            'Showing recipes matching "' + filterValue + '":' : 
+            'Based on what you haven\'t made recently:';
+        }
+      }
     }
 
   function showSuggestionsModal(filterTerm = '') {
@@ -7401,12 +7442,12 @@ onkeyup="if(event.key === 'Enter') { filterSuggestions(); }" />
             </button>
           </div>
           
-          <p class="mb-4 text-gray-600">
+         <p id="suggestionsDescription" class="mb-4 text-gray-600">
             ${filterTerm ? `Showing recipes matching "${esc(filterTerm)}":` : 'Based on what you haven\'t made recently:'}
           </p>
         
-           <div class="space-y-3 max-h-96 overflow-y-auto">
-            ${suggestions.length === 0 ? `
+<div id="suggestionsContainer" class="space-y-3 max-h-96 overflow-y-auto">
+${suggestions.length === 0 ? `
               <div class="text-center py-8 text-gray-500">
                 No recipes found matching "${esc(filterTerm)}". Try a different search term.
               </div>
