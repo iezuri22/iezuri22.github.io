@@ -9044,11 +9044,13 @@ function renderRecordingNeeds() {
    let alarmInterval = null;
     let alarmAudioCtx = null;
 
-    function playTimerSound() {
+   function playTimerSound() {
       // Play repeating alarm until stopped
       stopTimerSound(); // Clear any existing alarm
       
-      alarmAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      // Use pre-unlocked context if available, otherwise create new
+      alarmAudioCtx = window._timerAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      alarmAudioCtx.resume(); // Ensure it's running
       
       function playBeeps() {
         if (!alarmAudioCtx) return;
@@ -9119,6 +9121,16 @@ function renderRecordingNeeds() {
       showToast(`Timer started: ${label} (${minutes} min)`, 'success');
     }
    function startTimerSeconds(totalSeconds, label = 'Timer') {
+      // Pre-unlock audio on mobile (this happens during user tap on "Start Timer")
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        osc.connect(ctx.destination);
+        osc.start();
+        osc.stop();
+        window._timerAudioCtx = ctx; // Keep it alive
+      } catch(e) {}
+      
       const timer = {
         id: `timer_${Date.now()}`,
         label: label,
