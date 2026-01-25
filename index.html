@@ -7658,10 +7658,16 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                   <button type="button" onclick="showAddExpenseModal('takeout')"
                     class="px-2 py-1 rounded button-hover"
                     style="background:#f59e0b; color:white; font-size:${CONFIG.font_size * 0.7}px;">+ Takeout</button>
-                  <button type="button" onclick="document.getElementById('receiptInput').click()"
+                 <button type="button" onclick="document.getElementById('receiptInput').click()"
                     class="px-2 py-1 rounded button-hover"
                     style="background:#8b5cf6; color:white; font-size:${CONFIG.font_size * 0.7}px;">📷 Scan</button>
                   <input type="file" id="receiptInput" accept="image/*" onchange="handleReceiptUpload(event)" style="display:none;" />
+                  <button type="button" onclick="showManageExpensesModal()"
+                    class="px-2 py-1 rounded button-hover"
+                    style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">📋 Manage</button>
+                  <button type="button" onclick="showBudgetModal()"
+                    class="px-2 py-1 rounded button-hover"
+                    style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">⚙️ Edit</button>
                 </div>
               </div>
             </div>
