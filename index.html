@@ -243,7 +243,7 @@
       }
     }
 
-    /* Keyboard navigation hint */
+   /* Keyboard navigation hint */
     .kbd {
       background: rgba(255,255,255,0.1);
       border: 1px solid rgba(255,255,255,0.2);
@@ -251,6 +251,76 @@
       padding: 2px 6px;
       font-family: monospace;
       font-size: 0.85em;
+    }
+
+    /* Mention dropdown styles */
+    .mention-dropdown {
+      position: absolute;
+      background: #1a1a2e;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+
+    .mention-item {
+      padding: 8px 12px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .mention-item:hover, .mention-item.selected {
+      background: rgba(102, 126, 234, 0.3);
+    }
+
+    .mention-tag {
+      background: rgba(102, 126, 234, 0.3);
+      color: #667eea;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .record-tag {
+      background: rgba(245, 158, 11, 0.3);
+      color: #f59e0b;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .narrative-editor {
+      min-height: 120px;
+      line-height: 1.6;
+    }
+
+    .narrative-editor:focus {
+      outline: none;
+    }
+
+    .recording-badge {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      color: white;
+      padding: 4px 10px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .freestyle-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    @media (max-width: 640px) {
+      .freestyle-grid {
+        grid-template-columns: 1fr;
+      }
     }
   </style>
 </head>
@@ -307,7 +377,18 @@ const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Vegetables', 'Dinner', 'Appetize
   budgetExpenses: [],
   weeklyBudget: 200,
   groceryBudget: 150,
-  takeoutBudget: 50,
+takeoutBudget: 50,
+      freestyleMeals: [],
+      recordingNeeds: [],
+      // Freestyle specific state
+      freestyleViewMode: 'list',
+      freestyleFilterTag: null,
+      freestyleSearchTerm: '',
+      mentionDropdownVisible: false,
+      mentionDropdownType: null,
+      mentionDropdownIndex: 0,
+      mentionSearchTerm: '',
+      mentionCursorPosition: 0,
 externalMealTypes: [
     { name: 'Eating Out', emoji: '🍽️' },
     { name: 'Takeout/Delivery', emoji: '🥡' },
@@ -2055,8 +2136,8 @@ function getPlannedMealsForWeek(weekStart) {
        state.mealOptions = data.filter(d => d.id && d.id.startsWith('mealOption_'));
 state.budgetExpenses = data.filter(d => d.id && d.id.startsWith('expense_'));
       state.weekBudgets = data.filter(d => d.id && d.id.startsWith('weekBudget_'));
-      state.freestyleMeals = data.filter(d => d.id && d.id.startsWith('freestyle_'));
-        const budgetConfig = data.find(d => d.id === 'config_budgets');
+state.freestyleMeals = data.filter(d => d.id && d.id.startsWith('freestyle_'));
+        state.recordingNeeds = data.filter(d => d.id && d.id.startsWith('recording_'));        const budgetConfig = data.find(d => d.id === 'config_budgets');
         if (budgetConfig?.grocery) state.groceryBudget = budgetConfig.grocery;
         if (budgetConfig?.takeout) state.takeoutBudget = budgetConfig.takeout;
         const externalMealConfig = data.find(d => d.id === 'config_externalMealTypes');
@@ -2116,12 +2197,18 @@ function navigateTo(view) {
                 <option value="weekly-plan" ${state.currentView === 'weekly-plan' || state.currentView === 'recipe-picker' || state.currentView === 'external-meal-picker' ? 'selected' : ''}>📅 History</option>
                 <option value="recipe-stats" ${state.currentView === 'recipe-stats' ? 'selected' : ''}>👨‍🍳 Top Cooked</option>
                 <option value="grocery-list" ${state.currentView && state.currentView.includes('grocery') ? 'selected' : ''}>🛒 Grocery</option>
-                <option value="budget-dashboard" ${state.currentView === 'budget-dashboard' ? 'selected' : ''}>📊 Budget</option>
+               <option value="budget-dashboard" ${state.currentView === 'budget-dashboard' ? 'selected' : ''}>📊 Budget</option>
+                <option value="recording-needs" ${state.currentView === 'recording-needs' ? 'selected' : ''}>🎥 To Record</option>
               </select>
             </div>
             
             <!-- Action buttons -->
             <div class="flex items-center gap-2">
+            ${getPendingRecordingNeeds().length > 0 ? `
+                <button onclick="navigateTo('recording-needs')" class="recording-badge">
+                  🎥 ${getPendingRecordingNeeds().length}
+                </button>
+              ` : ''}
               <div id="userIndicator" style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 0.75}px; padding: 4px 8px; background: rgba(102, 126, 234, 0.2); border-radius: 4px; display: none;">
                 <span id="userEmail"></span>
               </div>
@@ -3412,9 +3499,213 @@ ${list.map(r => {
           `}
         </div>`;
     }
-   function renderFreestyleMeals() {
+  function renderFreestyleMeals() {
       const freestyleMeals = state.freestyleMeals || [];
+      const allTags = getAllFreestyleTags();
+      
+      // Filter meals
+      let filteredMeals = [...freestyleMeals];
+      
+      if (state.freestyleFilterTag) {
+        filteredMeals = filteredMeals.filter(m => (m.tags || []).includes(state.freestyleFilterTag));
+      }
+      
+      if (state.freestyleSearchTerm) {
+        const search = state.freestyleSearchTerm.toLowerCase();
+        filteredMeals = filteredMeals.filter(m => 
+          (m.narrative || m.notes || '').toLowerCase().includes(search)
+        );
+      }
+      
+      // Sort by date descending
+      filteredMeals.sort((a, b) => new Date(b.date) - new Date(a.date));
+      
       const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
+      const tipsCount = state.recipes.filter(r => r.isTip).length;
+      const freestyleCount = state.freestyleMeals.length;
+      const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
+      
+      return `
+        <div class="p-2 max-w-7xl mx-auto">
+          <!-- Tab Navigation -->
+          <div class="flex items-center justify-between mb-2 gap-2">
+            <div class="flex items-center gap-1 flex-wrap">
+              <button onclick="state.recipeTab = 'user'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                My Recipes (${userCount})
+              </button>
+              <button onclick="state.recipeTab = 'tips'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                Tips (${tipsCount})
+              </button>
+              <button onclick="state.recipeTab = 'freestyle'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                Freestyle (${freestyleCount})
+              </button>
+              <button onclick="state.recipeTab = 'chefiq'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                Chef IQ (${chefiqCount})
+              </button>
+            </div>
+            <button type="button" onclick="openNewFreestyle()"
+              class="px-3 py-1.5 rounded button-hover"
+              style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+              + Freestyle
+            </button>
+          </div>
+
+          <!-- Filters & View Toggle -->
+          <div class="mb-3 p-3 rounded" style="background:${CONFIG.surface_color};">
+            <div class="flex items-center justify-between gap-2 mb-2">
+              <input type="text" placeholder="Search meals..."
+                class="flex-1 px-3 py-2 rounded"
+                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);"
+                value="${esc(state.freestyleSearchTerm || '')}"
+                oninput="state.freestyleSearchTerm = this.value; render();" />
+              
+              <div class="flex gap-1">
+                <button onclick="state.freestyleViewMode = 'list'; render();"
+                  class="px-3 py-2 rounded"
+                  style="background:${state.freestyleViewMode === 'list' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                  📝
+                </button>
+                <button onclick="state.freestyleViewMode = 'grid'; render();"
+                  class="px-3 py-2 rounded"
+                  style="background:${state.freestyleViewMode === 'grid' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                  🖼️
+                </button>
+              </div>
+            </div>
+            
+            ${allTags.length > 0 ? `
+              <div class="flex gap-1 flex-wrap">
+                <button onclick="state.freestyleFilterTag = null; render();"
+                  class="px-2 py-1 rounded text-sm"
+                  style="background:${!state.freestyleFilterTag ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                  All
+                </button>
+                ${allTags.map(tag => `
+                  <button onclick="state.freestyleFilterTag = '${tag}'; render();"
+                    class="px-2 py-1 rounded text-sm"
+                    style="background:${state.freestyleFilterTag === tag ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                    #${esc(tag)}
+                  </button>
+                `).join('')}
+              </div>
+            ` : ''}
+          </div>
+
+          ${filteredMeals.length === 0 ? `
+            <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
+              <div style="font-size:3rem; margin-bottom:1rem;">📸</div>
+              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No freestyle meals yet</div>
+              <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px; margin-bottom:1rem;">
+                Capture meals you've made - use @mentions to link recipes & #tags for things to record
+              </div>
+              <button onclick="openNewFreestyle()" 
+                class="px-4 py-2 rounded button-hover"
+                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+                + Add Your First Freestyle Meal
+              </button>
+            </div>
+          ` : state.freestyleViewMode === 'grid' ? `
+            <!-- Grid View -->
+            <div class="freestyle-grid">
+              ${filteredMeals.map(meal => {
+                const narrativeHtml = narrativeToHtml(meal.narrative || meal.notes || '');
+                
+                return `
+                  <div class="rounded-lg overflow-hidden cursor-pointer card-hover"
+                    onclick="editFreestyle('${meal.id}')"
+                    style="background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.08);">
+                    ${meal.image_url ? `
+                      <div style="height:180px; overflow:hidden;">
+                        <img src="${esc(meal.image_url)}" style="width:100%; height:100%; object-fit:cover;" />
+                      </div>
+                    ` : `
+                      <div style="height:180px; background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center; font-size:3rem;">
+                        📸
+                      </div>
+                    `}
+                    <div class="p-3">
+                      <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px; margin-bottom:8px;">
+                        ${new Date(meal.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </div>
+                      <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; line-height:1.5; max-height:60px; overflow:hidden;">
+                        ${narrativeHtml || '<span style="opacity:0.5;">No description</span>'}
+                      </div>
+                      ${(meal.tags || []).length > 0 ? `
+                        <div class="flex gap-1 flex-wrap mt-2">
+                          ${meal.tags.slice(0, 3).map(tag => `
+                            <span style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.7}px;">#${esc(tag)}</span>
+                          `).join('')}
+                        </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          ` : `
+            <!-- List View -->
+            <div class="space-y-3">
+              ${filteredMeals.map(meal => {
+                const narrativeHtml = narrativeToHtml(meal.narrative || meal.notes || '');
+                
+                return `
+                  <div class="rounded-lg overflow-hidden" style="background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.08);">
+                    <div class="flex gap-4">
+                      ${meal.image_url ? `
+                        <div style="width:120px; height:120px; flex-shrink:0; overflow:hidden;">
+                          <img src="${esc(meal.image_url)}" style="width:100%; height:100%; object-fit:cover;" />
+                        </div>
+                      ` : ''}
+                      <div class="flex-1 p-3">
+                        <div class="flex justify-between items-start mb-2">
+                          <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.8}px;">
+                            ${new Date(meal.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
+                          <div class="flex gap-1">
+                            <button onclick="event.stopPropagation(); editFreestyle('${meal.id}')" 
+                              class="px-2 py-1 rounded button-hover"
+                              style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                              ✏️ Edit
+                            </button>
+                            <button onclick="event.stopPropagation(); if(confirm('Delete this freestyle meal?')) deleteFreestyle('${meal.id}')" 
+                              class="px-2 py-1 rounded button-hover"
+                              style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.75}px;">
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                        
+                        <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.95}px; line-height:1.6;">
+                          ${narrativeHtml || '<span style="opacity:0.5;">No description</span>'}
+                        </div>
+                        
+                        ${(meal.tags || []).length > 0 ? `
+                          <div class="flex gap-1 flex-wrap mt-2">
+                            ${meal.tags.map(tag => `
+                              <span class="px-2 py-0.5 rounded" style="background:rgba(102, 126, 234, 0.2); color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                                #${esc(tag)}
+                              </span>
+                            `).join('')}
+                          </div>
+                        ` : ''}
+                      </div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
       const tipsCount = state.recipes.filter(r => r.isTip).length;
       const freestyleCount = freestyleMeals.length;
       const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
@@ -3537,11 +3828,15 @@ ${list.map(r => {
       `;
     }
 
-    function openNewFreestyle() {
+   function openNewFreestyle() {
+      const today = new Date();
+      const localDate = new Date(today.getTime() - (today.getTimezoneOffset() * 60000));
+      
       state.freestyleForm = {
         id: null,
-        date: new Date().toISOString().split('T')[0],
+        date: localDate.toISOString().split('T')[0],
         image_url: '',
+        narrative: '',
         notes: '',
         linkedRecipes: [],
         tags: []
@@ -3550,12 +3845,312 @@ ${list.map(r => {
       render();
     }
 
-    function editFreestyle(id) {
+   function editFreestyle(id) {
       const meal = (state.freestyleMeals || []).find(m => m.id === id);
       if (!meal) return;
-      state.freestyleForm = { ...meal };
+      state.freestyleForm = { 
+        ...meal,
+        narrative: meal.narrative || meal.notes || ''
+      };
       state.currentView = 'freestyle-edit';
       render();
+    }
+
+   // ===== FREESTYLE ENHANCEMENT FUNCTIONS =====
+    
+    // Get all unique tags from freestyle meals
+    function getAllFreestyleTags() {
+      const tags = new Set();
+      state.freestyleMeals.forEach(meal => {
+        (meal.tags || []).forEach(tag => tags.add(tag));
+      });
+      return Array.from(tags).sort();
+    }
+
+    // Get pending recording needs
+    function getPendingRecordingNeeds() {
+      return (state.recordingNeeds || []).filter(r => !r.completed);
+    }
+
+    // Parse narrative text to extract @mentions and #recording needs
+    function parseNarrative(text) {
+      const mentions = [];
+      const recordingNeeds = [];
+      
+      const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+      let match;
+      while ((match = mentionRegex.exec(text)) !== null) {
+        mentions.push({ title: match[1], id: match[2], index: match.index });
+      }
+      
+      const recordingRegex = /#\[([^\]]+)\]/g;
+      while ((match = recordingRegex.exec(text)) !== null) {
+        recordingNeeds.push({ text: match[1], index: match.index });
+      }
+      
+      return { mentions, recordingNeeds };
+    }
+
+    // Convert narrative to display HTML
+    function narrativeToHtml(text) {
+      if (!text) return '';
+      
+      let html = esc(text);
+      
+      html = html.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (match, title, id) => {
+        const recipe = getRecipeById(id);
+        const emoji = recipe?.isTip ? '📝' : '🍽️';
+        return `<span class="mention-tag cursor-pointer" onclick="openRecipeView('${id}')">${emoji} ${title}</span>`;
+      });
+      
+      html = html.replace(/#\[([^\]]+)\]/g, (match, text) => {
+        return `<span class="record-tag">🎥 ${text}</span>`;
+      });
+      
+      return html;
+    }
+
+    // Handle mention dropdown selection
+    function selectMention(item) {
+      const textarea = document.getElementById('narrativeEditor');
+      if (!textarea) return;
+      
+      const text = textarea.value;
+      const cursorPos = state.mentionCursorPosition;
+      
+      let startPos = cursorPos - 1;
+      while (startPos >= 0 && text[startPos] !== '@' && text[startPos] !== '#') {
+        startPos--;
+      }
+      
+      let insertText;
+      if (state.mentionDropdownType === '@') {
+        insertText = `@[${item.title}](${item.id})`;
+      } else {
+        insertText = `#[${item}]`;
+      }
+      
+      const newText = text.slice(0, startPos) + insertText + text.slice(cursorPos);
+      
+      state.freestyleForm.narrative = newText;
+      state.mentionDropdownVisible = false;
+      
+      render();
+      
+      setTimeout(() => {
+        const newTextarea = document.getElementById('narrativeEditor');
+        if (newTextarea) {
+          newTextarea.focus();
+          const newPos = startPos + insertText.length;
+          newTextarea.setSelectionRange(newPos, newPos);
+        }
+      }, 0);
+    }
+
+    // Handle narrative input with @ and # detection
+    function handleNarrativeInput(e) {
+      const textarea = e.target;
+      const text = textarea.value;
+      const cursorPos = textarea.selectionStart;
+      
+      state.freestyleForm.narrative = text;
+      state.mentionCursorPosition = cursorPos;
+      
+      let startPos = cursorPos - 1;
+      let triggerChar = null;
+      
+      while (startPos >= 0) {
+        const char = text[startPos];
+        if (char === '@' || char === '#') {
+          triggerChar = char;
+          break;
+        }
+        if (char === ' ' || char === '\n') {
+          break;
+        }
+        startPos--;
+      }
+      
+      if (triggerChar && startPos >= 0) {
+        const searchTerm = text.slice(startPos + 1, cursorPos).toLowerCase();
+        state.mentionSearchTerm = searchTerm;
+        state.mentionDropdownType = triggerChar;
+        state.mentionDropdownVisible = true;
+        state.mentionDropdownIndex = 0;
+      } else {
+        state.mentionDropdownVisible = false;
+      }
+      
+      render();
+      
+      setTimeout(() => {
+        const newTextarea = document.getElementById('narrativeEditor');
+        if (newTextarea) {
+          newTextarea.focus();
+          newTextarea.setSelectionRange(cursorPos, cursorPos);
+        }
+      }, 0);
+    }
+
+    // Handle keyboard navigation in mention dropdown
+    function handleNarrativeKeydown(e) {
+      if (!state.mentionDropdownVisible) return;
+      
+      const items = getMentionDropdownItems();
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        state.mentionDropdownIndex = Math.min(state.mentionDropdownIndex + 1, items.length - 1);
+        render();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        state.mentionDropdownIndex = Math.max(state.mentionDropdownIndex - 1, 0);
+        render();
+      } else if (e.key === 'Enter' || e.key === 'Tab') {
+        if (items.length > 0) {
+          e.preventDefault();
+          selectMention(items[state.mentionDropdownIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        state.mentionDropdownVisible = false;
+        render();
+      }
+    }
+
+    // Get filtered items for mention dropdown
+    function getMentionDropdownItems() {
+      const search = state.mentionSearchTerm.toLowerCase();
+      
+      if (state.mentionDropdownType === '@') {
+        return state.recipes
+          .filter(r => !r.isDraft)
+          .filter(r => r.title.toLowerCase().includes(search))
+          .slice(0, 8)
+          .map(r => ({
+            id: r.__backendId || r.id,
+            title: r.title,
+            isTip: r.isTip
+          }));
+      } else {
+        const suggestions = [
+          'cleaning technique',
+          'prep method', 
+          'cooking tip',
+          'storage tip',
+          'seasoning blend'
+        ].filter(s => s.includes(search));
+        
+        if (search && !suggestions.some(s => s === search)) {
+          suggestions.unshift(search);
+        }
+        
+        return suggestions.slice(0, 6);
+      }
+    }
+
+    // Add tag to freestyle form
+    function addFreestyleTag(tag) {
+      if (!state.freestyleForm) return;
+      const cleanTag = tag.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (!cleanTag) return;
+      
+      if (!state.freestyleForm.tags.includes(cleanTag)) {
+        state.freestyleForm.tags.push(cleanTag);
+        render();
+      }
+    }
+
+    // Remove tag from freestyle form
+    function removeFreestyleTag(tag) {
+      if (!state.freestyleForm) return;
+      state.freestyleForm.tags = state.freestyleForm.tags.filter(t => t !== tag);
+      render();
+    }
+
+    // Toggle recording need completion
+    async function toggleRecordingNeed(id) {
+      const need = state.recordingNeeds.find(r => r.id === id);
+      if (!need) return;
+      
+      need.completed = !need.completed;
+      need.completedAt = need.completed ? new Date().toISOString() : null;
+      
+      try {
+        await storage.update(need);
+        render();
+        showToast(need.completed ? 'Marked as recorded!' : 'Unmarked', 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to update');
+      }
+    }
+
+    // Delete recording need
+    async function deleteRecordingNeed(id) {
+      const need = state.recordingNeeds.find(r => r.id === id);
+      if (!need) return;
+      
+      state.recordingNeeds = state.recordingNeeds.filter(r => r.id !== id);
+      render();
+      
+      try {
+        await storage.delete(need);
+        showToast('Recording need removed', 'success');
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Show modal to add recording need manually
+    function showAddRecordingNeedModal() {
+      openModal(`
+        <div style="color: #1a1a2e;">
+          <h2 class="text-2xl font-bold mb-4">🎥 Add Recording Need</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">What do you want to record?</label>
+            <input type="text" id="recordingNeedText" 
+                   class="w-full px-3 py-2 border rounded"
+                   placeholder="e.g., How to clean broccoli, Seasoning technique" />
+          </div>
+
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="addRecordingNeedFromModal()" 
+                    class="px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600">
+              Add
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function addRecordingNeedFromModal() {
+      const text = document.getElementById('recordingNeedText').value.trim();
+      if (!text) {
+        showError('Please enter what you want to record');
+        return;
+      }
+
+      const need = {
+        id: `recording_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        type: 'recording_need',
+        text: text,
+        createdAt: new Date().toISOString(),
+        completed: false
+      };
+
+      try {
+        await storage.create(need);
+        state.recordingNeeds.push(need);
+        closeModal();
+        render();
+        showToast('Recording need added!', 'success');
+      } catch (e) {
+        showError('Failed to add');
+      }
     }
 
     async function deleteFreestyle(id) {
@@ -3578,18 +4173,24 @@ ${list.map(r => {
       const form = state.freestyleForm;
       if (!form) return;
       
-      if (!form.image_url && !form.notes) {
-        showError('Please add a photo or notes');
+      if (!form.image_url && !form.narrative) {
+        showError('Please add a photo or write about your meal');
         return;
       }
+      
+      // Extract mentions and recording needs from narrative
+      const parsed = parseNarrative(form.narrative || '');
+      const linkedRecipes = parsed.mentions.map(m => m.id);
+      const recordingNeedsFromNarrative = parsed.recordingNeeds.map(r => r.text);
       
       const meal = {
         id: form.id || `freestyle_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         type: 'freestyle',
         date: form.date,
         image_url: form.image_url || '',
-        notes: form.notes || '',
-        linkedRecipes: form.linkedRecipes || [],
+        narrative: form.narrative || '',
+        notes: form.narrative || '', // Keep for backward compatibility
+        linkedRecipes: linkedRecipes,
         tags: form.tags || []
       };
       
@@ -3600,6 +4201,26 @@ ${list.map(r => {
         } else {
           await storage.create(meal);
           state.freestyleMeals = [...(state.freestyleMeals || []), meal];
+        }
+        
+        // Create recording need items from #[...] tags
+        for (const needText of recordingNeedsFromNarrative) {
+          const existingNeed = state.recordingNeeds.find(r => 
+            r.text.toLowerCase() === needText.toLowerCase() && !r.completed
+          );
+          
+          if (!existingNeed) {
+            const recordingNeed = {
+              id: `recording_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+              type: 'recording_need',
+              text: needText,
+              sourceFreestyleId: meal.id,
+              createdAt: new Date().toISOString(),
+              completed: false
+            };
+            await storage.create(recordingNeed);
+            state.recordingNeeds.push(recordingNeed);
+          }
         }
         
         state.freestyleForm = null;
@@ -3613,15 +4234,16 @@ ${list.map(r => {
       }
     }
 
-    function renderFreestyleEdit() {
+   function renderFreestyleEdit() {
       const form = state.freestyleForm || {};
-      const allRecipesAndTips = state.recipes.filter(r => !r.isDraft);
+      const allTags = getAllFreestyleTags();
+      const dropdownItems = state.mentionDropdownVisible ? getMentionDropdownItems() : [];
       
       return `
         <div class="p-4 max-w-2xl mx-auto">
           <div class="flex items-center justify-between mb-4">
             <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.3}px;">
-              ${form.id ? 'Edit' : 'New'} Freestyle Meal
+              ${form.id ? '✏️ Edit' : '📸 New'} Freestyle Meal
             </h2>
             <div class="flex gap-2">
               <button onclick="state.freestyleForm = null; state.currentView = 'recipes'; state.recipeTab = 'freestyle'; render();"
@@ -3640,7 +4262,7 @@ ${list.map(r => {
           <div class="rounded p-4" style="background:${CONFIG.surface_color};">
             <!-- Date -->
             <div class="mb-4">
-              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Date</label>
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">📅 Date</label>
               <input type="date" value="${form.date || ''}"
                 onchange="state.freestyleForm.date = this.value"
                 class="w-full px-3 py-2 rounded"
@@ -3649,74 +4271,65 @@ ${list.map(r => {
 
             <!-- Photo -->
             <div class="mb-4">
-              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Photo</label>
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">📷 Photo</label>
               ${form.image_url ? `
                 <div class="relative mb-2">
                   <img src="${esc(form.image_url)}" class="w-full rounded" style="max-height:200px; object-fit:cover;" />
                   <button onclick="state.freestyleForm.image_url = ''; render();"
                     class="absolute top-2 right-2 px-2 py-1 rounded"
                     style="background:rgba(220,38,38,0.9); color:white;">
-                    ✕
+                    ✕ Remove
                   </button>
                 </div>
               ` : ''}
               <input type="text" placeholder="Paste image URL..."
                 value="${esc(form.image_url || '')}"
                 onchange="state.freestyleForm.image_url = this.value; render();"
-                class="w-full px-3 py-2 rounded mb-2"
-                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
-              <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.75}px;">
-                Or upload coming soon...
-              </div>
-            </div>
-
-            <!-- Notes -->
-            <div class="mb-4">
-              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">What did you make/eat?</label>
-              <textarea 
-                placeholder="Describe your meal..."
-                onchange="state.freestyleForm.notes = this.value"
                 class="w-full px-3 py-2 rounded"
-                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); min-height:80px;"
-              >${esc(form.notes || '')}</textarea>
+                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
             </div>
 
-            <!-- Link Recipes/Tips -->
-            <div class="mb-4">
-              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Link Recipes & Tips (optional)</label>
+            <!-- Narrative with @mentions -->
+            <div class="mb-4 relative">
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                ✍️ What did you make?
+              </label>
+              <div class="mb-2 p-2 rounded" style="background:rgba(102, 126, 234, 0.1); font-size:${CONFIG.font_size * 0.8}px; color:${CONFIG.text_color};">
+                <strong>Tips:</strong> Type <span class="mention-tag">@</span> to link recipes/tips • Type <span class="record-tag">#</span> to note something to record
+              </div>
               
-              ${(form.linkedRecipes || []).length > 0 ? `
-                <div class="flex flex-wrap gap-1 mb-2">
-                  ${form.linkedRecipes.map(id => {
-                    const item = getRecipeById(id);
-                    if (!item) return '';
-                    return `
-                      <span class="px-2 py-1 rounded flex items-center gap-1"
-                        style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
-                        ${item.isTip ? '📝' : '🍽️'} ${esc(item.title)}
-                        <button onclick="state.freestyleForm.linkedRecipes = state.freestyleForm.linkedRecipes.filter(r => r !== '${id}'); render();"
-                          style="color:#dc2626;">×</button>
-                      </span>
-                    `;
-                  }).join('')}
+              <textarea 
+                id="narrativeEditor"
+                class="narrative-editor w-full px-3 py-2 rounded"
+                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); min-height:150px; font-size:${CONFIG.font_size}px; line-height:1.6;"
+                placeholder="Made @jerk chicken with @frozen broccoli... need to record #cleaning broccoli technique"
+                oninput="handleNarrativeInput(event)"
+                onkeydown="handleNarrativeKeydown(event)"
+              >${esc(form.narrative || '')}</textarea>
+              
+              <!-- Mention Dropdown -->
+              ${state.mentionDropdownVisible && dropdownItems.length > 0 ? `
+                <div class="mention-dropdown" style="top: 100%; left: 0; right: 0; margin-top: 4px;">
+                  ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
+                    <div class="mention-item ${i === state.mentionDropdownIndex ? 'selected' : ''}"
+                      onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+                      <span>${item.isTip ? '📝' : '🍽️'}</span>
+                      <span>${esc(item.title)}</span>
+                    </div>
+                  `).join('') : dropdownItems.map((item, i) => `
+                    <div class="mention-item ${i === state.mentionDropdownIndex ? 'selected' : ''}"
+                      onclick="selectMention('${esc(item)}')">
+                      <span>🎥</span>
+                      <span>${esc(item)}</span>
+                    </div>
+                  `).join('')}
                 </div>
               ` : ''}
-              
-              <select onchange="if(this.value) { state.freestyleForm.linkedRecipes = [...(state.freestyleForm.linkedRecipes || []), this.value]; this.value = ''; render(); }"
-                class="w-full px-3 py-2 rounded"
-                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);">
-                <option value="">+ Add recipe or tip...</option>
-                ${allRecipesAndTips
-                  .filter(r => !(form.linkedRecipes || []).includes(r.__backendId || r.id))
-                  .map(r => `
-                    <option value="${r.__backendId || r.id}">${r.isTip ? '📝' : '🍽️'} ${esc(r.title)}</option>
-                  `).join('')}
-              </select>
             </div>
 
             <!-- Tags -->
             <div class="mb-4">
-              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Tags (optional)</label>
+              <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">🏷️ Tags</label>
               
               ${(form.tags || []).length > 0 ? `
                 <div class="flex flex-wrap gap-1 mb-2">
@@ -3724,17 +4337,38 @@ ${list.map(r => {
                     <span class="px-2 py-1 rounded flex items-center gap-1"
                       style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
                       #${esc(tag)}
-                      <button onclick="state.freestyleForm.tags = state.freestyleForm.tags.filter(t => t !== '${tag}'); render();"
-                        style="color:white;">×</button>
+                      <button onclick="removeFreestyleTag('${tag}')" style="color:white; font-weight:bold;">×</button>
                     </span>
                   `).join('')}
                 </div>
               ` : ''}
               
-              <input type="text" placeholder="Add tag and press Enter..."
-                onkeydown="if(event.key === 'Enter' && this.value.trim()) { state.freestyleForm.tags = [...(state.freestyleForm.tags || []), this.value.trim().toLowerCase()]; this.value = ''; render(); event.preventDefault(); }"
-                class="w-full px-3 py-2 rounded"
-                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+              <div class="flex gap-2">
+                <input type="text" id="newTagInput" placeholder="Add tag..."
+                  onkeydown="if(event.key === 'Enter') { addFreestyleTag(this.value); this.value = ''; event.preventDefault(); }"
+                  class="flex-1 px-3 py-2 rounded"
+                  style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+                <button onclick="addFreestyleTag(document.getElementById('newTagInput').value); document.getElementById('newTagInput').value = '';"
+                  class="px-3 py-2 rounded button-hover"
+                  style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+                  Add
+                </button>
+              </div>
+              
+              ${allTags.length > 0 ? `
+                <div class="mt-2">
+                  <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px; margin-bottom:4px;">Quick add:</div>
+                  <div class="flex flex-wrap gap-1">
+                    ${allTags.filter(t => !(form.tags || []).includes(t)).slice(0, 10).map(tag => `
+                      <button onclick="addFreestyleTag('${tag}')"
+                        class="px-2 py-1 rounded"
+                        style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                        #${esc(tag)}
+                      </button>
+                    `).join('')}
+                  </div>
+                </div>
+              ` : ''}
             </div>
           </div>
         </div>
@@ -5478,6 +6112,99 @@ function renderGroceryList() {
       }, 600);
     }
 
+   function renderRecordingNeeds() {
+      const pending = (state.recordingNeeds || []).filter(r => !r.completed);
+      const completed = (state.recordingNeeds || []).filter(r => r.completed);
+      
+      return `
+        <div class="p-4 max-w-2xl mx-auto">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
+              🎥 Things to Record
+            </h2>
+            <button onclick="showAddRecordingNeedModal()"
+              class="px-3 py-1.5 rounded button-hover"
+              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+              + Add
+            </button>
+          </div>
+
+          ${pending.length === 0 && completed.length === 0 ? `
+            <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
+              <div style="font-size:3rem; margin-bottom:1rem;">🎬</div>
+              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No recording needs yet</div>
+              <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px;">
+                When you write freestyle meals, use #[topic] to note things you want to record
+              </div>
+            </div>
+          ` : `
+            ${pending.length > 0 ? `
+              <div class="mb-6">
+                <h3 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; margin-bottom:12px;">
+                  📋 Pending (${pending.length})
+                </h3>
+                <div class="space-y-2">
+                  ${pending.map(need => `
+                    <div class="flex items-center gap-3 p-3 rounded" style="background:${CONFIG.surface_color}; border:1px solid rgba(245, 158, 11, 0.3);">
+                      <button onclick="toggleRecordingNeed('${need.id}')"
+                        class="w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0"
+                        style="border-color:${CONFIG.accent_color}; color:${CONFIG.accent_color};">
+                      </button>
+                      <div class="flex-1">
+                        <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px;">
+                          ${esc(need.text)}
+                        </div>
+                        <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.75}px;">
+                          Added ${new Date(need.createdAt).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <button onclick="deleteRecordingNeed('${need.id}')"
+                        class="px-2 py-1 rounded button-hover flex-shrink-0"
+                        style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.75}px;">
+                        🗑️
+                      </button>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${completed.length > 0 ? `
+              <div>
+                <h3 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; margin-bottom:12px; opacity:0.7;">
+                  ✅ Completed (${completed.length})
+                </h3>
+                <div class="space-y-2">
+                  ${completed.map(need => `
+                    <div class="flex items-center gap-3 p-3 rounded" style="background:${CONFIG.surface_color}; opacity:0.6;">
+                      <button onclick="toggleRecordingNeed('${need.id}')"
+                        class="w-6 h-6 rounded border-2 flex items-center justify-center flex-shrink-0"
+                        style="border-color:#16a34a; background:#16a34a; color:white;">
+                        ✓
+                      </button>
+                      <div class="flex-1">
+                        <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px; text-decoration:line-through;">
+                          ${esc(need.text)}
+                        </div>
+                      </div>
+                      <button onclick="deleteRecordingNeed('${need.id}')"
+                        class="px-2 py-1 rounded button-hover flex-shrink-0"
+                        style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.75}px;">
+                        🗑️
+                      </button>
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+          `}
+        </div>
+      `;
+    }
+
+    // ===== MAIN RENDER =====
+    function render() {
+
     // ===== MAIN RENDER =====
     function render() {
       const app = document.getElementById('app');
@@ -5511,6 +6238,9 @@ function renderGroceryList() {
           break;
         case 'budget-dashboard':
           content = renderBudgetDashboard();
+          break;
+          case 'recording-needs':
+          content = renderRecordingNeeds();
           break;
         case 'grocery-select-meals':
           content = renderGrocerySelectMeals();
