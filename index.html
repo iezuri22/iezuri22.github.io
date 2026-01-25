@@ -6744,7 +6744,9 @@ Step 3: Add wet ingredients..."
       const url = (r.recipe_url || '').trim();
       const tags = (r.tags || '').trim();
       const notes = (r.notes || '').trim();
-      const instructions = (r.instructions || '').trim();
+      const instructions = Array.isArray(r.instructions) 
+        ? r.instructions.join('\n') 
+        : (r.instructions || '').trim();
       const sourceLabel = r.sourceType === 'chefiq' ? '🤖 ChefIQ Guided' : '👤 User-Created';
 
       const rows = Array.isArray(r.ingredientsRows) ? r.ingredientsRows : [];
