@@ -668,10 +668,44 @@ externalMealTypes: [
       event.target.value = '';
     }
 
-    function extractTotalFromReceipt(text) {
+function extractTotalFromReceipt(text) {
+      // Look for dollar sign followed by amount (most reliable)
+      const dollarAmounts = text.match(/\$\s*(\d{1,3}(?:,?\d{3})*\.\d{2})/g) || [];
+      const parsedDollarAmounts = dollarAmounts.map(a => parseFloat(a.replace(/[$,\s]/g, ''))).filter(n => n > 0 && n < 5000);
+      
       // Common patterns for totals on receipts
       const patterns = [
-        /total[:\s]*\$?\s*(\d+\.?\d*)/i,
+        /total[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i,
+        /grand\s*total[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i,
+        /amount\s*due[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i,
+        /balance\s*due[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i,
+        /you\s*paid[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i,
+      ];
+
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match && match[1]) {
+          const amount = parseFloat(match[1].replace(/,/g, ''));
+          if (amount > 0 && amount < 5000) {
+            return amount;
+          }
+        }
+      }
+
+      // If we found dollar amounts, prefer the one that appears most frequently
+      // or is in the typical grocery range ($20-$500)
+      if (parsedDollarAmounts.length > 0) {
+        // Look for amounts in typical grocery range first
+        const typicalRange = parsedDollarAmounts.filter(n => n >= 20 && n <= 500);
+        if (typicalRange.length > 0) {
+          return Math.max(...typicalRange);
+        }
+        // Otherwise return the largest reasonable amount
+        return Math.max(...parsedDollarAmounts);
+      }
+
+      return null;
+    }
         /grand\s*total[:\s]*\$?\s*(\d+\.?\d*)/i,
         /amount\s*due[:\s]*\$?\s*(\d+\.?\d*)/i,
         /balance\s*due[:\s]*\$?\s*(\d+\.?\d*)/i,
@@ -741,7 +775,7 @@ externalMealTypes: [
       showToast('Expense saved!', 'success');
     }
 
-    function renderReceiptModal() {
+function renderReceiptModal() {
       if (!receiptScanState.showModal) return '';
 
       return `
@@ -783,7 +817,7 @@ externalMealTypes: [
                   </div>
                   ${receiptScanState.detectedTotal ? `
                     <div style="color:${CONFIG.accent_color}; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
-                      Auto-detected from receipt
+                      Auto-detected from receipt - please verify
                     </div>
                   ` : `
                     <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
@@ -798,7 +832,7 @@ externalMealTypes: [
                   </label>
                   <input type="text" 
                     id="receiptNote" 
-                    placeholder="e.g., Costco weekly groceries"
+                    placeholder="e.g., Trader Joe's weekly groceries"
                     class="w-full px-3 py-2 rounded"
                     style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
                 </div>
