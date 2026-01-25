@@ -7371,10 +7371,13 @@ function setCurrentWeek() {
     }
   function filterSuggestions() {
       const filterValue = document.getElementById('suggestionFilter')?.value || '';
-      state.suggestionFilter = filterValue;
+      console.log('Filtering for:', filterValue);
       
       const suggestions = getRecipeSuggestions(filterValue);
+      console.log('Found suggestions:', suggestions.length);
+      
       const container = document.getElementById('suggestionsContainer');
+      console.log('Container found:', !!container);
       
       if (container) {
         container.innerHTML = suggestions.length === 0 ? `
