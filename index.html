@@ -7325,8 +7325,8 @@ function setCurrentWeek() {
           if (r.category?.toLowerCase().includes(term)) return true;
           // Search in ingredients
           if (r.ingredients?.some(ing => ing.item?.toLowerCase().includes(term))) return true;
-          // Search in tags
-          if (r.tags?.some(tag => tag.toLowerCase().includes(term))) return true;
+       // Search in tags
+          if (Array.isArray(r.tags) && r.tags.some(tag => tag.toLowerCase().includes(term))) return true;
           return false;
         });
       }
