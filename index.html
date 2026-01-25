@@ -381,8 +381,9 @@ const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Vegetables', 'Dinner', 'Appetize
 takeoutBudget: 50,
       freestyleMeals: [],
       recordingNeeds: [],
-     inventory: [],
+   inventory: [],
       expirationDefaults: {},
+      receiptMappings: {},
       // Freestyle specific state
       freestyleViewMode: 'list',
       freestyleFilterTag: null,
@@ -1020,11 +1021,16 @@ async function saveReceiptExpense() {
           if (seenItems.has(key)) continue;
           seenItems.add(key);
           
+        // Store both raw and formatted name
+          const rawName = name;
+          const formattedName = formatItemName(name, rawName);
+          
           items.push({
-            name: name,
+            name: formattedName,
+            rawText: rawName,
             price: price,
             quantity: 1,
-            category: guessCategory(name)
+            category: guessCategory(formattedName)
           });
         }
       }
@@ -1034,6 +1040,119 @@ async function saveReceiptExpense() {
       
       // Limit to top 20 items
       return items.slice(0, 20);
+    }
+   // ===== RECEIPT LEARNING SYSTEM =====
+    
+    async function saveReceiptMapping(rawText, correctedName) {
+      const key = rawText.toLowerCase().trim();
+      const id = `mapping_${key.replace(/[^a-z0-9]/g, '_').slice(0, 50)}`;
+      
+      const mapping = {
+        id: id,
+        rawText: key,
+        correctedName: correctedName,
+        createdAt: new Date().toISOString()
+      };
+      
+      // Check if mapping already exists
+      if (state.receiptMappings[key]) {
+        await storage.update(mapping);
+      } else {
+        await storage.create(mapping);
+      }
+      
+      state.receiptMappings[key] = correctedName;
+      console.log(`Learned: "${rawText}" → "${correctedName}"`);
+    }
+
+    function getLearnedMapping(rawText) {
+      const key = rawText.toLowerCase().trim();
+      return state.receiptMappings[key] || null;
+    }
+
+    function getSimilarItems(searchTerm) {
+      // Get items that are similar to the search term
+      const term = searchTerm.toLowerCase();
+      const suggestions = new Set();
+      
+      // Check inventory for similar items
+      const inventory = getInventoryItems();
+      inventory.forEach(item => {
+        if (item.name.toLowerCase().includes(term) || 
+            term.includes(item.name.toLowerCase().split(' ')[0])) {
+          suggestions.add(item.name);
+        }
+      });
+      
+      // Check ITEM_MAPPINGS for similar items
+      ITEM_MAPPINGS.forEach(mapping => {
+        const nameLower = mapping.name.toLowerCase();
+        if (nameLower.includes(term) || term.split(' ').some(word => nameLower.includes(word))) {
+          suggestions.add(mapping.name);
+        }
+      });
+      
+      // Check learned mappings for similar corrected names
+      Object.values(state.receiptMappings).forEach(correctedName => {
+        if (correctedName.toLowerCase().includes(term) ||
+            term.split(' ').some(word => correctedName.toLowerCase().includes(word))) {
+          suggestions.add(correctedName);
+        }
+      });
+      
+      // Add common variations based on the term
+      const variations = getCommonVariations(term);
+      variations.forEach(v => suggestions.add(v));
+      
+      return Array.from(suggestions).slice(0, 10);
+    }
+
+    function getCommonVariations(term) {
+      const variations = [];
+      const termLower = term.toLowerCase();
+      
+      // Common produce variations
+      if (termLower.includes('carrot')) {
+        variations.push('Baby Carrots', 'Shredded Carrots', 'Carrot Sticks', 'Whole Carrots', 'Organic Carrots');
+      }
+      if (termLower.includes('chicken')) {
+        variations.push('Chicken Breast', 'Chicken Thighs', 'Chicken Wings', 'Chicken Drumsticks', 'Ground Chicken', 'Rotisserie Chicken', 'Chicken Sausage');
+      }
+      if (termLower.includes('beef')) {
+        variations.push('Ground Beef', 'Beef Steak', 'Beef Stew Meat', 'Beef Roast');
+      }
+      if (termLower.includes('lettuce') || termLower.includes('salad')) {
+        variations.push('Romaine Lettuce', 'Iceberg Lettuce', 'Mixed Greens', 'Spring Mix', 'Butter Lettuce');
+      }
+      if (termLower.includes('potato')) {
+        variations.push('Russet Potatoes', 'Red Potatoes', 'Sweet Potatoes', 'Fingerling Potatoes', 'Baby Potatoes');
+      }
+      if (termLower.includes('tomato')) {
+        variations.push('Roma Tomatoes', 'Cherry Tomatoes', 'Grape Tomatoes', 'Beefsteak Tomatoes', 'Tomatoes on the Vine');
+      }
+      if (termLower.includes('onion')) {
+        variations.push('Yellow Onion', 'Red Onion', 'White Onion', 'Green Onions', 'Sweet Onion');
+      }
+      if (termLower.includes('pepper')) {
+        variations.push('Bell Peppers', 'Red Bell Pepper', 'Green Bell Pepper', 'Jalapeño', 'Serrano Pepper');
+      }
+      if (termLower.includes('apple')) {
+        variations.push('Gala Apples', 'Fuji Apples', 'Honeycrisp Apples', 'Granny Smith Apples', 'Red Delicious');
+      }
+      if (termLower.includes('bread')) {
+        variations.push('White Bread', 'Whole Wheat Bread', 'Sourdough', 'Multigrain Bread', 'Brioche');
+      }
+      if (termLower.includes('milk')) {
+        variations.push('Whole Milk', '2% Milk', 'Skim Milk', 'Oat Milk', 'Almond Milk');
+      }
+      if (termLower.includes('cheese')) {
+        variations.push('Cheddar Cheese', 'Mozzarella', 'Parmesan', 'Swiss Cheese', 'Cream Cheese', 'Shredded Cheese');
+      }
+      if (termLower.includes('egg')) {
+        variations.push('Large Eggs', 'Organic Eggs', 'Cage-Free Eggs', 'Brown Eggs');
+      }
+      
+      return variations;
     }
 
    // Smart mapping from receipt abbreviations to proper names
@@ -1137,7 +1256,13 @@ async function saveReceiptExpense() {
       { patterns: [/soda/i, /cola/i], name: 'Soda', category: 'Beverages' },
     ];
 
-   function formatItemName(name) {
+ function formatItemName(name, rawText = null) {
+      // First check user's learned mappings
+      const learned = getLearnedMapping(rawText || name);
+      if (learned) {
+        return learned;
+      }
+      
       // Try to match against known patterns (only for abbreviated items)
       for (const mapping of ITEM_MAPPINGS) {
         for (const pattern of mapping.patterns) {
@@ -1333,6 +1458,142 @@ async function saveReceiptExpense() {
     async function useInventoryItem(id) {
       if (confirm('Mark this item as used/finished?')) {
         await deleteInventoryItem(id);
+      }
+    }
+   function editReceiptItem(index) {
+      const item = window._receiptItems?.[index];
+      if (!item) return;
+      
+      const suggestions = getSimilarItems(item.name);
+      const row = document.getElementById(`receiptItemRow_${index}`);
+      if (!row) return;
+      
+      row.innerHTML = `
+        <input type="checkbox" checked 
+          id="receiptItem_${index}"
+          data-name="${esc(item.name)}"
+          data-raw="${esc(item.rawText || item.name)}"
+          data-price="${item.price}"
+          data-category="${item.category}" />
+        <div class="flex-1">
+          <input type="text" id="editItemName_${index}" value="${esc(item.name)}"
+            class="w-full px-2 py-1 rounded text-sm mb-1"
+            style="background:rgba(255,255,255,0.1); color:white; border:1px solid rgba(255,255,255,0.3);" />
+          ${suggestions.length > 0 ? `
+            <div class="flex flex-wrap gap-1 mb-1">
+              ${suggestions.map(s => `
+                <button type="button" onclick="selectSuggestion(${index}, '${esc(s)}')"
+                  class="px-2 py-0.5 rounded text-xs"
+                  style="background:${CONFIG.primary_action_color}; color:white;">
+                  ${esc(s)}
+                </button>
+              `).join('')}
+            </div>
+          ` : ''}
+          <div class="flex gap-1">
+            <button type="button" onclick="confirmItemEdit(${index})"
+              class="px-2 py-1 rounded text-xs"
+              style="background:#22c55e; color:white;">
+              ✓ Save
+            </button>
+            <button type="button" onclick="cancelItemEdit(${index})"
+              class="px-2 py-1 rounded text-xs"
+              style="background:rgba(255,255,255,0.2); color:white;">
+              Cancel
+            </button>
+            <label class="flex items-center gap-1 text-xs" style="color:${CONFIG.text_color};">
+              <input type="checkbox" id="rememberMapping_${index}" checked />
+              Remember
+            </label>
+          </div>
+        </div>
+      `;
+      
+      document.getElementById(`editItemName_${index}`)?.focus();
+    }
+
+    function selectSuggestion(index, suggestion) {
+      const input = document.getElementById(`editItemName_${index}`);
+      if (input) {
+        input.value = suggestion;
+      }
+    }
+
+    async function confirmItemEdit(index) {
+      const input = document.getElementById(`editItemName_${index}`);
+      const checkbox = document.getElementById(`receiptItem_${index}`);
+      const rememberCheckbox = document.getElementById(`rememberMapping_${index}`);
+      
+      if (!input || !checkbox) return;
+      
+      const newName = input.value.trim();
+      const rawText = checkbox.dataset.raw || window._receiptItems?.[index]?.rawText;
+      
+      if (!newName) {
+        showError('Please enter an item name');
+        return;
+      }
+      
+      // Update the item
+      if (window._receiptItems?.[index]) {
+        window._receiptItems[index].name = newName;
+        window._receiptItems[index].category = guessCategory(newName);
+      }
+      
+      // Update checkbox data
+      checkbox.dataset.name = newName;
+      checkbox.dataset.category = guessCategory(newName);
+      
+      // Save mapping if "Remember" is checked
+      if (rememberCheckbox?.checked && rawText && rawText !== newName) {
+        await saveReceiptMapping(rawText, newName);
+        showToast(`Learned: "${rawText.slice(0, 20)}..." → "${newName}"`, 'success');
+      }
+      
+      // Restore normal display
+      const row = document.getElementById(`receiptItemRow_${index}`);
+      if (row) {
+        row.innerHTML = `
+          <input type="checkbox" checked 
+            id="receiptItem_${index}"
+            data-name="${esc(newName)}"
+            data-raw="${esc(rawText || newName)}"
+            data-price="${window._receiptItems?.[index]?.price || 0}"
+            data-category="${guessCategory(newName)}" />
+          <div class="flex-1 cursor-pointer" onclick="editReceiptItem(${index})">
+            <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+              ${esc(newName)}
+            </div>
+            <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.7}px;">
+              $${(window._receiptItems?.[index]?.price || 0).toFixed(2)} • tap to edit
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function cancelItemEdit(index) {
+      const item = window._receiptItems?.[index];
+      if (!item) return;
+      
+      const row = document.getElementById(`receiptItemRow_${index}`);
+      if (row) {
+        row.innerHTML = `
+          <input type="checkbox" checked 
+            id="receiptItem_${index}"
+            data-name="${esc(item.name)}"
+            data-raw="${esc(item.rawText || item.name)}"
+            data-price="${item.price}"
+            data-category="${item.category}" />
+          <div class="flex-1 cursor-pointer" onclick="editReceiptItem(${index})">
+            <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+              ${esc(item.name)}
+            </div>
+            <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.7}px;">
+              $${item.price.toFixed(2)} • tap to edit
+            </div>
+          </div>
+        `;
       }
     }
 
@@ -1824,30 +2085,39 @@ function renderReceiptModal() {
                     </div>
                   `}
                 </div>
-                ${(() => {
+               ${(() => {
                   const extractedItems = extractItemsFromReceipt(receiptScanState.extractedText);
                   if (extractedItems.length === 0) return '';
+                  
+                  // Store items globally for editing
+                  window._receiptItems = extractedItems;
                   
                   return `
                     <div class="mb-4">
                       <label class="block mb-2" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
-                        Items Found (${extractedItems.length})
+                        Items Found (${extractedItems.length}) - tap to edit
                       </label>
-                      <div class="max-h-32 overflow-y-auto rounded p-2" style="background:rgba(0,0,0,0.2);">
+                      <div id="receiptItemsList" class="max-h-48 overflow-y-auto rounded p-2" style="background:rgba(0,0,0,0.2);">
                         ${extractedItems.map((item, i) => `
-                          <label class="flex items-center gap-2 py-1 cursor-pointer">
+                          <div class="flex items-center gap-2 py-2 border-b border-gray-700" id="receiptItemRow_${i}">
                             <input type="checkbox" checked 
                               id="receiptItem_${i}"
                               data-name="${esc(item.name)}"
+                              data-raw="${esc(item.rawText || item.name)}"
                               data-price="${item.price}"
                               data-category="${item.category}" />
-                            <span style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
-                              ${esc(item.name)} - $${item.price.toFixed(2)}
-                            </span>
-                          </label>
+                            <div class="flex-1 cursor-pointer" onclick="editReceiptItem(${i})">
+                              <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                                ${esc(item.name)}
+                              </div>
+                              <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.7}px;">
+                                $${item.price.toFixed(2)} • tap to edit
+                              </div>
+                            </div>
+                          </div>
                         `).join('')}
                       </div>
-                     <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
+                      <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
                         Checked items will be added to inventory
                       </div>
                       <button type="button" onclick="showQuickAddItemModal()"
@@ -3512,6 +3782,12 @@ const dataHandler = {
         state.expirationDefaults = {};
         expDefaults.forEach(d => {
           state.expirationDefaults[d.itemName] = d.days;
+        });
+        // Load receipt mappings (learned corrections)
+        const mappings = data.filter(d => d.id && d.id.startsWith('mapping_'));
+        state.receiptMappings = {};
+        mappings.forEach(d => {
+          state.receiptMappings[d.rawText] = d.correctedName;
         });
         let planData = data.filter(d => d.date && d.id && d.id.startsWith('plan_'));
         
