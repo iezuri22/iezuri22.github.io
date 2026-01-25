@@ -874,11 +874,154 @@ async function saveReceiptExpense() {
       return items.slice(0, 20);
     }
 
-    function formatItemName(name) {
-      // Convert "CHICKEN BREAST BNLS" to "Chicken Breast Bnls"
-      return name.toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+   // Smart mapping from receipt abbreviations to proper names
+    const ITEM_MAPPINGS = [
+      // Chicken
+      { patterns: [/bnls\s*sknls?\s*(ckn|chkn|chicken)/i, /chicken\s*breast/i, /ckn\s*brst/i], name: 'Chicken Breast (Boneless Skinless)', category: 'Meat & Seafood' },
+      { patterns: [/chicken\s*thigh/i, /ckn\s*thigh/i, /shawarma\s*chicken/i], name: 'Chicken Thighs', category: 'Meat & Seafood' },
+      { patterns: [/chicken\s*sausage/i, /sausage.*chicken/i, /ckn\s*saus/i], name: 'Chicken Sausage', category: 'Meat & Seafood' },
+      { patterns: [/rotisserie/i], name: 'Rotisserie Chicken', category: 'Meat & Seafood' },
+      { patterns: [/chicken\s*wing/i], name: 'Chicken Wings', category: 'Meat & Seafood' },
+      { patterns: [/chicken\s*drum/i], name: 'Chicken Drumsticks', category: 'Meat & Seafood' },
+      { patterns: [/ground\s*chicken/i], name: 'Ground Chicken', category: 'Meat & Seafood' },
+      
+      // Beef
+      { patterns: [/ground\s*beef/i, /beef\s*ground/i], name: 'Ground Beef', category: 'Meat & Seafood' },
+      { patterns: [/steak/i, /ribeye/i, /sirloin/i, /filet/i], name: 'Steak', category: 'Meat & Seafood' },
+      { patterns: [/beef\s*stew/i], name: 'Beef Stew Meat', category: 'Meat & Seafood' },
+      
+      // Pork
+      { patterns: [/bacon/i], name: 'Bacon', category: 'Meat & Seafood' },
+      { patterns: [/pork\s*chop/i], name: 'Pork Chops', category: 'Meat & Seafood' },
+      { patterns: [/ground\s*pork/i], name: 'Ground Pork', category: 'Meat & Seafood' },
+      { patterns: [/sausage/i], name: 'Sausage', category: 'Meat & Seafood' },
+      
+      // Seafood
+      { patterns: [/salmon/i], name: 'Salmon', category: 'Meat & Seafood' },
+      { patterns: [/shrimp/i], name: 'Shrimp', category: 'Meat & Seafood' },
+      { patterns: [/tilapia/i], name: 'Tilapia', category: 'Meat & Seafood' },
+      { patterns: [/cod\b/i], name: 'Cod', category: 'Meat & Seafood' },
+      { patterns: [/tuna/i], name: 'Tuna', category: 'Meat & Seafood' },
+      
+      // Produce - Vegetables
+      { patterns: [/zucchini/i, /r-squash\s*zucchini/i], name: 'Zucchini', category: 'Produce' },
+      { patterns: [/yellow\s*squash/i, /squash\s*yellow/i], name: 'Yellow Squash', category: 'Produce' },
+      { patterns: [/green\s*bean/i], name: 'Green Beans', category: 'Produce' },
+      { patterns: [/broccoli/i], name: 'Broccoli', category: 'Produce' },
+      { patterns: [/spinach/i], name: 'Spinach', category: 'Produce' },
+      { patterns: [/kale/i], name: 'Kale', category: 'Produce' },
+      { patterns: [/lettuce/i, /romaine/i], name: 'Lettuce', category: 'Produce' },
+      { patterns: [/carrot/i], name: 'Carrots', category: 'Produce' },
+      { patterns: [/onion/i], name: 'Onions', category: 'Produce' },
+      { patterns: [/garlic/i], name: 'Garlic', category: 'Produce' },
+      { patterns: [/tomato/i], name: 'Tomatoes', category: 'Produce' },
+      { patterns: [/potato(?!.*chip)/i, /sweet\s*potato/i], name: 'Potatoes', category: 'Produce' },
+      { patterns: [/cucumber/i, /hothouse/i], name: 'Cucumber', category: 'Produce' },
+      { patterns: [/pepper\s*(bell)?/i, /bell\s*pepper/i], name: 'Bell Peppers', category: 'Produce' },
+      { patterns: [/mushroom/i], name: 'Mushrooms', category: 'Produce' },
+      { patterns: [/asparagus/i], name: 'Asparagus', category: 'Produce' },
+      { patterns: [/brussels/i], name: 'Brussels Sprouts', category: 'Produce' },
+      { patterns: [/cauliflower/i], name: 'Cauliflower', category: 'Produce' },
+      { patterns: [/celery/i], name: 'Celery', category: 'Produce' },
+      { patterns: [/corn\b/i], name: 'Corn', category: 'Produce' },
+      { patterns: [/avocado/i], name: 'Avocados', category: 'Produce' },
+      { patterns: [/cabbage/i], name: 'Cabbage', category: 'Produce' },
+      { patterns: [/greens/i], name: 'Mixed Greens', category: 'Produce' },
+      
+      // Produce - Fruits
+      { patterns: [/banana/i], name: 'Bananas', category: 'Produce' },
+      { patterns: [/apple/i], name: 'Apples', category: 'Produce' },
+      { patterns: [/orange/i], name: 'Oranges', category: 'Produce' },
+      { patterns: [/lemon/i], name: 'Lemons', category: 'Produce' },
+      { patterns: [/lime/i], name: 'Limes', category: 'Produce' },
+      { patterns: [/strawberr/i], name: 'Strawberries', category: 'Produce' },
+      { patterns: [/blueberr/i], name: 'Blueberries', category: 'Produce' },
+      { patterns: [/grape(?!fruit)/i], name: 'Grapes', category: 'Produce' },
+      { patterns: [/mango/i], name: 'Mango', category: 'Produce' },
+      { patterns: [/pineapple/i], name: 'Pineapple', category: 'Produce' },
+      
+      // Dairy
+      { patterns: [/milk\b/i], name: 'Milk', category: 'Dairy & Eggs' },
+      { patterns: [/egg/i], name: 'Eggs', category: 'Dairy & Eggs' },
+      { patterns: [/butter/i], name: 'Butter', category: 'Dairy & Eggs' },
+      { patterns: [/cheese/i, /cheddar/i, /mozzarella/i, /parmesan/i], name: 'Cheese', category: 'Dairy & Eggs' },
+      { patterns: [/yogurt/i], name: 'Yogurt', category: 'Dairy & Eggs' },
+      { patterns: [/cream\s*cheese/i], name: 'Cream Cheese', category: 'Dairy & Eggs' },
+      { patterns: [/sour\s*cream/i], name: 'Sour Cream', category: 'Dairy & Eggs' },
+      { patterns: [/half.*half/i, /creamer/i], name: 'Half & Half', category: 'Dairy & Eggs' },
+      
+      // Bakery
+      { patterns: [/bread/i, /loaf/i], name: 'Bread', category: 'Bakery' },
+      { patterns: [/bagel/i], name: 'Bagels', category: 'Bakery' },
+      { patterns: [/tortilla/i], name: 'Tortillas', category: 'Bakery' },
+      { patterns: [/pita/i], name: 'Pita Bread', category: 'Bakery' },
+      { patterns: [/roll\b/i, /bun\b/i], name: 'Rolls/Buns', category: 'Bakery' },
+      
+      // Pantry
+      { patterns: [/rice\b/i], name: 'Rice', category: 'Pantry' },
+      { patterns: [/pasta/i, /spaghetti/i, /penne/i], name: 'Pasta', category: 'Pantry' },
+      { patterns: [/olive\s*oil/i], name: 'Olive Oil', category: 'Pantry' },
+{ patterns: [/lobster\s*bisque/i], name: 'Lobster Bisque', category: 'Pantry' },
+      { patterns: [/tomato\s*soup/i], name: 'Tomato Soup', category: 'Pantry' },
+      { patterns: [/chicken\s*soup/i, /chicken\s*noodle/i], name: 'Chicken Soup', category: 'Pantry' },      { patterns: [/bean.*can/i, /canned.*bean/i], name: 'Canned Beans', category: 'Pantry' },
+      { patterns: [/tomato.*sauce/i, /marinara/i], name: 'Tomato Sauce', category: 'Pantry' },
+      { patterns: [/salsa/i], name: 'Salsa', category: 'Pantry' },
+      
+      // Beverages
+      { patterns: [/water\b/i], name: 'Water', category: 'Beverages' },
+      { patterns: [/juice/i], name: 'Juice', category: 'Beverages' },
+      { patterns: [/coffee/i], name: 'Coffee', category: 'Beverages' },
+      { patterns: [/tea\b/i], name: 'Tea', category: 'Beverages' },
+      { patterns: [/soda/i, /cola/i], name: 'Soda', category: 'Beverages' },
+    ];
+
+   function formatItemName(name) {
+      // Try to match against known patterns (only for abbreviated items)
+      for (const mapping of ITEM_MAPPINGS) {
+        for (const pattern of mapping.patterns) {
+          if (pattern.test(name)) {
+            return mapping.name;
+          }
+        }
+      }
+      
+      // Fallback: clean up abbreviations but keep the descriptive name
+      return name
+        .toLowerCase()
+        .replace(/\b(bnls|sknls|skns|nat|natl|r-|wt|t\b)\b/gi, '') // Remove receipt abbreviations
+        .replace(/\borg\b/gi, 'Organic') // Expand common abbreviations
+        .replace(/\blb\b/gi, '') // Remove weight indicators
+        .replace(/\boz\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/\b\w/g, c => c.toUpperCase());
     }
 
+    function guessCategory(name) {
+      // First check against known mappings
+      for (const mapping of ITEM_MAPPINGS) {
+        for (const pattern of mapping.patterns) {
+          if (pattern.test(name)) {
+            return mapping.category;
+          }
+        }
+      }
+      
+      // Fallback to keyword matching
+      const lower = name.toLowerCase();
+      
+      if (lower.match(/chicken|beef|pork|salmon|fish|shrimp|turkey|sausage|meat|steak|bacon/)) return 'Meat & Seafood';
+      if (lower.match(/milk|cheese|yogurt|butter|cream|egg/)) return 'Dairy & Eggs';
+      if (lower.match(/bread|bagel|tortilla|roll|bun/)) return 'Bakery';
+      if (lower.match(/apple|banana|orange|berry|fruit|grape|melon|mango/)) return 'Produce';
+      if (lower.match(/lettuce|spinach|kale|carrot|broccoli|tomato|onion|potato|vegetable|greens|pepper|cucumber|squash|zucchini/)) return 'Produce';
+      if (lower.match(/frozen|ice cream/)) return 'Frozen';
+      if (lower.match(/soup|sauce|pasta|rice|bean|can|oil/)) return 'Pantry';
+      if (lower.match(/chip|snack|cookie|cracker/)) return 'Snacks';
+      if (lower.match(/water|juice|soda|drink|coffee|tea/)) return 'Beverages';
+      
+      return 'Other';
+    }
     function guessCategory(name) {
       const lower = name.toLowerCase();
       
