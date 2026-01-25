@@ -719,7 +719,7 @@ function extractTotalFromReceipt(text) {
       render();
     }
 
-    async function saveReceiptExpense() {
+async function saveReceiptExpense() {
       const amountInput = document.getElementById('receiptAmount');
       const noteInput = document.getElementById('receiptNote');
       const amount = parseFloat(amountInput?.value);
@@ -730,21 +730,29 @@ function extractTotalFromReceipt(text) {
         return;
       }
 
-      const expense = {
-        id: 'expense_' + Date.now(),
-        type: 'grocery',
-        amount: amount,
-        date: new Date().toISOString().split('T')[0],
-        note: note,
-        receipt_url: receiptScanState.imageUrl,
-        createdAt: new Date().toISOString()
-      };
+      state.isLoading = true;
+      render();
 
-      state.expenses.push(expense);
-      await saveExpenses();
-      
-      closeReceiptModal();
-      showToast('Expense saved!', 'success');
+      try {
+        const expense = {
+          id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          type: 'grocery',
+          amount: amount,
+          date: new Date().toISOString().split('T')[0],
+          note: note,
+          receipt_url: receiptScanState.imageUrl
+        };
+
+        await storage.create(expense);
+        closeReceiptModal();
+        showToast('Grocery expense logged!', 'success');
+      } catch (e) {
+        console.error(e);
+        showError('Failed to save expense');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
     }
 
 function renderReceiptModal() {
