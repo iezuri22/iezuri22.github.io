@@ -386,6 +386,8 @@ takeoutBudget: 50,
       receiptMappings: {},
       purchaseHistory: [],
       receipts: [],
+      notificationsEnabled: false,
+      lastNotificationCheck: null,
       // Freestyle specific state
       freestyleViewMode: 'list',
       freestyleFilterTag: null,
@@ -907,6 +909,113 @@ async function saveReceiptExpense() {
       const date = new Date(purchaseDate || new Date());
       date.setDate(date.getDate() + days);
       return date.toISOString().split('T')[0];
+    }
+   // ===== NOTIFICATIONS =====
+    
+    function getExpiringItems() {
+      const inventory = getInventoryItems();
+      return inventory.filter(item => {
+        const status = getExpirationStatus(item);
+        return status === 'expired' || status === 'expiring-soon';
+      });
+    }
+
+    function checkExpirationNotifications() {
+      const expiringItems = getExpiringItems();
+      if (expiringItems.length === 0) return;
+      
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Only show once per day
+      if (state.lastNotificationCheck === today) return;
+      state.lastNotificationCheck = today;
+      
+      // Show in-app alert
+      const expired = expiringItems.filter(i => getExpirationStatus(i) === 'expired');
+      const expiringSoon = expiringItems.filter(i => getExpirationStatus(i) === 'expiring-soon');
+      
+      let message = '';
+      if (expired.length > 0) {
+        message += `${expired.length} item${expired.length > 1 ? 's' : ''} expired! `;
+      }
+      if (expiringSoon.length > 0) {
+        message += `${expiringSoon.length} item${expiringSoon.length > 1 ? 's' : ''} expiring soon.`;
+      }
+      
+      if (message) {
+        showExpirationAlert(message, expiringItems);
+      }
+      
+      // Browser notification if enabled
+      if (state.notificationsEnabled && Notification.permission === 'granted') {
+        new Notification('🥗 Meal Planner', {
+          body: message,
+          icon: '🍽️'
+        });
+      }
+    }
+
+    function showExpirationAlert(message, items) {
+      const alertHtml = `
+        <div id="expirationAlert" class="fixed top-16 left-4 right-4 z-50 p-4 rounded-lg shadow-lg" 
+             style="background:linear-gradient(135deg, #dc2626 0%, #991b1b 100%); max-width:400px; margin:0 auto;">
+          <div class="flex items-start gap-3">
+            <div style="font-size:1.5rem;">⚠️</div>
+            <div class="flex-1">
+              <div style="color:white; font-weight:600; margin-bottom:4px;">
+                Items Need Attention
+              </div>
+              <div style="color:rgba(255,255,255,0.9); font-size:14px; margin-bottom:8px;">
+                ${message}
+              </div>
+              <div class="flex gap-2">
+                <button onclick="navigateTo('inventory'); document.getElementById('expirationAlert')?.remove();"
+                  class="px-3 py-1 rounded text-sm"
+                  style="background:white; color:#dc2626; font-weight:500;">
+                  View Inventory
+                </button>
+                <button onclick="document.getElementById('expirationAlert')?.remove();"
+                  class="px-3 py-1 rounded text-sm"
+                  style="background:rgba(255,255,255,0.2); color:white;">
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+      
+      // Remove existing alert if any
+      document.getElementById('expirationAlert')?.remove();
+      
+      // Add new alert
+      document.body.insertAdjacentHTML('beforeend', alertHtml);
+      
+      // Auto-dismiss after 10 seconds
+      setTimeout(() => {
+        document.getElementById('expirationAlert')?.remove();
+      }, 10000);
+    }
+
+    async function requestNotificationPermission() {
+      if (!('Notification' in window)) {
+        showToast('Browser notifications not supported', 'error');
+        return;
+      }
+      
+      const permission = await Notification.requestPermission();
+      
+      if (permission === 'granted') {
+        state.notificationsEnabled = true;
+        showToast('Notifications enabled!', 'success');
+        
+        // Test notification
+        new Notification('🥗 Meal Planner', {
+          body: 'You will now receive expiration alerts!'
+        });
+      } else {
+        showToast('Notification permission denied', 'error');
+      }
     }
 
     function getExpirationStatus(item) {
@@ -1563,15 +1672,23 @@ async function saveReceiptExpense() {
 
       return `
         <div class="p-4 max-w-2xl mx-auto">
-          <div class="flex items-center justify-between mb-4">
+         <div class="flex items-center justify-between mb-4">
             <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
               Inventory
             </h2>
-            <button onclick="showAddInventoryModal()"
-              class="px-3 py-1.5 rounded button-hover"
-              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
-              + Add Item
-            </button>
+            <div class="flex gap-2">
+              <button onclick="requestNotificationPermission()"
+                class="px-3 py-1.5 rounded button-hover"
+                style="background:${state.notificationsEnabled ? '#22c55e' : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;"
+                title="${state.notificationsEnabled ? 'Notifications on' : 'Enable notifications'}">
+                🔔 ${state.notificationsEnabled ? 'On' : 'Off'}
+              </button>
+              <button onclick="showAddInventoryModal()"
+                class="px-3 py-1.5 rounded button-hover"
+                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+                + Add Item
+              </button>
+            </div>
           </div>
 
           ${expiringCount > 0 ? `
@@ -4127,8 +4244,29 @@ function navigateTo(view) {
                <option value="budget-dashboard" ${state.currentView === 'budget-dashboard' ? 'selected' : ''}>📊 Budget</option>
              <option value="recording-needs" ${state.currentView === 'recording-needs' ? 'selected' : ''}>🎥 To Record</option>
                 <option value="inventory" ${state.currentView === 'inventory' ? 'selected' : ''}>📦 Inventory</option>
-                <option value="purchase-history" ${state.currentView === 'purchase-history' ? 'selected' : ''}>🧾 History</option>
+               <option value="purchase-history" ${state.currentView === 'purchase-history' ? 'selected' : ''}>🧾 History</option>
               </select>
+              
+              <!-- Notification Bell -->
+              ${(() => {
+                const expiringItems = getExpiringItems();
+                const count = expiringItems.length;
+                
+                return `
+                  <button onclick="navigateTo('inventory')" 
+                    class="relative px-2 py-1 rounded button-hover"
+                    style="background:${count > 0 ? 'rgba(239, 68, 68, 0.2)' : 'transparent'};"
+                    title="${count > 0 ? count + ' items expiring' : 'No expiring items'}">
+                    <span style="font-size:1.2rem;">🔔</span>
+                    ${count > 0 ? `
+                      <span class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold"
+                            style="background:#ef4444; color:white; min-width:18px; text-align:center;">
+                        ${count}
+                      </span>
+                    ` : ''}
+                  </button>
+                `;
+              })()}
             </div>
             
             <!-- Action buttons -->
@@ -8191,6 +8329,10 @@ function renderRecordingNeeds() {
     // ===== INITIALIZATION =====
     async function init() {
       await storage.init(dataHandler);
+      // Check for expiring items after data loads
+    setTimeout(() => {
+      checkExpirationNotifications();
+    }, 2000);
       setupKeyboardShortcuts();
       render();
       
