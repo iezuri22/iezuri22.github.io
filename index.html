@@ -5495,11 +5495,12 @@ console.log('byMonth:', byMonth);
       // Default to 'user' tab
       if (!state.recipeTab) state.recipeTab = 'user';
       
-      // Count for each tab
+     // Count for each tab
       const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
       const tipsCount = state.recipes.filter(r => r.isTip).length;
       const freestyleCount = (state.freestyleMeals || []).length;
       const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
+      const importedCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length;
       
       // Handle freestyle tab separately
       if (state.recipeTab === 'freestyle') {
@@ -5512,6 +5513,8 @@ console.log('byMonth:', byMonth);
         list = state.recipes.filter(r => r.isTip);
       } else if (state.recipeTab === 'chefiq') {
         list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq');
+      } else if (state.recipeTab === 'imported') {
+        list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported');
       } else {
         // user tab (default)
         list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user');
@@ -5554,6 +5557,11 @@ console.log('byMonth:', byMonth);
                 style="background:${state.recipeTab === 'chefiq' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
                 Chef IQ (${chefiqCount})
               </button>
+              <button onclick="state.recipeTab = 'imported'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'imported' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                🔗 Imported (${importedCount})
+              </button>
             </div>
            <div class="flex gap-1">
               ${state.recipeTab === 'tips' ? `
@@ -5567,6 +5575,13 @@ console.log('byMonth:', byMonth);
                   class="px-3 py-1.5 rounded button-hover"
                   style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
                   + Freestyle
+                </button>
+            
+               ` : state.recipeTab === 'imported' ? `
+                <button type="button" onclick="showImportRecipeModal()"
+                  class="px-3 py-1.5 rounded button-hover"
+                  style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                  🔗 Import from URL
                 </button>
               ` : `
                 <button type="button" onclick="showImportRecipeModal()"
@@ -5714,6 +5729,11 @@ ${list.map(r => {
                 class="px-2 py-1 rounded"
                 style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
                 Chef IQ (${chefiqCount})
+              </button>
+              <button onclick="state.recipeTab = 'imported'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                🔗 Imported (${importedCount})
               </button>
             </div>
             <button type="button" onclick="openNewFreestyle()"
@@ -6747,8 +6767,8 @@ Step 3: Add wet ingredients..."
       const instructions = Array.isArray(r.instructions) 
         ? r.instructions.join('\n') 
         : (r.instructions || '').trim();
-      const sourceLabel = r.sourceType === 'chefiq' ? '🤖 ChefIQ Guided' : '👤 User-Created';
-
+const sourceLabel = r.sourceType === 'chefiq' ? '🤖 ChefIQ Guided' : 
+                          r.sourceType === 'imported' ? '🔗 Imported' : '👤 User-Created';
       let rows = [];
       if (Array.isArray(r.ingredientsRows) && r.ingredientsRows.length > 0) {
         rows = r.ingredientsRows;
@@ -6858,6 +6878,20 @@ ${(r.timesCooked || 0) > 0 ? `
                 <div style="color:${CONFIG.text_color}; opacity:.7;">
                   ${esc(r.category)} • ${sourceLabel}
                 </div>
+                ${r.servings || r.prepTime || r.cookTime ? `
+                  <div style="color:${CONFIG.text_color}; opacity:.7; margin-top:4px;">
+                    ${r.servings ? `🍽️ ${r.servings} servings` : ''}
+                    ${r.prepTime ? ` • ⏱️ Prep: ${r.prepTime}` : ''}
+                    ${r.cookTime ? ` • 🔥 Cook: ${r.cookTime}` : ''}
+                  </div>
+                ` : ''}
+                ${r.sourceUrl ? `
+                  <div style="margin-top:4px;">
+                    <a href="${esc(r.sourceUrl)}" target="_blank" style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                      🔗 View Original Recipe
+                    </a>
+                  </div>
+                ` : ''}
 ${r.isTip ? `<div style="color:#667eea; font-weight:600; margin-top:8px;">📝 TIP/NOTE - Not available for meal planning</div>` : ''}              </div>
               <button type="button" onclick="toggleFavorite('${r.__backendId || r.id}')" class="text-2xl">
                 ${r.favorite ? '⭐' : '☆'}
@@ -9309,7 +9343,7 @@ function renderRecordingNeeds() {
         notes: notes,
         image: image || null,
         sourceUrl: sourceUrl,
-        sourceType: 'user',
+        sourceType: 'imported',
         favorite: false,
         isDraft: false,
         createdAt: new Date().toISOString()
