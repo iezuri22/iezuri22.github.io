@@ -404,6 +404,7 @@ takeoutBudget: 50,
       chefChatMessages: [],
       chefChatLoading: false,
       chefChatView: 'chat',
+      finishedTimers: [],
       frequentItems: [],
       activeTimers: [],
       notificationsEnabled: false,
@@ -9041,53 +9042,60 @@ function renderRecordingNeeds() {
       `;
     }
    // ===== COOKING TIMER =====
-   let alarmInterval = null;
-    let alarmAudioCtx = null;
+  let activeAlarms = [];
 
-   function playTimerSound() {
-      // Play repeating alarm until stopped
-      stopTimerSound(); // Clear any existing alarm
-      
+   function playTimerSound(timerId) {
       // Use pre-unlocked context if available, otherwise create new
-      alarmAudioCtx = window._timerAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
-      alarmAudioCtx.resume(); // Ensure it's running
+      const audioCtx = window._timerAudioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      audioCtx.resume();
       
       function playBeeps() {
-        if (!alarmAudioCtx) return;
-        
         [0, 0.2, 0.4].forEach(delay => {
-          const oscillator = alarmAudioCtx.createOscillator();
-          const gainNode = alarmAudioCtx.createGain();
-          
-          oscillator.connect(gainNode);
-          gainNode.connect(alarmAudioCtx.destination);
-          
-          oscillator.frequency.value = 880;
-          oscillator.type = 'sine';
-          
-          gainNode.gain.setValueAtTime(0.5, alarmAudioCtx.currentTime + delay);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, alarmAudioCtx.currentTime + delay + 0.15);
-          
-          oscillator.start(alarmAudioCtx.currentTime + delay);
-          oscillator.stop(alarmAudioCtx.currentTime + delay + 0.15);
+          try {
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            oscillator.frequency.value = 880;
+            oscillator.type = 'sine';
+            
+            gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime + delay);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + 0.15);
+            
+            oscillator.start(audioCtx.currentTime + delay);
+            oscillator.stop(audioCtx.currentTime + delay + 0.15);
+          } catch(e) {}
         });
       }
       
       playBeeps();
-      alarmInterval = setInterval(playBeeps, 1000); // Repeat every second
+      const interval = setInterval(playBeeps, 1000);
+      
+      activeAlarms.push({
+        id: timerId,
+        interval: interval,
+        audioCtx: audioCtx
+      });
     }
 
-    function stopTimerSound() {
-      if (alarmInterval) {
-        clearInterval(alarmInterval);
-        alarmInterval = null;
-      }
-      if (alarmAudioCtx) {
-        alarmAudioCtx.close();
-        alarmAudioCtx = null;
+    function stopTimerSound(timerId) {
+      if (timerId) {
+        // Stop specific alarm
+        const alarm = activeAlarms.find(a => a.id === timerId);
+        if (alarm) {
+          clearInterval(alarm.interval);
+          activeAlarms = activeAlarms.filter(a => a.id !== timerId);
+        }
+      } else {
+        // Stop all alarms
+        activeAlarms.forEach(alarm => {
+          clearInterval(alarm.interval);
+        });
+        activeAlarms = [];
       }
     }
-
     // Pre-initialize audio on user interaction (needed for mobile)
     document.addEventListener('click', function initAudio() {
       try {
@@ -9168,13 +9176,13 @@ function renderRecordingNeeds() {
       renderTimerWidget();
     }
 
-  function timerFinished(timer) {
+ function timerFinished(timer) {
       console.log('Timer finished!', timer.label);
       
       // Play repeating sound
       try {
         console.log('Playing sound...');
-        playTimerSound();
+        playTimerSound(timer.id);
       } catch (e) {
         console.error('Sound error:', e);
       }
@@ -9184,33 +9192,73 @@ function renderRecordingNeeds() {
         new Notification('⏰ Timer Done!', { body: timer.label });
       }
       
+      // Add to finished alarms (don't remove yet)
+      if (!state.finishedTimers) state.finishedTimers = [];
+      state.finishedTimers.push(timer);
+      
       // Remove from active timers
       state.activeTimers = state.activeTimers.filter(t => t.id !== timer.id);
       
-      // Show alarm modal
-      showTimerAlarmModal(timer);
+      // Show alarm widget
+      renderAlarmWidget();
     }
 
-    function showTimerAlarmModal(timer) {
-      openModal(`
-        <div style="color: #1a1a2e; text-align: center;">
-          <div style="font-size: 4rem; margin-bottom: 1rem;">⏰</div>
-          <h2 class="text-2xl font-bold mb-2">Timer Done!</h2>
-          <p class="text-lg mb-6">${esc(timer.label)}</p>
-          <button onclick="dismissAlarm()" 
-            class="px-8 py-4 text-xl font-bold rounded-lg"
-            style="background: #dc2626; color: white;">
-            Stop Alarm
-          </button>
+    function renderAlarmWidget() {
+      document.getElementById('alarmWidget')?.remove();
+      
+      if (!state.finishedTimers || state.finishedTimers.length === 0) {
+        renderTimerWidget();
+        return;
+      }
+      
+      const widgetHtml = `
+        <div id="alarmWidget" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.8);">
+          <div class="rounded-xl p-6 text-center" style="background:${CONFIG.surface_color}; max-width:90%; width:350px;">
+            <div style="font-size:4rem; margin-bottom:1rem;">⏰</div>
+            <h2 style="color:${CONFIG.text_color}; font-size:1.5rem; font-weight:bold; margin-bottom:1rem;">
+              ${state.finishedTimers.length === 1 ? 'Timer Done!' : state.finishedTimers.length + ' Timers Done!'}
+            </h2>
+            <div class="space-y-2 mb-4">
+              ${state.finishedTimers.map(timer => `
+                <div class="flex items-center justify-between p-2 rounded" style="background:rgba(255,255,255,0.1);">
+                  <span style="color:${CONFIG.text_color};">${esc(timer.label)}</span>
+                  <button onclick="dismissSingleAlarm('${timer.id}')"
+                    class="px-3 py-1 rounded"
+                    style="background:#dc2626; color:white; font-size:0.9rem;">
+                    Stop
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+            ${state.finishedTimers.length > 1 ? `
+              <button onclick="dismissAllAlarms()"
+                class="w-full px-6 py-3 rounded-lg font-bold"
+                style="background:#dc2626; color:white; font-size:1.1rem;">
+                Stop All Alarms
+              </button>
+            ` : ''}
+          </div>
         </div>
-      `);
+      `;
+      
+      document.body.insertAdjacentHTML('beforeend', widgetHtml);
     }
 
-    function dismissAlarm() {
-      stopTimerSound();
-      closeModal();
-      renderTimerWidget();
-      showToast('Alarm dismissed', 'success');
+    function dismissSingleAlarm(timerId) {
+      stopTimerSound(timerId);
+      state.finishedTimers = state.finishedTimers.filter(t => t.id !== timerId);
+      renderAlarmWidget();
+      
+      if (state.finishedTimers.length === 0) {
+        showToast('Alarm dismissed', 'success');
+      }
+    }
+
+    function dismissAllAlarms() {
+      stopTimerSound(); // Stop all
+      state.finishedTimers = [];
+      renderAlarmWidget();
+      showToast('All alarms dismissed', 'success');
     }
 
     function formatTime(seconds) {
