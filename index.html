@@ -3769,20 +3769,18 @@ ${list.map(r => {
       return { mentions, recordingNeeds };
     }
 
-    // Convert narrative to display HTML
+  // Convert narrative to display HTML
     function narrativeToHtml(text) {
       if (!text) return '';
       
       let html = esc(text);
       
       html = html.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (match, title, id) => {
-        const recipe = getRecipeById(id);
-        const emoji = recipe?.isTip ? '📝' : '🍽️';
-        return `<span class="mention-tag cursor-pointer" onclick="openRecipeView('${id}')">${emoji} ${title}</span>`;
+        return `<span class="mention-tag cursor-pointer" onclick="openRecipeView('${id}')">${title}</span>`;
       });
       
       html = html.replace(/#\[([^\]]+)\]/g, (match, text) => {
-        return `<span class="record-tag">🎥 ${text}</span>`;
+        return `<span class="record-tag">${text}</span>`;
       });
       
       return html;
