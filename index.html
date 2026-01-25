@@ -9107,8 +9107,11 @@ function renderRecordingNeeds() {
     }
 
     function timerFinished(timer) {
+      console.log('Timer finished!', timer.label);
+      
       // Play sound - use multiple beeps
       try {
+        console.log('Playing sound...');
         playTimerSound();
       } catch (e) {
         console.error('Sound error:', e);
