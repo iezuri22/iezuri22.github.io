@@ -9632,15 +9632,18 @@ function renderRecordingNeeds() {
           break;
         default:
 content = renderHome();      }
-    app.innerHTML = `
+  app.innerHTML = `
         <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'home' ? '56px' : '0'};">
           ${renderNav()}
           ${content}
           ${renderReceiptModal()}
-          ${state.currentView === 'home' ? renderChefChatButton() : ''}
+          ${renderChefChatButton()}
           ${renderBottomNav()}
         </div>
       `;
+      
+      // Render chef chat after main content (so it floats above)
+      renderChefChat();
     }
    // ===== RECIPE URL IMPORT =====
     function showImportRecipeModal() {
@@ -10743,14 +10746,15 @@ ${message.content}`
    // ===== CHEF CHAT =====
     const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';
    function renderChefChatButton() {
+      // Only show on home page since other pages have bottom nav with chef
+      if (state.currentView !== 'home') return '';
+      
       return `
         <button onclick="toggleChefChat()"
-          class="fixed bottom-6 right-6 z-40 rounded-full shadow-lg hover:scale-105 transition-transform"
-          style="width:60px; height:60px; background:linear-gradient(135deg, ${CONFIG.primary_action_color} 0%, #8b5cf6 100%); border:none; cursor:pointer;"
+          class="fixed z-40 rounded-full shadow-lg hover:scale-105 transition-transform"
+          style="bottom: 24px; right: 24px; width:56px; height:56px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border:none; cursor:pointer; display: flex; align-items: center; justify-content: center;"
           title="Ask Chef Claude">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" style="width:32px; height:32px; margin:auto;">
-            <path d="M12 2C6.48 2 2 6.48 2 12c0 1.54.36 2.98.97 4.29L2 22l5.71-.97A9.96 9.96 0 0012 22c5.52 0 10-4.48 10-10S17.52 2 12 2zm-1 14h2v-2h-2v2zm0-4h2V7h-2v5z"/>
-          </svg>
+          <span style="font-size: 28px;">👨‍🍳</span>
         </button>
       `;
     }
@@ -10923,39 +10927,38 @@ ${message.content}`
       renderChefChat();
     }
 
-    function renderChefChat() {
+ function renderChefChat() {
       // Remove existing chat if any
       document.getElementById('chefChatModal')?.remove();
       
       if (!state.chefChatOpen) return;
       
       const chatHtml = `
-      <div id="chefChatModal" class="fixed inset-0 z-50 flex items-end justify-end p-4 sm:p-6" style="background:rgba(0,0,0,0.3);">
-          <div class="w-full max-w-md rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height:70vh; margin-bottom:70px;">
+      <div id="chefChatModal" class="fixed z-50" style="bottom: ${state.currentView !== 'home' ? '70px' : '90px'}; right: 12px; width: 320px; max-width: calc(100vw - 24px);">
+          <div class="rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height: 50vh; border: 1px solid rgba(0,0,0,0.1);">
             
           <!-- Header -->
-            <div class="flex items-center justify-between p-4 border-b border-gray-700">
+            <div class="flex items-center justify-between p-3" style="border-bottom: 1px solid rgba(0,0,0,0.1); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px 12px 0 0;">
               <div class="flex items-center gap-2">
-                <span style="font-size:1.5rem;">🤖</span>
-                <span style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">Chef Claude</span>
+                <span style="font-size:1.2rem;">👨‍🍳</span>
+                <span style="color: white; font-size: 15px; font-weight:600;">Chef Claude</span>
               </div>
-             <div class="flex items-center gap-2">
+              <div class="flex items-center gap-1">
                 ${state.chefChatMessages.length > 0 ? `
                   <button onclick="state.chefChatView = state.chefChatView === 'history' ? 'chat' : 'history'; renderChefChat();" 
-                    class="p-1 px-2 rounded hover:bg-gray-700" 
-                    style="color:${CONFIG.text_color}; font-size:0.8rem; background:${state.chefChatView === 'history' ? 'rgba(255,255,255,0.1)' : 'transparent'};" 
-                    title="View history">
-                    ${state.chefChatView === 'history' ? '← Back' : '📜 History'}
+                    class="p-1 px-2 rounded" 
+                    style="color: white; font-size: 12px; background: rgba(255,255,255,0.2);">
+                    ${state.chefChatView === 'history' ? '←' : '📜'}
                   </button>
                 ` : ''}
-                <button onclick="toggleChefChat()" class="p-1 rounded hover:bg-gray-700" style="color:${CONFIG.text_color};">
+                <button onclick="toggleChefChat()" class="p-1 px-2 rounded" style="color: white; font-size: 14px; background: rgba(255,255,255,0.2);">
                   ✕
                 </button>
               </div>
             </div>
             
-            <!-- Messages -->
-            <div id="chefChatMessages" class="flex-1 overflow-y-auto p-4 space-y-3" style="min-height:300px;">
+           <!-- Messages -->
+            <div id="chefChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2" style="min-height: 200px; max-height: 300px;">
              ${state.chefChatView === 'history' ? `
                 <!-- History View -->
                 ${(() => {
@@ -11059,17 +11062,17 @@ ${message.content}`
             </div>
             
             <!-- Input -->
-            <div class="p-4 border-t border-gray-700">
+            <div class="p-3" style="border-top: 1px solid rgba(0,0,0,0.1);">
               <div class="flex gap-2">
                 <input type="text" id="chefChatInput" 
                   placeholder="Ask a cooking question..."
                   class="flex-1 px-3 py-2 rounded-lg"
-                  style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.2);"
+                  style="background: ${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size: 14px;"
                   onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChefMessage(); }"
                   ${state.chefChatLoading ? 'disabled' : ''} />
                 <button onclick="sendChefMessage()" 
-                  class="px-4 py-2 rounded-lg"
-                  style="background:${CONFIG.primary_action_color}; color:white;"
+                  class="px-3 py-2 rounded-lg"
+                  style="background:${CONFIG.primary_action_color}; color:white; font-size: 14px;"
                   ${state.chefChatLoading ? 'disabled' : ''}>
                   Send
                 </button>
