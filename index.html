@@ -6677,7 +6677,7 @@ ${list.map(r => {
               <button onclick="state.recipeTab = 'imported'; render();" 
                 class="px-2 py-1 rounded"
                 style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
-                🔗 Imported (${importedCount})
+                🔗 Imported (${state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length})
               </button>
             </div>
             <button type="button" onclick="openNewFreestyle()"
