@@ -5501,6 +5501,7 @@ console.log('byMonth:', byMonth);
       const freestyleCount = (state.freestyleMeals || []).length;
       const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
       const importedCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length;
+     const claudeCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'claude').length;
       
       // Handle freestyle tab separately
       if (state.recipeTab === 'freestyle') {
@@ -5513,8 +5514,10 @@ console.log('byMonth:', byMonth);
         list = state.recipes.filter(r => r.isTip);
       } else if (state.recipeTab === 'chefiq') {
         list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq');
-      } else if (state.recipeTab === 'imported') {
+     } else if (state.recipeTab === 'imported') {
         list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported');
+      } else if (state.recipeTab === 'claude') {
+        list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'claude');
       } else {
         // user tab (default)
         list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user');
@@ -5561,6 +5564,11 @@ console.log('byMonth:', byMonth);
                 class="px-2 py-1 rounded"
                 style="background:${state.recipeTab === 'imported' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
                 🔗 Imported (${importedCount})
+              </button>
+              <button onclick="state.recipeTab = 'claude'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'claude' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                🤖 Claude (${claudeCount})
               </button>
             </div>
            <div class="flex gap-1">
@@ -6636,8 +6644,10 @@ ${list.map(r => {
                   <select class="w-full px-4 py-3 rounded border"
                     style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12);"
                     onchange="setRecipeField('sourceType', this.value)">
-                    <option value="user" ${(state.recipeForm.sourceType || 'user') === 'user' ? 'selected' : ''}>User-Created</option>
+                   <option value="user" ${(state.recipeForm.sourceType || 'user') === 'user' ? 'selected' : ''}>User-Created</option>
                     <option value="chefiq" ${state.recipeForm.sourceType === 'chefiq' ? 'selected' : ''}>ChefIQ Guided</option>
+                    <option value="imported" ${state.recipeForm.sourceType === 'imported' ? 'selected' : ''}>🔗 Imported</option>
+                    <option value="claude" ${state.recipeForm.sourceType === 'claude' ? 'selected' : ''}>🤖 Chef Claude</option>
                   </select>
                 </div>
               `}
@@ -6768,7 +6778,8 @@ Step 3: Add wet ingredients..."
         ? r.instructions.join('\n') 
         : (r.instructions || '').trim();
 const sourceLabel = r.sourceType === 'chefiq' ? '🤖 ChefIQ Guided' : 
-                          r.sourceType === 'imported' ? '🔗 Imported' : '👤 User-Created';
+                          r.sourceType === 'imported' ? '🔗 Imported' : 
+                          r.sourceType === 'claude' ? '🤖 Chef Claude' : '👤 User-Created';
       let rows = [];
       if (Array.isArray(r.ingredientsRows) && r.ingredientsRows.length > 0) {
         rows = r.ingredientsRows;
@@ -9584,6 +9595,313 @@ function renderRecordingNeeds() {
       renderAlarmWidget();
       showToast('All alarms dismissed', 'success');
     }
+   async function saveClaudeAsRecipe(messageIndex) {
+      const message = state.chefChatMessages[messageIndex];
+      if (!message) return;
+      
+      toggleChefChat(); // Close chat
+      state.isLoading = true;
+      render();
+      showToast('Converting to recipe...', 'info');
+      
+      try {
+        // Ask Claude to optimize into recipe format
+        const response = await fetch(CHEF_API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{
+              role: 'user',
+              content: `Convert this cooking information into a structured recipe. Return ONLY valid JSON (no markdown, no backticks, no explanation). Use this exact structure:
+{
+  "title": "Recipe Name",
+  "category": "one of: Breakfast, Lunch, Dinner, Dessert, Snack, Beverage, Other",
+  "servings": number,
+  "prepTime": "e.g. 15 mins",
+  "cookTime": "e.g. 30 mins", 
+  "ingredients": [
+    {"item": "ingredient name", "amount": "quantity", "unit": "unit of measure", "group": "one of: Proteins, Vegetables, Carbs, Dairy, Fruits, Seasonings, Oils, Sweeteners, Other"}
+  ],
+  "instructions": ["Step 1 text", "Step 2 text", "Step 3 text"],
+  "notes": "any tips or notes"
+}
+
+Content to convert:
+${message.content}`
+            }]
+          })
+        });
+        
+        const data = await response.json();
+        
+        if (data.content && data.content[0]?.text) {
+          const text = data.content[0].text;
+          
+          let recipeData;
+          try {
+            let cleanText = text.trim();
+            cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+            
+            const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              recipeData = JSON.parse(jsonMatch[0]);
+            } else {
+              throw new Error('No JSON found');
+            }
+          } catch (e) {
+            console.error('Failed to parse:', e, text);
+            showError('Could not convert to recipe format');
+            state.isLoading = false;
+            render();
+            return;
+          }
+          
+          // Show preview modal with claude source type
+          showClaudeRecipePreviewModal(recipeData);
+        } else {
+          showError('Could not convert to recipe');
+        }
+      } catch (error) {
+        console.error('Convert error:', error);
+        showError('Failed to convert recipe');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
+
+    function showClaudeRecipePreviewModal(recipeData) {
+      const ingredientsList = (recipeData.ingredients || [])
+        .map(ing => `${ing.amount || ''} ${ing.unit || ''} ${ing.item}`.trim())
+        .join('\n');
+      
+      const instructionsList = (recipeData.instructions || [])
+        .map((step, i) => `${i + 1}. ${step}`)
+        .join('\n');
+      
+      openModal(`
+        <div style="color: #1a1a2e; max-height: 80vh; overflow-y: auto;">
+          <h2 class="text-2xl font-bold mb-4">🤖 Save Chef Claude Recipe</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Title:</label>
+            <input type="text" id="claudeRecipeTitle" value="${esc(recipeData.title || '')}"
+                   class="w-full px-3 py-2 border rounded" />
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block mb-2 font-semibold">Category:</label>
+              <select id="claudeRecipeCategory" class="w-full px-3 py-2 border rounded">
+                ${MEAL_CATEGORIES.map(c => `
+                  <option value="${c}" ${recipeData.category === c ? 'selected' : ''}>${c}</option>
+                `).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="block mb-2 font-semibold">Servings:</label>
+              <input type="number" id="claudeRecipeServings" value="${recipeData.servings || 4}"
+                     class="w-full px-3 py-2 border rounded" min="1" />
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block mb-2 font-semibold">Prep Time:</label>
+              <input type="text" id="claudeRecipePrepTime" value="${esc(recipeData.prepTime || '')}"
+                     class="w-full px-3 py-2 border rounded" placeholder="15 mins" />
+            </div>
+            <div>
+              <label class="block mb-2 font-semibold">Cook Time:</label>
+              <input type="text" id="claudeRecipeCookTime" value="${esc(recipeData.cookTime || '')}"
+                     class="w-full px-3 py-2 border rounded" placeholder="30 mins" />
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Ingredients:</label>
+            <textarea id="claudeRecipeIngredients" rows="6"
+                      class="w-full px-3 py-2 border rounded font-mono text-sm">${esc(ingredientsList)}</textarea>
+            <div class="text-xs text-gray-500 mt-1">One ingredient per line</div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Instructions:</label>
+            <textarea id="claudeRecipeInstructions" rows="6"
+                      class="w-full px-3 py-2 border rounded text-sm">${esc(instructionsList)}</textarea>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Notes:</label>
+            <textarea id="claudeRecipeNotes" rows="2"
+                      class="w-full px-3 py-2 border rounded">${esc(recipeData.notes || '')}</textarea>
+          </div>
+          
+          <input type="hidden" id="claudeRecipeIngredientsData" value='${JSON.stringify(recipeData.ingredients || [])}' />
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveClaudeRecipe()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Save Recipe
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveClaudeRecipe() {
+      const title = document.getElementById('claudeRecipeTitle')?.value.trim();
+      const category = document.getElementById('claudeRecipeCategory')?.value;
+      const servings = parseInt(document.getElementById('claudeRecipeServings')?.value) || 4;
+      const prepTime = document.getElementById('claudeRecipePrepTime')?.value.trim();
+      const cookTime = document.getElementById('claudeRecipeCookTime')?.value.trim();
+      const notes = document.getElementById('claudeRecipeNotes')?.value.trim();
+      const ingredientsData = JSON.parse(document.getElementById('claudeRecipeIngredientsData')?.value || '[]');
+      
+      const instructionsText = document.getElementById('claudeRecipeInstructions')?.value || '';
+      const instructions = instructionsText
+        .split('\n')
+        .map(line => line.replace(/^\d+\.\s*/, '').trim())
+        .filter(line => line.length > 0);
+      
+      if (!title) {
+        showError('Please enter a recipe title');
+        return;
+      }
+      
+      const recipe = {
+        id: `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        title: title,
+        category: category,
+        servings: servings,
+        prepTime: prepTime,
+        cookTime: cookTime,
+        ingredientsRows: ingredientsData.map(ing => ({
+          qty: ing.amount || '',
+          unit: ing.unit || '',
+          name: ing.item || '',
+          group: ing.group || 'Other'
+        })),
+        instructions: instructions.join('\n'),
+        notes: notes,
+        sourceType: 'claude',
+        favorite: false,
+        isDraft: false,
+        createdAt: new Date().toISOString()
+      };
+      
+      closeModal();
+      state.isLoading = true;
+      render();
+      
+      try {
+        await storage.create(recipe);
+        showToast(`"${title}" saved from Chef Claude!`, 'success');
+      } catch (e) {
+        console.error('Save error:', e);
+        showError('Failed to save recipe');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
+
+    async function saveClaudeAsTip(messageIndex) {
+      const message = state.chefChatMessages[messageIndex];
+      if (!message) return;
+      
+      // Get the user's question for context
+      const userQuestion = messageIndex > 0 ? state.chefChatMessages[messageIndex - 1]?.content : '';
+      
+      openModal(`
+        <div style="color: #1a1a2e; max-height: 80vh; overflow-y: auto;">
+          <h2 class="text-2xl font-bold mb-4">💡 Save as Quick Tip</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Tip Title:</label>
+            <input type="text" id="claudeTipTitle" value=""
+                   class="w-full px-3 py-2 border rounded" 
+                   placeholder="e.g., Chicken Cooking Times, How to Freeze Herbs" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Category:</label>
+            <select id="claudeTipCategory" class="w-full px-3 py-2 border rounded">
+              <option value="Cooking Times">⏱️ Cooking Times</option>
+              <option value="Freezing">❄️ Freezing</option>
+              <option value="Storage">📦 Storage</option>
+              <option value="Substitutions">🔄 Substitutions</option>
+              <option value="Techniques">👨‍🍳 Techniques</option>
+              <option value="Safety">⚠️ Food Safety</option>
+              <option value="Other">📝 Other</option>
+            </select>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Content:</label>
+            <textarea id="claudeTipContent" rows="8"
+                      class="w-full px-3 py-2 border rounded text-sm">${esc(message.content)}</textarea>
+          </div>
+          
+          ${userQuestion ? `
+            <div class="mb-4 p-2 rounded" style="background:#f3f4f6;">
+              <label class="block mb-1 font-semibold text-sm text-gray-600">Original Question:</label>
+              <div class="text-sm text-gray-700">${esc(userQuestion)}</div>
+            </div>
+          ` : ''}
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveClaudeTip()" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+              Save Tip
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveClaudeTip() {
+      const title = document.getElementById('claudeTipTitle')?.value.trim();
+      const category = document.getElementById('claudeTipCategory')?.value;
+      const content = document.getElementById('claudeTipContent')?.value.trim();
+      
+      if (!title) {
+        showError('Please enter a tip title');
+        return;
+      }
+      
+      const tip = {
+        id: `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        title: title,
+        category: category,
+        instructions: content,
+        notes: '',
+        sourceType: 'claude',
+        isTip: true,
+        favorite: false,
+        isDraft: false,
+        createdAt: new Date().toISOString()
+      };
+      
+      closeModal();
+      state.isLoading = true;
+      render();
+      
+      try {
+        await storage.create(tip);
+        showToast(`"${title}" saved as tip!`, 'success');
+      } catch (e) {
+        console.error('Save error:', e);
+        showError('Failed to save tip');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
 
     function formatTime(seconds) {
       const mins = Math.floor(seconds / 60);
@@ -9909,13 +10227,27 @@ function renderRecordingNeeds() {
                       "Is my salmon done?"
                     </div>
                   </div>
-                ` : state.chefChatMessages.map(msg => `
-                  <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
-                    <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
-                      ${formatChefMessage(msg.content)}
-                    </div>
+              ` : state.chefChatMessages.map((msg, idx) => `
+                <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
+                  <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                    ${formatChefMessage(msg.content)}
+                    ${msg.role === 'assistant' ? `
+                      <div class="flex gap-1 mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.1);">
+                        <button onclick="saveClaudeAsRecipe(${idx})"
+                          class="px-2 py-1 rounded text-xs hover:opacity-80"
+                          style="background:${CONFIG.primary_action_color}; color:white;">
+                          📥 Recipe
+                        </button>
+                        <button onclick="saveClaudeAsTip(${idx})"
+                          class="px-2 py-1 rounded text-xs hover:opacity-80"
+                          style="background:#f59e0b; color:white;">
+                          💡 Tip
+                        </button>
+                      </div>
+                    ` : ''}
                   </div>
-                `).join('')}
+                </div>
+              `).join('')}
                 ${state.chefChatLoading ? `
                   <div class="flex justify-start">
                     <div class="px-3 py-2 rounded-lg" style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};">
