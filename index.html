@@ -6268,13 +6268,33 @@ console.log('byMonth:', byMonth);
           
           <div class="max-w-4xl mx-auto p-4" style="margin-top: -20px;">
             
-            <!-- Tonight's Dinner Card -->
+           <!-- Tonight's Dinner Card -->
             ${(() => {
               const today = new Date().toISOString().split('T')[0];
               const todaysPlan = state.planData.find(p => p.date === today);
-              const plannedRecipe = todaysPlan?.recipeId ? state.recipes.find(r => (r.__backendId || r.id) === todaysPlan.recipeId) : null;
               
-             if (plannedRecipe) {
+              // Check for any planned meals (dinner first, then lunch, then breakfast)
+              let plannedRecipe = null;
+              let mealType = '';
+              
+              if (todaysPlan) {
+                const dinnerIds = todaysPlan.dinner || [];
+                const lunchIds = todaysPlan.lunch || [];
+                const breakfastIds = todaysPlan.breakfast || [];
+                
+                if (dinnerIds.length > 0) {
+                  plannedRecipe = getRecipeById(dinnerIds[0]);
+                  mealType = 'Dinner';
+                } else if (lunchIds.length > 0) {
+                  plannedRecipe = getRecipeById(lunchIds[0]);
+                  mealType = 'Lunch';
+                } else if (breakfastIds.length > 0) {
+                  plannedRecipe = getRecipeById(breakfastIds[0]);
+                  mealType = 'Breakfast';
+                }
+              }
+              
+              if (plannedRecipe) {
                 const recipeImg = recipeThumb(plannedRecipe);
                 return `
                   <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
@@ -6283,8 +6303,8 @@ console.log('byMonth:', byMonth);
                       ${recipeImg ? `<img src="${esc(recipeImg)}" style="width: 60px; height: 60px; border-radius: 12px; object-fit: cover;" />` : `<div style="width: 60px; height: 60px; border-radius: 12px; background: ${CONFIG.background_color}; display: flex; align-items: center; justify-content: center; font-size: 24px;">🍽️</div>`}
                       <div style="flex: 1; min-width: 0;">
                         <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(plannedRecipe.title)}</div>
-                        <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${plannedRecipe.category || 'Dinner'}</div>
-                      </div>
+<div style="color: ${CONFIG.text_muted}; font-size: 13px;">${mealType || plannedRecipe.category || 'Dinner'}</div>
+</div>
                     </div>
                     <div style="display: flex; gap: 8px; margin-top: 12px;">
                       <button onclick="openRecipeView('${plannedRecipe.__backendId || plannedRecipe.id}')" style="flex: 1; padding: 10px; background: ${CONFIG.background_color}; border: none; border-radius: 8px; color: ${CONFIG.text_color}; cursor: pointer; font-weight: 500;">
@@ -8709,12 +8729,12 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
             <div class="flex gap-2">
               <button onclick="state.mealPlanTab = 'week'; render();"
                 class="px-4 py-2 rounded-lg font-medium transition-all"
-                style="background:${state.mealPlanTab === 'week' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                style="background:${state.mealPlanTab === 'week' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.mealPlanTab === 'week' ? 'white' : CONFIG.text_color};">
                 This Week
               </button>
-              <button onclick="state.mealPlanTab = 'ideas'; render();"
+              <button onclick="state.mealPlanTab === 'ideas'; render();"
                 class="px-4 py-2 rounded-lg font-medium transition-all"
-                style="background:${state.mealPlanTab === 'ideas' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                style="background:${state.mealPlanTab === 'ideas' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.mealPlanTab === 'ideas' ? 'white' : CONFIG.text_color};">
                 Meal Ideas
               </button>
             </div>
@@ -8732,20 +8752,20 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
       return `
         <!-- Week Navigation -->
         <div class="flex items-center justify-between mb-4">
-          <div class="flex gap-1">
+          <div class="flex gap-2">
             <button type="button" onclick="changeWeek(-1)"
-              class="px-2 py-1 rounded button-hover"
-              style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">← Prev</button>
+              class="px-3 py-2 rounded-lg"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};">← Prev</button>
             <button type="button" onclick="setCurrentWeek()"
-              class="px-2 py-1 rounded button-hover"
-              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">This Week</button>
+              class="px-3 py-2 rounded-lg"
+              style="background:${CONFIG.primary_action_color}; color:white; font-size:${CONFIG.font_size * 0.85}px;">Today</button>
             <button type="button" onclick="changeWeek(1)"
-              class="px-2 py-1 rounded button-hover"
-              style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Next →</button>
+              class="px-3 py-2 rounded-lg"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};">Next →</button>
             <button type="button" onclick="copyLastWeekPlan()"
-              class="px-2 py-1 rounded button-hover"
-              style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;"
-              title="Copy last week's meals">📋 Copy</button>
+              class="px-3 py-2 rounded-lg"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};"
+              title="Copy last week's meals">📋</button>
           </div>
         </div>
 
@@ -8813,7 +8833,7 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
           ${dates.map(date => {
             const plan = state.planData.find(p => p.date === date);
             return `
-            <div class="rounded p-4" style="background:${CONFIG.surface_color};">
+            <div class="rounded-xl p-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
               <div class="font-semibold mb-3" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
                 ${formatDateDisplay(date)}
               </div>
@@ -8824,7 +8844,7 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                   const hasRecipes = recipeIds.length > 0;
 
                   return `
-                    <div class="p-3 rounded" style="background:rgba(255,255,255,0.03);"
+                    <div class="p-3 rounded-lg" style="background:${CONFIG.background_color};"
                          ondragover="handleDragOver(event)"
                          ondragleave="handleDragLeave(event)"
                          ondrop="handleDrop(event, '${date}', '${meal}')">
@@ -8996,21 +9016,21 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
             <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
               ${CONFIG.weekly_plan_label}
             </h2>
-         <div class="flex gap-1">
-              <button type="button" onclick="changeWeek(-1)"
-                class="px-2 py-1 rounded button-hover"
-                style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">← Prev</button>
-              <button type="button" onclick="setCurrentWeek()"
-                class="px-2 py-1 rounded button-hover"
-                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">This Week</button>
-             <button type="button" onclick="changeWeek(1)"
-                class="px-2 py-1 rounded button-hover"
-                style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Next →</button>
-              <button type="button" onclick="copyLastWeekPlan()"
-                class="px-2 py-1 rounded button-hover"
-                style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;"
-                title="Copy last week's meals">📋 Copy</button>
-            </div>
+         <div class="flex gap-2">
+            <button type="button" onclick="changeWeek(-1)"
+              class="px-3 py-2 rounded-lg"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};">← Prev</button>
+            <button type="button" onclick="setCurrentWeek()"
+              class="px-3 py-2 rounded-lg"
+              style="background:${CONFIG.primary_action_color}; color:white; font-size:${CONFIG.font_size * 0.85}px;">Today</button>
+            <button type="button" onclick="changeWeek(1)"
+              class="px-3 py-2 rounded-lg"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};">Next →</button>
+            <button type="button" onclick="copyLastWeekPlan()"
+              class="px-3 py-2 rounded-lg"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};"
+              title="Copy last week's meals">📋</button>
+          </div>
           </div>
 
         ${(() => {
@@ -9127,18 +9147,18 @@ ${weekExpenses.expenses.length > 0 ? '<details class="mt-2"><summary style="curs
             ${dates.map(date => {
               const plan = state.planData.find(p => p.date === date);
               return `
-              <div class="rounded p-4" style="background:${CONFIG.surface_color};">
-                <div class="font-semibold mb-3" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
-                  ${formatDateDisplay(date)}
-                </div>
-                <div class="grid gap-2">
-                ${meals.map(meal => {
-                    const key = meal.toLowerCase();
-                    const recipeIds = plan ? (plan[key] || []) : [];
-                    const hasRecipes = recipeIds.length > 0;
+             <div class="rounded-xl p-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
+              <div class="font-semibold mb-3" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
+                ${formatDateDisplay(date)}
+              </div>
+              <div class="grid gap-2">
+              ${meals.map(meal => {
+                  const key = meal.toLowerCase();
+                  const recipeIds = plan ? (plan[key] || []) : [];
+                  const hasRecipes = recipeIds.length > 0;
 
-                    return `
-                      <div class="p-3 rounded" style="background:rgba(255,255,255,0.03);">
+                  return `
+                    <div class="p-3 rounded-lg" style="background:${CONFIG.background_color};"
                         <div style="color:${CONFIG.text_color}; opacity:.7; font-size:${CONFIG.font_size * .85}px; margin-bottom:8px;">${meal}</div>
                         
                      ${hasRecipes ? `
@@ -11566,7 +11586,7 @@ ${message.content}`
                 <input type="text" id="chefChatInput" 
                   placeholder="${state.chefChatImage ? 'Ask about this image...' : 'Ask a cooking question...'}"
                   class="flex-1 px-3 py-2 rounded-lg"
-                  style="background: ${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size: 14px;"
+                  style="background: ${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size: 16px;"
                   onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChefMessage(); }"
                   ${state.chefChatLoading ? 'disabled' : ''} />
                 <button onclick="sendChefMessage()" 
