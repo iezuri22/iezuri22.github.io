@@ -10684,6 +10684,36 @@ ${message.content}`
         showToast('Chat history cleared', 'success');
       }
     }
+
+    function deleteConversation(topic, timestamp) {
+      if (!confirm('Delete this conversation?')) return;
+      
+      // Find the start of this conversation and remove its messages
+      const startIdx = state.chefChatMessages.findIndex(m => 
+        m.timestamp === timestamp && m.role === 'user'
+      );
+      
+      if (startIdx === -1) return;
+      
+      // Find where this conversation ends (next user message or end of array)
+      let endIdx = startIdx + 1;
+      while (endIdx < state.chefChatMessages.length) {
+        if (state.chefChatMessages[endIdx].role === 'user') {
+          // Check if this is a follow-up or new conversation
+          const prevMsg = state.chefChatMessages[endIdx - 1];
+          if (prevMsg && prevMsg.role === 'assistant') {
+            break; // New conversation starts here
+          }
+        }
+        endIdx++;
+      }
+      
+      // Remove the messages
+      state.chefChatMessages.splice(startIdx, endIdx - startIdx);
+      saveChefChatHistory();
+      renderChefChat();
+      showToast('Conversation deleted', 'success');
+    }
    function getChefChatHistory() {
       // Group messages into conversations by date and topic
       const conversations = [];
@@ -10767,16 +10797,13 @@ ${message.content}`
                 <span style="font-size:1.5rem;">🤖</span>
                 <span style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">Chef Claude</span>
               </div>
-              <div class="flex items-center gap-2">
+             <div class="flex items-center gap-2">
                 ${state.chefChatMessages.length > 0 ? `
                   <button onclick="state.chefChatView = state.chefChatView === 'history' ? 'chat' : 'history'; renderChefChat();" 
                     class="p-1 px-2 rounded hover:bg-gray-700" 
                     style="color:${CONFIG.text_color}; font-size:0.8rem; background:${state.chefChatView === 'history' ? 'rgba(255,255,255,0.1)' : 'transparent'};" 
                     title="View history">
-                    📜 ${state.chefChatView === 'history' ? 'Back' : 'History'}
-                  </button>
-                  <button onclick="clearChefChatHistory()" class="p-1 rounded hover:bg-gray-700" style="color:${CONFIG.text_color}; font-size:0.8rem;" title="Clear history">
-                    🗑️
+                    ${state.chefChatView === 'history' ? '← Back' : '📜 History'}
                   </button>
                 ` : ''}
                 <button onclick="toggleChefChat()" class="p-1 rounded hover:bg-gray-700" style="color:${CONFIG.text_color};">
@@ -10800,24 +10827,31 @@ ${message.content}`
                       <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.8}px; margin-bottom:8px; font-weight:600;">
                         ${group.date}
                       </div>
-                     ${group.conversations.map((convo, idx) => `
+                    ${group.conversations.map((convo, convoIdx) => `
                         <details class="mb-2 rounded-lg" style="background:rgba(255,255,255,0.05);">
                           <summary class="p-3 cursor-pointer" style="color:${CONFIG.text_color}; list-style:none;">
-                            <div class="flex items-center justify-between">
-                              <span style="font-size:${CONFIG.font_size * 0.9}px;">▶ ${esc(convo.topic)}</span>
-                              <span style="opacity:0.5; font-size:${CONFIG.font_size * 0.75}px;">
-                                (${convo.messages.length})
-                              </span>
+                            <div class="flex items-center justify-between gap-2">
+                              <span style="font-size:${CONFIG.font_size * 0.9}px; flex:1;">▶ ${esc(convo.topic)}</span>
+                              <span style="opacity:0.5; font-size:${CONFIG.font_size * 0.75}px;">(${convo.messages.length})</span>
                             </div>
                           </summary>
-                          <div class="p-3 pt-2 space-y-2" style="border-top:1px solid rgba(255,255,255,0.1);">
-                            ${convo.messages.map(msg => `
-                              <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
-                                <div class="px-3 py-2 rounded-lg" style="max-width:85%; background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; word-wrap:break-word;">
-                                  ${formatChefMessage(msg.content)}
+                          <div class="p-3 pt-2" style="border-top:1px solid rgba(255,255,255,0.1);">
+                            <div class="space-y-2 mb-3">
+                              ${convo.messages.map(msg => `
+                                <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
+                                  <div class="px-3 py-2 rounded-lg" style="max-width:85%; background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; word-wrap:break-word;">
+                                    ${formatChefMessage(msg.content)}
+                                  </div>
                                 </div>
-                              </div>
-                            `).join('')}
+                              `).join('')}
+                            </div>
+                            <div class="flex justify-end">
+                              <button onclick="deleteConversation('${esc(convo.topic)}', '${convo.timestamp}')"
+                                class="px-2 py-1 rounded text-xs hover:opacity-80"
+                                style="background:rgba(239,68,68,0.2); color:#ef4444;">
+                                🗑️ Delete
+                              </button>
+                            </div>
                           </div>
                         </details>
                       `).join('')}
