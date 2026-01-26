@@ -788,8 +788,9 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   weeklyBudget: 200,
   groceryBudget: 150,
 takeoutBudget: 50,
-      freestyleMeals: [],
+     freestyleMeals: [],
       recordingNeeds: [],
+      cookingTasks: [],
    inventory: [],
       expirationDefaults: {},
       receiptMappings: {},
@@ -4669,7 +4670,9 @@ const dataHandler = {
 state.budgetExpenses = data.filter(d => d.id && d.id.startsWith('expense_'));
       state.weekBudgets = data.filter(d => d.id && d.id.startsWith('weekBudget_'));
 state.freestyleMeals = data.filter(d => d.id && d.id.startsWith('freestyle_'));
-        state.recordingNeeds = data.filter(d => d.id && d.id.startsWith('recording_'));        const budgetConfig = data.find(d => d.id === 'config_budgets');
+        state.recordingNeeds = data.filter(d => d.id && d.id.startsWith('recording_'));
+        state.cookingTasks = data.filter(d => d.id && d.id.startsWith('task_'));
+        const budgetConfig = data.find(d => d.id === 'config_budgets');
         if (budgetConfig?.grocery) state.groceryBudget = budgetConfig.grocery;
         if (budgetConfig?.takeout) state.takeoutBudget = budgetConfig.takeout;
         const externalMealConfig = data.find(d => d.id === 'config_externalMealTypes');
@@ -5145,10 +5148,477 @@ function navigateTo(view) {
       closeModal();
       showToast(`"${itemName}" added to grocery list!`, 'success');
     }
-
+// ===== COOKING TASKS =====
+    
+    function renderCookingTasks() {
+      const tasks = state.cookingTasks || [];
+      const pendingTasks = tasks.filter(t => !t.completed);
+      const completedTasks = tasks.filter(t => t.completed);
+      
+      // Get inventory items for smart suggestions
+      const expiringItems = state.inventory.filter(i => {
+        const status = getExpirationStatus(i);
+        return status === 'expired' || status === 'expiring-soon' || status === 'expiring';
+      });
+      
+      // Generate smart suggestions based on inventory
+      const suggestions = generateTaskSuggestions();
+      
+      return `
+        <div class="p-4 max-w-2xl mx-auto">
+          <!-- Header -->
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: -16px -16px 20px -16px; padding: 24px 16px; border-radius: 0 0 24px 24px;">
+            <h1 style="color: white; font-size: 24px; font-weight: 700; margin-bottom: 4px;">✅ Cooking Tasks</h1>
+            <p style="color: rgba(255,255,255,0.8); font-size: 14px;">Stay on top of your kitchen to-dos</p>
+            
+            <div style="display: flex; gap: 12px; margin-top: 16px;">
+              <div style="background: rgba(255,255,255,0.2); border-radius: 12px; padding: 12px 16px; flex: 1; text-align: center;">
+                <div style="color: white; font-size: 24px; font-weight: 700;">${pendingTasks.length}</div>
+                <div style="color: rgba(255,255,255,0.8); font-size: 11px;">To Do</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.2); border-radius: 12px; padding: 12px 16px; flex: 1; text-align: center;">
+                <div style="color: white; font-size: 24px; font-weight: 700;">${completedTasks.length}</div>
+                <div style="color: rgba(255,255,255,0.8); font-size: 11px;">Done</div>
+              </div>
+              <div style="background: rgba(255,255,255,0.2); border-radius: 12px; padding: 12px 16px; flex: 1; text-align: center;">
+                <div style="color: white; font-size: 24px; font-weight: 700;">${expiringItems.length}</div>
+                <div style="color: rgba(255,255,255,0.8); font-size: 11px;">Use Soon</div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Quick Add -->
+          <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="quickTaskInput" placeholder="Add a task... (e.g., 'Freeze the salmon')"
+                style="flex: 1; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 12px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};"
+                onkeydown="if(event.key === 'Enter') addQuickTask()" />
+              <button onclick="addQuickTask()" style="padding: 12px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600;">
+                Add
+              </button>
+            </div>
+            
+           <!-- AI Assist Button -->
+            <button onclick="showAITaskAssistant()" style="width: 100%; margin-top: 8px; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span>🤖</span>
+              <span>Ask Claude to suggest tasks</span>
+            </button>
+            
+            <!-- Quick Templates Button -->
+            <button onclick="showTaskTemplates()" style="width: 100%; margin-top: 8px; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <span>📝</span>
+              <span>Add from templates</span>
+            </button>
+          </div>
+          
+          <!-- Smart Suggestions -->
+          ${suggestions.length > 0 ? `
+            <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">💡 Suggested Tasks</div>
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${suggestions.slice(0, 5).map(suggestion => `
+                  <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px;">
+                    <div style="flex: 1;">
+                      <div style="color: ${CONFIG.text_color}; font-size: 14px;">${esc(suggestion.task)}</div>
+                      <div style="color: ${CONFIG.text_muted}; font-size: 12px;">${esc(suggestion.reason)}</div>
+                    </div>
+                    <button onclick="addSuggestedTask('${esc(suggestion.task).replace(/'/g, "\\'")}')" 
+                      style="padding: 8px 12px; background: ${CONFIG.success_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
+                      + Add
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+          
+          <!-- Pending Tasks -->
+          <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">
+              📋 To Do (${pendingTasks.length})
+            </div>
+            
+            ${pendingTasks.length === 0 ? `
+              <div style="text-align: center; padding: 24px; color: ${CONFIG.text_muted};">
+                <div style="font-size: 32px; margin-bottom: 8px;">🎉</div>
+                <div>All caught up! Add a task above.</div>
+              </div>
+            ` : `
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${pendingTasks.map(task => `
+                  <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px; ${task.priority === 'high' ? `border-left: 4px solid ${CONFIG.danger_color};` : task.priority === 'medium' ? `border-left: 4px solid ${CONFIG.warning_color};` : ''}">
+                    <button onclick="toggleTaskComplete('${task.id}')" style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid ${CONFIG.primary_action_color}; background: transparent; cursor: pointer; flex-shrink: 0;">
+                    </button>
+                    <div style="flex: 1; min-width: 0;">
+                      <div style="color: ${CONFIG.text_color}; font-size: 15px;">${esc(task.title)}</div>
+                      ${task.linkedItem ? `<div style="color: ${CONFIG.text_muted}; font-size: 12px;">📦 ${esc(task.linkedItem)}</div>` : ''}
+                      ${task.dueDate ? `<div style="color: ${new Date(task.dueDate) < new Date() ? CONFIG.danger_color : CONFIG.text_muted}; font-size: 12px;">📅 ${new Date(task.dueDate).toLocaleDateString()}</div>` : ''}
+                    </div>
+                    <div style="display: flex; gap: 4px;">
+                      <button onclick="editTask('${task.id}')" style="padding: 6px; background: transparent; border: none; cursor: pointer; font-size: 14px;">✏️</button>
+                      <button onclick="deleteTask('${task.id}')" style="padding: 6px; background: transparent; border: none; cursor: pointer; font-size: 14px;">🗑️</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+          
+          <!-- Completed Tasks -->
+          ${completedTasks.length > 0 ? `
+            <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; box-shadow: ${CONFIG.shadow};">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px;">
+                  ✅ Completed (${completedTasks.length})
+                </div>
+                <button onclick="clearCompletedTasks()" style="padding: 6px 12px; background: transparent; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 12px;">
+                  Clear All
+                </button>
+              </div>
+              
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${completedTasks.slice(0, 10).map(task => `
+                  <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px; opacity: 0.7;">
+                    <button onclick="toggleTaskComplete('${task.id}')" style="width: 24px; height: 24px; border-radius: 50%; border: 2px solid ${CONFIG.success_color}; background: ${CONFIG.success_color}; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px;">
+                      ✓
+                    </button>
+                    <div style="flex: 1; color: ${CONFIG.text_muted}; font-size: 15px; text-decoration: line-through;">${esc(task.title)}</div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+    
+    function generateTaskSuggestions() {
+      const suggestions = [];
+      
+      // Check expiring items
+      state.inventory.forEach(item => {
+        const status = getExpirationStatus(item);
+        const daysUntil = item.expirationDate ? 
+          Math.ceil((new Date(item.expirationDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
+        
+        if (status === 'expired') {
+          suggestions.push({
+            task: `Check if ${item.name} is still good`,
+            reason: 'Expired',
+            priority: 'high',
+            linkedItem: item.name
+          });
+        } else if (status === 'expiring-soon' && daysUntil <= 2) {
+          suggestions.push({
+            task: `Use or freeze ${item.name}`,
+            reason: `Expires in ${daysUntil} day${daysUntil > 1 ? 's' : ''}`,
+            priority: 'high',
+            linkedItem: item.name
+          });
+        } else if (status === 'expiring') {
+          // Check if it's a freezable item
+          const knowledge = getIngredientKnowledge(item.name);
+          if (knowledge?.freezable) {
+            suggestions.push({
+              task: `Consider freezing ${item.name}`,
+              reason: `Expires in ${daysUntil} days - can be frozen`,
+              priority: 'medium',
+              linkedItem: item.name
+            });
+          }
+        }
+      });
+      
+      // Check for proteins that might need marinating
+      const proteins = state.inventory.filter(i => 
+        ['Meat & Seafood'].includes(i.category) && !i.isFrozen
+      );
+      proteins.forEach(protein => {
+        const existingTask = (state.cookingTasks || []).find(t => 
+          t.linkedItem === protein.name && !t.completed
+        );
+        if (!existingTask) {
+          suggestions.push({
+            task: `Plan what to do with ${protein.name}`,
+            reason: 'Fresh protein in inventory',
+            priority: 'medium',
+            linkedItem: protein.name
+          });
+        }
+      });
+      
+      return suggestions;
+    }
+    
+    async function addQuickTask() {
+      const input = document.getElementById('quickTaskInput');
+      const title = input?.value.trim();
+      
+      if (!title) {
+        showError('Please enter a task');
+        return;
+      }
+      
+      const task = {
+        id: `task_${Date.now()}`,
+        type: 'cooking_task',
+        title: title,
+        completed: false,
+        createdAt: new Date().toISOString(),
+        priority: 'normal'
+      };
+      
+      // Try to link to inventory item
+      const linkedItem = state.inventory.find(i => 
+        title.toLowerCase().includes(i.name.toLowerCase())
+      );
+      if (linkedItem) {
+        task.linkedItem = linkedItem.name;
+      }
+      
+      state.cookingTasks = state.cookingTasks || [];
+      state.cookingTasks.push(task);
+      await storage.create(task);
+      
+      input.value = '';
+      showToast('Task added!', 'success');
+      render();
+    }
+    
+    async function addSuggestedTask(taskTitle) {
+      const task = {
+        id: `task_${Date.now()}`,
+        type: 'cooking_task',
+        title: taskTitle,
+        completed: false,
+        createdAt: new Date().toISOString(),
+        priority: 'normal'
+      };
+      
+      // Try to link to inventory item
+      const linkedItem = state.inventory.find(i => 
+        taskTitle.toLowerCase().includes(i.name.toLowerCase())
+      );
+      if (linkedItem) {
+        task.linkedItem = linkedItem.name;
+      }
+      
+      state.cookingTasks = state.cookingTasks || [];
+      state.cookingTasks.push(task);
+      await storage.create(task);
+      
+      showToast('Task added!', 'success');
+      render();
+    }
+    
+    async function toggleTaskComplete(taskId) {
+      const task = (state.cookingTasks || []).find(t => t.id === taskId);
+      if (!task) return;
+      
+      task.completed = !task.completed;
+      task.completedAt = task.completed ? new Date().toISOString() : null;
+      
+      await storage.update(task);
+      render();
+    }
+    
+    async function deleteTask(taskId) {
+      const task = (state.cookingTasks || []).find(t => t.id === taskId);
+      if (!task) return;
+      
+      state.cookingTasks = state.cookingTasks.filter(t => t.id !== taskId);
+      await storage.delete(task);
+      render();
+    }
+    
+    function editTask(taskId) {
+      const task = (state.cookingTasks || []).find(t => t.id === taskId);
+      if (!task) return;
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">✏️ Edit Task</h2>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Task</label>
+            <input type="text" id="editTaskTitle" value="${esc(task.title)}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Priority</label>
+            <select id="editTaskPriority" style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};">
+              <option value="low" ${task.priority === 'low' ? 'selected' : ''}>Low</option>
+              <option value="normal" ${task.priority === 'normal' ? 'selected' : ''}>Normal</option>
+              <option value="medium" ${task.priority === 'medium' ? 'selected' : ''}>Medium</option>
+              <option value="high" ${task.priority === 'high' ? 'selected' : ''}>High</option>
+            </select>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Due Date (optional)</label>
+            <input type="date" id="editTaskDueDate" value="${task.dueDate || ''}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeModal()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="saveTaskEdit('${taskId}')" style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              Save
+            </button>
+          </div>
+        </div>
+      `);
+    }
+    
+    async function saveTaskEdit(taskId) {
+      const task = (state.cookingTasks || []).find(t => t.id === taskId);
+      if (!task) return;
+      
+      const title = document.getElementById('editTaskTitle')?.value.trim();
+      const priority = document.getElementById('editTaskPriority')?.value;
+      const dueDate = document.getElementById('editTaskDueDate')?.value;
+      
+      if (!title) {
+        showError('Please enter a task title');
+        return;
+      }
+      
+      task.title = title;
+      task.priority = priority;
+      task.dueDate = dueDate || null;
+      
+      await storage.update(task);
+      closeModal();
+      showToast('Task updated!', 'success');
+      render();
+    }
+    
+    async function clearCompletedTasks() {
+      if (!confirm('Clear all completed tasks?')) return;
+      
+      const completed = (state.cookingTasks || []).filter(t => t.completed);
+      for (const task of completed) {
+        await storage.delete(task);
+      }
+      
+      state.cookingTasks = (state.cookingTasks || []).filter(t => !t.completed);
+      showToast('Completed tasks cleared', 'success');
+      render();
+    }
+   function showTaskTemplates() {
+      const templates = [
+        { category: '🥶 Freezing & Storage', tasks: [
+          'Freeze vegetables before they go bad',
+          'Portion and freeze leftover soup/stew',
+          'Label and date frozen items',
+          'Rotate freezer stock (oldest to front)',
+          'Vacuum seal meat for freezing'
+        ]},
+        { category: '🔪 Meal Prep', tasks: [
+          'Prep vegetables for the week',
+          'Cook batch of grains (rice/quinoa)',
+          'Make salad dressings',
+          'Prep overnight oats',
+          'Marinate proteins for later',
+          'Wash and dry salad greens',
+          'Hard boil eggs for snacks'
+        ]},
+        { category: '🧹 Kitchen Maintenance', tasks: [
+          'Clean out fridge',
+          'Check pantry expiration dates',
+          'Organize spice cabinet',
+          'Deep clean oven',
+          'Sharpen knives',
+          'Clean out freezer',
+          'Wipe down cabinets'
+        ]},
+        { category: '📋 Planning', tasks: [
+          'Plan meals for the week',
+          'Make grocery list',
+          'Check what needs to be used soon',
+          'Research new recipes to try',
+          'Update recipe notes after cooking'
+        ]},
+        { category: '🍳 Cooking Projects', tasks: [
+          'Make homemade stock',
+          'Bake bread',
+          'Try a new cuisine',
+          'Perfect a signature dish',
+          'Experiment with a new ingredient',
+          'Cook through a cookbook chapter'
+        ]}
+      ];
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; max-height: 70vh; overflow-y: auto;">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">📝 Task Templates</h2>
+          <p style="color: ${CONFIG.text_muted}; margin-bottom: 16px; font-size: 14px;">Tap any task to add it to your list</p>
+          
+          ${templates.map(cat => `
+            <div style="margin-bottom: 20px;">
+              <div style="font-weight: 600; font-size: 15px; margin-bottom: 8px;">${cat.category}</div>
+              <div style="display: flex; flex-direction: column; gap: 6px;">
+                ${cat.tasks.map(task => `
+                  <button onclick="addTemplateTask('${esc(task).replace(/'/g, "\\'")}'); this.style.opacity='0.5'; this.disabled=true; this.innerHTML='✓ Added';"
+                    style="padding: 10px 14px; background: ${CONFIG.background_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 10px; text-align: left; cursor: pointer; color: ${CONFIG.text_color}; font-size: 14px; transition: all 0.2s;">
+                    ${esc(task)}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          `).join('')}
+          
+          <button onclick="closeModal()" style="width: 100%; margin-top: 12px; padding: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 12px; cursor: pointer; font-weight: 500;">
+            Done
+          </button>
+        </div>
+      `);
+    }
+    
+    async function addTemplateTask(taskTitle) {
+      const task = {
+        id: `task_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        type: 'cooking_task',
+        title: taskTitle,
+        completed: false,
+        createdAt: new Date().toISOString(),
+        priority: 'normal'
+      };
+      
+      state.cookingTasks = state.cookingTasks || [];
+      state.cookingTasks.push(task);
+      await storage.create(task);
+      
+      showToast('Task added!', 'success');
+    }
+    
+    function showAITaskAssistant() {
+      // Get inventory context
+      const inventoryContext = state.inventory.slice(0, 20).map(i => {
+        const status = getExpirationStatus(i);
+        return `${i.name} (${status}${i.expirationDate ? ', expires ' + i.expirationDate : ''})`;
+      }).join(', ');
+      
+      state.chefChatOpen = true;
+      renderChefChat();
+      
+      setTimeout(() => {
+        const input = document.getElementById('chefChatInput');
+        if (input) {
+          input.value = `Based on my inventory: ${inventoryContext}\n\nWhat cooking tasks should I prioritize? Consider what needs to be used soon, what could be prepped ahead, and any meal planning suggestions.`;
+          input.focus();
+        }
+      }, 100);
+    }
     function showMoreMenu() {
-      const menuItems = [
+     const menuItems = [
         { id: 'meal-plan', icon: '📅', label: 'Meal Plan' },
+        { id: 'cooking-tasks', icon: '✅', label: 'Tasks' },
         { id: 'ingredients', icon: '🥗', label: 'Ingredients' },
         { id: 'budget-dashboard', icon: '💰', label: 'Budget' },
         { id: 'recipe-stats', icon: '📊', label: 'Stats' },
@@ -10137,6 +10607,9 @@ function renderRecordingNeeds() {
           break;
        case 'tips':
           content = renderTips();
+          break;
+          case 'cooking-tasks':
+          content = renderCookingTasks();
           break;
         case 'meal-options':
           content = renderMealOptions();
