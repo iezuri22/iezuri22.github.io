@@ -10528,26 +10528,37 @@ ${message.content}`
       // Keep only last 50 messages to save storage
       const messagesToSave = state.chefChatMessages.slice(-50);
       
-      // Find existing record (might have __backendId from Supabase)
-      const existing = storage._data?.find(d => d.id === 'chef_chat_history');
-      
-      if (existing) {
-        // Update existing record, preserving backend ID
-        const chatData = {
-          ...existing,
-          id: 'chef_chat_history',
-          messages: messagesToSave,
-          updatedAt: new Date().toISOString()
-        };
-        await storage.update(chatData);
-      } else {
-        // Create new record
-        const chatData = {
-          id: 'chef_chat_history',
-          messages: messagesToSave,
-          updatedAt: new Date().toISOString()
-        };
-        await storage.create(chatData);
+      try {
+        // Try to update directly in Supabase first
+        const { data: existing } = await window.supabaseClient
+          .from('user_data')
+          .select('*')
+          .eq('id', 'chef_chat_history')
+          .single();
+        
+        if (existing) {
+          // Update existing record
+          await window.supabaseClient
+            .from('user_data')
+            .update({ 
+              messages: messagesToSave,
+              updatedAt: new Date().toISOString()
+            })
+            .eq('id', 'chef_chat_history');
+          console.log('Chat history updated');
+        } else {
+          // Create new record
+          await window.supabaseClient
+            .from('user_data')
+            .insert({
+              id: 'chef_chat_history',
+              messages: messagesToSave,
+              updatedAt: new Date().toISOString()
+            });
+          console.log('Chat history created');
+        }
+      } catch (e) {
+        console.error('Failed to save chat history:', e);
       }
     }
 
