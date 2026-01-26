@@ -375,7 +375,385 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     };
 
     const ING_GROUPS = ['Produce', 'Beef', 'Poultry', 'Pork', 'Lamb & Goat', 'Seafood', 'Dairy & Eggs', 'Grains & Pasta', 'Pantry', 'Spices & Seasonings', 'Prepared', 'Other'];
-const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Vegetables', 'Dinner', 'Appetizer'];
+// Default images for ingredients
+    const INGREDIENT_IMAGES = {
+      'chicken breast': 'https://joyfullymad.com/wp-content/uploads/2023/08/grilled-chicken-salad-5.jpg',
+      'chicken thighs': 'https://thecookful.com/wp-content/uploads/2018/09/chicken-thighs-instant-pot-feature-1392x780.jpg',
+      'chicken wings': 'https://www.instacart.com/assets/domains/product-image/file/large',
+      'whole chicken': 'https://ifoodreal.com/wp-content/uploads/2023/08/how-to-cut-up-a-whole-chicken.jpg',
+      'ground beef': 'https://meat.tamu.edu/wp-content/uploads/2024/07/Ground-Beef-@-Rosenthal-2-1536x1024-2.jpg',
+      'ribeye steak': 'https://www.vicsmeat.com.au/cdn/shop/files/beef-rib-eye-steak-black-onyx-marbling-score-3-rangers-valley-1kg-vics-meat-546607.jpg?v=1765840185',
+      'ribeye': 'https://www.vicsmeat.com.au/cdn/shop/files/beef-rib-eye-steak-black-onyx-marbling-score-3-rangers-valley-1kg-vics-meat-546607.jpg?v=1765840185',
+      'filet mignon': 'https://freezedrywholesalers.com/cdn/shop/products/Filet-Mignon_900x.jpg?v=1599149544',
+      'new york strip': 'https://thomascattlecompany.com/cdn/shop/files/Copy_of_New_York_2.jpg?v=1762458007&width=1920',
+      'sirloin': 'https://eelriverorganicbeef.com/wp-content/uploads/Eel-River-Organic-Top-Sirloin-Raw-3.jpg',
+      't-bone steak': 'https://cdn.woodwardmeats.com/media/product/2_aaa-t-bone-steak.jpg',
+      't-bone': 'https://cdn.woodwardmeats.com/media/product/2_aaa-t-bone-steak.jpg',
+      'flank steak': 'https://rogueproduce.com/wp-content/uploads/2020/11/Flank-Steak.jpg',
+      'skirt steak': 'https://www.grillseeker.com/wp-content/uploads/2020/03/inside-vs-outside-skirt-steak-feature-image-678x1024.jpg',
+      'beef roast': 'https://media.istockphoto.com/id/525616019/photo/raw-grass-fed-prime-rib-meat.jpg?s=612x612&w=0&k=20&c=D5ZzN6jur0JDkxmYpV7dkZ-uGdJ4X7HwWMrQRWjv8oo=',
+      'pork chops': 'https://www.seriouseats.com/thmb/7G55_V8fyOm2Z7JMFAz39W7Gvdc=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/__opt__aboutcom__coeus__resources__content_migration__serious_eats__seriouseats.com__images__2016__02__20160208-sous-vide-pork-chop-guide-food-lab-02-10d7ecdd7c2e42ca94ff188f814ece48.jpg',
+      'lamb chops': 'https://media.istockphoto.com/id/538918713/photo/lamb-chops.jpg?s=612x612&w=0&k=20&c=qRiDgM6Pp7mKLcIf_hIy6o4jom6J-wGrtkRMaXw5RaM=',
+      'turkey bacon': 'https://d1tjtj7oa1d196.cloudfront.net/filters:strip_exif()/filters:strip_icc()/filters:format(jpeg)/filters:background_color(fff)/filters:quality(60)/fit-in/800x0/2020/01/14/17/07/13/6703d644-133c-41f5-acbb-4bfd8032ba8b/Natural%20Turkey%20Bacon_Front.png',
+      'bacon': 'https://images.medicinenet.com/images/article/main_image/how-long-does-bacon-last.jpg?output-quality=75',
+      'chicken sausage': 'https://storage.googleapis.com/images-prs-prd-c7e7986.prs.prd.v8.commerce.mi9cloud.com/product-images/zoom/00030771026367_1',
+      'sausage': 'https://www.paulinamarket.com/cdn/shop/files/hungarian.jpg?v=1714743894',
+      'ham': 'https://heritagefoods.com/cdn/shop/products/Uncured-ham-bonein3_preview_600x.jpeg?v=1629752527',
+      'salmon': 'https://thefatbutcherph.com/cdn/shop/articles/NEW_COLLECTION.png?v=1682413999&width=1100',
+      'shrimp': 'https://shop.legalseafoods.com/cdn/shop/files/RawShrimpNov24.jpg?v=1731080264&width=1946',
+      'clams': 'https://popmenucloud.com/cdn-cgi/image/width=1920,height=1920,format=auto,fit=scale-down/jtfpqdub/bccd17cb-054b-4a46-8123-927e3ed3e50a.jpeg',
+      'tilapia': 'https://assets.usfoods.com/Product/Image/10133495/23f253cbebee152b35c938e050fba02b.jpg',
+      'tuna': 'https://www.tastingtable.com/img/gallery/14-tips-you-need-when-cooking-with-tuna/l-intro-1671563002.jpg',
+      'eggs': 'https://cdn.shopify.com/s/files/1/0732/3140/1273/files/Untitled_design_2_b5be794c-dd9b-40de-80eb-82c9b9fef755.png?v=1743249046',
+      'egg': 'https://cdn.shopify.com/s/files/1/0732/3140/1273/files/Untitled_design_2_b5be794c-dd9b-40de-80eb-82c9b9fef755.png?v=1743249046',
+      'tofu': 'https://bonpourtoi.ca/app/uploads/2020/04/BPT-Articles-tofu-cru-tinyjpg.jpeg',
+      'red onion': 'https://www.naturesninja.org/wp-content/uploads/2020/02/red-onions-960.jpg',
+      'yellow onion': 'https://www.gurneys.com/cdn/shop/files/14781A.webp?v=1729090544',
+      'white onion': 'https://migardener.com/cdn/shop/products/ONI5_white_sweet_spanish_d4e91e4a-db67-4a6f-b939-845ac8d7fa23_800x.jpg?v=1641493834',
+      'onion': 'https://www.gurneys.com/cdn/shop/files/14781A.webp?v=1729090544',
+      'garlic': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQN_uhM0eWP8vpC5ZYQWJtX7OWWji_2u0-g2Q&s',
+      'shallots': 'https://www.adaptiveseeds.com/wp-content/uploads/2024/12/Onion-Cuisse-de-Poulet-Zebrune-1.jpg',
+      'shallot': 'https://www.adaptiveseeds.com/wp-content/uploads/2024/12/Onion-Cuisse-de-Poulet-Zebrune-1.jpg',
+      'tomato': 'https://img.etimg.com/thumb/width-1200,height-900,imgsize-56196,resizemode-75,msid-95423774/magazines/panache/5-reasons-why-tomatoes-should-be-your-favourite-fruit-this-year.jpg',
+      'tomatoes': 'https://img.etimg.com/thumb/width-1200,height-900,imgsize-56196,resizemode-75,msid-95423774/magazines/panache/5-reasons-why-tomatoes-should-be-your-favourite-fruit-this-year.jpg',
+      'cherry tomatoes': 'https://bacolodpages.com/sites/default/files/styles/480x480/public/products/Cherry%20Tomato1.png.webp?itok=PsUliomj',
+      'bell pepper': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQZVYa_RBlmhm9U4LPivanbeLe4aZ1PHG_JJQ&s',
+      'bell peppers': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQZVYa_RBlmhm9U4LPivanbeLe4aZ1PHG_JJQ&s',
+      'jalapeño': 'https://www.foodandwine.com/thmb/ig_EnbYuEt-88gXJSDFpyWGxEJY=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Why-Have-Jalapenos-Become-so-Mild-FT-BLOG0525-01-bfb059df7eb745a6b454ec971c7d36b0.jpg',
+      'jalapeno': 'https://www.foodandwine.com/thmb/ig_EnbYuEt-88gXJSDFpyWGxEJY=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Why-Have-Jalapenos-Become-so-Mild-FT-BLOG0525-01-bfb059df7eb745a6b454ec971c7d36b0.jpg',
+      'carrot': 'https://static.wikia.nocookie.net/my-first-encyclopedia/images/9/9a/Carrot-PNG-Clipart.png/revision/latest/scale-to-width-down/340?cb=20220711193537',
+      'carrots': 'https://static.wikia.nocookie.net/my-first-encyclopedia/images/9/9a/Carrot-PNG-Clipart.png/revision/latest/scale-to-width-down/340?cb=20220711193537',
+      'baby carrot': 'https://i5.walmartimages.com/seo/Fresh-Baby-Cut-Carrots-2lb-Bag_7e8ec89d-158d-41d7-9dd4-aada713d1227.bda0fd4fa50396bc2205c1ca2e38ea75.jpeg',
+      'baby carrots': 'https://i5.walmartimages.com/seo/Fresh-Baby-Cut-Carrots-2lb-Bag_7e8ec89d-158d-41d7-9dd4-aada713d1227.bda0fd4fa50396bc2205c1ca2e38ea75.jpeg',
+      'celery': 'https://images.immediate.co.uk/production/volatile/sites/30/2020/02/Celery-stalks-and-leaves-7860193.jpg?quality=90&resize=700,636',
+      'broccoli': 'https://voca-land.sgp1.cdn.digitaloceanspaces.com/0/1757665833918/02cb4926.jpg',
+      'cauliflower': 'https://lh6.googleusercontent.com/proxy/U92MdIX-umsRwyIJa9MgRyvnW4kUOaGNIKef3C1pJnbExzNFHCLihNceYGESRvEh_p61UB15r8QGcgnXc2oR8gO97q76aTZMljuXz1ZJRjf29rObGo-k0zt8Du251vaCSWgQTaAHee5jf3Q',
+      'spinach': 'https://images.immediate.co.uk/production/volatile/sites/30/2013/06/GettyImages-652986635-3dffa4d.jpg?quality=90&resize=708,643',
+      'kale': 'https://healthyfamilyproject.com/wp-content/uploads/2020/05/Kale-background.jpg',
+      'lettuce': 'https://www.gurneys.com/cdn/shop/files/14627A.webp?v=1729089529',
+      'arugula': 'https://www.taylorfarms.com/wp-content/uploads/2023/10/Arugula.webp',
+      'zucchini': 'https://thrivemeetings.com/wp-content/uploads/2016/06/Zucchini%E2%80%94whole-partially-sliced.jpg',
+      'squash': 'https://www.highmowingseeds.com/media/catalog/product/cache/95cbc1bb565f689da055dd93b41e1c28/2/9/2940_1.jpg',
+      'eggplant': 'https://snaped.fns.usda.gov/sites/default/files/seasonal-produce/2018-05/eggplant.jpg',
+      'mushrooms': 'https://lovefoodhatewaste.com/sites/default/files/styles/16_9_two_column/public/2022-07/Mushroom-sh1679028943.jpg.webp?itok=zsNCU7sW',
+      'mushroom': 'https://lovefoodhatewaste.com/sites/default/files/styles/16_9_two_column/public/2022-07/Mushroom-sh1679028943.jpg.webp?itok=zsNCU7sW',
+      'potato': 'https://www.lovefoodhatewaste.com/sites/default/files/styles/twitter_card_image/public/2022-08/Potatoes-shutterstock-1721688538.jpg.webp?itok=4hLqSjDi',
+      'potatoes': 'https://www.lovefoodhatewaste.com/sites/default/files/styles/twitter_card_image/public/2022-08/Potatoes-shutterstock-1721688538.jpg.webp?itok=4hLqSjDi',
+      'baby potato': 'https://vegetablerecipes.com/wp-content/uploads/2023/03/Boiled-Baby-Potatoes-VR-6-1-of-1-1024x731.jpg',
+      'baby potatoes': 'https://vegetablerecipes.com/wp-content/uploads/2023/03/Boiled-Baby-Potatoes-VR-6-1-of-1-1024x731.jpg',
+      'sweet potato': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSB3tXoUG54W7fKjmfz63nPzvsLC4v1ro9R0g&s',
+      'sweet potatoes': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSB3tXoUG54W7fKjmfz63nPzvsLC4v1ro9R0g&s',
+      'corn': 'https://asian-veggies.com/cdn/shop/products/goldcorn.jpg?v=1614395321',
+      'green beans': 'https://vikalinka.com/wp-content/uploads/2023/12/Lemon-Garlic-Green-Beans-7-Edit-500x500.jpg',
+      'peas': 'https://images.ctfassets.net/ruek9xr8ihvu/6ajA622p1DhEV41r5mBtC6/b150416e7b2e3ad29afea40dfee50739/Pea_Garden-Kate_Lindquist.jpg?w=1096&q=80&fm=webp',
+      'asparagus': 'https://www.madaboutmacarons.com/wp-content/uploads/2023/05/oven-roasted-asparagus-French-500x500.jpg',
+      'brussels sprouts': 'https://nutritionsource.hsph.harvard.edu/wp-content/uploads/2024/11/AdobeStock_59069256-1024x683.jpeg',
+      'cucumber': 'https://www.freshpoint.com/wp-content/uploads/2020/02/freshpoint-english-cucumber-scaled.jpg',
+      'avocado': 'https://domf5oio6qrcr.cloudfront.net/medialibrary/16762/gettyimages-961101662.jpg',
+      'cabbage': 'https://www.kikkoman.com/en/cookbook/assets/img/0023_feature2.jpg',
+      'apple': 'https://assets.clevelandclinic.org/transform/LargeFeatureImage/cd71f4bd-81d4-45d8-a450-74df78e4477a/Apples-184940975-770x533-1_jpg',
+      'apples': 'https://assets.clevelandclinic.org/transform/LargeFeatureImage/cd71f4bd-81d4-45d8-a450-74df78e4477a/Apples-184940975-770x533-1_jpg',
+      'banana': 'https://www.southernliving.com/thmb/EM-f8L_T36WluwBtBkhD4gnCKg8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/How_To_Freeze_Bananas_023-71e81efacb6a4d87a3596b8c2c519884.jpg',
+      'bananas': 'https://www.southernliving.com/thmb/EM-f8L_T36WluwBtBkhD4gnCKg8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/How_To_Freeze_Bananas_023-71e81efacb6a4d87a3596b8c2c519884.jpg',
+      'orange': 'https://cdn.britannica.com/24/174524-050-A851D3F2/Oranges.jpg',
+      'oranges': 'https://cdn.britannica.com/24/174524-050-A851D3F2/Oranges.jpg',
+      'lemon': 'https://assets.vogue.com/photos/6925e7e556850c6852dae0ab/1:1/w_3648,h_3648,c_limit/1395000061',
+      'lemons': 'https://assets.vogue.com/photos/6925e7e556850c6852dae0ab/1:1/w_3648,h_3648,c_limit/1395000061',
+      'lime': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNtbiRCz4WAebwffdxrErABMHo676xRI9a0Q&s',
+      'limes': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNtbiRCz4WAebwffdxrErABMHo676xRI9a0Q&s',
+      'strawberries': 'https://cdn.mos.cms.futurecdn.net/r5ibnDz656ibgejAdjWHaj.jpg',
+      'strawberry': 'https://cdn.mos.cms.futurecdn.net/r5ibnDz656ibgejAdjWHaj.jpg',
+      'blueberries': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqUBHTFEu_rXLYV39NuVesAA1aB2CiWpr-Ww&s',
+      'blueberry': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqUBHTFEu_rXLYV39NuVesAA1aB2CiWpr-Ww&s',
+      'raspberries': 'https://cdn.britannica.com/83/156583-050-4A1FABB5/Red-raspberries.jpg',
+      'raspberry': 'https://cdn.britannica.com/83/156583-050-4A1FABB5/Red-raspberries.jpg',
+      'mango': 'https://www.avera.org/app/files/public/75073/mango-fruit-and-slices-on-a-cutting-board.jpg',
+      'pineapple': 'https://articles-1mg.gumlet.io/articles/wp-content/uploads/2016/10/pineapple.jpg?compress=true&quality=80&w=640&dpr=2.6',
+      'grapes': 'https://assets.epicurious.com/photos/55e4c39fcf90d6663f727a74/16:9/w_2560%2Cc_limit/shutterstock_209917372.jpg',
+      'peaches': 'https://draxe.com/wp-content/uploads/2016/08/DrAxePeachHeader.jpg',
+      'peach': 'https://draxe.com/wp-content/uploads/2016/08/DrAxePeachHeader.jpg',
+      'milk': 'https://www.elizabethrider.com/wp-content/uploads/2024/02/homemade-almond-milk-2.jpg',
+      'heavy cream': 'https://i5.walmartimages.com/seo/Land-O-Lakes-Heavy-Whipping-Cream-32-fl-oz_09395890-0f62-4336-9fb1-f4c01622890b.5c23cc54754527ecf67c8716c210265f.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF',
+      'half and half': 'https://i5.walmartimages.com/asr/66471027-4b85-4dcc-915c-101c9e90f4a4.926ae5f515760be92fd8ab0a6422dab6.jpeg',
+      'butter': 'https://www.bhg.com/thmb/Fx7YYldknv8aJvvsO-f5YZxOn5k=/5434x0/filters:no_upscale():strip_icc()/GettyImages-2158134925-23a8af00a9db4ddabbe99cb0c0d67540.jpg',
+      'cheddar cheese': 'https://pearlvalleycheese.com/cdn/shop/files/sharp-cheddar-slices_1.jpg?v=1755888466',
+      'cheddar': 'https://pearlvalleycheese.com/cdn/shop/files/sharp-cheddar-slices_1.jpg?v=1755888466',
+      'mozzarella': 'https://images.immediate.co.uk/production/volatile/sites/30/2021/09/Homemade-mozzarella-054151d.jpg?quality=90&resize=708,643',
+      'parmesan': 'https://www.kroger.com/product/images/xlarge/front/0003114252385',
+      'feta': 'https://upload.wikimedia.org/wikipedia/commons/2/28/Feta_Cheese.jpg',
+      'monterey jack': 'https://californiaranchmarket.com/cdn/shop/products/105147.jpg?v=1622480636',
+      'monterey jack cheese': 'https://californiaranchmarket.com/cdn/shop/products/105147.jpg?v=1622480636',
+      'pepper jack': 'https://www.kroger.com/product/images/large/front/0004610000122',
+      'pepper jack cheese': 'https://www.kroger.com/product/images/large/front/0004610000122',
+      'cream cheese': 'https://i5.walmartimages.com/asr/7160398e-31e3-4097-8280-bf333ea32d49.b53d76dbeeb50dc7857146566ed0dede.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF',
+      'yogurt': 'https://www.liveeatlearn.com/wp-content/uploads/2024/08/how-to-make-homemade-greek-yogurt-28-500x500.jpg',
+      'sour cream': 'https://m.media-amazon.com/images/I/61wzj-GacBL._AC_UF1000,1000_QL80_.jpg',
+      'bread': 'https://assets.bonappetit.com/photos/5c62e4a3e81bbf522a9579ce/1:1/w_2560%2Cc_limit/milk-bread.jpg',
+      'tortillas': 'https://static01.nyt.com/images/2024/08/06/multimedia/11EATrex-flour-tortillas-mvfk/11EATrex-flour-tortillas-mvfk-mediumSquareAt3X.jpg',
+      'tortilla': 'https://static01.nyt.com/images/2024/08/06/multimedia/11EATrex-flour-tortillas-mvfk/11EATrex-flour-tortillas-mvfk-mediumSquareAt3X.jpg',
+      'pita': 'https://www.seriouseats.com/thmb/oV5Eov1pgSkwjpjA5E2ynSdCFv4=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/__opt__aboutcom__coeus__resources__content_migration__serious_eats__seriouseats.com__recipes__images__2015__08__20150626-Stacked-Perfect-Pitas-Yvonne-Ruperti-Edit-Edit-bf72e9e490e148e0b95c56c04a0d18ab.jpg',
+      'spaghetti': 'https://cdn.apartmenttherapy.info/image/upload/f_jpg,q_auto:eco,c_fill,g_auto,w_1500,ar_1:1/k%2Farchive%2Faa5b3bf7120c1f655611b3e4b2e848679823777e',
+      'cavatappi': 'https://images.albertsons-media.com/is/image/ABS/970011886-ECOM?$ng-ecom-pdp-desktop$&defaultImage=Not_Available',
+      'linguine': 'https://chefsmandala.com/wp-content/uploads/2018/02/Linguine-Pasta-shutterstock_377987440.jpg',
+      'penne': 'https://www.the-pasta-project.com/wp-content/uploads/Penne-Pasta.jpg',
+      'fettuccine': 'https://tb-static.uber.com/prod/image-proc/processed_images/5d1066b9afe3876d00ab9de64a62a0f3/b4665c191b34baf3d0e0fa45dfdd3d1d.jpeg',
+      'rigatoni': 'https://www.orchidsandsweettea.com/wp-content/uploads/2024/02/Spicy-Vodka-Rigatoni-Pasta-Bake-2.jpg',
+      'farfalle': 'https://substackcdn.com/image/fetch/$s_!-xnQ!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F7edd31a4-8561-4264-9881-0333c643138e_1442x2048.jpeg',
+      'orzo': 'https://m.media-amazon.com/images/I/71TZ64uRNxL._SL1500_.jpg',
+      'lasagna noodles': 'https://keepingitsimpleitalian.com/wp-content/uploads/2023/01/dried-lasagna-noodles-360x480.jpg',
+      'lasagna': 'https://keepingitsimpleitalian.com/wp-content/uploads/2023/01/dried-lasagna-noodles-360x480.jpg',
+      'egg noodles': 'https://thewoksoflife.com/wp-content/uploads/2020/04/homemade-chinese-egg-noodles-19-e1609271249794.jpg',
+      'rice': 'https://www.bhf.org.uk/-/media/images/information-support/support/healthy-living/recipes-new/peas-and-corn-pilau-rice_800x600.jpg?rev=274cde5c777c4dcbada4ab10239643cb&la=en&h=600&w=800&hash=2C0EAC67627E147BFC455A9EC8C70B1F',
+      'quinoa': 'https://twohealthykitchens.com/wp-content/uploads/2016/01/THK-Quinoa-1-2.jpg',
+      'couscous': 'https://www.fivehearthome.com/wp-content/uploads/2024/07/How-to-Cook-Couscous-by-Five-Heart-Home_1200pxFeatured-1.jpg',
+      'flour': 'https://pics.walgreens.com/prodimg/509296/450.jpg',
+      'breadcrumbs': 'https://www.bowlofdelicious.com/wp-content/uploads/2021/09/homemade-bread-crumbs-square.jpg',
+      'oats': 'https://food.fnr.sndimg.com/content/dam/images/food/fullset/2021/09/23/rolled-oats-linen-wood-surface-white-bowl.jpg.rend.hgtvcom.1280.1280.85.suffix/1632429307666.webp',
+      'cereal': 'https://www.digicomply.com/hubfs/AI-Generated%20Media/Images/Cereal%20Recall.jpeg',
+      'salt': 'https://media.self.com/photos/5cc0781558c4c36a45d91deb/1:1/w_3569,h_3569,c_limit/cooking-salts.jpg',
+      'pepper': 'https://spices.com/cdn/shop/products/a5ba8da4bc526b25463e0607481bc4e39a3d5cd33806617f1f32d76e54c84f9d.jpg?v=1718827884&width=1445',
+      'black pepper': 'https://spices.com/cdn/shop/products/a5ba8da4bc526b25463e0607481bc4e39a3d5cd33806617f1f32d76e54c84f9d.jpg?v=1718827884&width=1445',
+      'cumin': 'https://i5.walmartimages.com/seo/McCormick-Kosher-Ground-Cumin-1-5-oz-Bottle_bce81744-0b14-4e22-8d84-19070ac9a481.7c849d503f3269de460198ce80883008.jpeg',
+      'paprika': 'https://badiaspices.com/wp-content/uploads/2025/02/033844006730.jpg',
+      'crushed red pepper': 'https://badiaspices.com/wp-content/uploads/2025/02/033844005474.jpg',
+      'red pepper flakes': 'https://badiaspices.com/wp-content/uploads/2025/02/033844005474.jpg',
+      'chili powder': 'https://www.mccormick.com/cdn/shop/files/00052100004280_D_A1N1-2025-12-02.jpg?v=1764708478&width=700',
+      'oregano': 'https://m.media-amazon.com/images/I/91qESpubSlL._AC_UF894,1000_QL80_.jpg',
+      'basil': 'https://cdn.shopify.com/s/files/1/0686/4283/2583/files/new_about_basil_hero.webp?v=1757613354',
+      'thyme': 'https://www.highmowingseeds.com/media/catalog/product/cache/95cbc1bb565f689da055dd93b41e1c28/5/1/5140-4.jpg',
+      'rosemary': 'https://m.media-amazon.com/images/I/61giyp23UTL._AC_UF1000,1000_QL80_.jpg',
+      'garlic powder': 'https://m.media-amazon.com/images/I/81mPfw5LQgL._AC_UF894,1000_QL80_.jpg',
+      'onion powder': 'https://badiaspices.com/wp-content/uploads/2025/02/033844000066.jpg',
+      'cinnamon': 'https://www.bluemountainorganics.com/media/catalog/product/cache/207e23213cf636ccdef205098cf3c8a3/c/i/cinnamon_powder_4.webp',
+      'nutmeg': 'https://images.albertsons-media.com/is/image/ABS/114150166-C1N1?$ng-ecom-pdp-mobile$&defaultImage=Not_Available',
+      'bay leaves': 'https://www.redstickspice.com/cdn/shop/products/bay_leaf_600x.jpg?v=1704812105',
+      'bay leaf': 'https://www.redstickspice.com/cdn/shop/products/bay_leaf_600x.jpg?v=1704812105',
+      'italian seasoning': 'https://www.kroger.com/product/images/xlarge/front/0005210000534',
+      'olive oil': 'https://purenutrition.in/cdn/shop/files/Olive-Pomace-Oil-1L-_FOP_1.jpg?v=1723799877&width=1500',
+      'vegetable oil': 'https://storage.googleapis.com/images-lnb-prd-8936dd0.lnb.prd.v8.commerce.mi9cloud.com/product-images/zoom/00070253009587.png',
+      'coconut oil': 'https://www.pureindianfoods.com/cdn/shop/files/CO-1_d864f329-f198-4e44-949f-99a80dfdba07.jpg?v=1701805811',
+      'avocado oil': 'https://shop.daniellewalker.com/cdn/shop/products/31csf_tADRL_560x.jpg?v=1604462155',
+      'sesame oil': 'https://m.media-amazon.com/images/I/71SxFJLbq3L._AC_UF894,1000_QL80_.jpg',
+      'balsamic vinegar': 'https://www.ponti.com/wp-content/uploads/3241.png',
+      'red wine vinegar': 'https://images.cdn.retail.brookshires.com/detail/00070404001002_C1C1.jpeg',
+      'apple cider vinegar': 'https://i5.walmartimages.com/seo/Bragg-Organic-Apple-Cider-Vinegar-with-the-Mother-Raw-and-Unfiltered-32-fl-oz_e85f2790-ddb2-4ee6-a337-114aca7a00e5.ae5d30f07483f7714bf246bd92a29984.jpeg',
+      'soy sauce': 'https://i5.walmartimages.com/asr/bebe857c-3ba0-446a-b019-35aaa727e845.315ccee09c32027b32e06f820788ef3c.jpeg',
+      'fish sauce': 'https://www.markethallfoods.com/cdn/shop/files/red-boat-fish-sauce.jpg?v=1761865254&width=900',
+      'sugar': 'https://i.cbc.ca/ais/1.1912472,1717151470459/full/max/0/default.jpg?im=Crop%2Crect%3D%280%2C0%2C620%2C348%29%3B',
+      'brown sugar': 'https://cdn.jwplayer.com/v2/media/F9e0EImz/thumbnails/VCZN7qMW.jpg?width=1280',
+      'honey': 'https://cdn.mos.cms.futurecdn.net/v2/t:0,l:592,cw:3558,ch:2669,q:80,w:2560/zcz8f72orNC9GKgm3tbqMY.jpg',
+      'maple syrup': 'https://dutchmansgold.com/cdn/shop/files/17657---Dutchmans-Gold-Pure-Maple-Syrup-250mlWeb_600x.jpg?v=1719681510',
+      'vanilla extract': 'https://www.clubhouse.ca/-/media/project/oneweb/clubhouseca/products/club-house/00066200004705_a1c1.png?rev=592791abe9d6477a934bfd427e90a277&vd=20250505T192315Z&extension=webp&hash=424CB3B06503C80111334927E5D86A8D',
+      'vanilla': 'https://www.clubhouse.ca/-/media/project/oneweb/clubhouseca/products/club-house/00066200004705_a1c1.png?rev=592791abe9d6477a934bfd427e90a277&vd=20250505T192315Z&extension=webp&hash=424CB3B06503C80111334927E5D86A8D',
+      'chicken broth': 'https://i5.walmartimages.com/seo/Swanson-100-Natural-Chicken-Broth-32-oz-Carton_d663a2bb-5e23-471b-b3ab-744341f43ab9.2cec2d16e105ee87612f1fab8f00b216.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF',
+      'chicken stock': 'https://i5.walmartimages.com/seo/Swanson-100-Natural-Chicken-Broth-32-oz-Carton_d663a2bb-5e23-471b-b3ab-744341f43ab9.2cec2d16e105ee87612f1fab8f00b216.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF',
+      'beef broth': 'https://healthyheartmarket.com/cdn/shop/products/swanson-unsalted-beef-broth-gluten-free-32-oz-carton-healthy-heart-market.jpg?v=1675886225&width=1445',
+      'beef stock': 'https://healthyheartmarket.com/cdn/shop/products/swanson-unsalted-beef-broth-gluten-free-32-oz-carton-healthy-heart-market.jpg?v=1675886225&width=1445',
+      'canned tomatoes': 'https://www.allrecipes.com/thmb/v7p4-wFK22zmUDJlktNwgslED-8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/ar-canned-tomato-taste-test-cento-whole-4x3-1b3a0d596e0041ffad3c644cb039b53a.jpg',
+      'diced tomatoes': 'https://www.allrecipes.com/thmb/v7p4-wFK22zmUDJlktNwgslED-8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/ar-canned-tomato-taste-test-cento-whole-4x3-1b3a0d596e0041ffad3c644cb039b53a.jpg',
+      'tomato paste': 'https://www.cheeseshopsb.com/cdn/shop/products/502515_doubleconcetrate_tomatopaste.jpg?v=1718486636',
+      'tomato sauce': 'https://www.kierstenhickman.com/wp-content/uploads/2019/09/homemade-tomato-sauce-2-khickman.jpg',
+      'black beans': 'https://i5.walmartimages.com/seo/Bush-s-Black-Beans-Canned-Beans-15-oz_c27b0e60-c3f8-434a-9cfa-f83b05e651a8.2796317ef2848615bad8f99338504cfc.jpeg',
+      'kidney beans': 'https://i5.walmartimages.com/seo/Bush-s-Dark-Red-Kidney-Beans-Canned-Beans-16-oz_c80718d7-1d4d-41a1-a971-c6e9c859aa9f.7c67bd90bc638704e7e01bafb838571c.jpeg',
+      'chickpeas': 'https://www.lapreferida.com/wp-content/uploads/2017/12/Chick-Peas-1.png',
+      'garbanzo beans': 'https://www.lapreferida.com/wp-content/uploads/2017/12/Chick-Peas-1.png',
+      'coconut milk': 'https://images.albertsons-media.com/is/image/ABS/127050033-C1N1?$ng-ecom-pdp-mobile$&defaultImage=Not_Available',
+      'peanut butter': 'https://www.kroger.com/product/images/xlarge/front/0005150024191',
+      'almonds': 'https://www.harighotra.co.uk/images/Shutterstock/almonds_560x560.jpg',
+      'walnuts': 'https://wegotnuts.com/cdn/shop/files/1_6bcf7df5-aa40-4301-87d0-1226f3b40357_1024x1024.png?v=1741332459',
+      'peanuts': 'https://nuts.com/images/ct/images.cdn.us-central1.gcp.commercetools.com/fe6ef66f-361c-4adb-b11f-d4aa8f13c79c/4046_RoastedPeanutsS-g-WeqkNg-zoom.jpg',
+      'white wine': 'https://images.commerce7.com/st--francis-winery/images/medium/chardonnay-1708120943704.png',
+      'red wine': 'https://bravofarms.com/cdn/shop/products/red-wine.jpg?v=1646253890',
+      'brandy': 'https://cdn11.bigcommerce.com/s-0ddlsmhg83/images/stencil/836x836/products/2485/2703/hennessy-very-special-cognac__42099.1752495284.1280.1280__79246.1755241936.jpg?c=1'
+    };
+   // Custom ingredient images (loaded from storage, overrides defaults)
+    let customIngredientImages = {};
+
+    function loadCustomIngredientImages() {
+      const saved = localStorage.getItem('custom_ingredient_images');
+      if (saved) {
+        try {
+          customIngredientImages = JSON.parse(saved);
+        } catch (e) {
+          customIngredientImages = {};
+        }
+      }
+    }
+
+    function saveCustomIngredientImages() {
+      localStorage.setItem('custom_ingredient_images', JSON.stringify(customIngredientImages));
+    }
+
+    // Load on startup
+    loadCustomIngredientImages();
+
+    function showIngredientImagesManager() {
+      // Combine default and custom images
+      const allImages = { ...INGREDIENT_IMAGES, ...customIngredientImages };
+      const sortedKeys = Object.keys(allImages).sort();
+      
+      openModal(`
+        <div style="color: #1a1a2e; max-height: 80vh; overflow-y: auto;">
+          <h2 class="text-2xl font-bold mb-4">🖼️ Ingredient Images Manager</h2>
+          
+          <div class="mb-4 p-3 rounded" style="background:#f3f4f6;">
+            <div class="font-semibold mb-2">Add New Ingredient Image:</div>
+            <div class="flex gap-2 mb-2">
+              <input type="text" id="newIngredientName" placeholder="Ingredient name (e.g., cod)"
+                     class="flex-1 px-3 py-2 border rounded" />
+            </div>
+            <div class="flex gap-2">
+              <input type="url" id="newIngredientUrl" placeholder="Image URL"
+                     class="flex-1 px-3 py-2 border rounded" />
+              <button onclick="addCustomIngredientImage()" 
+                      class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+                Add
+              </button>
+            </div>
+          </div>
+          
+          <div class="mb-2 text-sm text-gray-600">
+            ${sortedKeys.length} ingredients with images. Click an image to change it.
+          </div>
+          
+          <div style="max-height: 50vh; overflow-y: auto;">
+            <div class="grid grid-cols-2 gap-2">
+              ${sortedKeys.map(name => `
+                <div class="flex items-center gap-2 p-2 rounded" style="background:#f9fafb; border:1px solid #e5e7eb;">
+                  <img src="${esc(allImages[name])}" 
+                       style="width:40px; height:40px; object-fit:cover; border-radius:4px; cursor:pointer;"
+                       onclick="editIngredientImage('${esc(name)}')"
+                       onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><rect fill=%22%23ddd%22 width=%2240%22 height=%2240%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22>❌</text></svg>'" />
+                  <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium truncate">${esc(name)}</div>
+                    ${customIngredientImages[name] ? '<div class="text-xs text-blue-600">Custom</div>' : ''}
+                  </div>
+                  <button onclick="deleteIngredientImage('${esc(name)}')"
+                          class="text-red-500 hover:text-red-700 text-sm px-1"
+                          title="Remove custom image">
+                    ✕
+                  </button>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          
+          <div class="flex gap-2 justify-end mt-4">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Close
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function addCustomIngredientImage() {
+      const name = document.getElementById('newIngredientName')?.value.trim().toLowerCase();
+      const url = document.getElementById('newIngredientUrl')?.value.trim();
+      
+      if (!name) {
+        showError('Please enter an ingredient name');
+        return;
+      }
+      if (!url) {
+        showError('Please enter an image URL');
+        return;
+      }
+      
+      customIngredientImages[name] = url;
+      saveCustomIngredientImages();
+      showToast(`Image added for "${name}"`, 'success');
+      showIngredientImagesManager(); // Refresh
+    }
+
+    function editIngredientImage(name) {
+      const currentUrl = customIngredientImages[name] || INGREDIENT_IMAGES[name] || '';
+      
+      openModal(`
+        <div style="color: #1a1a2e;">
+          <h2 class="text-xl font-bold mb-4">Edit Image: ${esc(name)}</h2>
+          
+          <div class="mb-4">
+            <img src="${esc(currentUrl)}" 
+                 style="width:100px; height:100px; object-fit:cover; border-radius:8px; margin-bottom:10px;"
+                 onerror="this.style.display='none'" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">New Image URL:</label>
+            <input type="url" id="editIngredientUrl" value="${esc(currentUrl)}"
+                   class="w-full px-3 py-2 border rounded" />
+          </div>
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="showIngredientImagesManager()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveEditedIngredientImage('${esc(name)}')" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Save
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function saveEditedIngredientImage(name) {
+      const url = document.getElementById('editIngredientUrl')?.value.trim();
+      
+      if (!url) {
+        showError('Please enter an image URL');
+        return;
+      }
+      
+      customIngredientImages[name] = url;
+      saveCustomIngredientImages();
+      showToast(`Image updated for "${name}"`, 'success');
+      showIngredientImagesManager();
+    }
+
+    function deleteIngredientImage(name) {
+      if (customIngredientImages[name]) {
+        delete customIngredientImages[name];
+        saveCustomIngredientImages();
+        showToast(`Custom image removed for "${name}"`, 'success');
+        showIngredientImagesManager();
+      } else {
+        showToast(`Cannot remove default image. Add a custom one to override.`, 'info');
+      }
+    }
+
+    function getIngredientImage(ingredientName, category) {
+      if (!ingredientName) return null;
+      
+      const name = ingredientName.toLowerCase().trim();
+      
+      // Check custom images first (exact match)
+      if (customIngredientImages[name]) {
+        return customIngredientImages[name];
+      }
+      
+      // Check default images (exact match)
+      if (INGREDIENT_IMAGES[name]) {
+        return INGREDIENT_IMAGES[name];
+      }
+      
+      // Check for partial match in custom images
+      for (const [key, url] of Object.entries(customIngredientImages)) {
+        if (name.includes(key) || key.includes(name)) {
+          return url;
+        }
+      }
+      
+      // Check for partial match in default images
+      for (const [key, url] of Object.entries(INGREDIENT_IMAGES)) {
+        if (name.includes(key) || key.includes(name)) {
+          return url;
+        }
+      }
+      
+      return null;
+    }
+   const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Vegetables', 'Dinner', 'Appetizer'];
     const TIP_CATEGORIES = ['Prep Techniques', 'Cleaning & Washing', 'Cutting & Slicing', 'Defrosting', 'Seasoning', 'Cooking Methods', 'Storage', 'Other'];
     const SOURCE_TYPES = ['user', 'chefiq'];
     const STORAGE_KEY = 'meal_planner_data_v1';
@@ -1708,10 +2086,16 @@ async function saveReceiptExpense() {
                 title="${state.notificationsEnabled ? 'Notifications on' : 'Enable notifications'}">
                 🔔 ${state.notificationsEnabled ? 'On' : 'Off'}
               </button>
-              <button onclick="showAddInventoryModal()"
+             <button onclick="showAddInventoryModal()"
                 class="px-3 py-1.5 rounded button-hover"
                 style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
                 + Add Item
+              </button>
+              <button onclick="showIngredientImagesManager()"
+                class="px-2 py-1.5 rounded button-hover"
+                style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};"
+                title="Manage ingredient images">
+                🖼️
               </button>
             </div>
           </div>
@@ -1759,14 +2143,21 @@ async function saveReceiptExpense() {
                       return `
                       <div class="flex items-center gap-3 p-3 rounded" 
                            style="background:${CONFIG.surface_color}; border-left:4px solid ${statusColor};">
-                        ${item.image_url ? `
-                          <img src="${esc(item.image_url)}" 
-                               style="width:50px; height:50px; object-fit:cover; border-radius:8px;" />
-                        ` : `
-                          <div style="width:50px; height:50px; background:rgba(255,255,255,0.1); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
-                            ${cat === 'Produce' ? '🥬' : cat === 'Meat & Seafood' ? '🥩' : cat === 'Dairy & Eggs' ? '🥛' : cat === 'Bakery' ? '🍞' : cat === 'Frozen' ? '🧊' : '📦'}
-                          </div>
-                        `}
+                       ${(() => {
+                          const imgUrl = item.image_url || getIngredientImage(item.name, cat);
+                          if (imgUrl) {
+                            return `<img src="${esc(imgUrl)}" 
+                                     style="width:50px; height:50px; object-fit:cover; border-radius:8px;"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                                   <div style="width:50px; height:50px; background:rgba(255,255,255,0.1); border-radius:8px; display:none; align-items:center; justify-content:center; font-size:1.5rem;">
+                                     ${cat === 'Produce' ? '🥬' : cat === 'Meat & Seafood' ? '🥩' : cat === 'Dairy & Eggs' ? '🥛' : cat === 'Bakery' ? '🍞' : cat === 'Frozen' ? '🧊' : '📦'}
+                                   </div>`;
+                          } else {
+                            return `<div style="width:50px; height:50px; background:rgba(255,255,255,0.1); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                                     ${cat === 'Produce' ? '🥬' : cat === 'Meat & Seafood' ? '🥩' : cat === 'Dairy & Eggs' ? '🥛' : cat === 'Bakery' ? '🍞' : cat === 'Frozen' ? '🧊' : '📦'}
+                                   </div>`;
+                          }
+                        })()}
                         <div class="flex-1 min-w-0">
                           <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px; font-weight:500;">
                             ${esc(item.name)}
