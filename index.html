@@ -9732,9 +9732,9 @@ function renderGroceryByMeal(unchecked, checked) {
         </h3>
         ${sortedGroups.map(group => `
           <div class="mb-4">
-            <div style="color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size * 1.05}px; opacity: 0.8; font-weight: 600; padding: 8px 0; border-bottom: 2px solid rgba(255,255,255,0.1); margin-bottom: 8px;">
-              ${esc(group)}
-            </div>
+            <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.05}px; font-weight: 600; padding: 8px 0; border-bottom: 2px solid rgba(0,0,0,0.1); margin-bottom: 8px;">
+                    ${esc(group)}
+                  </div>
             ${byCategory[group].map(item => {
               const capitalizedName = item.name.split(' ').map(word => 
                 word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
@@ -9787,57 +9787,67 @@ function renderGroceryList() {
   });
 
   return `
-    <div class="p-6 max-w-4xl mx-auto">
-      <div class="flex items-center justify-between mb-6 mobile-stack gap-3">
+    <div class="p-4 max-w-4xl mx-auto">
+      <div class="flex items-center justify-between mb-4 mobile-stack gap-3">
         <div>
-          <h2 style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.5}px; font-family: ${CONFIG.font_family}, sans-serif;" class="font-bold">
-            ${CONFIG.grocery_list_label}
+          <h2 style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.5}px;" class="font-bold">
+            🛒 Grocery List
           </h2>
           <div class="flex gap-2 mt-2">
             <button type="button" onclick="state.groceryViewMode = 'all'; render();"
-              class="px-3 py-1 rounded button-hover"
-              style="background: ${state.groceryViewMode === 'all' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 0.85}px;">
+              class="px-3 py-2 rounded-lg"
+              style="background: ${state.groceryViewMode === 'all' ? CONFIG.primary_action_color : CONFIG.background_color}; color: ${state.groceryViewMode === 'all' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.font_size * 0.85}px;">
               All
             </button>
             <button type="button" onclick="state.groceryViewMode = 'by-meal'; render();"
-              class="px-3 py-1 rounded button-hover"
-              style="background: ${state.groceryViewMode === 'by-meal' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 0.85}px;">
+              class="px-3 py-2 rounded-lg"
+              style="background: ${state.groceryViewMode === 'by-meal' ? CONFIG.primary_action_color : CONFIG.background_color}; color: ${state.groceryViewMode === 'by-meal' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.font_size * 0.85}px;">
               By Meal
             </button>
           </div>
         </div>
-       <div class="flex gap-2">
+       <div class="flex gap-2 flex-wrap">
           <button type="button" onclick="showAddManualItemModal();"
-                  style="background: ${CONFIG.secondary_action_color}; color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px;"
-                  class="px-4 py-2 rounded button-hover">
+                  style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 0.9}px; box-shadow: ${CONFIG.shadow};"
+                  class="px-4 py-2 rounded-lg">
             ➕ Add Item
           </button>
           ${groceryList.length > 0 ? `
             <button type="button" onclick="if(confirm('Delete all items from grocery list?')) clearAllGroceryItems();"
-                    style="background:#dc2626; color:white; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px;"
-                    class="px-4 py-2 rounded button-hover">
-              Delete All
+                    style="background: rgba(220,38,38,0.1); color: #dc2626; font-size: ${CONFIG.font_size * 0.9}px;"
+                    class="px-4 py-2 rounded-lg">
+              🗑️ Clear
             </button>
           ` : ''}
           <button type="button" onclick="navigateTo('grocery-select-meals');"
-                  style="background: ${CONFIG.primary_action_color}; color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px;"
-                  class="px-4 py-2 rounded button-hover">
-            Select Meals
+                  style="background: ${CONFIG.primary_action_color}; color: white; font-size: ${CONFIG.font_size * 0.9}px;"
+                  class="px-4 py-2 rounded-lg">
+            📋 Select Meals
           </button>
         </div>
       </div>
 
-      ${groceryList.length === 0 ? `
-        <div style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px;"
-             class="p-8 rounded text-center">
-          No ingredients selected. Click "Select Meals" to add items to your grocery list.
+     ${groceryList.length === 0 ? `
+        <div style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};"
+             class="p-8 rounded-xl text-center">
+          <div style="font-size: 3rem; margin-bottom: 12px;">🛒</div>
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">Your grocery list is empty</div>
+          <div style="font-size: 14px; color: ${CONFIG.text_muted}; margin-bottom: 16px;">Add items manually or generate from your meal plan</div>
+          <div style="display: flex; gap: 8px; justify-content: center;">
+            <button onclick="showAddManualItemModal()" style="padding: 10px 20px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; cursor: pointer;">
+              ➕ Add Item
+            </button>
+            <button onclick="navigateTo('grocery-select-meals')" style="padding: 10px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer;">
+              📋 Select Meals
+            </button>
+          </div>
         </div>
       ` : state.groceryViewMode === 'by-meal' ? `
-        <div style="background: ${CONFIG.surface_color};" class="rounded p-4">
+        <div style="background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};" class="rounded-xl p-4">
           ${renderGroceryByMeal(unchecked, checked)}
         </div>
       ` : `
-        <div style="background: ${CONFIG.surface_color};" class="rounded p-4">
+        <div style="background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};" class="rounded-xl p-4">
           ${unchecked.length > 0 ? `
             <div class="mb-4">
               <h3 style="color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size * 1.125}px;" class="font-semibold mb-4">
@@ -9845,7 +9855,7 @@ function renderGroceryList() {
               </h3>
               ${sortedGroups.map(group => `
                 <div class="mb-4">
-                  <div style="color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size * 1.05}px; opacity: 0.8; font-weight: 600; padding: 8px 0; border-bottom: 2px solid rgba(255,255,255,0.1); margin-bottom: 8px;">
+                  <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.05}px; font-weight: 600; padding: 8px 0; border-bottom: 2px solid rgba(0,0,0,0.1); margin-bottom: 8px;">
                     ${esc(group)}
                   </div>
                 ${groupedUnchecked[group].map(item => {
@@ -9854,16 +9864,16 @@ function renderGroceryList() {
                     ).join(' ');
                     
                     return `
-                    <div style="color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px;"
-                         class="flex items-center justify-between gap-3 p-3 rounded hover:bg-opacity-50">
+                    <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size}px; background: ${CONFIG.background_color};"
+                         class="flex items-center justify-between gap-3 p-3 rounded-lg mb-2">
                       <label class="flex items-center gap-3 cursor-pointer flex-1">
-                        <input type="checkbox" onchange="toggleGroceryItem('${normalizeIngredient(item.name)}')">
+                        <input type="checkbox" onchange="toggleGroceryItem('${normalizeIngredient(item.name)}')" style="width: 20px; height: 20px;">
                         <span>${capitalizedName}</span>
                       </label>
                       <button type="button" onclick="removeFromGroceryList('${normalizeIngredient(item.name)}')"
-                        class="px-2 py-1 rounded button-hover"
-                        style="background:#dc2626; color:white; font-size:${CONFIG.font_size * 0.85}px;">
-                        Delete
+                        class="px-2 py-1 rounded-lg"
+                        style="background: rgba(220,38,38,0.1); color: #dc2626; font-size:${CONFIG.font_size * 0.85}px;">
+                        ✕
                       </button>
                     </div>
                   `}).join('')}
@@ -9884,10 +9894,10 @@ function renderGroceryList() {
                 ).join(' ');
                 
                 return `
-                <label style="color: ${CONFIG.text_color}; opacity: 0.5; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px;"
-                       class="flex items-center gap-3 p-3 rounded hover:bg-opacity-50 cursor-pointer line-through">
-                  <input type="checkbox" checked onchange="toggleGroceryItem('${normalizeIngredient(item.name)}')">
-                  <span>${capitalizedName}</span>
+                <label style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.font_size}px; background: ${CONFIG.background_color};"
+                       class="flex items-center gap-3 p-3 rounded-lg mb-2 cursor-pointer">
+                  <input type="checkbox" checked onchange="toggleGroceryItem('${normalizeIngredient(item.name)}')" style="width: 20px; height: 20px;">
+                  <span style="text-decoration: line-through;">${capitalizedName}</span>
                 </label>
               `}).join('')}
             </div>
