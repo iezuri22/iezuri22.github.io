@@ -5079,6 +5079,24 @@ function navigateTo(view) {
         }
       }, 100);
     }
+   async function markRecipeCooked(recipeId) {
+      const recipe = state.recipes.find(r => (r.__backendId || r.id) === recipeId);
+      if (!recipe) return;
+      
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Add to cooked dates
+      recipe.cookedDates = recipe.cookedDates || [];
+      if (!recipe.cookedDates.includes(today)) {
+        recipe.cookedDates.push(today);
+      }
+      recipe.lastCooked = today;
+      recipe.cookCount = (recipe.cookCount || 0) + 1;
+      
+      await storage.update(recipe);
+      showToast(`"${recipe.title}" marked as cooked! 🎉`, 'success');
+      render();
+    }
 
     async function addQuickGroceryItem() {
       const input = document.getElementById('quickGroceryItem');
@@ -6235,6 +6253,38 @@ console.log('byMonth:', byMonth);
           
           <div class="max-w-4xl mx-auto p-4" style="margin-top: -20px;">
             
+            <!-- Tonight's Dinner Card -->
+            ${(() => {
+              const today = new Date().toISOString().split('T')[0];
+              const todaysPlan = state.planData.find(p => p.date === today);
+              const plannedRecipe = todaysPlan?.recipeId ? state.recipes.find(r => (r.__backendId || r.id) === todaysPlan.recipeId) : null;
+              
+              if (plannedRecipe) {
+                const recipeImg = recipeThumb(plannedRecipe);
+                return `
+                  <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
+                    <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">🍽️ Tonight's Dinner</div>
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      ${recipeImg ? `<img src="${esc(recipeImg)}" style="width: 60px; height: 60px; border-radius: 12px; object-fit: cover;" />` : `<div style="width: 60px; height: 60px; border-radius: 12px; background: ${CONFIG.background_color}; display: flex; align-items: center; justify-content: center; font-size: 24px;">🍽️</div>`}
+                      <div style="flex: 1; min-width: 0;">
+                        <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(plannedRecipe.title)}</div>
+                        <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${plannedRecipe.category || 'Dinner'}</div>
+                      </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; margin-top: 12px;">
+                      <button onclick="openRecipeView('${plannedRecipe.__backendId || plannedRecipe.id}')" style="flex: 1; padding: 10px; background: ${CONFIG.background_color}; border: none; border-radius: 8px; color: ${CONFIG.text_color}; cursor: pointer; font-weight: 500;">
+                        View Recipe
+                      </button>
+                      <button onclick="markRecipeCooked('${plannedRecipe.__backendId || plannedRecipe.id}')" style="flex: 1; padding: 10px; background: ${CONFIG.success_color}; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 500;">
+                        ✓ I Made This
+                      </button>
+                    </div>
+                  </div>
+                `;
+              }
+              return '';
+            })()}
+            
             <!-- Alert Card (if items expiring) -->
             ${expiringItems.length > 0 ? `
               <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow}; cursor: pointer; border-left: 4px solid ${CONFIG.warning_color};">
@@ -6247,6 +6297,48 @@ console.log('byMonth:', byMonth);
                   <div style="color: ${CONFIG.text_muted};">→</div>
                 </div>
               </div>
+            ` : ''}
+            
+            <!-- Use Soon - Recipes with expiring ingredients -->
+            ${(() => {
+              if (expiringItems.length === 0) return '';
+              
+              const expiringNames = expiringItems.map(i => i.name.toLowerCase());
+              const useSoonRecipes = state.recipes
+                .filter(r => !r.isDraft && !r.isTip)
+                .map(recipe => {
+                  const ingredients = recipeIngList(recipe);
+                  const matchingExpiring = ingredients.filter(ing => 
+                    expiringNames.some(exp => exp.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(exp))
+                  );
+                  return { ...recipe, matchingExpiring };
+                })
+                .filter(r => r.matchingExpiring.length > 0)
+                .sort((a, b) => b.matchingExpiring.length - a.matchingExpiring.length)
+                .slice(0, 4);
+              
+              if (useSoonRecipes.length === 0) return '';
+              
+              return `
+                <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
+                  <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">🕐 Use Soon</div>
+                  <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;">
+                    ${useSoonRecipes.map(recipe => {
+                      const img = recipeThumb(recipe);
+                      return `
+                        <div onclick="openRecipeView('${recipe.__backendId || recipe.id}')" style="flex-shrink: 0; width: 100px; cursor: pointer;">
+                          <div style="height: 70px; border-radius: 10px; overflow: hidden; background: ${CONFIG.background_color}; margin-bottom: 6px;">
+                            ${img ? `<img src="${esc(img)}" style="width: 100%; height: 100%; object-fit: cover;" />` : `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px;">🍽️</div>`}
+                          </div>
+                          <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(recipe.title)}</div>
+                          <div style="color: ${CONFIG.warning_color}; font-size: 10px;">Uses ${recipe.matchingExpiring[0]?.name || 'expiring item'}</div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              `;
+            })()}
             ` : ''}
             
             <!-- Main Navigation Cards -->
@@ -6392,32 +6484,32 @@ console.log('byMonth:', byMonth);
 
       return `
         <div class="p-2 max-w-7xl mx-auto">
-          <!-- Compact Header -->
-          <div class="flex items-center justify-between mb-2 gap-2">
+         <!-- Compact Header -->
+          <div class="flex items-center justify-between mb-3 gap-2">
             <div class="flex items-center gap-1 flex-wrap">
              <button onclick="state.recipeTab = 'user'; render();" 
                 class="px-2 py-1 rounded"
-                style="background:${state.recipeTab === 'user' || !state.recipeTab ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                style="background:${state.recipeTab === 'user' || !state.recipeTab ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.recipeTab === 'user' || !state.recipeTab ? 'white' : CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px; border: none;">
                 My Recipes (${userCount})
               </button>
-              <button onclick="state.recipeTab = 'freestyle'; render();"
+             <button onclick="state.recipeTab = 'freestyle'; render();"
                 class="px-2 py-1 rounded"
-                style="background:${state.recipeTab === 'freestyle' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                style="background:${state.recipeTab === 'freestyle' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.recipeTab === 'freestyle' ? 'white' : CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px; border: none;">
                 Freestyle (${freestyleCount})
               </button>
               <button onclick="state.recipeTab = 'chefiq'; render();" 
                 class="px-2 py-1 rounded"
-                style="background:${state.recipeTab === 'chefiq' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                style="background:${state.recipeTab === 'chefiq' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.recipeTab === 'chefiq' ? 'white' : CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px; border: none;">
                 Chef IQ (${chefiqCount})
               </button>
               <button onclick="state.recipeTab = 'imported'; render();" 
                 class="px-2 py-1 rounded"
-                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
-                🔗 Imported (${state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length})
+                style="background:${state.recipeTab === 'imported' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.recipeTab === 'imported' ? 'white' : CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px; border: none;">
+                🔗 Imported (${importedCount})
               </button>
               <button onclick="state.recipeTab = 'claude'; render();" 
                 class="px-2 py-1 rounded"
-                style="background:${state.recipeTab === 'claude' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                style="background:${state.recipeTab === 'claude' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.recipeTab === 'claude' ? 'white' : CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px; border: none;">
                 🤖 Claude (${claudeCount})
               </button>
             </div>
@@ -6457,37 +6549,37 @@ console.log('byMonth:', byMonth);
           </div>
 
 <!-- Collapsible Filters -->
-          <details class="mb-2" open>
-            <summary class="cursor-pointer px-2 py-1 rounded" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px; list-style:none;">
+          <details class="mb-3">
+            <summary class="cursor-pointer px-3 py-2 rounded-lg" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; list-style:none; box-shadow: ${CONFIG.shadow};">
               🔍 Filters ${state.selectedCategory !== 'All' || state.filterSourceType !== 'all' || state.filterFavorites || state.filterIngredientGroup !== 'all' ? '(active)' : ''}
             </summary>
-            <div class="mt-1 p-2 rounded" style="background:${CONFIG.surface_color};">
+            <div class="mt-2 p-3 rounded-lg" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
               <!-- Search -->
-              <input placeholder="Search..." id="recipesPageSearchInput"
-                class="w-full px-2 py-1 rounded border mb-2"
-                style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:${CONFIG.font_size * 0.8}px;"
+              <input placeholder="Search recipes..." id="recipesPageSearchInput"
+                class="w-full px-3 py-2 rounded-lg mb-3"
+                style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size:${CONFIG.font_size * 0.85}px;"
                 value="${esc(state.searchTerm)}"
                 oninput="handleRecipesPageSearch(this.value)"/>
               
-             <!-- Filter Row 1: Category & Ingredients -->
-              <div class="flex gap-2 mb-2 flex-wrap">
+            <!-- Filter Row 1: Category & Ingredients -->
+              <div class="flex gap-2 mb-3 flex-wrap">
                 ${state.recipeTab !== 'tips' ? `
                 <select onchange="state.selectedCategory=this.value; render();"
-                  style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:${CONFIG.font_size * 0.75}px; padding:4px 8px; border-radius:4px; flex:1; min-width:100px;">
+                  style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size:${CONFIG.font_size * 0.8}px; padding:8px 12px; border-radius:8px; flex:1; min-width:120px;">
                   <option value="All" ${state.selectedCategory === 'All' ? 'selected' : ''}>All Categories</option>
                   ${MEAL_CATEGORIES.map(c => `<option value="${c}" ${state.selectedCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
                 ` : ''}
                 <select onchange="state.filterIngredientGroup=this.value; render();"
-                  style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:${CONFIG.font_size * 0.75}px; padding:4px 8px; border-radius:4px; flex:1; min-width:100px;">
+                  style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size:${CONFIG.font_size * 0.8}px; padding:8px 12px; border-radius:8px; flex:1; min-width:120px;">
                   <option value="all" ${state.filterIngredientGroup === 'all' ? 'selected' : ''}>All Ingredients</option>
                   ${ING_GROUPS.map(g => `<option value="${g}" ${state.filterIngredientGroup === g ? 'selected' : ''}>${g}</option>`).join('')}
                 </select>
               </div>
               
               <!-- Filter Row 2: Checkbox -->
-              <label class="flex items-center gap-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
-                <input type="checkbox" ${state.filterFavorites ? 'checked' : ''} onchange="state.filterFavorites=this.checked; render();">
+              <label class="flex items-center gap-2 cursor-pointer" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                <input type="checkbox" ${state.filterFavorites ? 'checked' : ''} onchange="state.filterFavorites=this.checked; render();" style="width: 18px; height: 18px;">
                 ⭐ Favorites Only
               </label>
             </div>
@@ -6502,20 +6594,20 @@ console.log('byMonth:', byMonth);
               </div>
             </div>
           ` : `
-<div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+<div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
 ${list.map(r => {
                 const id = r.__backendId || r.id;
                 const img = recipeThumb(r);
                 return `
-                <div class="rounded overflow-hidden cursor-pointer"
+                <div class="rounded-xl overflow-hidden cursor-pointer transition-transform hover:scale-102"
                   onclick="openRecipeView('${id}', null, false, ${state.showTips})"
-                  style="background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.08);">
+                  style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
                   ${img ? `
-                    <div class="recipe-img-height" style="height:70px; overflow:hidden;">
+                    <div style="height:80px; overflow:hidden;">
                       <img src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
                     </div>
                   ` : `
-                    <div class="recipe-img-height" style="height:70px; background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                    <div style="height:80px; background:${CONFIG.background_color}; display:flex; align-items:center; justify-content:center; font-size:1.8rem;">
                       ${state.showTips ? '📝' : '🍽️'}
                     </div>
                   `}
@@ -6523,7 +6615,7 @@ ${list.map(r => {
                     <div class="font-semibold truncate" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
                       ${esc(r.title)} ${r.favorite ? '⭐' : ''}
                     </div>
-                    <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.65}px;">
+                    <div style="color:${CONFIG.text_muted}; font-size:${CONFIG.font_size * 0.65}px;">
                       ${r.category || 'Tip'}
                     </div>
                   </div>
