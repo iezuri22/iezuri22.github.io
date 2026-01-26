@@ -10324,22 +10324,21 @@ ${message.content}`
       const message = state.chefChatMessages[messageIndex];
       if (!message) return;
       
-      // Get the user's question for context
-      const userQuestion = messageIndex > 0 ? state.chefChatMessages[messageIndex - 1]?.content : '';
-      
-      // Close the chat first
-      state.chefChatOpen = false;
-      document.getElementById('chefChatModal')?.remove();
+      // Extract title from first line (Claude usually puts title first with **)
+      const firstLine = message.content.split('\n')[0] || '';
+      let extractedTitle = firstLine.replace(/\*\*/g, '').replace(/^#+\s*/, '').replace(/:$/, '').trim();
+      extractedTitle = extractedTitle.slice(0, 50);
       
       // Auto-detect ingredients
       const contentLower = message.content.toLowerCase();
       const produceAndProteins = [
-        'chicken breast', 'chicken thighs', 'chicken wings', 'whole chicken', 'ground beef', 
-        'ribeye steak', 'ribeye', 'filet mignon', 'new york strip', 'sirloin', 't-bone steak', 
-        't-bone', 'flank steak', 'skirt steak', 'beef roast', 'pork chops', 'lamb chops', 
-        'bacon', 'turkey bacon', 'sausage', 'chicken sausage', 'ham', 'salmon', 'shrimp', 
-        'clams', 'tilapia', 'tuna', 'eggs', 'egg', 'tofu',
-        'red onion', 'yellow onion', 'white onion', 'onion', 'garlic', 'shallots', 'shallot',
+        'chicken breast', 'chicken thighs', 'chicken wings', 'whole chicken', 'chicken',
+        'ground beef', 'beef', 'steak', 'ribeye steak', 'ribeye', 'filet mignon', 
+        'new york strip', 'sirloin', 't-bone steak', 't-bone', 'flank steak', 'skirt steak', 
+        'beef roast', 'pork chops', 'pork', 'lamb chops', 'lamb', 'bacon', 'turkey bacon', 
+        'turkey', 'sausage', 'chicken sausage', 'ham', 'salmon', 'shrimp', 'clams', 
+        'tilapia', 'tuna', 'cod', 'fish', 'eggs', 'egg', 'tofu',
+        'onion', 'red onion', 'yellow onion', 'white onion', 'garlic', 'shallots', 'shallot',
         'tomato', 'tomatoes', 'cherry tomatoes', 'bell pepper', 'bell peppers', 'jalapeño', 
         'jalapeno', 'carrot', 'carrots', 'baby carrot', 'baby carrots', 'celery', 'broccoli', 
         'cauliflower', 'spinach', 'kale', 'lettuce', 'arugula', 'zucchini', 'squash', 
@@ -10351,16 +10350,30 @@ ${message.content}`
         'raspberries', 'raspberry', 'mango', 'pineapple', 'grapes', 'peaches', 'peach'
       ];
       
-      const detectedIngredients = produceAndProteins.filter(ing => 
-        contentLower.includes(ing.toLowerCase())
-      );
+      // Find the most specific match (longer names first to avoid "chicken" matching before "chicken breast")
+      const sortedByLength = [...produceAndProteins].sort((a, b) => b.length - a.length);
+      const detectedIngredients = [];
+      
+      for (const ing of sortedByLength) {
+        if (contentLower.includes(ing.toLowerCase())) {
+          // Check if we already have a more specific version
+          const alreadyHasSpecific = detectedIngredients.some(d => 
+            d.includes(ing) || ing.includes(d)
+          );
+          if (!alreadyHasSpecific) {
+            detectedIngredients.push(ing);
+          }
+        }
+      }
       
       if (detectedIngredients.length === 0) {
-        showToast('No ingredients detected in this response. Use 💡 Tip to save manually.', 'info');
+        showToast('No ingredients detected. Use 💡 Tip to save manually.', 'info');
         return;
       }
       
-      // Save to all detected ingredients
+      // Close chat and show loading
+      state.chefChatOpen = false;
+      document.getElementById('chefChatModal')?.remove();
       state.isLoading = true;
       render();
       
@@ -10371,17 +10384,21 @@ ${message.content}`
             knowledge = createDefaultIngredientKnowledge(ingredientName);
           }
           
-          // Add the full response with context
+          // Add with extracted title
           knowledge.notes = knowledge.notes || [];
-          const noteEntry = userQuestion 
-            ? `❓ ${userQuestion}\n\n${message.content}`
-            : message.content;
+          const noteEntry = `📌 ${extractedTitle}\n\n${message.content}`;
           knowledge.notes.push(noteEntry);
           
           await saveIngredientKnowledge(knowledge);
         }
         
-        showToast(`Saved to ${detectedIngredients.length} ingredient${detectedIngredients.length > 1 ? 's' : ''}: ${detectedIngredients.slice(0, 3).join(', ')}${detectedIngredients.length > 3 ? '...' : ''}`, 'success');
+        // Better confirmation with title and ingredients
+        const ingredientsList = detectedIngredients.slice(0, 3).map(i => 
+          i.charAt(0).toUpperCase() + i.slice(1)
+        ).join(', ');
+        const moreCount = detectedIngredients.length > 3 ? ` +${detectedIngredients.length - 3} more` : '';
+        
+        showToast(` "${extractedTitle}" saved to ${ingredientsList}${moreCount}`, 'success');
       } catch (e) {
         console.error('Save error:', e);
         showError('Failed to save');
