@@ -10203,12 +10203,12 @@ ${message.content}`
       const message = state.chefChatMessages[messageIndex];
       if (!message) return;
       
-      // Close the chat first so modal appears on top
-      state.chefChatOpen = false;
-      render();
-      
       // Get the user's question for context
       const userQuestion = messageIndex > 0 ? state.chefChatMessages[messageIndex - 1]?.content : '';
+      
+      // Close the chat first
+      state.chefChatOpen = false;
+      document.getElementById('chefChatModal')?.remove();
       
       openModal(`
         <div style="color: #1a1a2e; max-height: 80vh; overflow-y: auto;">
