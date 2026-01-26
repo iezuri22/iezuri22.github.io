@@ -10199,9 +10199,13 @@ ${message.content}`
       }
     }
 
-    async function saveClaudeAsTip(messageIndex) {
+  async function saveClaudeAsTip(messageIndex) {
       const message = state.chefChatMessages[messageIndex];
       if (!message) return;
+      
+      // Close the chat first so modal appears on top
+      state.chefChatOpen = false;
+      render();
       
       // Get the user's question for context
       const userQuestion = messageIndex > 0 ? state.chefChatMessages[messageIndex - 1]?.content : '';
