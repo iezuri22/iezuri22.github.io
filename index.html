@@ -11611,8 +11611,8 @@ ${message.content}`
         </div>
       `;
       
-      document.body.insertAdjacentHTML('beforeend', chatHtml);
-      document.getElementById('chefChatInput')?.focus();
+     document.body.insertAdjacentHTML('beforeend', chatHtml);
+      // Don't auto-focus on mobile to prevent zoom - let user tap to focus
       
       // Scroll to bottom after a brief delay to ensure content is rendered
       setTimeout(() => {
