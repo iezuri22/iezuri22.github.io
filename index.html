@@ -11058,15 +11058,18 @@ ${message.content}`
    // ===== CHEF CHAT =====
     const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';
    function renderChefChatButton() {
-      // Only show on home page since other pages have bottom nav with chef
-      if (state.currentView !== 'home') return '';
+      // Don't show button if chat is already open
+      if (state.chefChatOpen) return '';
+      
+      // Position above bottom nav on non-home pages
+      const bottomPosition = state.currentView !== 'home' ? '70px' : '24px';
       
       return `
         <button onclick="toggleChefChat()"
           class="fixed z-40 rounded-full shadow-lg hover:scale-105 transition-transform"
-          style="bottom: 24px; right: 24px; width:56px; height:56px; background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); border:none; cursor:pointer; display: flex; align-items: center; justify-content: center;"
+          style="bottom: ${bottomPosition}; right: 16px; width: 52px; height: 52px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);"
           title="Ask Chef Claude">
-          <span style="font-size: 28px;">👨‍🍳</span>
+          <span style="font-size: 24px;">👨‍🍳</span>
         </button>
       `;
     }
