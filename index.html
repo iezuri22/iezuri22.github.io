@@ -10384,9 +10384,10 @@ ${message.content}`
             knowledge = createDefaultIngredientKnowledge(ingredientName);
           }
           
-          // Add with extracted title
+         // Add with extracted title (don't duplicate if content already starts with title)
           knowledge.notes = knowledge.notes || [];
-          const noteEntry = `📌 ${extractedTitle}\n\n${message.content}`;
+          const contentWithoutTitle = message.content.replace(/^.*?\n/, '').trim(); // Remove first line
+          const noteEntry = `📌 ${extractedTitle}\n\n${contentWithoutTitle}`;
           knowledge.notes.push(noteEntry);
           
           await saveIngredientKnowledge(knowledge);
@@ -11429,15 +11430,16 @@ ${knowledge.freezable ? '🧊 Freezable' : '❌ Cannot Freeze'}
                   
                   return `
                     <div class="rounded-lg overflow-hidden" style="background:rgba(255,255,255,0.05);">
-                      <div class="p-3 cursor-pointer flex items-center justify-between" 
-                           onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                   <div class="p-3 cursor-pointer flex items-center justify-between" 
+                           onclick="const el = this.nextElementSibling; el.style.cssText = el.style.display === 'none' ? 'display:block; padding:12px; border-top:1px solid rgba(255,255,255,0.1);' : 'display:none !important;'">
+                           
                         <div style="display:flex; align-items:center; gap:8px;">
                           <span style="color:#f59e0b;">💡</span>
                           <span style="color:${CONFIG.text_color}; font-weight:500;">${esc(noteTitle)}</span>
                         </div>
                         <span style="color:${CONFIG.text_color}; opacity:0.5;">▼</span>
                       </div>
-                      <div style="display:none; padding:12px; border-top:1px solid rgba(255,255,255,0.1);">
+                      <div class="note-content-${idx}" style="display:none !important; padding:12px; border-top:1px solid rgba(255,255,255,0.1);">
                         <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; line-height:1.6;">
                           ${formatChefMessage(noteContent)}
                         </div>
