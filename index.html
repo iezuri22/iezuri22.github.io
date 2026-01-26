@@ -5900,7 +5900,6 @@ console.log('byMonth:', byMonth);
       
      // Count for each tab
       const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
-      const tipsCount = state.recipes.filter(r => r.isTip).length;
       const freestyleCount = (state.freestyleMeals || []).length;
       const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
       const importedCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length;
@@ -5943,17 +5942,12 @@ console.log('byMonth:', byMonth);
           <!-- Compact Header -->
           <div class="flex items-center justify-between mb-2 gap-2">
             <div class="flex items-center gap-1 flex-wrap">
-              <button onclick="state.recipeTab = 'user'; render();" 
+             <button onclick="state.recipeTab = 'user'; render();" 
                 class="px-2 py-1 rounded"
                 style="background:${state.recipeTab === 'user' || !state.recipeTab ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
                 My Recipes (${userCount})
               </button>
-              <button onclick="state.recipeTab = 'tips'; render();" 
-                class="px-2 py-1 rounded"
-                style="background:${state.recipeTab === 'tips' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
-                Tips (${tipsCount})
-              </button>
-              <button onclick="state.recipeTab = 'freestyle'; render();" 
+              <button onclick="state.recipeTab = 'freestyle'; render();"
                 class="px-2 py-1 rounded"
                 style="background:${state.recipeTab === 'freestyle' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
                 Freestyle (${freestyleCount})
@@ -6112,7 +6106,6 @@ ${list.map(r => {
 });
       
       const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
-      const tipsCount = state.recipes.filter(r => r.isTip).length;
       const freestyleCount = state.freestyleMeals.length;
       const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
       
@@ -6121,17 +6114,12 @@ ${list.map(r => {
           <!-- Tab Navigation -->
           <div class="flex items-center justify-between mb-2 gap-2">
             <div class="flex items-center gap-1 flex-wrap">
-              <button onclick="state.recipeTab = 'user'; render();" 
+            <button onclick="state.recipeTab = 'user'; render();" 
                 class="px-2 py-1 rounded"
                 style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
                 My Recipes (${userCount})
               </button>
-              <button onclick="state.recipeTab = 'tips'; render();" 
-                class="px-2 py-1 rounded"
-                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
-                Tips (${tipsCount})
-              </button>
-              <button onclick="state.recipeTab = 'freestyle'; render();" 
+              <button onclick="state.recipeTab = 'freestyle'; render();"
                 class="px-2 py-1 rounded"
                 style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
                 Freestyle (${freestyleCount})
@@ -10217,96 +10205,139 @@ ${message.content}`
       }
     }
 
-  async function saveClaudeAsTip(messageIndex) {
+ async function saveClaudeAsTip(messageIndex) {
       const message = state.chefChatMessages[messageIndex];
       if (!message) return;
-      
-      // Get the user's question for context
-      const userQuestion = messageIndex > 0 ? state.chefChatMessages[messageIndex - 1]?.content : '';
       
       // Close the chat first
       state.chefChatOpen = false;
       document.getElementById('chefChatModal')?.remove();
       
+      // Auto-detect ingredients from the message
+      const contentLower = message.content.toLowerCase();
+      const detectedIngredients = Object.keys(INGREDIENT_IMAGES).filter(ing => 
+        contentLower.includes(ing.toLowerCase())
+      );
+      
+      // Get all available ingredients for selection
+      const allIngredients = [...new Set([
+        ...Object.keys(INGREDIENT_IMAGES),
+        ...state.ingredientKnowledge.map(k => k.name.toLowerCase())
+      ])].sort();
+      
+      // Extract title from first line
+      const firstLine = message.content.split('\n')[0] || '';
+      const extractedTitle = firstLine.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim().slice(0, 60);
+      
       openModal(`
         <div style="color: #1a1a2e; max-height: 80vh; overflow-y: auto;">
-          <h2 class="text-2xl font-bold mb-4">💡 Save as Quick Tip</h2>
+          <h2 class="text-2xl font-bold mb-4">💡 Save Tip to Ingredients</h2>
           
           <div class="mb-4">
             <label class="block mb-2 font-semibold">Tip Title:</label>
-            <input type="text" id="claudeTipTitle" value=""
+            <input type="text" id="claudeTipTitle" value="${esc(extractedTitle)}"
                    class="w-full px-3 py-2 border rounded" 
-                   placeholder="e.g., Chicken Cooking Times, How to Freeze Herbs" />
+                   placeholder="e.g., How to get crispy skin" />
           </div>
           
           <div class="mb-4">
-            <label class="block mb-2 font-semibold">Category:</label>
-            <select id="claudeTipCategory" class="w-full px-3 py-2 border rounded">
-              <option value="Cooking Times">⏱️ Cooking Times</option>
-              <option value="Freezing">❄️ Freezing</option>
-              <option value="Storage">📦 Storage</option>
-              <option value="Substitutions">🔄 Substitutions</option>
-              <option value="Techniques">👨‍🍳 Techniques</option>
-              <option value="Safety">⚠️ Food Safety</option>
-              <option value="Other">📝 Other</option>
-            </select>
-          </div>
-          
-          <div class="mb-4">
-            <label class="block mb-2 font-semibold">Content:</label>
-            <textarea id="claudeTipContent" rows="8"
+            <label class="block mb-2 font-semibold">Tip Content:</label>
+            <textarea id="claudeTipContent" rows="5"
                       class="w-full px-3 py-2 border rounded text-sm">${esc(message.content)}</textarea>
           </div>
           
-          ${userQuestion ? `
-            <div class="mb-4 p-2 rounded" style="background:#f3f4f6;">
-              <label class="block mb-1 font-semibold text-sm text-gray-600">Original Question:</label>
-              <div class="text-sm text-gray-700">${esc(userQuestion)}</div>
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Add to which ingredients:</label>
+            <div class="text-xs text-gray-500 mb-2">Select all ingredients this tip applies to</div>
+            
+            <input type="text" id="ingredientTipSearch" 
+                   class="w-full px-3 py-2 border rounded mb-2" 
+                   placeholder="Search ingredients..."
+                   oninput="filterIngredientCheckboxes(this.value)" />
+            
+            <div id="ingredientCheckboxes" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px;">
+              ${allIngredients.map(ing => `
+                <label class="flex items-center gap-2 p-1 hover:bg-gray-100 rounded cursor-pointer ingredient-checkbox-label" data-name="${esc(ing.toLowerCase())}">
+                  <input type="checkbox" name="tipIngredients" value="${esc(ing)}" 
+                         ${detectedIngredients.includes(ing) ? 'checked' : ''} />
+                  <span style="text-transform: capitalize;">${esc(ing)}</span>
+                  ${detectedIngredients.includes(ing) ? '<span class="text-xs text-green-600">(detected)</span>' : ''}
+                </label>
+              `).join('')}
             </div>
-          ` : ''}
+            
+            ${detectedIngredients.length > 0 ? `
+              <div class="text-xs text-green-600 mt-2">
+                ✓ Auto-detected: ${detectedIngredients.map(i => i).join(', ')}
+              </div>
+            ` : `
+              <div class="text-xs text-orange-500 mt-2">
+                ⚠️ No ingredients auto-detected. Please select manually.
+              </div>
+            `}
+          </div>
           
           <div class="flex gap-2 justify-end">
             <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
               Cancel
             </button>
-            <button onclick="saveClaudeTip()" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
-              Save Tip
+            <button onclick="saveTipToIngredients()" class="px-4 py-2 bg-yellow-500 text-white rounded hover:bg-yellow-600">
+              Save to Ingredients
             </button>
           </div>
         </div>
       `);
     }
 
-    async function saveClaudeTip() {
+    function filterIngredientCheckboxes(searchTerm) {
+      const labels = document.querySelectorAll('.ingredient-checkbox-label');
+      const search = searchTerm.toLowerCase();
+      
+      labels.forEach(label => {
+        const name = label.dataset.name;
+        if (name.includes(search)) {
+          label.style.display = 'flex';
+        } else {
+          label.style.display = 'none';
+        }
+      });
+    }
+
+    async function saveTipToIngredients() {
       const title = document.getElementById('claudeTipTitle')?.value.trim();
-      const category = document.getElementById('claudeTipCategory')?.value;
       const content = document.getElementById('claudeTipContent')?.value.trim();
+      const checkboxes = document.querySelectorAll('input[name="tipIngredients"]:checked');
+      const selectedIngredients = Array.from(checkboxes).map(cb => cb.value.toLowerCase());
       
       if (!title) {
         showError('Please enter a tip title');
         return;
       }
       
-      const tip = {
-        id: `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        title: title,
-        category: category,
-        instructions: content,
-        notes: '',
-        sourceType: 'claude',
-        isTip: true,
-        favorite: false,
-        isDraft: false,
-        createdAt: new Date().toISOString()
-      };
+      if (selectedIngredients.length === 0) {
+        showError('Please select at least one ingredient');
+        return;
+      }
       
       closeModal();
       state.isLoading = true;
       render();
       
       try {
-        await storage.create(tip);
-        showToast(`"${title}" saved as tip!`, 'success');
+        // Save tip to each selected ingredient
+        for (const ingredientName of selectedIngredients) {
+          let knowledge = getIngredientKnowledge(ingredientName);
+          if (!knowledge) {
+            knowledge = createDefaultIngredientKnowledge(ingredientName);
+          }
+          
+          knowledge.notes = knowledge.notes || [];
+          knowledge.notes.push(`💡 ${title}\n${content}`);
+          
+          await saveIngredientKnowledge(knowledge);
+        }
+        
+        showToast(`Tip saved to ${selectedIngredients.length} ingredient${selectedIngredients.length > 1 ? 's' : ''}!`, 'success');
       } catch (e) {
         console.error('Save error:', e);
         showError('Failed to save tip');
