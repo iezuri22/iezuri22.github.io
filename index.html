@@ -6412,8 +6412,8 @@ console.log('byMonth:', byMonth);
               </button>
               <button onclick="state.recipeTab = 'imported'; render();" 
                 class="px-2 py-1 rounded"
-                style="background:${state.recipeTab === 'imported' ? CONFIG.primary_action_color : 'transparent'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
-                🔗 Imported (${importedCount})
+                style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                🔗 Imported (${state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length})
               </button>
               <button onclick="state.recipeTab = 'claude'; render();" 
                 class="px-2 py-1 rounded"
