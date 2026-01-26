@@ -10524,22 +10524,29 @@ ${message.content}`
         </button>
       `;
     }
-   async function saveChefChatHistory() {
+      async function saveChefChatHistory() {
       // Keep only last 50 messages to save storage
       const messagesToSave = state.chefChatMessages.slice(-50);
       
-      const chatData = {
-        id: 'chef_chat_history',
-        messages: messagesToSave,
-        updatedAt: new Date().toISOString()
-      };
-      
-      // Check if exists
-      const existing = await storage._data?.find(d => d.id === 'chef_chat_history');
+      // Find existing record (might have __backendId from Supabase)
+      const existing = storage._data?.find(d => d.id === 'chef_chat_history');
       
       if (existing) {
+        // Update existing record, preserving backend ID
+        const chatData = {
+          ...existing,
+          id: 'chef_chat_history',
+          messages: messagesToSave,
+          updatedAt: new Date().toISOString()
+        };
         await storage.update(chatData);
       } else {
+        // Create new record
+        const chatData = {
+          id: 'chef_chat_history',
+          messages: messagesToSave,
+          updatedAt: new Date().toISOString()
+        };
         await storage.create(chatData);
       }
     }
