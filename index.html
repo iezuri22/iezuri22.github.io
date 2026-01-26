@@ -359,19 +359,29 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     document.head.appendChild(script);
 
     // ===== CONFIG & STATE =====
-    const CONFIG = {
-      background_color: "#0f0f23",
-      surface_color: "#1a1a2e",
-      text_color: "#e4e4e7",
-      primary_action_color: "#667eea",
-      secondary_action_color: "#764ba2",
-      accent_color: "#f59e0b",
-      font_family: "system-ui, -apple-system, sans-serif",
+   const CONFIG = {
+      // Light, warm, friendly colors
+      background_color: "#faf8f5",
+      surface_color: "#ffffff",
+      text_color: "#2d3748",
+      text_muted: "#718096",
+      primary_action_color: "#ff6b6b",
+      secondary_action_color: "#4ecdc4",
+      accent_color: "#ffe66d",
+      success_color: "#51cf66",
+      warning_color: "#ffa94d",
+      danger_color: "#ff6b6b",
+      // Gradient for fun elements
+      gradient_start: "#ff6b6b",
+      gradient_end: "#feca57",
+      font_family: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
       font_size: 16,
-      app_title: "Meal Planner",
+      app_title: "Yummy",
       recipes_label: "My Recipes",
       weekly_plan_label: "Meal History",
-      grocery_list_label: "Grocery List"
+      grocery_list_label: "Grocery List",
+      border_radius: "16px",
+      shadow: "0 4px 20px rgba(0,0,0,0.08)"
     };
 
        const ING_GROUPS = ['Produce', 'Beef', 'Poultry', 'Pork', 'Lamb & Goat', 'Seafood', 'Dairy & Eggs', 'Grains & Pasta', 'Pantry', 'Spices & Seasonings', 'Prepared', 'Other'];
