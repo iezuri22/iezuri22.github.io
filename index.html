@@ -5946,9 +5946,48 @@ console.log('byMonth:', byMonth);
               <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">More</div>
               
               <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-                <div onclick="navigateTo('grocery-list')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0
+                <div onclick="navigateTo('grocery-list')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
+                  <div style="font-size: 24px; margin-bottom: 4px;">🛒</div>
+                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Grocery</div>
+                </div>
+                
+                <div onclick="navigateTo('budget-dashboard')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
+                  <div style="font-size: 24px; margin-bottom: 4px;">💰</div>
+                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Budget</div>
+                </div>
+                
+                <div onclick="navigateTo('recipe-stats')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
+                  <div style="font-size: 24px; margin-bottom: 4px;">📊</div>
+                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Stats</div>
+                </div>
+                
+                <div onclick="navigateTo('purchase-history')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
+                  <div style="font-size: 24px; margin-bottom: 4px;">🧾</div>
+                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">History</div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Chef Claude Card -->
+            <div onclick="toggleChefChat()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+              <div style="display: flex; align-items: center; gap: 16px;">
+                <div style="font-size: 40px;">👨‍🍳</div>
+                <div style="flex: 1;">
+                  <div style="color: white; font-weight: 700; font-size: 18px;">Ask Chef Claude</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 14px;">Get cooking tips, substitutions & more</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.2); border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: white;">
+                  💬
+                </div>
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      `;
+    }
 
-   function renderRecipes() {
+    function renderRecipes() {
       if (!state.recipes || !Array.isArray(state.recipes)) return '<div class="p-3">Loading...</div>';
       
       // Default to 'user' tab
