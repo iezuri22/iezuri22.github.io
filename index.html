@@ -10772,7 +10772,7 @@ ${message.content}`
       return state.ingredientKnowledge.find(k => k.name.toLowerCase() === name);
     }
 
-    function createDefaultIngredientKnowledge(name) {
+  function createDefaultIngredientKnowledge(name) {
       return {
         id: `ingredient_${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
         type: 'ingredient_knowledge',
@@ -10783,6 +10783,7 @@ ${message.content}`
         freezable: null,
         freezingInfo: { blanch: '', duration: '', instructions: '' },
         cookingMethods: [],
+        techniques: [],
         pairings: [],
         notes: [],
         createdAt: new Date().toISOString()
@@ -11017,6 +11018,59 @@ ${knowledge.freezable ? '🧊 Freezable' : '❌ Cannot Freeze'}
               <div class="text-center p-4" style="color:${CONFIG.text_color}; opacity:0.5;">
                 No cooking times added yet.<br>
                 <span style="font-size:${CONFIG.font_size * 0.85}px;">Click "+ Add" or ask Chef Claude below!</span>
+              </div>
+            `}
+          </div>
+
+          <!-- Techniques -->
+          <div class="rounded-xl p-4 mb-4" style="background:${CONFIG.surface_color};">
+            <div class="flex items-center justify-between mb-3">
+              <h2 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">
+                👨‍🍳 Techniques
+              </h2>
+              <button onclick="addTechnique('${esc(name)}')"
+                class="px-2 py-1 rounded text-sm"
+                style="background:${CONFIG.primary_action_color}; color:white;">
+                + Add
+              </button>
+            </div>
+            
+            ${knowledge.techniques && knowledge.techniques.length > 0 ? `
+              <div class="space-y-2">
+                ${knowledge.techniques.map((tech, idx) => `
+                  <details class="rounded-lg overflow-hidden" style="background:rgba(255,255,255,0.05);">
+                    <summary class="flex items-center justify-between p-3 cursor-pointer" style="list-style:none;">
+                      <div class="flex items-center gap-3">
+                        <div style="color:#f59e0b; font-size:1.2rem;">🎯</div>
+                        <div style="color:${CONFIG.text_color}; font-weight:500;">${esc(tech.result)}</div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span style="color:${CONFIG.text_color}; opacity:0.5; font-size:0.8rem;">tap for steps</span>
+                        <span style="color:${CONFIG.text_color}; opacity:0.5;">▼</span>
+                      </div>
+                    </summary>
+                    <div class="p-3 pt-0" style="border-top:1px solid rgba(255,255,255,0.1);">
+                      <div style="color:${CONFIG.primary_action_color}; font-weight:600; font-size:${CONFIG.font_size * 0.85}px; margin-bottom:8px;">
+                        ${esc(tech.method)}
+                      </div>
+                      <div style="color:${CONFIG.text_color}; opacity:0.9; font-size:${CONFIG.font_size * 0.9}px; white-space:pre-line;">
+                        ${esc(tech.steps)}
+                      </div>
+                      <div class="flex justify-end mt-3">
+                        <button onclick="deleteTechnique('${esc(name)}', ${idx})"
+                          class="px-2 py-1 rounded text-sm"
+                          style="background:rgba(239,68,68,0.2); color:#ef4444;">
+                          🗑️ Remove
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="text-center p-4" style="color:${CONFIG.text_color}; opacity:0.5;">
+                No techniques added yet.<br>
+                <span style="font-size:${CONFIG.font_size * 0.85}px;">Add tips like "sear then bake for juicy results"</span>
               </div>
             `}
           </div>
@@ -11380,6 +11434,83 @@ ${knowledge.freezable ? '🧊 Freezable' : '❌ Cannot Freeze'}
       const knowledge = getIngredientKnowledge(name);
       if (knowledge && knowledge.cookingMethods) {
         knowledge.cookingMethods.splice(index, 1);
+        await saveIngredientKnowledge(knowledge);
+        render();
+      }
+    }
+   function addTechnique(name) {
+      openModal(`
+        <div style="color: #1a1a2e;">
+          <h2 class="text-xl font-bold mb-4">👨‍🍳 Add Technique</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">🎯 Result (what you'll get):</label>
+            <input type="text" id="newTechResult" class="w-full px-3 py-2 border rounded"
+                   placeholder="e.g., Juicy with crispy skin" />
+            <div class="text-xs text-gray-500 mt-1">This is what a novice cook will see first</div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Method name:</label>
+            <input type="text" id="newTechMethod" class="w-full px-3 py-2 border rounded"
+                   placeholder="e.g., Sear then Bake" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Steps:</label>
+            <textarea id="newTechSteps" class="w-full px-3 py-2 border rounded" rows="4"
+                      placeholder="1. Sear 2-3 min per side on stovetop&#10;2. Transfer to 400°F oven for 15-20 min&#10;3. Rest 5 min before cutting"></textarea>
+          </div>
+          
+          <input type="hidden" id="techIngName" value="${esc(name)}" />
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveTechnique()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Add Technique
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveTechnique() {
+      const name = document.getElementById('techIngName').value;
+      const technique = {
+        result: document.getElementById('newTechResult').value.trim(),
+        method: document.getElementById('newTechMethod').value.trim(),
+        steps: document.getElementById('newTechSteps').value.trim()
+      };
+      
+      if (!technique.result) {
+        showError('Please enter the result (what you\'ll get)');
+        return;
+      }
+      if (!technique.steps) {
+        showError('Please enter the steps');
+        return;
+      }
+      
+      let knowledge = getIngredientKnowledge(name);
+      if (!knowledge) {
+        knowledge = createDefaultIngredientKnowledge(name);
+      }
+      
+      knowledge.techniques = knowledge.techniques || [];
+      knowledge.techniques.push(technique);
+      
+      await saveIngredientKnowledge(knowledge);
+      closeModal();
+      showToast('Technique added!', 'success');
+      render();
+    }
+
+    async function deleteTechnique(name, index) {
+      const knowledge = getIngredientKnowledge(name);
+      if (knowledge && knowledge.techniques) {
+        knowledge.techniques.splice(index, 1);
         await saveIngredientKnowledge(knowledge);
         render();
       }
