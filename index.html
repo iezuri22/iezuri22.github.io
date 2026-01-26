@@ -10213,9 +10213,30 @@ ${message.content}`
       state.chefChatOpen = false;
       document.getElementById('chefChatModal')?.remove();
       
-      // Auto-detect ingredients from the message
+      // Auto-detect only proteins and produce (not seasonings, oils, etc.)
       const contentLower = message.content.toLowerCase();
-      const detectedIngredients = Object.keys(INGREDIENT_IMAGES).filter(ing => 
+      const produceAndProteins = [
+        // Proteins
+        'chicken breast', 'chicken thighs', 'chicken wings', 'whole chicken', 'ground beef', 
+        'ribeye steak', 'ribeye', 'filet mignon', 'new york strip', 'sirloin', 't-bone steak', 
+        't-bone', 'flank steak', 'skirt steak', 'beef roast', 'pork chops', 'lamb chops', 
+        'bacon', 'turkey bacon', 'sausage', 'chicken sausage', 'ham', 'salmon', 'shrimp', 
+        'clams', 'tilapia', 'tuna', 'eggs', 'egg', 'tofu',
+        // Vegetables
+        'red onion', 'yellow onion', 'white onion', 'onion', 'garlic', 'shallots', 'shallot',
+        'tomato', 'tomatoes', 'cherry tomatoes', 'bell pepper', 'bell peppers', 'jalapeño', 
+        'jalapeno', 'carrot', 'carrots', 'baby carrot', 'baby carrots', 'celery', 'broccoli', 
+        'cauliflower', 'spinach', 'kale', 'lettuce', 'arugula', 'zucchini', 'squash', 
+        'eggplant', 'mushrooms', 'mushroom', 'potato', 'potatoes', 'baby potato', 'baby potatoes',
+        'sweet potato', 'sweet potatoes', 'corn', 'green beans', 'peas', 'asparagus', 
+        'brussels sprouts', 'cucumber', 'avocado', 'cabbage',
+        // Fruits
+        'apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'lemon', 'lemons',
+        'lime', 'limes', 'strawberries', 'strawberry', 'blueberries', 'blueberry',
+        'raspberries', 'raspberry', 'mango', 'pineapple', 'grapes', 'peaches', 'peach'
+      ];
+      
+      const detectedIngredients = produceAndProteins.filter(ing => 
         contentLower.includes(ing.toLowerCase())
       );
       
