@@ -2083,10 +2083,10 @@ async function saveReceiptExpense() {
       const expiringCount = inventory.filter(i => ['expired', 'expiring-soon'].includes(getExpirationStatus(i))).length;
 
       return `
-        <div class="p-4 max-w-2xl mx-auto">
-         <div class="flex items-center justify-between mb-4">
+        <div class="p-4 max-w-4xl mx-auto">
+          <div class="flex items-center justify-between mb-4">
             <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
-              Inventory
+              📦 Inventory
             </h2>
             <div class="flex gap-2">
               <button onclick="requestNotificationPermission()"
@@ -2095,7 +2095,7 @@ async function saveReceiptExpense() {
                 title="${state.notificationsEnabled ? 'Notifications on' : 'Enable notifications'}">
                 🔔 ${state.notificationsEnabled ? 'On' : 'Off'}
               </button>
-             <button onclick="showAddInventoryModal()"
+              <button onclick="showAddInventoryModal()"
                 class="px-3 py-1.5 rounded button-hover"
                 style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
                 + Add Item
@@ -2130,12 +2130,14 @@ async function saveReceiptExpense() {
               const items = grouped[cat];
               if (items.length === 0) return '';
               
+              const catEmoji = cat === 'Produce' ? '🥬' : cat === 'Meat & Seafood' ? '🥩' : cat === 'Dairy & Eggs' ? '🥛' : cat === 'Bakery' ? '🍞' : cat === 'Frozen' ? '🧊' : cat === 'Pantry' ? '🥫' : cat === 'Snacks' ? '🍿' : cat === 'Beverages' ? '🥤' : '📦';
+              
               return `
-                <div class="mb-4">
-                  <h3 class="font-semibold mb-2" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
-                    ${cat} (${items.length})
+                <div class="mb-6">
+                  <h3 class="font-semibold mb-3" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
+                    ${catEmoji} ${cat} (${items.length})
                   </h3>
-                  <div class="space-y-2">
+                  <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
                     ${items.map(item => {
                       const status = getExpirationStatus(item);
                       const statusColor = getExpirationColor(status);
@@ -2143,77 +2145,28 @@ async function saveReceiptExpense() {
                         Math.ceil((new Date(item.expirationDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
                       
                       let statusText = '';
-                      if (item.isFrozen) statusText = '❄️ Frozen';
-                      else if (status === 'expired') statusText = '⚠️ Expired';
-                      else if (status === 'expiring-soon') statusText = `⚠️ ${daysUntil} day${daysUntil !== 1 ? 's' : ''} left`;
-                      else if (status === 'expiring') statusText = `${daysUntil} days left`;
-                      else if (daysUntil !== null) statusText = `${daysUntil} days left`;
+                      let statusBg = 'transparent';
+                      if (item.isFrozen) {
+                        statusText = '❄️ Frozen';
+                        statusBg = 'rgba(59,130,246,0.3)';
+                      } else if (status === 'expired') {
+                        statusText = '⚠️ Expired';
+                        statusBg = 'rgba(239,68,68,0.3)';
+                      } else if (status === 'expiring-soon') {
+                        statusText = `⚠️ ${daysUntil}d`;
+                        statusBg = 'rgba(239,68,68,0.2)';
+                      } else if (status === 'expiring') {
+                        statusText = `${daysUntil}d`;
+                        statusBg = 'rgba(245,158,11,0.2)';
+                      } else if (daysUntil !== null) {
+                        statusText = `${daysUntil}d`;
+                      }
+                      
+                      const imgUrl = item.image_url || getIngredientImage(item.name, cat);
                       
                       return `
-                      <div class="flex items-center gap-3 p-3 rounded" 
-                           style="background:${CONFIG.surface_color}; border-left:4px solid ${statusColor};">
-                       ${(() => {
-                          const imgUrl = item.image_url || getIngredientImage(item.name, cat);
-                          if (imgUrl) {
-                            return `<img src="${esc(imgUrl)}" 
-                                     style="width:50px; height:50px; object-fit:cover; border-radius:8px;"
-                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                                   <div style="width:50px; height:50px; background:rgba(255,255,255,0.1); border-radius:8px; display:none; align-items:center; justify-content:center; font-size:1.5rem;">
-                                     ${cat === 'Produce' ? '🥬' : cat === 'Meat & Seafood' ? '🥩' : cat === 'Dairy & Eggs' ? '🥛' : cat === 'Bakery' ? '🍞' : cat === 'Frozen' ? '🧊' : '📦'}
-                                   </div>`;
-                          } else {
-                            return `<div style="width:50px; height:50px; background:rgba(255,255,255,0.1); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
-                                     ${cat === 'Produce' ? '🥬' : cat === 'Meat & Seafood' ? '🥩' : cat === 'Dairy & Eggs' ? '🥛' : cat === 'Bakery' ? '🍞' : cat === 'Frozen' ? '🧊' : '📦'}
-                                   </div>`;
-                          }
-                        })()}
-                        <div class="flex-1 min-w-0">
-                          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px; font-weight:500;">
-                            ${esc(item.name)}
-                          </div>
-                          <div style="color:${statusColor}; font-size:${CONFIG.font_size * 0.75}px;">
-                            ${statusText}
-                          </div>
-                          <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.7}px;">
-                            ${item.quantity || 1}${item.unit ? ' ' + item.unit : ''} 
-                            ${item.price ? ' • $' + item.price.toFixed(2) : ''}
-                          </div>
-                        </div>
-                       <div class="flex gap-1">
-                          <button onclick="toggleFrozen('${item.id}')"
-                            class="px-2 py-1 rounded button-hover"
-                            style="background:${item.isFrozen ? '#3b82f6' : 'rgba(255,255,255,0.1)'}; color:white; font-size:${CONFIG.font_size * 0.75}px;"
-                            title="${item.isFrozen ? 'Unfreeze' : 'Freeze'}">
-                            ❄️
-                          </button>
-                          <button onclick="showEditInventoryModal('${item.id}')"
-                            class="px-2 py-1 rounded button-hover"
-                            style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
-                            ✏️
-                          </button>
-                          <button onclick="useInventoryItem('${item.id}')"
-                            class="px-2 py-1 rounded button-hover"
-                            style="background:${CONFIG.primary_action_color}; color:white; font-size:${CONFIG.font_size * 0.75}px;"
-                            title="Mark as used">
-                            ✓
-                          </button>
-                          <button onclick="confirmDeleteInventoryItem('${item.id}')"
-                            class="px-2 py-1 rounded button-hover"
-                            style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.75}px;"
-                            title="Delete">
-                            🗑️
-                          </button>
-                        </div>
-                      </div>
-                    `}).join('')}
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          `}
-        </div>
-      `;
-    }
+                        <div class="rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
+                             style="background:${CONFIG.surface_color}; border:2px solid ${statusColor};"
 
     async function useInventoryItem(id) {
       const item = state.inventory.find(i => i.id === id);
