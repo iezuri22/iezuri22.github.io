@@ -2100,19 +2100,19 @@ async function saveReceiptExpense() {
             </h2>
             <div class="flex gap-2">
               <button onclick="requestNotificationPermission()"
-                class="px-3 py-1.5 rounded button-hover"
-                style="background:${state.notificationsEnabled ? '#22c55e' : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;"
+                class="px-3 py-2 rounded-lg"
+                style="background:${state.notificationsEnabled ? CONFIG.success_color : CONFIG.surface_color}; color:${state.notificationsEnabled ? 'white' : CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px; box-shadow: ${CONFIG.shadow};"
                 title="${state.notificationsEnabled ? 'Notifications on' : 'Enable notifications'}">
                 🔔 ${state.notificationsEnabled ? 'On' : 'Off'}
               </button>
               <button onclick="showAddInventoryModal()"
-                class="px-3 py-1.5 rounded button-hover"
-                style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+                class="px-3 py-2 rounded-lg"
+                style="background:${CONFIG.primary_action_color}; color:white;">
                 + Add Item
               </button>
               <button onclick="showIngredientImagesManager()"
-                class="px-2 py-1.5 rounded button-hover"
-                style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};"
+                class="px-3 py-2 rounded-lg"
+                style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};"
                 title="Manage ingredient images">
                 🖼️
               </button>
@@ -2120,19 +2120,27 @@ async function saveReceiptExpense() {
           </div>
 
           ${expiringCount > 0 ? `
-            <div class="mb-4 p-3 rounded-lg" style="background:rgba(239, 68, 68, 0.2); border:1px solid rgba(239, 68, 68, 0.5);">
-              <div style="color:#fca5a5; font-size:${CONFIG.font_size * 0.9}px;">
+            <div class="mb-4 p-3 rounded-lg" style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3);">
+              <div style="color:${CONFIG.danger_color}; font-size:${CONFIG.font_size * 0.9}px; font-weight: 500;">
                 ⚠️ ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon or expired
               </div>
             </div>
           ` : ''}
 
           ${inventory.length === 0 ? `
-            <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
+            <div class="p-8 rounded-xl text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
               <div style="font-size:3rem; margin-bottom:1rem;">📦</div>
-              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No items in inventory</div>
-              <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px;">
+              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem; font-weight: 600;">No items in inventory</div>
+              <div style="color: ${CONFIG.text_muted}; font-size:${CONFIG.font_size * 0.9}px; margin-bottom: 16px;">
                 Scan a receipt or add items manually
+              </div>
+              <div style="display: flex; gap: 8px; justify-content: center;">
+                <button onclick="showReceiptModal()" style="padding: 10px 20px; background: ${CONFIG.success_color}; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                  📸 Scan Receipt
+                </button>
+                <button onclick="showAddInventoryModal()" style="padding: 10px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer;">
+                  + Add Item
+                </button>
               </div>
             </div>
           ` : `
@@ -2176,9 +2184,9 @@ async function saveReceiptExpense() {
                       
                       return `
                         <div class="rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
-                             style="background:${CONFIG.surface_color}; border:2px solid ${statusColor};"
-onclick="showInventoryItemMenu('${item.id}')">
-<div style="height:80px; overflow:hidden; background:rgba(255,255,255,0.05); position:relative;">
+                             style="background:${CONFIG.surface_color}; border:2px solid ${statusColor}; box-shadow: ${CONFIG.shadow};"
+                             onclick="showInventoryItemMenu('${item.id}')">
+                          <div style="height:80px; overflow:hidden; background:${CONFIG.background_color}; position:relative;">
                             ${imgUrl ? `
                               <img src="${esc(imgUrl)}" style="width:100%; height:100%; object-fit:cover;" 
                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
