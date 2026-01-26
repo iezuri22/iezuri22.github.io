@@ -4778,7 +4778,7 @@ function navigateTo(view) {
       `;
     }
     
-    function renderBottomNav() {
+   function renderBottomNav() {
       if (state.currentView === 'home') return '';
       
       const navItems = [
@@ -4786,30 +4786,64 @@ function navigateTo(view) {
         { id: 'recipes', icon: '📚', label: 'Recipes' },
         { id: 'inventory', icon: '📦', label: 'Pantry' },
         { id: 'grocery-list', icon: '🛒', label: 'Shop' },
-        { id: 'chef', icon: '👨‍🍳', label: 'Chef', action: 'toggleChefChat()' }
+        { id: 'more', icon: '•••', label: 'More', action: 'showMoreMenu()' }
       ];
       
       return `
         <nav style="position: fixed; bottom: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; box-shadow: 0 -2px 16px rgba(0,0,0,0.08); z-index: 40; padding-bottom: env(safe-area-inset-bottom);">
-          <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px 0;">
+          <div style="display: flex; justify-content: space-around; align-items: center; padding: 4px 0;">
             ${navItems.map(item => {
               const isActive = item.id === state.currentView || 
                 (item.id === 'recipes' && ['recipe-view', 'recipe-edit', 'freestyle-edit'].includes(state.currentView)) ||
                 (item.id === 'grocery-list' && state.currentView?.includes('grocery')) ||
-                (item.id === 'inventory' && ['inventory', 'ingredients', 'ingredient-detail'].includes(state.currentView));
+                (item.id === 'inventory' && ['inventory', 'ingredients', 'ingredient-detail'].includes(state.currentView)) ||
+                (item.id === 'more' && ['budget-dashboard', 'recipe-stats', 'purchase-history', 'recording-needs', 'meal-plan', 'ingredients'].includes(state.currentView));
               
               const onClick = item.action || `navigateTo('${item.id}')`;
               
               return `
-                <button onclick="${onClick}" style="display: flex; flex-direction: column; align-items: center; padding: 8px 16px; border: none; background: transparent; cursor: pointer;">
-                  <span style="font-size: 24px; ${isActive ? '' : 'opacity: 0.5;'}">${item.icon}</span>
-                  <span style="font-size: 10px; margin-top: 2px; color: ${isActive ? CONFIG.primary_action_color : CONFIG.text_muted}; font-weight: ${isActive ? '600' : '400'};">${item.label}</span>
+                <button onclick="${onClick}" style="display: flex; flex-direction: column; align-items: center; padding: 4px 12px; border: none; background: transparent; cursor: pointer;">
+                  <span style="font-size: 20px; ${isActive ? '' : 'opacity: 0.5;'}">${item.icon}</span>
+                  <span style="font-size: 9px; color: ${isActive ? CONFIG.primary_action_color : CONFIG.text_muted}; font-weight: ${isActive ? '600' : '400'};">${item.label}</span>
                 </button>
               `;
             }).join('')}
           </div>
         </nav>
       `;
+    }
+
+    function showMoreMenu() {
+      const menuItems = [
+        { id: 'meal-plan', icon: '📅', label: 'Meal Plan' },
+        { id: 'ingredients', icon: '🥗', label: 'Ingredients' },
+        { id: 'budget-dashboard', icon: '💰', label: 'Budget' },
+        { id: 'recipe-stats', icon: '📊', label: 'Stats' },
+        { id: 'purchase-history', icon: '🧾', label: 'History' },
+        { id: 'recording-needs', icon: '🎥', label: 'To Record' }
+      ];
+      
+      // Remove existing menu if any
+      document.getElementById('moreMenuOverlay')?.remove();
+      
+      const menuHtml = `
+        <div id="moreMenuOverlay" onclick="closeMoreMenu()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 50;">
+          <div onclick="event.stopPropagation()" style="position: fixed; bottom: 60px; left: 50%; transform: translateX(-50%); background: ${CONFIG.surface_color}; border-radius: 16px; padding: 8px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); min-width: 200px;">
+            ${menuItems.map(item => `
+              <button onclick="navigateTo('${item.id}'); closeMoreMenu();" style="display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: none; background: transparent; cursor: pointer; border-radius: 12px; text-align: left;" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='transparent'">
+                <span style="font-size: 20px;">${item.icon}</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 15px; font-weight: 500;">${item.label}</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `;
+      
+      document.body.insertAdjacentHTML('beforeend', menuHtml);
+    }
+
+    function closeMoreMenu() {
+      document.getElementById('moreMenuOverlay')?.remove();
     }
    function openMealOptionsRecipePicker() {
       state.selectedMealOptionCategory = null;
@@ -9597,10 +9631,9 @@ function renderRecordingNeeds() {
           content = renderMealOptionsRecipePicker();
           break;
         default:
-          content = renderRecipes();
-      }
-      app.innerHTML = `
-        <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'home' ? '80px' : '0'};">
+content = renderHome();      }
+    app.innerHTML = `
+        <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'home' ? '56px' : '0'};">
           ${renderNav()}
           ${content}
           ${renderReceiptModal()}
