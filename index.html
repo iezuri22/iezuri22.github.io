@@ -4952,6 +4952,15 @@ function navigateTo(view) {
               </div>
             </button>
             
+            <button onclick="closeModal(); searchRecipesByIngredient('${esc(item.name)}')" 
+              style="display: flex; align-items: center; gap: 12px; padding: 14px; background: ${CONFIG.background_color}; border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+              <span style="font-size: 20px;">🔍</span>
+              <div>
+                <div style="color: ${CONFIG.text_color}; font-weight: 600;">Find Recipes</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Recipes using ${esc(item.name)}</div>
+              </div>
+            </button>
+            
             <button onclick="closeModal(); showEditInventoryModal('${item.id}')" 
               style="display: flex; align-items: center; gap: 12px; padding: 14px; background: ${CONFIG.background_color}; border: none; border-radius: 12px; cursor: pointer; text-align: left;">
               <span style="font-size: 20px;">✏️</span>
@@ -5060,6 +5069,12 @@ function navigateTo(view) {
       closeModal();
       showToast(`${newItem.name} added to inventory!`, 'success');
       render();
+    }
+   function searchRecipesByIngredient(ingredientName) {
+      state.searchByIngredient = true;
+      state.searchTerm = ingredientName;
+      state.recipeTab = 'user';
+      navigateTo('recipes');
     }
 
     function viewIngredientFromInventory(ingredientName) {
@@ -6486,8 +6501,20 @@ console.log('byMonth:', byMonth);
       list = list.filter(r => {
         if (state.filterFavorites && !r.favorite) return false;
         if (state.recipeTab !== 'tips' && state.selectedCategory !== 'All' && r.category !== state.selectedCategory) return false;
-        if (state.searchTerm && !(r.title || '').toLowerCase().includes(state.searchTerm.toLowerCase())) return false;
-        if (state.filterIngredientGroup !== 'all') {
+if (state.searchTerm) {
+          const searchLower = state.searchTerm.toLowerCase();
+          if (state.searchByIngredient) {
+            // Search by ingredient
+            const ingredients = recipeIngList(r);
+            const hasIngredient = ingredients.some(ing => 
+              (ing.name || '').toLowerCase().includes(searchLower)
+            );
+            if (!hasIngredient) return false;
+          } else {
+            // Search by title
+            if (!(r.title || '').toLowerCase().includes(searchLower)) return false;
+          }
+        }        if (state.filterIngredientGroup !== 'all') {
           const recipeIngredients = recipeIngList(r);
           const hasIngredientInGroup = recipeIngredients.some(ing => ing.group === state.filterIngredientGroup);
           if (!hasIngredientInGroup) return false;
@@ -6567,12 +6594,21 @@ console.log('byMonth:', byMonth);
               🔍 Filters ${state.selectedCategory !== 'All' || state.filterSourceType !== 'all' || state.filterFavorites || state.filterIngredientGroup !== 'all' ? '(active)' : ''}
             </summary>
             <div class="mt-2 p-3 rounded-lg" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-              <!-- Search -->
-              <input placeholder="Search recipes..." id="recipesPageSearchInput"
-                class="w-full px-3 py-2 rounded-lg mb-3"
-                style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size:${CONFIG.font_size * 0.85}px;"
-                value="${esc(state.searchTerm)}"
-                oninput="handleRecipesPageSearch(this.value)"/>
+             <!-- Search -->
+              <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <div style="flex: 1; position: relative;">
+                  <input placeholder="${state.searchByIngredient ? 'Search by ingredient...' : 'Search recipes...'}" id="recipesPageSearchInput"
+                    class="w-full px-3 py-2 rounded-lg"
+                    style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size:${CONFIG.font_size * 0.85}px;"
+                    value="${esc(state.searchTerm)}"
+                    oninput="handleRecipesPageSearch(this.value)"/>
+                </div>
+                <button onclick="state.searchByIngredient = !state.searchByIngredient; state.searchTerm = ''; render();"
+                  style="padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; background: ${state.searchByIngredient ? CONFIG.primary_action_color : CONFIG.background_color}; color: ${state.searchByIngredient ? 'white' : CONFIG.text_color}; white-space: nowrap;"
+                  title="Search by ingredient">
+                  🥕 ${state.searchByIngredient ? 'By Ingredient' : 'By Name'}
+                </button>
+              </div>
               
             <!-- Filter Row 1: Category & Ingredients -->
               <div class="flex gap-2 mb-3 flex-wrap">
@@ -6598,13 +6634,36 @@ console.log('byMonth:', byMonth);
             </div>
           </details>
 
-     <!-- Results Grid -->
+    <!-- Results Grid -->
           ${list.length === 0 ? `
-            <div class="p-4 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
-              <div style="font-size:2rem;">📭</div>
-              <div style="font-size:${CONFIG.font_size * 0.85}px; opacity:0.7;">
-                ${state.showTips ? 'No tips found' : 'No recipes found'}
+            <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              <div style="font-size: 3rem; margin-bottom: 12px;">${state.searchTerm ? '🔍' : '📭'}</div>
+              <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">
+                ${state.searchTerm 
+                  ? (state.searchByIngredient 
+                      ? `No recipes with "${esc(state.searchTerm)}"` 
+                      : `No recipes matching "${esc(state.searchTerm)}"`)
+                  : 'No recipes yet'}
               </div>
+              <div style="font-size: 14px; color: ${CONFIG.text_muted}; margin-bottom: 16px;">
+                ${state.searchTerm 
+                  ? 'Try a different search or add a new recipe'
+                  : 'Start building your recipe collection!'}
+              </div>
+              ${!state.searchTerm ? `
+                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap;">
+                  <button onclick="openNewRecipe()" style="padding: 10px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+                    + Add Recipe
+                  </button>
+                  <button onclick="showImportRecipeModal()" style="padding: 10px 20px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; cursor: pointer; font-weight: 500;">
+                    🔗 Import from URL
+                  </button>
+                </div>
+              ` : `
+                <button onclick="state.searchTerm = ''; render();" style="padding: 10px 20px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; cursor: pointer; font-weight: 500;">
+                  Clear Search
+                </button>
+              `}
             </div>
           ` : `
 <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
