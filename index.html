@@ -6259,7 +6259,7 @@ console.log('byMonth:', byMonth);
               const todaysPlan = state.planData.find(p => p.date === today);
               const plannedRecipe = todaysPlan?.recipeId ? state.recipes.find(r => (r.__backendId || r.id) === todaysPlan.recipeId) : null;
               
-              if (plannedRecipe) {
+             if (plannedRecipe) {
                 const recipeImg = recipeThumb(plannedRecipe);
                 return `
                   <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
@@ -6282,7 +6282,21 @@ console.log('byMonth:', byMonth);
                   </div>
                 `;
               }
-              return '';
+              // Empty state - no dinner planned
+              return `
+                <div style="background: linear-gradient(135deg, ${CONFIG.surface_color} 0%, rgba(102,126,234,0.05) 100%); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow}; border: 2px dashed rgba(102,126,234,0.3);">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 50px; height: 50px; border-radius: 12px; background: ${CONFIG.background_color}; display: flex; align-items: center; justify-content: center; font-size: 24px;">🤔</div>
+                    <div style="flex: 1;">
+                      <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 15px;">What's for dinner?</div>
+                      <div style="color: ${CONFIG.text_muted}; font-size: 13px;">No meal planned for tonight</div>
+                    </div>
+                    <button onclick="navigateTo('meal-plan')" style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 500; font-size: 13px;">
+                      Plan Now
+                    </button>
+                  </div>
+                </div>
+              `;
             })()}
             
             <!-- Alert Card (if items expiring) -->
@@ -11431,9 +11445,10 @@ ${message.content}`
                       "Is my salmon done?"
                     </div>
                   </div>
-              ` : state.chefChatMessages.map((msg, idx) => `
+             ` : state.chefChatMessages.map((msg, idx) => `
                 <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
-                  <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                  <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${msg.role === 'user' ? 'white' : CONFIG.text_color};">
+                    ${msg.image ? `<img src="${msg.image}" style="width: 100%; max-width: 200px; border-radius: 8px; margin-bottom: 8px;" />` : ''}
                     ${formatChefMessage(msg.content)}
                    ${msg.role === 'assistant' ? `
                       <div class="flex gap-1 mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.1);">
@@ -11467,11 +11482,30 @@ ${message.content}`
               `}
             </div>
             
+            <!-- Image Preview -->
+            ${state.chefChatImage ? `
+              <div style="padding: 8px 12px; border-top: 1px solid rgba(0,0,0,0.1); background: ${CONFIG.background_color};">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <img src="${state.chefChatImage}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;" />
+                  <div style="flex: 1; color: ${CONFIG.text_muted}; font-size: 12px;">Image attached</div>
+                  <button onclick="state.chefChatImage = null; renderChefChat();" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; font-size: 16px;">✕</button>
+                </div>
+              </div>
+            ` : ''}
+            
             <!-- Input -->
             <div class="p-3" style="border-top: 1px solid rgba(0,0,0,0.1);">
-              <div class="flex gap-2">
+              <div class="flex gap-2 items-center">
+                <input type="file" id="chefChatImageInput" accept="image/*" style="display: none;" onchange="handleChefImageUpload(event)" />
+                <button onclick="document.getElementById('chefChatImageInput').click()" 
+                  class="p-2 rounded-lg"
+                  style="background: ${CONFIG.background_color}; border: 1px solid rgba(0,0,0,0.1); cursor: pointer; font-size: 18px;"
+                  title="Upload photo"
+                  ${state.chefChatLoading ? 'disabled' : ''}>
+                  📷
+                </button>
                 <input type="text" id="chefChatInput" 
-                  placeholder="Ask a cooking question..."
+                  placeholder="${state.chefChatImage ? 'Ask about this image...' : 'Ask a cooking question...'}"
                   class="flex-1 px-3 py-2 rounded-lg"
                   style="background: ${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size: 14px;"
                   onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChefMessage(); }"
@@ -11497,6 +11531,23 @@ ${message.content}`
         if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
       }, 50);
     }
+   function handleChefImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      // Check file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        showError('Image too large. Please use an image under 5MB.');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        state.chefChatImage = e.target.result;
+        renderChefChat();
+      };
+      reader.readAsDataURL(file);
+    }
 
     async function sendChefMessage() {
       const input = document.getElementById('chefChatInput');
@@ -11504,12 +11555,19 @@ ${message.content}`
       
       if (!message || state.chefChatLoading) return;
       
-     // Add user message
-      state.chefChatMessages.push({ 
+     // Add user message (with image if present)
+      const userMessage = { 
         role: 'user', 
         content: message,
         timestamp: new Date().toISOString()
-      });
+      };
+      if (state.chefChatImage) {
+        userMessage.image = state.chefChatImage;
+      }
+      state.chefChatMessages.push(userMessage);
+      
+      const imageToSend = state.chefChatImage;
+      state.chefChatImage = null; // Clear after adding to message
       input.value = '';
       state.chefChatLoading = true;
       renderChefChat();
@@ -11540,15 +11598,26 @@ Format cooking times clearly like:
 
 Keep responses helpful but concise. Use bullet points for steps.`;
 
+      // Prepare messages with image support
+        const apiMessages = state.chefChatMessages.map(m => {
+          if (m.image) {
+            return {
+              role: m.role,
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: m.image.split(',')[1] } },
+                { type: 'text', text: m.content || 'What is this? Any cooking suggestions?' }
+              ]
+            };
+          }
+          return { role: m.role, content: m.content };
+        });
+
         const response = await fetch(CHEF_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             systemPrompt: systemPrompt,
-            messages: state.chefChatMessages.map(m => ({
-              role: m.role,
-              content: m.content
-            })),
+            messages: apiMessages,
             recipeContext: recipeContext ? `User's saved recipes: ${recipeContext}` : null
           })
         });
