@@ -5839,69 +5839,114 @@ console.log('byMonth:', byMonth);
       }
     }
 
-    function renderHome() {
+   function renderHome() {
+      // Get time-based greeting
+      const hour = new Date().getHours();
+      let greeting = 'Good morning';
+      let greetingEmoji = '☀️';
+      if (hour >= 12 && hour < 17) {
+        greeting = 'Good afternoon';
+        greetingEmoji = '🌤️';
+      } else if (hour >= 17) {
+        greeting = 'Good evening';
+        greetingEmoji = '🌙';
+      }
+      
+      // Get stats
+      const recipeCount = state.recipes.filter(r => !r.isDraft && !r.isTip).length;
+      const expiringItems = state.inventory.filter(i => {
+        const status = getExpirationStatus(i);
+        return status === 'expired' || status === 'expiring-soon';
+      });
+      const todaysPlan = state.planData.find(p => p.date === new Date().toISOString().split('T')[0]);
+      const mealsCookedThisMonth = state.recipes.filter(r => {
+        const cooked = r.cookedDates || [];
+        const thisMonth = new Date().getMonth();
+        return cooked.some(d => new Date(d).getMonth() === thisMonth);
+      }).length;
+
       return `
-        <div class="p-6 max-w-6xl mx-auto fade-in">
-          <h1 style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 2.5}px; font-family: ${CONFIG.font_family};"
-              class="app-title mb-4 text-center font-bold">
-            ${CONFIG.app_title}
-          </h1>
-          <p class="text-center mb-12" style="color: ${CONFIG.text_color}; opacity: 0.7; font-size: ${CONFIG.font_size * 1.1}px;">
-            Plan meals, organize recipes, and shop smarter
-          </p>
-
-          <div class="grid md:grid-cols-3 gap-6">
-            <button type="button" onclick="navigateTo('recipes')"
-                    style="background: linear-gradient(135deg, ${CONFIG.surface_color} 0%, rgba(102, 126, 234, 0.1) 100%);"
-                    class="p-8 rounded-2xl card-hover text-center glass">
-              <div style="font-size: 4rem;" class="mb-4">🍳</div>
-              <h3 style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.4}px; font-family: ${CONFIG.font_family};"
-                  class="font-bold mb-3">
-                ${CONFIG.recipes_label}
-              </h3>
-              <p style="color: ${CONFIG.text_color}; opacity: 0.7; font-size: ${CONFIG.font_size}px; font-family: ${CONFIG.font_family};">
-                Browse and manage your recipe collection
-              </p>
-              <div class="mt-4 chip" style="background: rgba(102, 126, 234, 0.2); color: ${CONFIG.primary_action_color};">
-                ${state.recipes.length} recipes
+        <div style="background: ${CONFIG.background_color}; min-height: 100vh;">
+          <!-- Hero Section -->
+          <div style="background: linear-gradient(135deg, ${CONFIG.gradient_start} 0%, ${CONFIG.gradient_end} 100%); padding: 32px 24px; border-radius: 0 0 32px 32px;">
+            <div class="max-w-4xl mx-auto">
+              <div style="color: white; font-size: 28px; font-weight: 700; margin-bottom: 4px;">
+                ${greetingEmoji} ${greeting}!
               </div>
-            </button>
-
-           <button type="button" onclick="navigateTo('meal-options')"
-                    style="background: linear-gradient(135deg, ${CONFIG.surface_color} 0%, rgba(118, 75, 162, 0.1) 100%);"
-                    class="p-8 rounded-2xl card-hover text-center glass">
-              <div style="font-size: 4rem;" class="mb-4">📋</div>
-              <h3 style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.4}px; font-family: ${CONFIG.font_family};"
-                  class="font-bold mb-3">
-                Meal Options
-              </h3>
-              <p style="color: ${CONFIG.text_color}; opacity: 0.7; font-size: ${CONFIG.font_size}px; font-family: ${CONFIG.font_family};">
-                Your recipe pool for the week
-              </p>
-              <div class="mt-4 chip" style="background: rgba(118, 75, 162, 0.2); color: ${CONFIG.secondary_action_color};">
-                ${state.mealOptions.length} options
+              <div style="color: rgba(255,255,255,0.9); font-size: 16px;">
+                What's cooking today?
               </div>
-            </button>
-
-            <button type="button" onclick="navigateTo('grocery-list')"
-                    style="background: linear-gradient(135deg, ${CONFIG.surface_color} 0%, rgba(245, 158, 11, 0.1) 100%);"
-                    class="p-8 rounded-2xl card-hover text-center glass">
-              <div style="font-size: 4rem;" class="mb-4">🛒</div>
-              <h3 style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.4}px; font-family: ${CONFIG.font_family};"
-                  class="font-bold mb-3">
-                ${CONFIG.grocery_list_label}
-              </h3>
-              <p style="color: ${CONFIG.text_color}; opacity: 0.7; font-size: ${CONFIG.font_size}px; font-family: ${CONFIG.font_family};">
-                Generate shopping list from your plan
-              </p>
-              <div class="mt-4 chip" style="background: rgba(245, 158, 11, 0.2); color: ${CONFIG.accent_color};">
-                Smart lists
+              
+              <!-- Quick Stats -->
+              <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
+                <div style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 12px 16px; flex: 1; min-width: 100px;">
+                  <div style="color: white; font-size: 24px; font-weight: 700;">${recipeCount}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 12px;">Recipes</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 12px 16px; flex: 1; min-width: 100px;">
+                  <div style="color: white; font-size: 24px; font-weight: 700;">${state.inventory.length}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 12px;">In Stock</div>
+                </div>
+                <div style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 12px 16px; flex: 1; min-width: 100px;">
+                  <div style="color: white; font-size: 24px; font-weight: 700;">${mealsCookedThisMonth}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 12px;">Cooked This Month</div>
+                </div>
               </div>
-            </button>
+            </div>
           </div>
-        </div>
-      `;
-    }
+          
+          <div class="max-w-4xl mx-auto p-4" style="margin-top: -20px;">
+            
+            <!-- Alert Card (if items expiring) -->
+            ${expiringItems.length > 0 ? `
+              <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow}; cursor: pointer; border-left: 4px solid ${CONFIG.warning_color};">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="font-size: 24px;">⚠️</div>
+                  <div style="flex: 1;">
+                    <div style="color: ${CONFIG.text_color}; font-weight: 600;">${expiringItems.length} item${expiringItems.length > 1 ? 's' : ''} expiring soon</div>
+                    <div style="color: ${CONFIG.text_muted}; font-size: 14px;">${expiringItems.slice(0, 3).map(i => i.name).join(', ')}${expiringItems.length > 3 ? '...' : ''}</div>
+                  </div>
+                  <div style="color: ${CONFIG.text_muted};">→</div>
+                </div>
+              </div>
+            ` : ''}
+            
+            <!-- Main Navigation Cards -->
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;">
+              
+              <!-- Cook Section -->
+              <div onclick="navigateTo('recipes')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="font-size: 36px; margin-bottom: 8px;">📚</div>
+                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Recipes</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${recipeCount} saved</div>
+              </div>
+              
+              <div onclick="navigateTo('meal-plan')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="font-size: 36px; margin-bottom: 8px;">📅</div>
+                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Meal Plan</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">Plan your week</div>
+              </div>
+              
+              <div onclick="navigateTo('ingredients')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="font-size: 36px; margin-bottom: 8px;">🥗</div>
+                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Ingredients</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">Cooking guides</div>
+              </div>
+              
+              <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="font-size: 36px; margin-bottom: 8px;">📦</div>
+                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Inventory</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${state.inventory.length} items</div>
+              </div>
+              
+            </div>
+            
+            <!-- Secondary Navigation -->
+            <div style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 16px; box-shadow: ${CONFIG.shadow}; margin-bottom: 24px;">
+              <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">More</div>
+              
+              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+                <div onclick="navigateTo('grocery-list')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0
 
    function renderRecipes() {
       if (!state.recipes || !Array.isArray(state.recipes)) return '<div class="p-3">Loading...</div>';
