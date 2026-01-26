@@ -4710,91 +4710,103 @@ function navigateTo(view) {
 }
 
    // ===== RENDER FUNCTIONS =====
-    function renderNav() {
+  function renderNav() {
       if (state.currentView === 'home') return '';
+      
+      // Get page title based on current view
+      const pageTitles = {
+        'recipes': '📚 Recipes',
+        'recipe-edit': '✏️ Edit Recipe',
+        'recipe-view': '📖 Recipe',
+        'freestyle-edit': '✏️ Freestyle',
+        'meal-plan': '📅 Meal Plan',
+        'weekly-plan': '📅 Weekly Plan',
+        'meal-options': '📋 Meal Options',
+        'recipe-picker': '📚 Pick Recipe',
+        'meal-options-recipe-picker': '📚 Pick Recipe',
+        'external-meal-picker': '🍽️ External Meal',
+        'grocery-list': '🛒 Grocery',
+        'grocery-select-meals': '🛒 Select Meals',
+        'grocery-ingredients': '🛒 Ingredients',
+        'budget-dashboard': '💰 Budget',
+        'recording-needs': '🎥 To Record',
+        'inventory': '📦 Inventory',
+        'ingredients': '🥗 Ingredients',
+        'ingredient-detail': '🥗 Ingredient',
+        'purchase-history': '🧾 History',
+        'recipe-stats': '📊 Stats',
+        'tips': '💡 Tips'
+      };
+      
+      const pageTitle = pageTitles[state.currentView] || 'Yummy';
+      const expiringItems = getExpiringItems();
+      const expiringCount = expiringItems.length;
 
       return `
-       <nav style="background: ${CONFIG.surface_color}; box-shadow: 0 2px 8px rgba(0,0,0,0.2);" class="p-3 mb-0 sticky top-0 z-50">
-          <div class="max-w-7xl mx-auto flex items-center justify-between gap-2">
-            <!-- Title + Page Select (inline) -->
+        <!-- Top Nav - Simplified -->
+        <nav style="background: ${CONFIG.surface_color}; box-shadow: 0 2px 8px rgba(0,0,0,0.06);" class="p-3 sticky top-0 z-50">
+          <div class="max-w-4xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <button type="button" onclick="navigateTo('home')"
-                      style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.1}px; font-family: ${CONFIG.font_family};"
-                      class="font-bold button-hover flex items-center gap-1">
-                <span style="font-size: 1.2rem;">🍽️</span>
-                <span class="app-title hidden sm:inline">${CONFIG.app_title}</span>
+              <button onclick="navigateTo('home')" style="color: ${CONFIG.text_muted}; font-size: 20px;" title="Home">
+                ←
               </button>
-              <select onchange="navigateTo(this.value); this.blur();"
-                      style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid ${CONFIG.primary_action_color}; font-family: ${CONFIG.font_family}; font-size: ${CONFIG.font_size * 0.85}px; padding: 6px 10px; border-radius: 4px;"> <option value="recipes" ${state.currentView === 'recipes' ? 'selected' : ''}>📚 Recipes</option>
-                <option value="meal-plan" ${state.currentView === 'meal-plan' || state.currentView === 'meal-options' || state.currentView === 'weekly-plan' || state.currentView === 'recipe-picker' || state.currentView === 'meal-options-recipe-picker' || state.currentView === 'external-meal-picker' ? 'selected' : ''}>📅 Meal Plan</option>
-                <option value="recipe-stats" ${state.currentView === 'recipe-stats' ? 'selected' : ''}>👨‍🍳 Top Cooked</option>
-                <option value="grocery-list" ${state.currentView && state.currentView.includes('grocery') ? 'selected' : ''}>🛒 Grocery</option>
-               <option value="budget-dashboard" ${state.currentView === 'budget-dashboard' ? 'selected' : ''}>📊 Budget</option>
-             <option value="recording-needs" ${state.currentView === 'recording-needs' ? 'selected' : ''}>🎥 To Record</option>
-              <option value="inventory" ${state.currentView === 'inventory' ? 'selected' : ''}>📦 Inventory</option>
-               <option value="ingredients" ${state.currentView === 'ingredients' || state.currentView === 'ingredient-detail' ? 'selected' : ''}>🥗 Ingredients</option>
-               <option value="purchase-history" ${state.currentView === 'purchase-history' ? 'selected' : ''}>🧾 History</option>
-              </select>
-
-             <!-- Timer Button -->
-              <button onclick="showTimerModal()"
-                class="px-2 py-1 rounded button-hover"
-                style="background:${state.activeTimers.length > 0 ? 'rgba(239, 68, 68, 0.2)' : 'transparent'};"
-                title="Set cooking timer">
-                <span style="font-size:1.2rem;">⏰</span>
-                ${state.activeTimers.length > 0 ? `
-                  <span class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold"
-                        style="background:#ef4444; color:white; min-width:18px; text-align:center;">
-                    ${state.activeTimers.length}
-                  </span>
-                ` : ''}
-              </button>
-              
-              <!-- Notification Bell -->
-              ${(() => {
-                const expiringItems = getExpiringItems();
-                const count = expiringItems.length;
-                
-                return `
-                  <button onclick="navigateTo('inventory')" 
-                    class="relative px-2 py-1 rounded button-hover"
-                    style="background:${count > 0 ? 'rgba(239, 68, 68, 0.2)' : 'transparent'};"
-                    title="${count > 0 ? count + ' items expiring' : 'No expiring items'}">
-                    <span style="font-size:1.2rem;">🔔</span>
-                    ${count > 0 ? `
-                      <span class="absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full text-xs font-bold"
-                            style="background:#ef4444; color:white; min-width:18px; text-align:center;">
-                        ${count}
-                      </span>
-                    ` : ''}
-                  </button>
-                `;
-              })()}
+              <span style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 17px;">${pageTitle}</span>
             </div>
             
-            <!-- Action buttons -->
-            <div class="flex items-center gap-2">
-            ${getPendingRecordingNeeds().length > 0 ? `
-                <button onclick="navigateTo('recording-needs')" class="recording-badge">
-                  🎥 ${getPendingRecordingNeeds().length}
+            <div class="flex items-center gap-1">
+              <!-- Timer -->
+              <button onclick="showTimerModal()" class="relative p-2 rounded-lg" style="background: ${state.activeTimers.length > 0 ? 'rgba(232,93,93,0.15)' : 'transparent'};">
+                <span style="font-size: 20px;">⏱️</span>
+                ${state.activeTimers.length > 0 ? `<span style="position:absolute; top:2px; right:2px; background:${CONFIG.danger_color}; color:white; font-size:10px; padding:2px 5px; border-radius:10px;">${state.activeTimers.length}</span>` : ''}
+              </button>
+              
+              <!-- Notifications -->
+              ${expiringCount > 0 ? `
+                <button onclick="navigateTo('inventory')" class="relative p-2 rounded-lg" style="background: rgba(232,93,93,0.15);">
+                  <span style="font-size: 20px;">🔔</span>
+                  <span style="position:absolute; top:2px; right:2px; background:${CONFIG.danger_color}; color:white; font-size:10px; padding:2px 5px; border-radius:10px;">${expiringCount}</span>
                 </button>
               ` : ''}
-              <div id="userIndicator" style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 0.75}px; padding: 4px 8px; background: rgba(102, 126, 234, 0.2); border-radius: 4px; display: none;">
-                <span id="userEmail"></span>
-              </div>
-              <button type="button" onclick="storage.loadData(); showToast('Refreshed!', 'success');"
-                      style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.2}px;"
-                      class="button-hover p-2"
-                      title="Refresh">
-                🔄
-              </button>
-              <button type="button" onclick="showSettingsMenu()"
-                      style="color: ${CONFIG.text_color}; font-size: ${CONFIG.font_size * 1.2}px;"
-                      class="button-hover p-2"
-                      title="Settings">
-                ⚙️
+              
+              <!-- Settings -->
+              <button onclick="showSettingsMenu()" class="p-2 rounded-lg">
+                <span style="font-size: 20px;">⚙️</span>
               </button>
             </div>
+          </div>
+        </nav>
+      `;
+    }
+    
+    function renderBottomNav() {
+      if (state.currentView === 'home') return '';
+      
+      const navItems = [
+        { id: 'home', icon: '🏠', label: 'Home' },
+        { id: 'recipes', icon: '📚', label: 'Recipes' },
+        { id: 'inventory', icon: '📦', label: 'Pantry' },
+        { id: 'grocery-list', icon: '🛒', label: 'Shop' },
+        { id: 'chef', icon: '👨‍🍳', label: 'Chef', action: 'toggleChefChat()' }
+      ];
+      
+      return `
+        <nav style="position: fixed; bottom: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; box-shadow: 0 -2px 16px rgba(0,0,0,0.08); z-index: 40; padding-bottom: env(safe-area-inset-bottom);">
+          <div style="display: flex; justify-content: space-around; align-items: center; padding: 8px 0;">
+            ${navItems.map(item => {
+              const isActive = item.id === state.currentView || 
+                (item.id === 'recipes' && ['recipe-view', 'recipe-edit', 'freestyle-edit'].includes(state.currentView)) ||
+                (item.id === 'grocery-list' && state.currentView?.includes('grocery')) ||
+                (item.id === 'inventory' && ['inventory', 'ingredients', 'ingredient-detail'].includes(state.currentView));
+              
+              const onClick = item.action || `navigateTo('${item.id}')`;
+              
+              return `
+                <button onclick="${onClick}" style="display: flex; flex-direction: column; align-items: center; padding: 8px 16px; border: none; background: transparent; cursor: pointer;">
+                  <span style="font-size: 24px; ${isActive ? '' : 'opacity: 0.5;'}">${item.icon}</span>
+                  <span style="font-size: 10px; margin-top: 2px; color: ${isActive ? CONFIG.primary_action_color : CONFIG.text_muted}; font-weight: ${isActive ? '600' : '400'};">${item.label}</span>
+                </button>
+              `;
+            }).join('')}
           </div>
         </nav>
       `;
@@ -9588,11 +9600,12 @@ function renderRecordingNeeds() {
           content = renderRecipes();
       }
       app.innerHTML = `
-        <div style="background: ${CONFIG.background_color}; min-height: 100vh;">
+        <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'home' ? '80px' : '0'};">
           ${renderNav()}
           ${content}
           ${renderReceiptModal()}
-          ${renderChefChatButton()}
+          ${state.currentView === 'home' ? renderChefChatButton() : ''}
+          ${renderBottomNav()}
         </div>
       `;
     }
