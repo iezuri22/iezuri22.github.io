@@ -11419,21 +11419,52 @@ ${knowledge.freezable ? '🧊 Freezable' : '❌ Cannot Freeze'}
             
             ${(knowledge.notes && knowledge.notes.length > 0) || relatedTips.length > 0 ? `
               <div class="space-y-2">
-                ${(knowledge.notes || []).map((note, idx) => `
-                  <div class="flex items-start gap-2 p-2 rounded" style="background:rgba(255,255,255,0.05);">
-                    <span style="color:${CONFIG.primary_action_color};">•</span>
-                    <div class="flex-1" style="color:${CONFIG.text_color};">${esc(note)}</div>
-                    <button onclick="deleteIngredientNote('${esc(name)}', ${idx})"
-                      class="text-red-400 hover:text-red-300">×</button>
-                  </div>
-                `).join('')}
-                ${relatedTips.map(tip => `
-                  <div class="p-2 rounded" style="background:rgba(245,158,11,0.1); border-left:3px solid #f59e0b;">
-                    <div style="color:${CONFIG.text_color}; font-weight:500; font-size:${CONFIG.font_size * 0.9}px;">
-                      💡 ${esc(tip.title)}
+                ${(knowledge.notes || []).map((note, idx) => {
+                  // Extract title from note (first line or first 50 chars)
+                  const lines = note.split('\n');
+                  let noteTitle = lines[0].replace(/^📌\s*/, '').replace(/\*\*/g, '').replace(/^#+\s*/, '').trim();
+                  if (noteTitle.length > 50) noteTitle = noteTitle.slice(0, 50) + '...';
+                  if (!noteTitle) noteTitle = 'Note';
+                  const noteContent = lines.slice(1).join('\n').trim() || note;
+                  
+                  return `
+                    <div class="rounded-lg overflow-hidden" style="background:rgba(255,255,255,0.05);">
+                      <div class="p-3 cursor-pointer flex items-center justify-between" 
+                           onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="color:#f59e0b;">💡</span>
+                          <span style="color:${CONFIG.text_color}; font-weight:500;">${esc(noteTitle)}</span>
+                        </div>
+                        <span style="color:${CONFIG.text_color}; opacity:0.5;">▼</span>
+                      </div>
+                      <div style="display:none; padding:12px; border-top:1px solid rgba(255,255,255,0.1);">
+                        <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; line-height:1.6;">
+                          ${formatChefMessage(noteContent)}
+                        </div>
+                        <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+                          <button onclick="event.stopPropagation(); deleteIngredientNote('${esc(name)}', ${idx})"
+                            style="padding:4px 8px; border-radius:4px; font-size:12px; background:rgba(239,68,68,0.2); color:#ef4444; border:none; cursor:pointer;">
+                            🗑️ Delete
+                          </button>
+                        </div>
+                      </div>
                     </div>
-                    <div style="color:${CONFIG.text_color}; opacity:0.8; font-size:${CONFIG.font_size * 0.8}px; margin-top:4px;">
-                      ${esc((tip.instructions || '').slice(0, 150))}${(tip.instructions || '').length > 150 ? '...' : ''}
+                  `;
+                }).join('')}
+                ${relatedTips.map(tip => `
+                  <div class="rounded-lg overflow-hidden" style="background:rgba(245,158,11,0.1);">
+                    <div class="p-3 cursor-pointer flex items-center justify-between"
+                         onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span>💡</span>
+                        <span style="color:${CONFIG.text_color}; font-weight:500;">${esc(tip.title)}</span>
+                      </div>
+                      <span style="color:${CONFIG.text_color}; opacity:0.5;">▼</span>
+                    </div>
+                    <div style="display:none; padding:12px; border-top:1px solid rgba(255,255,255,0.1);">
+                      <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; line-height:1.6;">
+                        ${formatChefMessage(tip.instructions || '')}
+                      </div>
                     </div>
                   </div>
                 `).join('')}
