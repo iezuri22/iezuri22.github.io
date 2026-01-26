@@ -10256,12 +10256,22 @@ ${message.content}`
                    oninput="filterIngredientCheckboxes(this.value)" />
             
             <div id="ingredientCheckboxes" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px;">
-              ${allIngredients.map(ing => `
+              ${detectedIngredients.length > 0 ? `
+                <div style="border-bottom: 1px solid #ddd; padding-bottom: 8px; margin-bottom: 8px;">
+                  <div class="text-xs font-semibold text-green-700 mb-1">✓ Auto-detected:</div>
+                  ${detectedIngredients.map(ing => `
+                    <label class="flex items-center gap-2 p-1 hover:bg-green-50 rounded cursor-pointer ingredient-checkbox-label" data-name="${esc(ing.toLowerCase())}" style="background: rgba(34,197,94,0.1);">
+                      <input type="checkbox" name="tipIngredients" value="${esc(ing)}" checked />
+                      <span style="text-transform: capitalize; font-weight: 500;">${esc(ing)}</span>
+                    </label>
+                  `).join('')}
+                </div>
+              ` : ''}
+              <div class="text-xs text-gray-500 mb-1">All ingredients:</div>
+              ${allIngredients.filter(ing => !detectedIngredients.includes(ing)).map(ing => `
                 <label class="flex items-center gap-2 p-1 hover:bg-gray-100 rounded cursor-pointer ingredient-checkbox-label" data-name="${esc(ing.toLowerCase())}">
-                  <input type="checkbox" name="tipIngredients" value="${esc(ing)}" 
-                         ${detectedIngredients.includes(ing) ? 'checked' : ''} />
+                  <input type="checkbox" name="tipIngredients" value="${esc(ing)}" />
                   <span style="text-transform: capitalize;">${esc(ing)}</span>
-                  ${detectedIngredients.includes(ing) ? '<span class="text-xs text-green-600">(detected)</span>' : ''}
                 </label>
               `).join('')}
             </div>
