@@ -11354,8 +11354,8 @@ ${message.content}`
       if (!state.chefChatOpen) return;
       
       const chatHtml = `
-      <div id="chefChatModal" class="fixed z-50" style="bottom: ${state.currentView !== 'home' ? '70px' : '90px'}; right: 12px; width: 320px; max-width: calc(100vw - 24px);">
-          <div class="rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height: 50vh; border: 1px solid rgba(0,0,0,0.1);">
+     <div id="chefChatModal" class="fixed z-50" style="bottom: ${state.currentView !== 'home' ? '70px' : '90px'}; right: 12px; width: 360px; max-width: calc(100vw - 24px);">
+          <div class="rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height: 70vh; border: 1px solid rgba(0,0,0,0.1);">
             
           <!-- Header -->
             <div class="flex items-center justify-between p-3" style="border-bottom: 1px solid rgba(0,0,0,0.1); background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px 12px 0 0;">
@@ -11377,8 +11377,8 @@ ${message.content}`
               </div>
             </div>
             
-           <!-- Messages -->
-            <div id="chefChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2" style="min-height: 200px; max-height: 300px;">
+          <!-- Messages -->
+            <div id="chefChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2" style="min-height: 350px; max-height: 450px;">
              ${state.chefChatView === 'history' ? `
                 <!-- History View -->
                 ${(() => {
