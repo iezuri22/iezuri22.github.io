@@ -11443,7 +11443,11 @@ ${knowledge.freezable ? '🧊 Freezable' : '❌ Cannot Freeze'}
                         <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; line-height:1.6;">
                           ${formatChefMessage(noteContent)}
                         </div>
-                        <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+                       <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:8px;">
+                          <button onclick="event.stopPropagation(); editIngredientNote('${esc(name)}', ${idx})"
+                            style="padding:4px 8px; border-radius:4px; font-size:12px; background:rgba(102,126,234,0.2); color:#667eea; border:none; cursor:pointer;">
+                            ✏️ Edit
+                          </button>
                           <button onclick="event.stopPropagation(); deleteIngredientNote('${esc(name)}', ${idx})"
                             style="padding:4px 8px; border-radius:4px; font-size:12px; background:rgba(239,68,68,0.2); color:#ef4444; border:none; cursor:pointer;">
                             🗑️ Delete
@@ -11863,6 +11867,70 @@ ${knowledge.freezable ? '🧊 Freezable' : '❌ Cannot Freeze'}
       knowledge.notes.push(note);
       await saveIngredientKnowledge(knowledge);
       showToast('Note added!', 'success');
+      render();
+    }
+   function editIngredientNote(name, index) {
+      const knowledge = getIngredientKnowledge(name);
+      if (!knowledge || !knowledge.notes || !knowledge.notes[index]) return;
+      
+      const note = knowledge.notes[index];
+      
+      // Extract title and content
+      const lines = note.split('\n');
+      let noteTitle = lines[0].replace(/^📌\s*/, '').trim();
+      const noteContent = lines.slice(1).join('\n').trim();
+      
+      openModal(`
+        <div style="color: #1a1a2e; max-height: 80vh; overflow-y: auto;">
+          <h2 class="text-xl font-bold mb-4">✏️ Edit Note</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Title:</label>
+            <input type="text" id="editNoteTitle" class="w-full px-3 py-2 border rounded"
+                   value="${esc(noteTitle)}" placeholder="Note title" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Content:</label>
+            <textarea id="editNoteContent" class="w-full px-3 py-2 border rounded" rows="10"
+                      placeholder="Note content...">${esc(noteContent)}</textarea>
+          </div>
+          
+          <input type="hidden" id="editNoteIngName" value="${esc(name)}" />
+          <input type="hidden" id="editNoteIndex" value="${index}" />
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveEditedNote()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Save
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveEditedNote() {
+      const name = document.getElementById('editNoteIngName').value;
+      const index = parseInt(document.getElementById('editNoteIndex').value);
+      const title = document.getElementById('editNoteTitle').value.trim();
+      const content = document.getElementById('editNoteContent').value.trim();
+      
+      if (!title) {
+        showError('Please enter a title');
+        return;
+      }
+      
+      const knowledge = getIngredientKnowledge(name);
+      if (!knowledge || !knowledge.notes) return;
+      
+      // Update the note
+      knowledge.notes[index] = `📌 ${title}\n\n${content}`;
+      
+      await saveIngredientKnowledge(knowledge);
+      closeModal();
+      showToast('Note updated!', 'success');
       render();
     }
 
