@@ -10320,6 +10320,77 @@ ${message.content}`
       `);
     }
 
+   async function saveClaudeToHistory(messageIndex) {
+      const message = state.chefChatMessages[messageIndex];
+      if (!message) return;
+      
+      // Get the user's question for context
+      const userQuestion = messageIndex > 0 ? state.chefChatMessages[messageIndex - 1]?.content : '';
+      
+      // Close the chat first
+      state.chefChatOpen = false;
+      document.getElementById('chefChatModal')?.remove();
+      
+      // Auto-detect ingredients
+      const contentLower = message.content.toLowerCase();
+      const produceAndProteins = [
+        'chicken breast', 'chicken thighs', 'chicken wings', 'whole chicken', 'ground beef', 
+        'ribeye steak', 'ribeye', 'filet mignon', 'new york strip', 'sirloin', 't-bone steak', 
+        't-bone', 'flank steak', 'skirt steak', 'beef roast', 'pork chops', 'lamb chops', 
+        'bacon', 'turkey bacon', 'sausage', 'chicken sausage', 'ham', 'salmon', 'shrimp', 
+        'clams', 'tilapia', 'tuna', 'eggs', 'egg', 'tofu',
+        'red onion', 'yellow onion', 'white onion', 'onion', 'garlic', 'shallots', 'shallot',
+        'tomato', 'tomatoes', 'cherry tomatoes', 'bell pepper', 'bell peppers', 'jalapeño', 
+        'jalapeno', 'carrot', 'carrots', 'baby carrot', 'baby carrots', 'celery', 'broccoli', 
+        'cauliflower', 'spinach', 'kale', 'lettuce', 'arugula', 'zucchini', 'squash', 
+        'eggplant', 'mushrooms', 'mushroom', 'potato', 'potatoes', 'baby potato', 'baby potatoes',
+        'sweet potato', 'sweet potatoes', 'corn', 'green beans', 'peas', 'asparagus', 
+        'brussels sprouts', 'cucumber', 'avocado', 'cabbage',
+        'apple', 'apples', 'banana', 'bananas', 'orange', 'oranges', 'lemon', 'lemons',
+        'lime', 'limes', 'strawberries', 'strawberry', 'blueberries', 'blueberry',
+        'raspberries', 'raspberry', 'mango', 'pineapple', 'grapes', 'peaches', 'peach'
+      ];
+      
+      const detectedIngredients = produceAndProteins.filter(ing => 
+        contentLower.includes(ing.toLowerCase())
+      );
+      
+      if (detectedIngredients.length === 0) {
+        showToast('No ingredients detected in this response. Use 💡 Tip to save manually.', 'info');
+        return;
+      }
+      
+      // Save to all detected ingredients
+      state.isLoading = true;
+      render();
+      
+      try {
+        for (const ingredientName of detectedIngredients) {
+          let knowledge = getIngredientKnowledge(ingredientName);
+          if (!knowledge) {
+            knowledge = createDefaultIngredientKnowledge(ingredientName);
+          }
+          
+          // Add the full response with context
+          knowledge.notes = knowledge.notes || [];
+          const noteEntry = userQuestion 
+            ? `❓ ${userQuestion}\n\n${message.content}`
+            : message.content;
+          knowledge.notes.push(noteEntry);
+          
+          await saveIngredientKnowledge(knowledge);
+        }
+        
+        showToast(`Saved to ${detectedIngredients.length} ingredient${detectedIngredients.length > 1 ? 's' : ''}: ${detectedIngredients.slice(0, 3).join(', ')}${detectedIngredients.length > 3 ? '...' : ''}`, 'success');
+      } catch (e) {
+        console.error('Save error:', e);
+        showError('Failed to save');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
+
     function filterIngredientCheckboxes(searchTerm) {
       const labels = document.querySelectorAll('.ingredient-checkbox-label');
       const search = searchTerm.toLowerCase();
@@ -10750,7 +10821,7 @@ ${message.content}`
                 <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
                   <div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
                     ${formatChefMessage(msg.content)}
-                    ${msg.role === 'assistant' ? `
+                   ${msg.role === 'assistant' ? `
                       <div class="flex gap-1 mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.1);">
                         <button onclick="saveClaudeAsRecipe(${idx})"
                           class="px-2 py-1 rounded text-xs hover:opacity-80"
@@ -10761,6 +10832,11 @@ ${message.content}`
                           class="px-2 py-1 rounded text-xs hover:opacity-80"
                           style="background:#f59e0b; color:white;">
                           💡 Tip
+                        </button>
+                        <button onclick="saveClaudeToHistory(${idx})"
+                          class="px-2 py-1 rounded text-xs hover:opacity-80"
+                          style="background:#8b5cf6; color:white;">
+                          📜 Save
                         </button>
                       </div>
                     ` : ''}
@@ -10801,9 +10877,11 @@ ${message.content}`
       document.body.insertAdjacentHTML('beforeend', chatHtml);
       document.getElementById('chefChatInput')?.focus();
       
-      // Scroll to bottom
-      const messagesDiv = document.getElementById('chefChatMessages');
-      if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      // Scroll to bottom after a brief delay to ensure content is rendered
+      setTimeout(() => {
+        const messagesDiv = document.getElementById('chefChatMessages');
+        if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }, 50);
     }
 
     async function sendChefMessage() {
@@ -10830,10 +10908,29 @@ ${message.content}`
           .map(r => r.title)
           .join(', ');
         
+        const systemPrompt = `You are Chef Claude, a friendly cooking assistant for home cooks who may be beginners. 
+
+When giving cooking instructions:
+- Always include specific times (e.g., "cook for 3-4 minutes" not just "cook until done")
+- Always include temperatures when relevant (e.g., "medium-high heat, about 375°F")
+- Explain visual/sensory cues (e.g., "until golden brown" or "until juices run clear")
+- Break down steps clearly - one action per step when possible
+- Include timing for each major step
+- Mention common mistakes to avoid
+- If something needs resting time, say how long and why
+
+Format cooking times clearly like:
+- Prep: X minutes
+- Cook: X minutes  
+- Rest: X minutes (if applicable)
+
+Keep responses helpful but concise. Use bullet points for steps.`;
+
         const response = await fetch(CHEF_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            systemPrompt: systemPrompt,
             messages: state.chefChatMessages.map(m => ({
               role: m.role,
               content: m.content
