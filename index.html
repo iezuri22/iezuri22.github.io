@@ -10783,18 +10783,20 @@ ${message.content}`
                       <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.8}px; margin-bottom:8px; font-weight:600;">
                         ${group.date}
                       </div>
-                      ${group.conversations.map((convo, idx) => `
+                     ${group.conversations.map((convo, idx) => `
                         <details class="mb-2 rounded-lg" style="background:rgba(255,255,255,0.05);">
-                          <summary class="p-3 cursor-pointer" style="color:${CONFIG.text_color};">
-                            <span style="font-size:${CONFIG.font_size * 0.9}px;">${esc(convo.topic)}</span>
-                            <span style="opacity:0.5; font-size:${CONFIG.font_size * 0.75}px; margin-left:8px;">
-                              (${convo.messages.length} messages)
-                            </span>
+                          <summary class="p-3 cursor-pointer" style="color:${CONFIG.text_color}; list-style:none;">
+                            <div class="flex items-center justify-between">
+                              <span style="font-size:${CONFIG.font_size * 0.9}px;">▶ ${esc(convo.topic)}</span>
+                              <span style="opacity:0.5; font-size:${CONFIG.font_size * 0.75}px;">
+                                (${convo.messages.length})
+                              </span>
+                            </div>
                           </summary>
-                          <div class="p-3 pt-0 space-y-2">
+                          <div class="p-3 pt-2 space-y-2" style="border-top:1px solid rgba(255,255,255,0.1);">
                             ${convo.messages.map(msg => `
                               <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}">
-                                <div class="max-w-xs px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                                <div class="px-3 py-2 rounded-lg" style="max-width:85%; background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; word-wrap:break-word;">
                                   ${formatChefMessage(msg.content)}
                                 </div>
                               </div>
