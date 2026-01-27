@@ -1339,18 +1339,25 @@ If you can't read something clearly, make your best guess. Always return valid J
                 </div>
                 
                 <!-- Items List -->
-                <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Detected Items</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Detected Items (tap to edit)</div>
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
                   ${items.map((item, idx) => `
                     <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px;">
                       <input type="checkbox" id="receiptItem${idx}" checked style="width: 20px; height: 20px;" />
-                      <div style="flex: 1; min-width: 0;">
-                        <div style="color: ${CONFIG.text_color}; font-weight: 500;">${esc(item.name)}</div>
+                      <div style="flex: 1; min-width: 0;" onclick="editReceiptItem(${idx})">
+                        <div style="color: ${CONFIG.text_color}; font-weight: 500;">
+                          ${item.quantity > 1 ? `<span style="background: ${CONFIG.primary_action_color}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">${item.quantity}x</span>` : ''}
+                          ${esc(item.name)}
+                        </div>
                         <div style="color: ${CONFIG.text_muted}; font-size: 12px;">
-                          ${esc(item.category)} ${item.daysUntilExpiration ? `• Expires in ~${item.daysUntilExpiration} days` : ''}
+                          ${esc(item.category)} ${item.daysUntilExpiration ? `• ~${item.daysUntilExpiration} days` : ''} 
+                          <span style="color: ${CONFIG.primary_action_color};">• tap to edit</span>
                         </div>
                       </div>
-                      <div style="color: ${CONFIG.text_color}; font-weight: 600;">$${(item.price || 0).toFixed(2)}</div>
+                      <div style="text-align: right;">
+                        <div style="color: ${CONFIG.text_color}; font-weight: 600;">$${(item.price || 0).toFixed(2)}</div>
+                        ${item.quantity > 1 ? `<div style="color: ${CONFIG.text_muted}; font-size: 11px;">$${((item.price || 0) / item.quantity).toFixed(2)} ea</div>` : ''}
+                      </div>
                     </div>
                   `).join('')}
                 </div>
@@ -1397,7 +1404,7 @@ If you can't read something clearly, make your best guess. Always return valid J
       `;
     }
 
-    async function addReceiptItemsToInventory() {
+  async function addReceiptItemsToInventory() {
       const items = receiptScanState.extractedItems || [];
       let addedCount = 0;
       
@@ -1407,31 +1414,39 @@ If you can't read something clearly, make your best guess. Always return valid J
         
         const item = items[i];
         const today = new Date();
-        let expirationDate = null;
+        const quantity = item.quantity || 1;
+        const pricePerItem = (item.price || 0) / quantity;
         
+        let expirationDate = null;
         if (item.daysUntilExpiration) {
           const expDate = new Date(today);
           expDate.setDate(expDate.getDate() + item.daysUntilExpiration);
           expirationDate = expDate.toISOString().split('T')[0];
         }
         
-        const inventoryItem = {
-          id: `inv_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-          type: 'inventory',
-          name: item.name,
-          category: item.category || 'Other',
-          quantity: item.quantity || 1,
-          unit: '',
-          purchasePrice: item.price,
-          purchaseDate: receiptScanState.receiptDate || today.toISOString().split('T')[0],
-          expirationDate: expirationDate,
-          store: receiptScanState.store || '',
-          image_url: getIngredientImage(item.name, item.category) || ''
-        };
-        
-        await storage.create(inventoryItem);
-        state.inventory.push(inventoryItem);
-        addedCount++;
+        // Create separate inventory entry for each item in quantity
+        for (let q = 0; q < quantity; q++) {
+          const inventoryItem = {
+            id: `inv_${Date.now()}_${Math.random().toString(36).slice(2)}_${q}`,
+            type: 'inventory',
+            name: item.name,
+            category: item.category || 'Other',
+            quantity: 1,
+            unit: '',
+            purchasePrice: pricePerItem,
+            purchaseDate: receiptScanState.receiptDate || today.toISOString().split('T')[0],
+            expirationDate: expirationDate,
+            store: receiptScanState.store || '',
+            image_url: getIngredientImage(item.name, item.category) || ''
+          };
+          
+          await storage.create(inventoryItem);
+          state.inventory.push(inventoryItem);
+          addedCount++;
+          
+          // Small delay to ensure unique IDs
+          await new Promise(r => setTimeout(r, 10));
+        }
       }
       
       showToast(`Added ${addedCount} items to inventory!`, 'success');
@@ -1470,6 +1485,85 @@ If you can't read something clearly, make your best guess. Always return valid J
       
       showToast(`$${total.toFixed(2)} added to budget!`, 'success');
       closeReceiptModal();
+      render();
+    }
+   function editReceiptItem(idx) {
+      const item = receiptScanState.extractedItems[idx];
+      if (!item) return;
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">✏️ Edit Item</h2>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Item Name</label>
+            <input type="text" id="editReceiptItemName" value="${esc(item.name)}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-weight: 500;">Quantity</label>
+              <input type="number" id="editReceiptItemQty" value="${item.quantity || 1}" min="1"
+                style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-weight: 500;">Total Price</label>
+              <input type="number" id="editReceiptItemPrice" value="${item.price || 0}" step="0.01" min="0"
+                style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Category</label>
+            <select id="editReceiptItemCategory"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};">
+              ${['Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Other'].map(cat => 
+                `<option value="${cat}" ${item.category === cat ? 'selected' : ''}>${cat}</option>`
+              ).join('')}
+            </select>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Days Until Expiration</label>
+            <input type="number" id="editReceiptItemExpiry" value="${item.daysUntilExpiration || ''}" min="0" placeholder="Leave blank if non-perishable"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeModal()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="saveReceiptItemEdit(${idx})" style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              Save
+            </button>
+          </div>
+        </div>
+      `);
+    }
+    
+    function saveReceiptItemEdit(idx) {
+      const name = document.getElementById('editReceiptItemName')?.value.trim();
+      const qty = parseInt(document.getElementById('editReceiptItemQty')?.value) || 1;
+      const price = parseFloat(document.getElementById('editReceiptItemPrice')?.value) || 0;
+      const category = document.getElementById('editReceiptItemCategory')?.value;
+      const expiry = parseInt(document.getElementById('editReceiptItemExpiry')?.value) || null;
+      
+      if (!name) {
+        showError('Please enter an item name');
+        return;
+      }
+      
+      receiptScanState.extractedItems[idx] = {
+        ...receiptScanState.extractedItems[idx],
+        name: name,
+        quantity: qty,
+        price: price,
+        category: category,
+        daysUntilExpiration: expiry
+      };
+      
+      closeModal();
       render();
     }
 
@@ -5332,6 +5426,24 @@ function navigateTo(view) {
               </div>
             </button>
             
+            <button onclick="closeModal(); showSplitInventoryItem('${item.id}')" 
+              style="display: flex; align-items: center; gap: 12px; padding: 14px; background: rgba(102, 126, 234, 0.1); border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+              <span style="font-size: 20px;">✂️</span>
+              <div>
+                <div style="color: #667eea; font-weight: 600;">Split Item</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Separate into fridge & freezer</div>
+              </div>
+            </button>
+            
+            <button onclick="closeModal(); toggleFreezeItem('${item.id}')" 
+              style="display: flex; align-items: center; gap: 12px; padding: 14px; background: rgba(59, 130, 246, 0.1); border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+              <span style="font-size: 20px;">${item.isFrozen ? '🔥' : '❄️'}</span>
+              <div>
+                <div style="color: #3b82f6; font-weight: 600;">${item.isFrozen ? 'Thaw Item' : 'Freeze Item'}</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px;">${item.isFrozen ? 'Move back to fridge' : 'Extend shelf life'}</div>
+              </div>
+            </button>
+            
             <button onclick="closeModal(); confirmDeleteInventoryItem('${item.id}')" 
               style="display: flex; align-items: center; gap: 12px; padding: 14px; background: rgba(232, 93, 93, 0.1); border: none; border-radius: 12px; cursor: pointer; text-align: left;">
               <span style="font-size: 20px;">🗑️</span>
@@ -5428,6 +5540,127 @@ function navigateTo(view) {
       state.searchTerm = ingredientName;
       state.recipeTab = 'user';
       navigateTo('recipes');
+    }
+   function showSplitInventoryItem(itemId) {
+      const item = state.inventory.find(i => i.id === itemId);
+      if (!item) return;
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">✂️ Split ${esc(item.name)}</h2>
+          <p style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: 16px;">Create separate entries for fridge and freezer</p>
+          
+          <div style="background: ${CONFIG.background_color}; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+              <div style="font-size: 32px;">🧊</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 600;">Freeze</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Goes in freezer with extended expiry</div>
+              </div>
+              <input type="number" id="splitFreezeQty" value="1" min="0" max="99"
+                style="width: 60px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; text-align: center; font-size: 18px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};" />
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="font-size: 32px;">🥶</div>
+              <div style="flex: 1;">
+                <div style="font-weight: 600;">Keep in Fridge</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Stays fresh with current expiry</div>
+              </div>
+              <input type="number" id="splitFridgeQty" value="1" min="0" max="99"
+                style="width: 60px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; text-align: center; font-size: 18px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};" />
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeModal()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="confirmSplitInventoryItem('${item.id}')" style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              Split Item
+            </button>
+          </div>
+        </div>
+      `);
+    }
+    
+    async function confirmSplitInventoryItem(itemId) {
+      const item = state.inventory.find(i => i.id === itemId);
+      if (!item) return;
+      
+      const freezeQty = parseInt(document.getElementById('splitFreezeQty')?.value) || 0;
+      const fridgeQty = parseInt(document.getElementById('splitFridgeQty')?.value) || 0;
+      
+      if (freezeQty === 0 && fridgeQty === 0) {
+        showError('Please enter at least 1 for either option');
+        return;
+      }
+      
+      // Delete original item
+      state.inventory = state.inventory.filter(i => i.id !== itemId);
+      await storage.delete(item);
+      
+      // Create freezer items
+      for (let i = 0; i < freezeQty; i++) {
+        const frozenItem = {
+          ...item,
+          id: `inv_${Date.now()}_freeze_${i}_${Math.random().toString(36).slice(2)}`,
+          quantity: 1,
+          isFrozen: true,
+          frozenDate: new Date().toISOString().split('T')[0],
+          // Extend expiration by 90 days when frozen
+          expirationDate: (() => {
+            const d = new Date();
+            d.setDate(d.getDate() + 90);
+            return d.toISOString().split('T')[0];
+          })()
+        };
+        await storage.create(frozenItem);
+        state.inventory.push(frozenItem);
+        await new Promise(r => setTimeout(r, 10));
+      }
+      
+      // Create fridge items
+      for (let i = 0; i < fridgeQty; i++) {
+        const fridgeItem = {
+          ...item,
+          id: `inv_${Date.now()}_fridge_${i}_${Math.random().toString(36).slice(2)}`,
+          quantity: 1,
+          isFrozen: false
+        };
+        await storage.create(fridgeItem);
+        state.inventory.push(fridgeItem);
+        await new Promise(r => setTimeout(r, 10));
+      }
+      
+      closeModal();
+      showToast(`Split into ${freezeQty} frozen + ${fridgeQty} fresh`, 'success');
+      render();
+    }
+    
+    async function toggleFreezeItem(itemId) {
+      const item = state.inventory.find(i => i.id === itemId);
+      if (!item) return;
+      
+      item.isFrozen = !item.isFrozen;
+      
+      if (item.isFrozen) {
+        item.frozenDate = new Date().toISOString().split('T')[0];
+        // Extend expiration by 90 days when freezing
+        const newExpiry = new Date();
+        newExpiry.setDate(newExpiry.getDate() + 90);
+        item.expirationDate = newExpiry.toISOString().split('T')[0];
+        showToast(`${item.name} moved to freezer`, 'success');
+      } else {
+        // When thawing, set expiration to 2-3 days from now
+        const newExpiry = new Date();
+        newExpiry.setDate(newExpiry.getDate() + 3);
+        item.expirationDate = newExpiry.toISOString().split('T')[0];
+        showToast(`${item.name} thawed - use within 3 days`, 'info');
+      }
+      
+      await storage.update(item);
+      render();
     }
 
     function viewIngredientFromInventory(ingredientName) {
