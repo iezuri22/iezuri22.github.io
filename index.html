@@ -1343,18 +1343,20 @@ If you can't read something clearly, make your best guess. Always return valid J
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
                   ${items.map((item, idx) => `
                     <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px;">
-                      <input type="checkbox" id="receiptItem${idx}" checked style="width: 20px; height: 20px;" />
-                      <div style="flex: 1; min-width: 0;" onclick="editReceiptItem(${idx})">
+                      <input type="checkbox" id="receiptItem${idx}" checked style="width: 20px; height: 20px;" onclick="event.stopPropagation();" />
+                      <div style="flex: 1; min-width: 0; cursor: pointer;" onclick="event.stopPropagation(); editReceiptItem(${idx});">
                         <div style="color: ${CONFIG.text_color}; font-weight: 500;">
                           ${item.quantity > 1 ? `<span style="background: ${CONFIG.primary_action_color}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">${item.quantity}x</span>` : ''}
                           ${esc(item.name)}
                         </div>
                         <div style="color: ${CONFIG.text_muted}; font-size: 12px;">
                           ${esc(item.category)} ${item.daysUntilExpiration ? `• ~${item.daysUntilExpiration} days` : ''} 
-                          <span style="color: ${CONFIG.primary_action_color};">• tap to edit</span>
                         </div>
                       </div>
-                      <div style="text-align: right;">
+                      <button onclick="event.stopPropagation(); editReceiptItem(${idx});" style="padding: 6px 10px; background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; font-size: 12px; color: ${CONFIG.primary_action_color};">
+                        ✏️ Edit
+                      </button>
+                      <div style="text-align: right; min-width: 60px;">
                         <div style="color: ${CONFIG.text_color}; font-weight: 600;">$${(item.price || 0).toFixed(2)}</div>
                         ${item.quantity > 1 ? `<div style="color: ${CONFIG.text_muted}; font-size: 11px;">$${((item.price || 0) / item.quantity).toFixed(2)} ea</div>` : ''}
                       </div>
@@ -1404,22 +1406,26 @@ If you can't read something clearly, make your best guess. Always return valid J
       `;
     }
 
-  async function addReceiptItemsToInventory() {
+async function addReceiptItemsToInventory() {
       const items = receiptScanState.extractedItems || [];
       let addedCount = 0;
+      
+      // Use receipt date as purchase date, or today if not available
+      const purchaseDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
+      const purchaseDateObj = new Date(purchaseDate + 'T00:00:00');
       
       for (let i = 0; i < items.length; i++) {
         const checkbox = document.getElementById(`receiptItem${i}`);
         if (!checkbox?.checked) continue;
         
         const item = items[i];
-        const today = new Date();
         const quantity = item.quantity || 1;
         const pricePerItem = (item.price || 0) / quantity;
         
+        // Calculate expiration date from PURCHASE DATE, not today
         let expirationDate = null;
         if (item.daysUntilExpiration) {
-          const expDate = new Date(today);
+          const expDate = new Date(purchaseDateObj);
           expDate.setDate(expDate.getDate() + item.daysUntilExpiration);
           expirationDate = expDate.toISOString().split('T')[0];
         }
@@ -1434,7 +1440,7 @@ If you can't read something clearly, make your best guess. Always return valid J
             quantity: 1,
             unit: '',
             purchasePrice: pricePerItem,
-            purchaseDate: receiptScanState.receiptDate || today.toISOString().split('T')[0],
+            purchaseDate: purchaseDate,
             expirationDate: expirationDate,
             store: receiptScanState.store || '',
             image_url: getIngredientImage(item.name, item.category) || ''
@@ -1491,9 +1497,25 @@ If you can't read something clearly, make your best guess. Always return valid J
       const item = receiptScanState.extractedItems[idx];
       if (!item) return;
       
+      const purchaseDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
+      
+      // Calculate what the expiration date would be
+      let expiryPreview = 'Non-perishable';
+      if (item.daysUntilExpiration) {
+        const expDate = new Date(purchaseDate + 'T00:00:00');
+        expDate.setDate(expDate.getDate() + item.daysUntilExpiration);
+        expiryPreview = expDate.toLocaleDateString();
+      }
+      
       openModal(`
         <div style="color: ${CONFIG.text_color};">
           <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">✏️ Edit Item</h2>
+          
+          <!-- Purchase date info -->
+          <div style="background: ${CONFIG.background_color}; padding: 10px 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px;">
+            📅 Purchase Date: <strong>${purchaseDate}</strong>
+            ${item.daysUntilExpiration ? ` → Expires: <strong>${expiryPreview}</strong>` : ''}
+          </div>
           
           <div style="margin-bottom: 12px;">
             <label style="display: block; margin-bottom: 4px; font-weight: 500;">Item Name</label>
@@ -1525,9 +1547,13 @@ If you can't read something clearly, make your best guess. Always return valid J
           </div>
           
           <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Days Until Expiration</label>
+            <label style="display: block; margin-bottom: 4px; font-weight: 500;">Days Until Expiration (from purchase date)</label>
             <input type="number" id="editReceiptItemExpiry" value="${item.daysUntilExpiration || ''}" min="0" placeholder="Leave blank if non-perishable"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};"
+              oninput="updateExpiryPreview(this.value, '${purchaseDate}')" />
+            <div id="expiryPreviewText" style="color: ${CONFIG.text_muted}; font-size: 12px; margin-top: 4px;">
+              ${item.daysUntilExpiration ? `Will expire on ${expiryPreview}` : 'No expiration set'}
+            </div>
           </div>
           
           <div style="display: flex; gap: 8px;">
@@ -1540,6 +1566,20 @@ If you can't read something clearly, make your best guess. Always return valid J
           </div>
         </div>
       `);
+    }
+    
+    function updateExpiryPreview(days, purchaseDate) {
+      const preview = document.getElementById('expiryPreviewText');
+      if (!preview) return;
+      
+      if (!days || days <= 0) {
+        preview.textContent = 'No expiration set';
+        return;
+      }
+      
+      const expDate = new Date(purchaseDate + 'T00:00:00');
+      expDate.setDate(expDate.getDate() + parseInt(days));
+      preview.textContent = `Will expire on ${expDate.toLocaleDateString()}`;
     }
     
     function saveReceiptItemEdit(idx) {
