@@ -1282,13 +1282,18 @@ If you can't read something clearly, make your best guess. Always return valid J
         <div class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background: rgba(0,0,0,0.5);">
           <div style="background: ${CONFIG.surface_color}; border-radius: 20px; width: 100%; max-width: 500px; max-height: 90vh; overflow: hidden; display: flex; flex-direction: column;">
             
-            <!-- Header -->
+           <!-- Header -->
             <div style="background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); padding: 20px; color: white;">
               <div style="display: flex; align-items: center; justify-content: space-between;">
                 <h2 style="font-size: 20px; font-weight: 700;">📸 Smart Receipt Scanner</h2>
                 <button onclick="closeReceiptModal()" style="background: rgba(255,255,255,0.2); border: none; border-radius: 8px; padding: 8px 12px; color: white; cursor: pointer;">✕</button>
               </div>
-              ${receiptScanState.store ? `<div style="opacity: 0.9; margin-top: 4px;">🏪 ${esc(receiptScanState.store)} ${receiptScanState.receiptDate ? '• ' + receiptScanState.receiptDate : ''}</div>` : ''}
+              ${receiptScanState.store || receiptScanState.receiptDate ? `
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 8px;">
+                  <div style="opacity: 0.9;">🏪 ${esc(receiptScanState.store || 'Unknown Store')} • ${receiptScanState.receiptDate || 'No date'}</div>
+                  <button onclick="editReceiptDetails()" style="background: rgba(255,255,255,0.2); border: none; border-radius: 6px; padding: 4px 10px; color: white; cursor: pointer; font-size: 12px;">✏️ Edit</button>
+                </div>
+              ` : ''}
             </div>
             
             <!-- Content -->
@@ -1342,20 +1347,17 @@ If you can't read something clearly, make your best guess. Always return valid J
                 <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Detected Items (tap to edit)</div>
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
                   ${items.map((item, idx) => `
-                    <div style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px;">
+                   <div onclick="editReceiptItem(${idx})" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px; cursor: pointer;">
                       <input type="checkbox" id="receiptItem${idx}" checked style="width: 20px; height: 20px;" onclick="event.stopPropagation();" />
-                      <div style="flex: 1; min-width: 0; cursor: pointer;" onclick="event.stopPropagation(); editReceiptItem(${idx});">
+                      <div style="flex: 1; min-width: 0;">
                         <div style="color: ${CONFIG.text_color}; font-weight: 500;">
                           ${item.quantity > 1 ? `<span style="background: ${CONFIG.primary_action_color}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">${item.quantity}x</span>` : ''}
                           ${esc(item.name)}
                         </div>
                         <div style="color: ${CONFIG.text_muted}; font-size: 12px;">
-                          ${esc(item.category)} ${item.daysUntilExpiration ? `• ~${item.daysUntilExpiration} days` : ''} 
+                          ${esc(item.category)} ${item.daysUntilExpiration ? `• ~${item.daysUntilExpiration} days` : ''} • <span style="color: ${CONFIG.primary_action_color};">tap to edit</span>
                         </div>
                       </div>
-                      <button onclick="event.stopPropagation(); editReceiptItem(${idx});" style="padding: 6px 10px; background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; font-size: 12px; color: ${CONFIG.primary_action_color};">
-                        ✏️ Edit
-                      </button>
                       <div style="text-align: right; min-width: 60px;">
                         <div style="color: ${CONFIG.text_color}; font-weight: 600;">$${(item.price || 0).toFixed(2)}</div>
                         ${item.quantity > 1 ? `<div style="color: ${CONFIG.text_muted}; font-size: 11px;">$${((item.price || 0) / item.quantity).toFixed(2)} ea</div>` : ''}
@@ -1507,7 +1509,154 @@ async function addReceiptItemsToInventory() {
         expiryPreview = expDate.toLocaleDateString();
       }
       
-      openModal(`
+      // Create edit modal overlay on top of receipt modal
+      const editOverlay = document.createElement('div');
+      editOverlay.id = 'receiptItemEditOverlay';
+      editOverlay.style.cssText = 'position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,0.5);';
+      editOverlay.innerHTML = `
+        <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; max-height: 90vh; overflow-y: auto;">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; color: ${CONFIG.text_color};">✏️ Edit Item</h2>
+          
+          <!-- Purchase date info -->
+          <div style="background: ${CONFIG.background_color}; padding: 10px 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: ${CONFIG.text_color};">
+            📅 Purchase Date: <strong>${purchaseDate}</strong>
+            ${item.daysUntilExpiration ? ` → Expires: <strong>${expiryPreview}</strong>` : ''}
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Item Name</label>
+            <input type="text" id="editReceiptItemName" value="${esc(item.name)}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Quantity</label>
+              <input type="number" id="editReceiptItemQty" value="${item.quantity || 1}" min="1"
+                style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Total Price</label>
+              <input type="number" id="editReceiptItemPrice" value="${item.price || 0}" step="0.01" min="0"
+                style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Category</label>
+            <select id="editReceiptItemCategory"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;">
+              ${['Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Other'].map(cat => 
+                `<option value="${cat}" ${item.category === cat ? 'selected' : ''}>${cat}</option>`
+              ).join('')}
+            </select>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Days Until Expiration (from purchase)</label>
+            <input type="number" id="editReceiptItemExpiry" value="${item.daysUntilExpiration || ''}" min="0" placeholder="Leave blank if non-perishable"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeReceiptItemEdit()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="saveReceiptItemEdit(${idx})" style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              Save
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(editOverlay);
+    }
+    
+    function closeReceiptItemEdit() {
+      document.getElementById('receiptItemEditOverlay')?.remove();
+    }
+    
+    function saveReceiptItemEdit(idx) {
+      const name = document.getElementById('editReceiptItemName')?.value.trim();
+      const qty = parseInt(document.getElementById('editReceiptItemQty')?.value) || 1;
+      const price = parseFloat(document.getElementById('editReceiptItemPrice')?.value) || 0;
+      const category = document.getElementById('editReceiptItemCategory')?.value;
+      const expiry = parseInt(document.getElementById('editReceiptItemExpiry')?.value) || null;
+      
+      if (!name) {
+        showError('Please enter an item name');
+        return;
+      }
+      
+      receiptScanState.extractedItems[idx] = {
+        ...receiptScanState.extractedItems[idx],
+        name: name,
+        quantity: qty,
+        price: price,
+        category: category,
+        daysUntilExpiration: expiry
+      };
+      
+      closeReceiptItemEdit();
+      render();
+    }
+    
+    function editReceiptDetails() {
+      const editOverlay = document.createElement('div');
+      editOverlay.id = 'receiptDetailsEditOverlay';
+      editOverlay.style.cssText = 'position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0,0,0,0.5);';
+      editOverlay.innerHTML = `
+        <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px;">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; color: ${CONFIG.text_color};">🏪 Edit Receipt Details</h2>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Store Name</label>
+            <input type="text" id="editReceiptStore" value="${esc(receiptScanState.store || '')}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Purchase Date</label>
+            <input type="date" id="editReceiptDate" value="${receiptScanState.receiptDate || ''}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Total Amount</label>
+            <input type="number" id="editReceiptTotal" value="${receiptScanState.detectedTotal || 0}" step="0.01" min="0"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeReceiptDetailsEdit()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="saveReceiptDetailsEdit()" style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              Save
+            </button>
+          </div>
+        </div>
+      `;
+      
+      document.body.appendChild(editOverlay);
+    }
+    
+    function closeReceiptDetailsEdit() {
+      document.getElementById('receiptDetailsEditOverlay')?.remove();
+    }
+    
+    function saveReceiptDetailsEdit() {
+      const store = document.getElementById('editReceiptStore')?.value.trim();
+      const date = document.getElementById('editReceiptDate')?.value;
+      const total = parseFloat(document.getElementById('editReceiptTotal')?.value) || 0;
+      
+      receiptScanState.store = store;
+      receiptScanState.receiptDate = date;
+      receiptScanState.detectedTotal = total;
+      
+      closeReceiptDetailsEdit();
+      render();
+    }
         <div style="color: ${CONFIG.text_color};">
           <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">✏️ Edit Item</h2>
           
