@@ -1154,14 +1154,16 @@ function extractTotalFromReceipt(text) {
    // ===== CLAUDE-POWERED RECEIPT SCANNER =====
     
     async function scanReceiptWithClaude(imageBase64) {
-      const systemPrompt = `You are a receipt scanning assistant. Analyze the receipt image and extract:
-
+    const systemPrompt = `You are a receipt scanning assistant. Analyze the receipt image and extract:
 1. Store name
-2. Date of purchase
+2. Date of purchase  
 3. All items purchased with their prices
 4. Total amount
-5. For each item, categorize it into one of these categories: Produce, Meat & Seafood, Dairy & Eggs, Bakery, Frozen, Pantry, Snacks, Beverages, Other
-6. For perishable items, estimate days until expiration
+5. For each item:
+   - Clean up the name (e.g., "BNLS CHKN BRST" → "Chicken Breast")
+   - Categorize into: Vegetables, Fruits, Proteins, Dairy, Grains, Herbs & Spices, Pantry, Other
+   - Estimate days until expiration for perishables
+6. Keep the original raw text from receipt for reference
 
 Respond in this exact JSON format:
 {
@@ -1170,17 +1172,27 @@ Respond in this exact JSON format:
   "total": 45.67,
   "items": [
     {
-      "name": "Item Name",
+      "name": "Chicken Breast",
+      "rawText": "BNLS CHKN BRST",
       "price": 3.99,
       "quantity": 1,
-      "category": "Produce",
-      "daysUntilExpiration": 7
+      "category": "Proteins",
+      "daysUntilExpiration": 3
     }
   ]
 }
 
-If you can't read something clearly, make your best guess. Always return valid JSON.`;
+Category guidelines:
+- Vegetables: fresh produce like broccoli, carrots, lettuce
+- Fruits: apples, bananas, berries
+- Proteins: meat, poultry, fish, eggs, tofu
+- Dairy: milk, cheese, yogurt, butter
+- Grains: bread, pasta, rice, cereal
+- Herbs & Spices: fresh herbs, spices, seasonings
+- Pantry: canned goods, oils, sauces, dry goods
+- Other: anything else
 
+If you can't read something clearly, make your best guess. Always return valid JSON.`;
       try {
         const response = await fetch(CHEF_API_URL, {
           method: 'POST',
@@ -1281,8 +1293,44 @@ If you can't read something clearly, make your best guess. Always return valid J
         
         console.log('Claude result:', result);
         
-        receiptScanState.claudeResult = result;
-        receiptScanState.extractedItems = result.items || [];
+       receiptScanState.claudeResult = result;
+        
+        // Apply saved mappings to items
+        const items = (result.items || []).map(item => {
+          const rawText = (item.rawText || item.name || '').toLowerCase().trim();
+          const savedMapping = state.receiptMappings[rawText];
+          
+          if (savedMapping) {
+            // Use saved mapping
+            return {
+              ...item,
+              name: savedMapping.name,
+              category: savedMapping.category,
+              rawText: item.rawText || item.name,
+              isRemembered: true,
+              linkedIngredient: savedMapping.ingredientId
+            };
+          }
+          
+          // Try to match to existing ingredient
+          const matchedIngredient = findMatchingIngredient(item.name);
+          if (matchedIngredient) {
+            return {
+              ...item,
+              rawText: item.rawText || item.name,
+              linkedIngredient: matchedIngredient.name,
+              suggestedCategory: matchedIngredient.category
+            };
+          }
+          
+          return {
+            ...item,
+            rawText: item.rawText || item.name,
+            isNew: true
+          };
+        });
+        
+        receiptScanState.extractedItems = items;
         receiptScanState.detectedTotal = result.total;
         receiptScanState.store = result.store;
         receiptScanState.receiptDate = result.date;
@@ -1375,16 +1423,19 @@ If you can't read something clearly, make your best guess. Always return valid J
                 <!-- Items List -->
                 <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; margin-bottom: 8px;">Detected Items (tap to edit)</div>
                 <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;">
-                  ${items.map((item, idx) => `
-                   <div onclick="editReceiptItem(${idx})" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px; cursor: pointer;">
+                ${items.map((item, idx) => `
+                   <div onclick="editReceiptItem(${idx})" style="display: flex; align-items: center; gap: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 12px; cursor: pointer; ${item.isNew ? 'border-left: 3px solid #f59e0b;' : item.isRemembered ? 'border-left: 3px solid #22c55e;' : ''}">
                       <input type="checkbox" id="receiptItem${idx}" checked style="width: 20px; height: 20px;" onclick="event.stopPropagation();" />
                       <div style="flex: 1; min-width: 0;">
-                        <div style="color: ${CONFIG.text_color}; font-weight: 500;">
-                          ${item.quantity > 1 ? `<span style="background: ${CONFIG.primary_action_color}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; margin-right: 6px;">${item.quantity}x</span>` : ''}
+                        <div style="color: ${CONFIG.text_color}; font-weight: 500; display: flex; align-items: center; gap: 6px;">
+                          ${item.quantity > 1 ? `<span style="background: ${CONFIG.primary_action_color}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">${item.quantity}x</span>` : ''}
                           ${esc(item.name)}
+                          ${item.isRemembered ? '<span style="font-size: 10px;">✓</span>' : ''}
+                          ${item.isNew ? '<span style="background: #f59e0b; color: white; padding: 1px 5px; border-radius: 4px; font-size: 9px;">NEW</span>' : ''}
                         </div>
                         <div style="color: ${CONFIG.text_muted}; font-size: 12px;">
-                          ${esc(item.category)} ${item.daysUntilExpiration ? `• ~${item.daysUntilExpiration} days` : ''} • <span style="color: ${CONFIG.primary_action_color};">tap to edit</span>
+                          ${esc(item.category)} ${item.daysUntilExpiration ? `• ~${item.daysUntilExpiration} days` : ''}
+                          ${item.rawText && item.rawText !== item.name ? ` • <span style="opacity: 0.7;">${esc(item.rawText)}</span>` : ''}
                         </div>
                       </div>
                       <div style="text-align: right; min-width: 60px;">
@@ -1531,7 +1582,7 @@ async function addReceiptItemsToInventory() {
       closeReceiptModal();
       render();
     }
-  function editReceiptItem(idx) {
+function editReceiptItem(idx) {
       const item = receiptScanState.extractedItems[idx];
       if (!item) return;
       
@@ -1552,6 +1603,12 @@ async function addReceiptItemsToInventory() {
       editOverlay.innerHTML = `
         <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 20px; width: 100%; max-width: 400px; max-height: 90vh; overflow-y: auto;">
           <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px; color: ${CONFIG.text_color};">✏️ Edit Item</h2>
+          
+          ${item.rawText && item.rawText !== item.name ? `
+            <div style="background: rgba(245,158,11,0.1); padding: 8px 12px; border-radius: 8px; margin-bottom: 12px; font-size: 12px; color: ${CONFIG.text_color};">
+              📝 Receipt text: <strong>${esc(item.rawText)}</strong>
+            </div>
+          ` : ''}
           
           <div style="background: ${CONFIG.background_color}; padding: 10px 12px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: ${CONFIG.text_color};">
             📅 Purchase Date: <strong>${purchaseDate}</strong>
@@ -1581,17 +1638,37 @@ async function addReceiptItemsToInventory() {
             <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Category</label>
             <select id="editReceiptItemCategory"
               style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;">
-              ${['Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Other'].map(cat => 
+              ${INGREDIENT_CATEGORIES.map(cat => 
                 '<option value="' + cat + '"' + (item.category === cat ? ' selected' : '') + '>' + cat + '</option>'
               ).join('')}
             </select>
           </div>
           
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Days Until Expiration (from purchase)</label>
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 4px; font-weight: 500; color: ${CONFIG.text_color};">Days Until Expiration</label>
             <input type="number" id="editReceiptItemExpiry" value="${item.daysUntilExpiration || ''}" min="0" placeholder="Leave blank if non-perishable"
               style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
           </div>
+          
+          <!-- Remember this mapping -->
+          <div style="margin-bottom: 16px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 8px;">
+            <label style="display: flex; align-items: center; gap: 8px; color: ${CONFIG.text_color}; cursor: pointer;">
+              <input type="checkbox" id="editReceiptRemember" ${item.isRemembered ? 'checked' : 'checked'} style="width: 18px; height: 18px;" />
+              <span>Remember this for next time</span>
+            </label>
+            ${item.rawText ? `<div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 4px; margin-left: 26px;">"${esc(item.rawText)}" → this name & category</div>` : ''}
+          </div>
+          
+          <!-- Add to ingredients library -->
+          ${item.isNew ? `
+            <div style="margin-bottom: 16px; padding: 12px; background: rgba(245,158,11,0.1); border-radius: 8px;">
+              <label style="display: flex; align-items: center; gap: 8px; color: ${CONFIG.text_color}; cursor: pointer;">
+                <input type="checkbox" id="editReceiptAddIngredient" style="width: 18px; height: 18px;" />
+                <span>Add to Ingredients library</span>
+              </label>
+              <div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 4px; margin-left: 26px;">Save cooking times, storage info & more</div>
+            </div>
+          ` : ''}
           
           <div style="display: flex; gap: 8px;">
             <button onclick="closeReceiptItemEdit()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
@@ -1609,6 +1686,69 @@ async function addReceiptItemsToInventory() {
     
     function closeReceiptItemEdit() {
       document.getElementById('receiptItemEditOverlay')?.remove();
+    }
+
+    async function saveReceiptItemEdit(idx) {
+      const name = document.getElementById('editReceiptItemName')?.value.trim();
+      const qty = parseInt(document.getElementById('editReceiptItemQty')?.value) || 1;
+      const price = parseFloat(document.getElementById('editReceiptItemPrice')?.value) || 0;
+      const category = document.getElementById('editReceiptItemCategory')?.value;
+      const expiry = parseInt(document.getElementById('editReceiptItemExpiry')?.value) || null;
+      const remember = document.getElementById('editReceiptRemember')?.checked;
+      const addToIngredients = document.getElementById('editReceiptAddIngredient')?.checked;
+      
+      if (!name) {
+        showError('Please enter an item name');
+        return;
+      }
+      
+      const item = receiptScanState.extractedItems[idx];
+      const rawText = item.rawText || item.name;
+      
+      // Save mapping if requested
+      if (remember && rawText) {
+        await saveReceiptMapping(rawText, name, category);
+      }
+      
+      // Add to ingredients library if requested
+      if (addToIngredients) {
+        const normalizedName = name.toLowerCase();
+        const existing = state.ingredientKnowledge.find(k => k.name.toLowerCase() === normalizedName);
+        
+        if (!existing) {
+          const knowledge = {
+            id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+            type: 'ingredient_knowledge',
+            name: normalizedName,
+            category: category,
+            image_url: '',
+            notes: [],
+            cookingMethods: [],
+            pairings: [],
+            favorite: false,
+            createdAt: new Date().toISOString()
+          };
+          
+          await storage.create(knowledge);
+          state.ingredientKnowledge.push(knowledge);
+          showToast(`${name} added to Ingredients!`, 'success');
+        }
+      }
+      
+      // Update the item
+      receiptScanState.extractedItems[idx] = {
+        ...item,
+        name: name,
+        quantity: qty,
+        price: price,
+        category: category,
+        daysUntilExpiration: expiry,
+        isRemembered: remember,
+        isNew: false
+      };
+      
+      closeReceiptItemEdit();
+      render();
     }
 
     function editReceiptDetails() {
@@ -1668,7 +1808,57 @@ async function addReceiptItemsToInventory() {
       render();
     }
           
-        
+     function findMatchingIngredient(itemName) {
+      if (!itemName) return null;
+      const name = itemName.toLowerCase().trim();
+      
+      // Check ingredient knowledge first
+      for (const knowledge of state.ingredientKnowledge) {
+        const ingName = knowledge.name.toLowerCase();
+        if (name.includes(ingName) || ingName.includes(name)) {
+          return knowledge;
+        }
+      }
+      
+      // Check INGREDIENT_IMAGES keys
+      for (const key of Object.keys(INGREDIENT_IMAGES)) {
+        if (name.includes(key) || key.includes(name)) {
+          const knowledge = getIngredientKnowledge(key);
+          return knowledge || { name: key, category: 'Other' };
+        }
+      }
+      
+      return null;
+    }
+
+    async function saveReceiptMapping(rawText, cleanName, category, ingredientId = null) {
+      const normalizedRaw = rawText.toLowerCase().trim();
+      
+      const mapping = {
+        id: `mapping_${normalizedRaw.replace(/[^a-z0-9]/g, '_')}`,
+        type: 'receipt_mapping',
+        rawText: normalizedRaw,
+        correctedName: cleanName,
+        category: category,
+        ingredientId: ingredientId,
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Update local state
+      state.receiptMappings[normalizedRaw] = {
+        name: cleanName,
+        category: category,
+        ingredientId: ingredientId
+      };
+      
+      // Save to storage
+      const existing = await storage.query(d => d.id === mapping.id);
+      if (existing.length > 0) {
+        await storage.update(mapping);
+      } else {
+        await storage.create(mapping);
+      }
+    }   
 
     function showReceiptModal() {
       receiptScanState = {
@@ -5112,7 +5302,11 @@ const dataHandler = {
         const mappings = data.filter(d => d.id && d.id.startsWith('mapping_'));
         state.receiptMappings = {};
         mappings.forEach(d => {
-          state.receiptMappings[d.rawText] = d.correctedName;
+          state.receiptMappings[d.rawText] = {
+            name: d.correctedName,
+            category: d.category || 'Other',
+            ingredientId: d.ingredientId || null
+          };
         });
         // Load purchase history
         state.purchaseHistory = data.filter(d => d.id && d.id.startsWith('history_'));
