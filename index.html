@@ -10012,17 +10012,18 @@ function renderFreestyleEdit() {
                 Type <span class="mention-tag">@</span> to link a recipe • Type <span class="record-tag">#</span> to tag ingredients or seasonings you used
               </div>
               
-            <textarea 
-                id="narrativeEditor"
-                class="narrative-editor w-full px-3 py-2 rounded"
-                style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); min-height:150px; font-size:${CONFIG.font_size}px; line-height:1.6;"
-                placeholder="Made @jerk-chicken tonight with #chicken-thighs and #my-jerk-seasoning. Came out great, kids loved it!"
-                oninput="handleNarrativeInput(event)"
-                onkeydown="handleNarrativeKeydown(event)"
-              >${esc(form.narrative || '')}</textarea>
+         <div style="position: relative;">
+                <textarea 
+                  id="narrativeEditor"
+                  class="narrative-editor w-full px-3 py-2 rounded"
+                  style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); min-height:150px; font-size:${CONFIG.font_size}px; line-height:1.6;"
+                  placeholder="Made @jerk-chicken tonight with #chicken-thighs and #my-jerk-seasoning. Came out great, kids loved it!"
+                  oninput="handleNarrativeInput(event)"
+                  onkeydown="handleNarrativeKeydown(event)"
+                >${esc(form.narrative || '')}</textarea>
               
-        <!-- Mention Dropdown Container -->
-              <div id="mentionDropdownContainer" style="position: relative;">
+                <!-- Mention Dropdown Container -->
+                <div id="mentionDropdownContainer" style="position: absolute; left: 0; right: 0; top: 100%; z-index: 100;">
                 ${state.mentionDropdownVisible ? `
                   <div style="position: absolute; top: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.15); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; max-height: 250px; overflow-y: auto;">
                     ${dropdownItems.length > 0 ? `
@@ -10050,6 +10051,7 @@ function renderFreestyleEdit() {
                     `}
                   </div>
                 ` : ''}
+              </div>
               </div>
               
               <!-- To Record Checkbox -->
