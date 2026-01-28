@@ -9099,7 +9099,7 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
       }
     }
     
-    // Helper to render just the dropdown
+  // Helper to render just the dropdown
     function renderMentionDropdown() {
       const dropdownItems = state.mentionDropdownVisible ? getMentionDropdownItems() : [];
       
@@ -9108,18 +9108,25 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
       }
       
       return `
-        <div class="mention-dropdown" style="top: 100%; left: 0; right: 0; margin-top: 4px;">
+        <div class="mention-dropdown" style="top: 100%; left: 0; right: 0; margin-top: 4px; position: absolute; background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; max-height: 250px; overflow-y: auto;">
           ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
             <div class="mention-item ${i === state.mentionDropdownIndex ? 'selected' : ''}"
+              style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''}"
+              onmouseover="this.style.background='rgba(102,126,234,0.1)'"
+              onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(102,126,234,0.15)' : 'transparent'}'"
               onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
               <span>${item.isTip ? '📝' : '🍽️'}</span>
-              <span>${esc(item.title)}</span>
+              <span style="color: ${CONFIG.text_color};">${esc(item.title)}</span>
             </div>
           `).join('') : dropdownItems.map((item, i) => `
             <div class="mention-item ${i === state.mentionDropdownIndex ? 'selected' : ''}"
-              onclick="selectMention('${esc(item)}')">
-              <span>🎥</span>
-              <span>${esc(item)}</span>
+              style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''}"
+              onmouseover="this.style.background='rgba(102,126,234,0.1)'"
+              onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(102,126,234,0.15)' : 'transparent'}'"
+              onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+              <span>${item.icon || '🏷️'}</span>
+              <span style="flex: 1; color: ${CONFIG.text_color};">${esc(item.name)}</span>
+              <span style="opacity: 0.5; font-size: 11px; color: ${CONFIG.text_muted};">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : ''}</span>
             </div>
           `).join('')}
         </div>
@@ -9486,8 +9493,8 @@ function renderFreestyleEdit() {
                 style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
             </div>
 
-          <!-- Narrative with @mentions -->
-            <div class="mb-4 relative">
+         <!-- Narrative with @mentions -->
+            <div class="mb-4" style="position: relative;">
               <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
                 What did you make?
               </label>
@@ -9504,24 +9511,34 @@ function renderFreestyleEdit() {
                 onkeydown="handleNarrativeKeydown(event)"
               >${esc(form.narrative || '')}</textarea>
               
-              <!-- Mention Dropdown Container -->
-              <div id="mentionDropdownContainer">
-                ${state.mentionDropdownVisible && dropdownItems.length > 0 ? `
-                  <div class="mention-dropdown" style="top: 100%; left: 0; right: 0; margin-top: 4px;">
-                   ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
-            <div class="mention-item ${i === state.mentionDropdownIndex ? 'selected' : ''}"
-              onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-              <span>${item.isTip ? '📝' : '🍽️'}</span>
-              <span>${esc(item.title)}</span>
-            </div>
-          `).join('') : dropdownItems.map((item, i) => `
-            <div class="mention-item ${i === state.mentionDropdownIndex ? 'selected' : ''}"
-              onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-              <span>${item.icon || '🏷️'}</span>
-              <span>${esc(item.name)}</span>
-              <span style="opacity: 0.5; font-size: 11px; margin-left: auto;">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : ''}</span>
-            </div>
-          `).join('')}
+          <!-- Mention Dropdown Container -->
+              <div id="mentionDropdownContainer" style="position: relative;">
+                ${state.mentionDropdownVisible ? `
+                  <div style="position: absolute; top: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.15); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; max-height: 250px; overflow-y: auto;">
+                    ${dropdownItems.length > 0 ? `
+                      ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
+                        <div style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''} color: ${CONFIG.text_color};"
+                          onmouseover="this.style.background='rgba(102,126,234,0.1)'"
+                          onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(102,126,234,0.15)' : 'transparent'}'"
+                          onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+                          <span>${item.isTip ? '📝' : '🍽️'}</span>
+                          <span>${esc(item.title)}</span>
+                        </div>
+                      `).join('') : dropdownItems.map((item, i) => `
+                        <div style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''} color: ${CONFIG.text_color};"
+                          onmouseover="this.style.background='rgba(102,126,234,0.1)'"
+                          onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(102,126,234,0.15)' : 'transparent'}'"
+                          onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+                          <span>${item.icon || '🏷️'}</span>
+                          <span style="flex: 1;">${esc(item.name)}</span>
+                          <span style="opacity: 0.5; font-size: 11px;">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : ''}</span>
+                        </div>
+                      `).join('')}
+                    ` : `
+                      <div style="padding: 12px; color: ${CONFIG.text_muted}; text-align: center; font-size: 13px;">
+                        ${state.mentionDropdownType === '@' ? 'No recipes found. Keep typing...' : 'Type to search ingredients or add new...'}
+                      </div>
+                    `}
                   </div>
                 ` : ''}
               </div>
