@@ -1227,37 +1227,59 @@ If you can't read something clearly, make your best guess. Always return valid J
       }
     }
 
-    async function handleClaudeReceiptUpload(event) {
+  async function handleClaudeReceiptUpload(event) {
       const file = event.target.files[0];
       if (!file) return;
-
+      
+      console.log('Receipt upload started:', file.name, file.size, file.type);
+      
       receiptScanState.isScanning = true;
       receiptScanState.showModal = true;
       receiptScanState.extractedItems = [];
       receiptScanState.claudeResult = null;
       render();
-
+      
       try {
-        showToast('Processing receipt with AI...', 'info');
+        showToast('Processing receipt...', 'info');
         
         // Compress image
+        console.log('Compressing image...');
         const compressedFile = await compressImage(file, 1200, 0.8);
+        console.log('Compressed to:', compressedFile.size);
         
         // Convert to base64
-        const base64 = await new Promise((resolve) => {
+        console.log('Converting to base64...');
+        const base64 = await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target.result.split(',')[1]);
+          reader.onerror = (e) => reject(new Error('Failed to read file'));
           reader.readAsDataURL(compressedFile);
         });
+        console.log('Base64 length:', base64.length);
         
-        // Also upload for display
-        const imageUrl = await uploadPhoto(compressedFile);
-        receiptScanState.imageUrl = imageUrl;
-        render();
+        // Upload for display (don't block on this)
+        console.log('Uploading image for display...');
+        uploadPhoto(compressedFile).then(url => {
+          receiptScanState.imageUrl = url;
+          render();
+        }).catch(e => {
+          console.warn('Image upload failed (non-critical):', e);
+        });
         
-        // Send to Claude
+        // Send to Claude with timeout
         showToast('AI is reading your receipt...', 'info');
-        const result = await scanReceiptWithClaude(base64);
+        console.log('Sending to Claude API...');
+        
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Request timed out after 60 seconds')), 60000)
+        );
+        
+        const result = await Promise.race([
+          scanReceiptWithClaude(base64),
+          timeoutPromise
+        ]);
+        
+        console.log('Claude result:', result);
         
         receiptScanState.claudeResult = result;
         receiptScanState.extractedItems = result.items || [];
@@ -1443,7 +1465,7 @@ async function addReceiptItemsToInventory() {
         // Create separate inventory entry for each item in quantity
         for (let q = 0; q < quantity; q++) {
           const inventoryItem = {
-            id: `inv_${Date.now()}_${i}_${q}_${Math.random().toString(36).slice(2)}`,
+            id: `inventory_${Date.now()}_${i}_${q}_${Math.random().toString(36).slice(2)}`,
             type: 'inventory',
             name: item.name,
             category: item.category || 'Other',
@@ -5079,7 +5101,7 @@ const dataHandler = {
         }
         
         state.recipes = data.filter(d => d.id && d.id.startsWith('recipe_'));
-        state.inventory = data.filter(d => d.id && d.id.startsWith('inventory_'));
+        state.inventory = data.filter(d => d.id && (d.id.startsWith('inventory_') || d.id.startsWith('inv_')));
         // Load expiration defaults
         const expDefaults = data.filter(d => d.id && d.id.startsWith('expdefault_'));
         state.expirationDefaults = {};
@@ -5209,7 +5231,7 @@ function navigateTo(view) {
         'grocery-ingredients': '🛒 Ingredients',
         'budget-dashboard': '💰 Budget',
         'recording-needs': '🎥 To Record',
-        'inventory': '📦 Inventory',
+'inventory': '🥫 Pantry',
         'ingredients': '🥗 Ingredients',
         'ingredient-detail': '🥗 Ingredient',
         'purchase-history': '🧾 History',
