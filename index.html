@@ -602,14 +602,33 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
     // Load on startup
     loadCustomIngredientImages();
 
-    function showIngredientImagesManager() {
-      // Combine default and custom images
+   function showIngredientImagesManager() {
+      // Combine all image sources
       const allImages = { ...INGREDIENT_IMAGES, ...customIngredientImages };
+      
+      // Add images from ingredient knowledge
+      (state.ingredientKnowledge || []).forEach(ing => {
+        if (ing.image_url) {
+          allImages[ing.name.toLowerCase()] = ing.image_url;
+        }
+      });
+      
       const sortedKeys = Object.keys(allImages).sort();
+      
+      // Helper to get source label
+      const getSource = (name) => {
+        const knowledge = (state.ingredientKnowledge || []).find(k => k.name.toLowerCase() === name);
+        if (knowledge?.image_url) return 'library';
+        if (customIngredientImages[name]) return 'custom';
+        return 'default';
+      };
+      
+      // Helper to capitalize
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       
       openModal(`
         <div style="color: #1a1a2e; max-height: 80vh; overflow-y: auto;">
-          <h2 class="text-2xl font-bold mb-4">🖼️ Ingredient Images Manager</h2>
+          <h2 class="text-2xl font-bold mb-4">🖼️ Ingredient Images</h2>
           
           <div class="mb-4 p-3 rounded" style="background:#f3f4f6;">
             <div class="font-semibold mb-2">Add New Ingredient Image:</div>
@@ -627,29 +646,43 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
             </div>
           </div>
           
-          <div class="mb-2 text-sm text-gray-600">
-            ${sortedKeys.length} ingredients with images. Click an image to change it.
+          <div class="mb-3 text-sm text-gray-600">
+            ${sortedKeys.length} ingredients with images
           </div>
           
-          <div style="max-height: 50vh; overflow-y: auto;">
+          <div class="mb-3 flex gap-2 text-xs">
+            <span class="px-2 py-1 rounded" style="background: #dbeafe; color: #1e40af;">Library</span>
+            <span class="px-2 py-1 rounded" style="background: #dcfce7; color: #166534;">Custom</span>
+            <span class="px-2 py-1 rounded" style="background: #f3f4f6; color: #6b7280;">Default</span>
+          </div>
+          
+          <div style="max-height: 45vh; overflow-y: auto;">
             <div class="grid grid-cols-2 gap-2">
-              ${sortedKeys.map(name => `
+              ${sortedKeys.map(name => {
+                const source = getSource(name);
+                const sourceColor = source === 'library' ? '#dbeafe' : source === 'custom' ? '#dcfce7' : '#f3f4f6';
+                const sourceTextColor = source === 'library' ? '#1e40af' : source === 'custom' ? '#166534' : '#6b7280';
+                const sourceLabel = source === 'library' ? 'Library' : source === 'custom' ? 'Custom' : '';
+                
+                return `
                 <div class="flex items-center gap-2 p-2 rounded" style="background:#f9fafb; border:1px solid #e5e7eb;">
                   <img src="${esc(allImages[name])}" 
                        style="width:40px; height:40px; object-fit:cover; border-radius:4px; cursor:pointer;"
                        onclick="editIngredientImage('${esc(name)}')"
                        onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><rect fill=%22%23ddd%22 width=%2240%22 height=%2240%22/><text x=%2250%%22 y=%2250%%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22>❌</text></svg>'" />
                   <div class="flex-1 min-w-0">
-                    <div class="text-sm font-medium truncate">${esc(name)}</div>
-                    ${customIngredientImages[name] ? '<div class="text-xs text-blue-600">Custom</div>' : ''}
+                    <div class="text-sm font-medium truncate">${esc(capitalize(name))}</div>
+                    ${sourceLabel ? `<div class="text-xs" style="color:${sourceTextColor};">${sourceLabel}</div>` : ''}
                   </div>
-                  <button onclick="deleteIngredientImage('${esc(name)}')"
-                          class="text-red-500 hover:text-red-700 text-sm px-1"
-                          title="Remove custom image">
-                    ✕
-                  </button>
+                  ${source !== 'default' ? `
+                    <button onclick="deleteIngredientImage('${esc(name)}')"
+                            class="text-red-500 hover:text-red-700 text-sm px-1"
+                            title="Remove image">
+                      ✕
+                    </button>
+                  ` : ''}
                 </div>
-              `).join('')}
+              `}).join('')}
             </div>
           </div>
           
@@ -3076,20 +3109,26 @@ async function saveReceiptExpense() {
               </button>
             </div>
             
-            <div id="blendIngredientsList" style="display: flex; flex-direction: column; gap: 8px;">
+           <div id="blendIngredientsList" style="display: flex; flex-direction: column; gap: 8px;">
               ${(form.ingredients || []).map((ing, idx) => `
                 <div style="display: flex; gap: 8px; align-items: center; padding: 10px; background: ${CONFIG.background_color}; border-radius: 8px;">
-                  <input type="text" value="${esc(capitalize(ing.name || ''))}" 
-                    placeholder="Ingredient"
-                    onchange="updateBlendIngredient(${idx}, 'name', this.value)"
-                    style="flex: 2; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};" />
+                  <div style="flex: 2; position: relative;">
+                    <input type="text" id="blendIng_${idx}" value="${esc(capitalize(ing.name || ''))}" 
+                      placeholder="Search ingredient..."
+                      oninput="showBlendIngredientDropdown(${idx}, this.value)"
+                      onfocus="showBlendIngredientDropdown(${idx}, this.value)"
+                      onblur="setTimeout(() => hideBlendIngredientDropdown(${idx}), 200)"
+                      autocomplete="off"
+                      style="width: 100%; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+                    <div id="blendIngDropdown_${idx}" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.15); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; max-height: 200px; overflow-y: auto;"></div>
+                  </div>
                   <input type="text" value="${esc(ing.amount || '')}" 
                     placeholder="Amt"
                     onchange="updateBlendIngredient(${idx}, 'amount', this.value)"
-                    style="width: 60px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};" />
+                    style="width: 55px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
                   <select onchange="updateBlendIngredient(${idx}, 'unit', this.value)"
-                    style="width: 80px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};">
-                    ${measurementUnits.map(u => `<option value="${u}" ${ing.unit === u ? 'selected' : ''}>${u || '(none)'}</option>`).join('')}
+                    style="width: 75px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};">
+                    ${measurementUnits.map(u => `<option value="${u}" ${ing.unit === u ? 'selected' : ''}>${u || '—'}</option>`).join('')}
                   </select>
                   <button type="button" onclick="removeBlendIngredient(${idx})"
                     style="padding: 8px; background: rgba(239,68,68,0.1); color: ${CONFIG.danger_color}; border: none; border-radius: 6px; cursor: pointer;">
@@ -3134,6 +3173,85 @@ async function saveReceiptExpense() {
           </div>
         </div>
       `);
+    }
+
+   function showBlendIngredientDropdown(idx, searchTerm) {
+      const dropdown = document.getElementById(`blendIngDropdown_${idx}`);
+      if (!dropdown) return;
+      
+      const search = (searchTerm || '').toLowerCase().trim();
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      
+      // Gather all ingredients from various sources
+      const allIngredients = new Map();
+      
+      // From pantry
+      state.inventory.forEach(item => {
+        const name = item.name.toLowerCase();
+        if (!allIngredients.has(name)) {
+          allIngredients.set(name, { name: item.name, source: 'pantry' });
+        }
+      });
+      
+      // From ingredient knowledge
+      (state.ingredientKnowledge || []).forEach(ing => {
+        const name = ing.name.toLowerCase();
+        if (!allIngredients.has(name)) {
+          allIngredients.set(name, { name: ing.name, source: 'library' });
+        }
+      });
+      
+      // From INGREDIENT_IMAGES keys
+      Object.keys(INGREDIENT_IMAGES).forEach(name => {
+        if (!allIngredients.has(name)) {
+          allIngredients.set(name, { name: name, source: 'default' });
+        }
+      });
+      
+      // Filter by search term
+      let filtered = Array.from(allIngredients.values())
+        .filter(ing => ing.name.toLowerCase().includes(search))
+        .sort((a, b) => a.name.localeCompare(b.name))
+        .slice(0, 15);
+      
+      // Add custom option if search doesn't match exactly
+      if (search && !filtered.some(ing => ing.name.toLowerCase() === search)) {
+        filtered.unshift({ name: search, source: 'custom' });
+      }
+      
+      if (filtered.length === 0) {
+        dropdown.style.display = 'none';
+        return;
+      }
+      
+      dropdown.innerHTML = filtered.map(ing => `
+        <div onclick="selectBlendIngredient(${idx}, '${esc(ing.name)}')"
+          style="padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: ${CONFIG.text_color};"
+          onmouseover="this.style.background='rgba(102,126,234,0.1)'"
+          onmouseout="this.style.background='transparent'">
+          <span>${esc(capitalize(ing.name))}</span>
+          <span style="font-size: 11px; opacity: 0.5;">${ing.source === 'custom' ? 'new' : ing.source === 'pantry' ? 'pantry' : ''}</span>
+        </div>
+      `).join('');
+      
+      dropdown.style.display = 'block';
+    }
+
+    function hideBlendIngredientDropdown(idx) {
+      const dropdown = document.getElementById(`blendIngDropdown_${idx}`);
+      if (dropdown) {
+        dropdown.style.display = 'none';
+      }
+    }
+
+    function selectBlendIngredient(idx, name) {
+      const input = document.getElementById(`blendIng_${idx}`);
+      if (input) {
+        const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+        input.value = capitalize(name);
+      }
+      updateBlendIngredient(idx, 'name', name);
+      hideBlendIngredientDropdown(idx);
     }
 
     function addBlendIngredient() {
