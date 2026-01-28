@@ -1492,6 +1492,8 @@ async function addReceiptItemsToInventory() {
       const items = receiptScanState.extractedItems || [];
       const itemsToAdd = [];
       
+      console.log('Adding receipt items, total items:', items.length);
+      
       // Use receipt date as purchase date, or today if not available
       const purchaseDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
       const purchaseDateObj = new Date(purchaseDate + 'T00:00:00');
@@ -1499,6 +1501,7 @@ async function addReceiptItemsToInventory() {
       // First, collect all items to add
       for (let i = 0; i < items.length; i++) {
         const checkbox = document.getElementById(`receiptItem${i}`);
+        console.log(`Item ${i}: checkbox found = ${!!checkbox}, checked = ${checkbox?.checked}`);
         if (!checkbox?.checked) continue;
         
         const item = items[i];
@@ -1515,7 +1518,7 @@ async function addReceiptItemsToInventory() {
         
         // Create separate inventory entry for each item in quantity
         for (let q = 0; q < quantity; q++) {
-          const inventoryItem = {
+        const inventoryItem = {
             id: `inventory_${Date.now()}_${i}_${q}_${Math.random().toString(36).slice(2)}`,
             type: 'inventory',
             name: item.name,
@@ -1526,7 +1529,9 @@ async function addReceiptItemsToInventory() {
             purchaseDate: purchaseDate,
             expirationDate: expirationDate,
             store: receiptScanState.store || '',
-            image_url: getIngredientImage(item.name, item.category) || ''
+            image_url: getIngredientImage(item.name, item.category) || '',
+            fromReceipt: true,
+            expirationVerified: false  // Needs verification since AI guessed
           };
           
           itemsToAdd.push(inventoryItem);
@@ -2242,9 +2247,12 @@ async function saveReceiptExpense() {
       return state.inventory || [];
     }
 
-   async function addInventoryItem(item) {
+  async function addInventoryItem(item) {
       const purchaseDate = item.purchaseDate || new Date().toISOString().split('T')[0];
       const category = item.category || 'Uncategorized';
+      
+      // Manual adds are auto-verified, receipt scans need verification
+      const isFromReceipt = item.fromReceipt || false;
       
       const inventoryItem = {
         id: `inventory_${Date.now()}_${Math.random().toString(36).slice(2)}`,
@@ -2257,7 +2265,8 @@ async function saveReceiptExpense() {
         price: item.price || null,
         image_url: item.image_url || null,
         isFrozen: item.isFrozen || false,
-        fromReceipt: item.fromReceipt || false
+        fromReceipt: isFromReceipt,
+        expirationVerified: !isFromReceipt  // Manual = verified, Receipt = needs verification
       };
       
      await storage.create(inventoryItem);
@@ -2867,6 +2876,10 @@ async function saveReceiptExpense() {
 
       // Count expiring items
       const expiringCount = inventory.filter(i => ['expired', 'expiring-soon'].includes(getExpirationStatus(i))).length;
+      
+      // Count items needing verification (from receipts, not yet verified)
+      const unverifiedItems = inventory.filter(i => i.fromReceipt && i.expirationVerified === false);
+      const unverifiedCount = unverifiedItems.length;
 
       return `
         <div class="p-4 max-w-4xl mx-auto">
@@ -2895,10 +2908,61 @@ async function saveReceiptExpense() {
             </div>
           </div>
 
-          ${expiringCount > 0 ? `
+         ${expiringCount > 0 ? `
             <div class="mb-4 p-3 rounded-lg" style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3);">
               <div style="color:${CONFIG.danger_color}; font-size:${CONFIG.font_size * 0.9}px; font-weight: 500;">
                 ⚠️ ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon or expired
+              </div>
+            </div>
+          ` : ''}
+
+          ${unverifiedCount > 0 ? `
+            <div class="mb-4 p-4 rounded-xl" style="background: linear-gradient(135deg, rgba(245,158,11,0.1), rgba(251,191,36,0.1)); border: 1px solid rgba(245,158,11,0.3); box-shadow: ${CONFIG.shadow};">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                <div style="color: #b45309; font-size: ${CONFIG.font_size}px; font-weight: 600;">
+                  📋 Verify Expiration Dates (${unverifiedCount})
+                </div>
+                <button onclick="verifyAllItems()" style="padding: 6px 12px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                  ✓ Verify All
+                </button>
+              </div>
+              <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-bottom: 12px;">
+                These items were added from receipt scans. Tap to verify or adjust expiration dates.
+              </div>
+              <div style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;">
+                ${unverifiedItems.map(item => {
+                  const status = getExpirationStatus(item);
+                  const statusColors = {
+                    'expired': '#ef4444',
+                    'expiring-soon': '#f59e0b',
+                    'expiring': '#eab308',
+                    'fresh': '#22c55e',
+                    'frozen': '#3b82f6',
+                    'unknown': '#9ca3af'
+                  };
+                  const statusColor = statusColors[status] || '#9ca3af';
+                  
+                  return `
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: ${CONFIG.surface_color}; border-radius: 8px;">
+                      <img src="${item.image_url || getIngredientImage(item.name, item.category) || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><rect fill=%22%23ddd%22 width=%2240%22 height=%2240%22/></svg>'}" 
+                           style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;"
+                           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><rect fill=%22%23ddd%22 width=%2240%22 height=%2240%22/></svg>'" />
+                      <div style="flex: 1; min-width: 0;">
+                        <div style="font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(item.name)}</div>
+                        <div style="font-size: 12px; color: ${statusColor};">
+                          ${item.expirationDate ? 'Expires: ' + new Date(item.expirationDate + 'T00:00:00').toLocaleDateString() : 'No expiration set'}
+                          ${item.store ? ` • ${esc(item.store)}` : ''}
+                        </div>
+                      </div>
+                      <button onclick="showVerifyItemModal('${item.id}')" style="padding: 8px 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                        Edit
+                      </button>
+                      <button onclick="verifyItem('${item.id}')" style="padding: 8px 12px; background: #22c55e; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                        ✓
+                      </button>
+                    </div>
+                  `;
+                }).join('')}
               </div>
             </div>
           ` : ''}
@@ -3377,6 +3441,111 @@ async function saveReceiptExpense() {
         state.isLoading = false;
         render();
       }
+    }
+
+   async function verifyItem(itemId) {
+      const item = state.inventory.find(i => i.id === itemId);
+      if (!item) return;
+      
+      item.expirationVerified = true;
+      await storage.update(item);
+      showToast(`${item.name} verified!`, 'success');
+      render();
+    }
+
+    async function verifyAllItems() {
+      const unverified = state.inventory.filter(i => i.fromReceipt && i.expirationVerified === false);
+      
+      for (const item of unverified) {
+        item.expirationVerified = true;
+        await storage.update(item);
+      }
+      
+      showToast(`Verified ${unverified.length} items!`, 'success');
+      render();
+    }
+
+    function showVerifyItemModal(itemId) {
+      const item = state.inventory.find(i => i.id === itemId);
+      if (!item) return;
+      
+      const today = new Date().toISOString().split('T')[0];
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">📋 Verify Expiration</h2>
+          
+          <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 8px;">
+            <img src="${item.image_url || getIngredientImage(item.name, item.category) || ''}" 
+                 style="width: 50px; height: 50px; border-radius: 8px; object-fit: cover;"
+                 onerror="this.style.display='none'" />
+            <div>
+              <div style="font-weight: 600;">${esc(item.name)}</div>
+              <div style="font-size: 12px; color: ${CONFIG.text_muted};">
+                ${item.category || 'Uncategorized'}
+                ${item.store ? ` • from ${esc(item.store)}` : ''}
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Expiration Date</label>
+            <input type="date" id="verifyExpDate" value="${item.expirationDate || ''}"
+                   style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Quick Set</label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              <button onclick="document.getElementById('verifyExpDate').value=''" style="padding: 8px 12px; background: ${CONFIG.background_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; color: ${CONFIG.text_color};">
+                No expiration
+              </button>
+              <button onclick="setVerifyExpDays(3)" style="padding: 8px 12px; background: ${CONFIG.background_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; color: ${CONFIG.text_color};">
+                3 days
+              </button>
+              <button onclick="setVerifyExpDays(7)" style="padding: 8px 12px; background: ${CONFIG.background_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; color: ${CONFIG.text_color};">
+                1 week
+              </button>
+              <button onclick="setVerifyExpDays(14)" style="padding: 8px 12px; background: ${CONFIG.background_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; color: ${CONFIG.text_color};">
+                2 weeks
+              </button>
+              <button onclick="setVerifyExpDays(30)" style="padding: 8px 12px; background: ${CONFIG.background_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; cursor: pointer; color: ${CONFIG.text_color};">
+                1 month
+              </button>
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeModal()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="saveVerifiedItem('${item.id}')" style="flex: 1; padding: 12px; background: #22c55e; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              ✓ Verify
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function setVerifyExpDays(days) {
+      const date = new Date();
+      date.setDate(date.getDate() + days);
+      document.getElementById('verifyExpDate').value = date.toISOString().split('T')[0];
+    }
+
+    async function saveVerifiedItem(itemId) {
+      const item = state.inventory.find(i => i.id === itemId);
+      if (!item) return;
+      
+      const expDate = document.getElementById('verifyExpDate')?.value || null;
+      
+      item.expirationDate = expDate;
+      item.expirationVerified = true;
+      
+      await storage.update(item);
+      closeModal();
+      showToast(`${item.name} verified!`, 'success');
+      render();
     }
 
   function showAddInventoryModal() {
