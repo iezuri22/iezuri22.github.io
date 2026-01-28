@@ -797,6 +797,7 @@ takeoutBudget: 50,
      freestyleMeals: [],
       recordingNeeds: [],
       cookingTasks: [],
+      deletedIngredients: [],
    inventory: [],
       expirationDefaults: {},
       receiptMappings: {},
@@ -1416,12 +1417,13 @@ If you can't read something clearly, make your best guess. Always return valid J
 
 async function addReceiptItemsToInventory() {
       const items = receiptScanState.extractedItems || [];
-      let addedCount = 0;
+      const itemsToAdd = [];
       
       // Use receipt date as purchase date, or today if not available
       const purchaseDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
       const purchaseDateObj = new Date(purchaseDate + 'T00:00:00');
       
+      // First, collect all items to add
       for (let i = 0; i < items.length; i++) {
         const checkbox = document.getElementById(`receiptItem${i}`);
         if (!checkbox?.checked) continue;
@@ -1441,7 +1443,7 @@ async function addReceiptItemsToInventory() {
         // Create separate inventory entry for each item in quantity
         for (let q = 0; q < quantity; q++) {
           const inventoryItem = {
-            id: `inv_${Date.now()}_${Math.random().toString(36).slice(2)}_${q}`,
+            id: `inv_${Date.now()}_${i}_${q}_${Math.random().toString(36).slice(2)}`,
             type: 'inventory',
             name: item.name,
             category: item.category || 'Other',
@@ -1454,20 +1456,26 @@ async function addReceiptItemsToInventory() {
             image_url: getIngredientImage(item.name, item.category) || ''
           };
           
-          await storage.create(inventoryItem);
-          state.inventory.push(inventoryItem);
-          addedCount++;
-          
-          // Small delay to ensure unique IDs
-          await new Promise(r => setTimeout(r, 10));
+          itemsToAdd.push(inventoryItem);
         }
       }
       
-      showToast(`Added ${addedCount} items to inventory!`, 'success');
+      // Now add all items
+      showToast(`Adding ${itemsToAdd.length} items...`, 'info');
+      
+      for (const inventoryItem of itemsToAdd) {
+        try {
+          await storage.create(inventoryItem);
+          state.inventory.push(inventoryItem);
+        } catch (e) {
+          console.error('Failed to add item:', inventoryItem.name, e);
+        }
+      }
+      
+      showToast(`Added ${itemsToAdd.length} items to pantry!`, 'success');
       closeReceiptModal();
       render();
     }
-
     async function saveReceiptToExpenses() {
       const total = receiptScanState.detectedTotal || 0;
       if (total <= 0) {
@@ -2606,7 +2614,7 @@ async function saveReceiptExpense() {
         <div class="p-4 max-w-4xl mx-auto">
           <div class="flex items-center justify-between mb-4">
             <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
-              📦 Inventory
+              🥫 Pantry
             </h2>
             <div class="flex gap-2">
               <button onclick="requestNotificationPermission()"
@@ -5131,6 +5139,7 @@ state.budgetExpenses = data.filter(d => d.id && d.id.startsWith('expense_'));
 state.freestyleMeals = data.filter(d => d.id && d.id.startsWith('freestyle_'));
         state.recordingNeeds = data.filter(d => d.id && d.id.startsWith('recording_'));
         state.cookingTasks = data.filter(d => d.id && d.id.startsWith('task_'));
+        state.deletedIngredients = data.filter(d => d.type === 'deleted_ingredient').map(d => d.name);
         const budgetConfig = data.find(d => d.id === 'config_budgets');
         if (budgetConfig?.grocery) state.groceryBudget = budgetConfig.grocery;
         if (budgetConfig?.takeout) state.takeoutBudget = budgetConfig.takeout;
@@ -12845,13 +12854,16 @@ Keep responses helpful but concise. Use bullet points for steps.`;
     }
 
     function renderIngredientLibrary() {
-      // Get all ingredients from INGREDIENT_IMAGES + any with knowledge
+    // Get all ingredients from INGREDIENT_IMAGES + any with knowledge
       const allIngredients = new Set([
         ...Object.keys(INGREDIENT_IMAGES),
         ...state.ingredientKnowledge.map(k => k.name.toLowerCase())
       ]);
       
-      let ingredientList = Array.from(allIngredients).sort();
+      // Filter out deleted ingredients
+      let ingredientList = Array.from(allIngredients)
+        .filter(name => !state.deletedIngredients.includes(name.toLowerCase()))
+        .sort();
       
       // Apply filters
       if (state.ingredientSearchTerm) {
@@ -12869,8 +12881,8 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       return `
         <div class="p-4 max-w-4xl mx-auto">
           <div class="flex items-center justify-between mb-4">
-            <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
-              🥗 Pantry
+          <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
+              🥗 Ingredients
             </h2>
             <button onclick="showAddIngredientModal()"
               style="padding: 10px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;">
@@ -13057,19 +13069,30 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       render();
     }
 
-    async function deleteIngredient(name) {
+  async function deleteIngredient(name) {
       if (!confirm(`Delete ${name} from your ingredient library?`)) return;
       
-      const knowledge = state.ingredientKnowledge.find(k => k.name.toLowerCase() === name.toLowerCase());
+      const normalizedName = name.toLowerCase();
       
+      // Delete from ingredient knowledge
+      const knowledge = state.ingredientKnowledge.find(k => k.name.toLowerCase() === normalizedName);
       if (knowledge) {
         state.ingredientKnowledge = state.ingredientKnowledge.filter(k => k.id !== knowledge.id);
         await storage.delete(knowledge);
       }
       
-      // Remove from INGREDIENT_IMAGES if it's a custom one
-      if (INGREDIENT_IMAGES[name.toLowerCase()]) {
-        delete INGREDIENT_IMAGES[name.toLowerCase()];
+      // Track as deleted so it doesn't show up from INGREDIENT_IMAGES
+      if (!state.deletedIngredients.includes(normalizedName)) {
+        state.deletedIngredients.push(normalizedName);
+        
+        // Save the deletion record
+        const deletionRecord = {
+          id: `deleted_ingredient_${normalizedName}`,
+          type: 'deleted_ingredient',
+          name: normalizedName,
+          deletedAt: new Date().toISOString()
+        };
+        await storage.create(deletionRecord);
       }
       
       showToast(`${name} deleted`, 'success');
