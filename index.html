@@ -1752,7 +1752,7 @@ function editReceiptItem(idx) {
             createdAt: new Date().toISOString()
           };
           
-          await storage.create(knowledge);
+         await storage.create(knowledge);
           state.ingredientKnowledge.push(knowledge);
           showToast(`${name} added to Ingredients!`, 'success');
         }
