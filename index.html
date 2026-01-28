@@ -9553,6 +9553,55 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
       }, 0);
     }
 
+   function positionDropdownAtCursor(textarea, dropdownContainer) {
+      if (!textarea || !dropdownContainer) return;
+      
+      const text = textarea.value;
+      const cursorPos = textarea.selectionStart;
+      
+      // Create a mirror div to calculate cursor position
+      const mirror = document.getElementById('narrativeMirror');
+      if (!mirror) {
+        // Fallback: position below textarea
+        dropdownContainer.style.left = '0';
+        dropdownContainer.style.top = '100%';
+        return;
+      }
+      
+      // Copy text up to cursor into mirror
+      const textBeforeCursor = text.substring(0, cursorPos);
+      mirror.textContent = textBeforeCursor;
+      
+      // Add a span at the end to mark cursor position
+      const cursorSpan = document.createElement('span');
+      cursorSpan.textContent = '|';
+      mirror.appendChild(cursorSpan);
+      
+      // Get position relative to textarea
+      const textareaRect = textarea.getBoundingClientRect();
+      const spanRect = cursorSpan.getBoundingClientRect();
+      
+      // Calculate position
+      let left = spanRect.left - textareaRect.left;
+      let top = spanRect.top - textareaRect.top + 20; // 20px below the cursor line
+      
+      // Make sure dropdown doesn't go off-screen to the right
+      const dropdownWidth = 280;
+      if (left + dropdownWidth > textarea.offsetWidth) {
+        left = textarea.offsetWidth - dropdownWidth;
+      }
+      if (left < 0) left = 0;
+      
+      // If dropdown would go below textarea, show it above cursor instead
+      const dropdownHeight = 200;
+      if (top + dropdownHeight > textarea.offsetHeight + 50) {
+        top = spanRect.top - textareaRect.top - dropdownHeight - 5;
+      }
+      
+      dropdownContainer.style.left = left + 'px';
+      dropdownContainer.style.top = top + 'px';
+    }
+
     // Handle narrative input with @ and # detection
     function handleNarrativeInput(e) {
       const textarea = e.target;
@@ -9591,12 +9640,17 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
         state.mentionDropdownVisible = false;
       }
       
-      // Only re-render if dropdown state changed (not on every keystroke)
+     // Only re-render if dropdown state changed (not on every keystroke)
       if (wasDropdownVisible !== state.mentionDropdownVisible || state.mentionDropdownVisible) {
         // Update just the dropdown, not the whole page
         const dropdownContainer = document.getElementById('mentionDropdownContainer');
         if (dropdownContainer) {
           dropdownContainer.innerHTML = renderMentionDropdown();
+          
+          // Position dropdown at cursor
+          if (state.mentionDropdownVisible) {
+            positionDropdownAtCursor(textarea, dropdownContainer);
+          }
         } else {
           // Fallback: full render if container not found
           render();
@@ -9611,7 +9665,7 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
       }
     }
     
-  // Helper to render just the dropdown
+ // Helper to render just the dropdown
     function renderMentionDropdown() {
       const dropdownItems = state.mentionDropdownVisible ? getMentionDropdownItems() : [];
       
@@ -9619,25 +9673,23 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
         return '';
       }
       
-     return `
-        <div style="background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.15); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto;"> ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
-            <div class="mention-item ${i === state.mentionDropdownIndex ? 'selected' : ''}"
-              style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''}"
+      return `
+        <div style="background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.15); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto;">
+          ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
+            <div style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''} color: ${CONFIG.text_color};"
               onmouseover="this.style.background='rgba(102,126,234,0.1)'"
               onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(102,126,234,0.15)' : 'transparent'}'"
               onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-              <span>${item.isTip ? '📝' : '🍽️'}</span>
-              <span style="color: ${CONFIG.text_color};">${esc(item.title)}</span>
+              <span>${esc(item.title)}</span>
+              <span style="opacity: 0.4; font-size: 11px;">recipe</span>
             </div>
           `).join('') : dropdownItems.map((item, i) => `
-            <div class="mention-item ${i === state.mentionDropdownIndex ? 'selected' : ''}"
-              style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''}"
+            <div style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''} color: ${CONFIG.text_color};"
               onmouseover="this.style.background='rgba(102,126,234,0.1)'"
               onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(102,126,234,0.15)' : 'transparent'}'"
               onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-              <span>${item.icon || '🏷️'}</span>
-              <span style="flex: 1; color: ${CONFIG.text_color};">${esc(item.name)}</span>
-              <span style="opacity: 0.5; font-size: 11px; color: ${CONFIG.text_muted};">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : ''}</span>
+              <span>${esc(item.name)}</span>
+              <span style="opacity: 0.4; font-size: 11px;">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : 'ingredient'}</span>
             </div>
           `).join('')}
         </div>
@@ -10011,7 +10063,7 @@ function renderFreestyleEdit() {
                 Type <span class="mention-tag">@</span> to link a recipe • Type <span class="record-tag">#</span> to tag ingredients or seasonings you used
               </div>
               
-         <div style="position: relative;">
+        <div style="position: relative; z-index: 50;">
                 <textarea 
                   id="narrativeEditor"
                   class="narrative-editor w-full px-3 py-2 rounded"
@@ -10020,9 +10072,12 @@ function renderFreestyleEdit() {
                   oninput="handleNarrativeInput(event)"
                   onkeydown="handleNarrativeKeydown(event)"
                 >${esc(form.narrative || '')}</textarea>
+                
+                <!-- Hidden div to measure cursor position -->
+                <div id="narrativeMirror" style="position: absolute; top: 0; left: 0; visibility: hidden; white-space: pre-wrap; word-wrap: break-word; padding: 8px 12px; font-size: ${CONFIG.font_size}px; line-height: 1.6; width: 100%; box-sizing: border-box; pointer-events: none;"></div>
               
-               <!-- Mention Dropdown Container -->
-                <div id="mentionDropdownContainer" style="position: absolute; left: 0; right: 0; top: 100%; z-index: 1000;">
+                <!-- Mention Dropdown Container -->
+                <div id="mentionDropdownContainer" style="position: absolute; z-index: 1000; max-width: 280px;">
                 ${state.mentionDropdownVisible ? `
                   <div style="background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.15); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto;"> ${dropdownItems.length > 0 ? `
                       ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
