@@ -1588,6 +1588,12 @@ function editReceiptItem(idx) {
       
       const purchaseDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
       
+      // Count similar items with same raw text
+      const rawText = (item.rawText || item.name || '').toLowerCase().trim();
+      const similarCount = receiptScanState.extractedItems.filter(i => 
+        (i.rawText || i.name || '').toLowerCase().trim() === rawText
+      ).length;
+      
       // Calculate what the expiration date would be
       let expiryPreview = 'Non-perishable';
       if (item.daysUntilExpiration) {
@@ -1650,6 +1656,17 @@ function editReceiptItem(idx) {
               style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
           </div>
           
+         <!-- Apply to all similar items -->
+          ${similarCount > 1 ? `
+            <div style="margin-bottom: 12px; padding: 12px; background: rgba(102,126,234,0.1); border-radius: 8px;">
+              <label style="display: flex; align-items: center; gap: 8px; color: ${CONFIG.text_color}; cursor: pointer;">
+                <input type="checkbox" id="editReceiptApplyToAll" checked style="width: 18px; height: 18px;" />
+                <span>Apply to all ${similarCount} similar items</span>
+              </label>
+              <div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 4px; margin-left: 26px;">Updates name, category & expiration (keeps individual prices)</div>
+            </div>
+          ` : ''}
+          
           <!-- Remember this mapping -->
           <div style="margin-bottom: 16px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 8px;">
             <label style="display: flex; align-items: center; gap: 8px; color: ${CONFIG.text_color}; cursor: pointer;">
@@ -1688,7 +1705,7 @@ function editReceiptItem(idx) {
       document.getElementById('receiptItemEditOverlay')?.remove();
     }
 
-    async function saveReceiptItemEdit(idx) {
+ async function saveReceiptItemEdit(idx) {
       const name = document.getElementById('editReceiptItemName')?.value.trim();
       const qty = parseInt(document.getElementById('editReceiptItemQty')?.value) || 1;
       const price = parseFloat(document.getElementById('editReceiptItemPrice')?.value) || 0;
@@ -1696,6 +1713,7 @@ function editReceiptItem(idx) {
       const expiry = parseInt(document.getElementById('editReceiptItemExpiry')?.value) || null;
       const remember = document.getElementById('editReceiptRemember')?.checked;
       const addToIngredients = document.getElementById('editReceiptAddIngredient')?.checked;
+      const applyToAll = document.getElementById('editReceiptApplyToAll')?.checked;
       
       if (!name) {
         showError('Please enter an item name');
@@ -1703,7 +1721,7 @@ function editReceiptItem(idx) {
       }
       
       const item = receiptScanState.extractedItems[idx];
-      const rawText = item.rawText || item.name;
+      const rawText = (item.rawText || item.name || '').toLowerCase().trim();
       
       // Save mapping if requested
       if (remember && rawText) {
@@ -1735,17 +1753,45 @@ function editReceiptItem(idx) {
         }
       }
       
-      // Update the item
-      receiptScanState.extractedItems[idx] = {
-        ...item,
-        name: name,
-        quantity: qty,
-        price: price,
-        category: category,
-        daysUntilExpiration: expiry,
-        isRemembered: remember,
-        isNew: false
-      };
+      // Count similar items for toast message
+      let updatedCount = 1;
+      
+      // Apply to all similar items if requested
+      if (applyToAll && rawText) {
+        receiptScanState.extractedItems = receiptScanState.extractedItems.map((existingItem, i) => {
+          const existingRaw = (existingItem.rawText || existingItem.name || '').toLowerCase().trim();
+          
+          if (existingRaw === rawText) {
+            if (i !== idx) updatedCount++;
+            return {
+              ...existingItem,
+              name: name,
+              category: category,
+              daysUntilExpiration: expiry,
+              isRemembered: remember,
+              isNew: false
+              // Keep original price and quantity for each item
+            };
+          }
+          return existingItem;
+        });
+        
+        if (updatedCount > 1) {
+          showToast(`Updated ${updatedCount} similar items!`, 'success');
+        }
+      } else {
+        // Update only this item
+        receiptScanState.extractedItems[idx] = {
+          ...item,
+          name: name,
+          quantity: qty,
+          price: price,
+          category: category,
+          daysUntilExpiration: expiry,
+          isRemembered: remember,
+          isNew: false
+        };
+      }
       
       closeReceiptItemEdit();
       render();
