@@ -2854,6 +2854,382 @@ async function saveReceiptExpense() {
       `;
     }
 
+   function renderMyBlends() {
+      const blends = state.seasoningBlends || [];
+      const blendTypes = ['All', 'Seasoning', 'Smoothie', 'Veggie Mix', 'Marinade', 'Other'];
+      const filterType = state.blendFilterType || 'All';
+      
+      const filteredBlends = filterType === 'All' 
+        ? blends 
+        : blends.filter(b => b.blendType === filterType);
+      
+      // Helper to capitalize words
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      
+      return `
+        <div>
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-4">
+            <div style="color: ${CONFIG.text_muted}; font-size: 14px;">
+              ${blends.length} blend${blends.length !== 1 ? 's' : ''} saved
+            </div>
+            <button onclick="showAddBlendModal()"
+              class="px-4 py-2 rounded-lg font-medium"
+              style="background: ${CONFIG.primary_action_color}; color: white;">
+              + New Blend
+            </button>
+          </div>
+          
+          <!-- Filter by type -->
+          <div class="flex gap-2 flex-wrap mb-4">
+            ${blendTypes.map(type => `
+              <button onclick="state.blendFilterType = '${type}'; render();"
+                class="px-3 py-1 rounded-full text-sm"
+                style="background: ${filterType === type ? CONFIG.primary_action_color : CONFIG.background_color}; color: ${filterType === type ? 'white' : CONFIG.text_color};">
+                ${type}
+              </button>
+            `).join('')}
+          </div>
+          
+          ${filteredBlends.length === 0 ? `
+            <div class="p-8 rounded-xl text-center" style="background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
+              <div style="font-size: 3rem; margin-bottom: 1rem;">🧂</div>
+              <div style="font-size: 18px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">
+                ${blends.length === 0 ? 'No blends yet' : 'No ' + filterType.toLowerCase() + ' blends'}
+              </div>
+              <div style="color: ${CONFIG.text_muted}; margin-bottom: 16px;">
+                Create custom seasoning mixes, smoothie combos, veggie blends & more
+              </div>
+              <button onclick="showAddBlendModal()"
+                class="px-4 py-2 rounded-lg"
+                style="background: ${CONFIG.primary_action_color}; color: white;">
+                + Create Your First Blend
+              </button>
+            </div>
+          ` : `
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              ${filteredBlends.map(blend => `
+                <div class="rounded-xl p-4 cursor-pointer hover:scale-[1.02] transition-transform"
+                     style="background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};"
+                     onclick="showBlendDetail('${blend.id}')">
+                  <div class="flex items-start justify-between mb-2">
+                    <div>
+                      <div style="font-size: 16px; font-weight: 600; color: ${CONFIG.text_color};">
+                        ${esc(blend.name)}
+                      </div>
+                      <div style="font-size: 12px; color: ${CONFIG.text_muted};">
+                        ${blend.blendType || 'Other'} • ${(blend.ingredients || []).length} ingredients
+                      </div>
+                    </div>
+                    <span style="font-size: 24px;">
+                      ${blend.blendType === 'Seasoning' ? '🧂' : blend.blendType === 'Smoothie' ? '🥤' : blend.blendType === 'Veggie Mix' ? '🥗' : blend.blendType === 'Marinade' ? '🫗' : '📦'}
+                    </span>
+                  </div>
+                  <div style="font-size: 13px; color: ${CONFIG.text_muted};">
+                    ${(blend.ingredients || []).slice(0, 4).map(ing => capitalize(ing.name)).join(', ')}${(blend.ingredients || []).length > 4 ? '...' : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }
+
+    function showAddBlendModal() {
+      state.blendForm = {
+        id: null,
+        name: '',
+        blendType: 'Seasoning',
+        ingredients: [],
+        notes: '',
+        recordingUrl: ''
+      };
+      renderBlendEditModal();
+    }
+
+    function showBlendDetail(blendId) {
+      const blend = (state.seasoningBlends || []).find(b => b.id === blendId);
+      if (!blend) return;
+      
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;">
+          <div class="flex items-start justify-between mb-4">
+            <div>
+              <h2 style="font-size: 22px; font-weight: 700;">${esc(blend.name)}</h2>
+              <div style="color: ${CONFIG.text_muted}; font-size: 14px;">
+                ${blend.blendType || 'Other'} • ${(blend.ingredients || []).length} ingredients
+              </div>
+            </div>
+            <span style="font-size: 32px;">
+              ${blend.blendType === 'Seasoning' ? '🧂' : blend.blendType === 'Smoothie' ? '🥤' : blend.blendType === 'Veggie Mix' ? '🥗' : blend.blendType === 'Marinade' ? '🫗' : '📦'}
+            </span>
+          </div>
+          
+          <!-- Ingredients -->
+          <div class="mb-4 p-4 rounded-lg" style="background: ${CONFIG.background_color};">
+            <div style="font-weight: 600; margin-bottom: 12px;">Ingredients</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              ${(blend.ingredients || []).map(ing => `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span>${esc(capitalize(ing.name))}</span>
+                  ${ing.amount ? `<span style="color: ${CONFIG.text_muted}; font-size: 13px;">${esc(ing.amount)}${ing.unit ? ' ' + esc(ing.unit) : ''}</span>` : ''}
+                </div>
+              `).join('')}
+            </div>
+          </div>
+          
+          ${blend.notes ? `
+            <div class="mb-4 p-4 rounded-lg" style="background: ${CONFIG.background_color};">
+              <div style="font-weight: 600; margin-bottom: 8px;">Notes</div>
+              <div style="font-size: 14px; white-space: pre-wrap;">${esc(blend.notes)}</div>
+            </div>
+          ` : ''}
+          
+          ${blend.recordingUrl ? `
+            <div class="mb-4">
+              <a href="${esc(blend.recordingUrl)}" target="_blank" 
+                 style="display: inline-flex; align-items: center; gap: 8px; color: ${CONFIG.primary_action_color};">
+                🎥 Watch Recording
+              </a>
+            </div>
+          ` : ''}
+          
+          <div class="flex gap-2">
+            <button onclick="editBlend('${blend.id}')"
+              class="flex-1 py-3 rounded-lg font-medium"
+              style="background: ${CONFIG.primary_action_color}; color: white;">
+              ✏️ Edit
+            </button>
+            <button onclick="if(confirm('Delete this blend?')) deleteBlend('${blend.id}')"
+              class="py-3 px-4 rounded-lg"
+              style="background: rgba(239,68,68,0.1); color: ${CONFIG.danger_color};">
+              🗑️
+            </button>
+          </div>
+          
+          <button onclick="closeModal()" 
+            class="w-full mt-3 py-2 rounded-lg"
+            style="background: ${CONFIG.background_color}; color: ${CONFIG.text_color};">
+            Close
+          </button>
+        </div>
+      `);
+    }
+
+    function editBlend(blendId) {
+      const blend = (state.seasoningBlends || []).find(b => b.id === blendId);
+      if (!blend) return;
+      
+      state.blendForm = { ...blend };
+      closeModal();
+      renderBlendEditModal();
+    }
+
+    function renderBlendEditModal() {
+      const form = state.blendForm;
+      if (!form) return;
+      
+      const blendTypes = ['Seasoning', 'Smoothie', 'Veggie Mix', 'Marinade', 'Other'];
+      const measurementUnits = ['', 'tsp', 'tbsp', 'cup', 'oz', 'g', 'lb', 'pinch', 'dash', 'sprinkle', 'to taste', 'handful', 'scoop'];
+      
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; max-height: 85vh; overflow-y: auto;">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">
+            ${form.id ? 'Edit' : 'New'} Blend
+          </h2>
+          
+          <!-- Name -->
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Blend Name</label>
+            <input type="text" id="blendName" value="${esc(form.name || '')}"
+              placeholder="e.g., My Chicken Seasoning"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <!-- Type -->
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Type</label>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+              ${blendTypes.map(type => `
+                <button type="button" onclick="state.blendForm.blendType = '${type}'; renderBlendEditModal();"
+                  style="padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; font-size: 14px;
+                         background: ${form.blendType === type ? CONFIG.primary_action_color : CONFIG.background_color}; 
+                         color: ${form.blendType === type ? 'white' : CONFIG.text_color};">
+                  ${type === 'Seasoning' ? '🧂' : type === 'Smoothie' ? '🥤' : type === 'Veggie Mix' ? '🥗' : type === 'Marinade' ? '🫗' : '📦'} ${type}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+          
+          <!-- Ingredients -->
+          <div class="mb-4">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="font-weight: 500;">Ingredients</label>
+              <button type="button" onclick="addBlendIngredient()"
+                style="padding: 6px 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 6px; font-size: 13px; cursor: pointer;">
+                + Add
+              </button>
+            </div>
+            
+            <div id="blendIngredientsList" style="display: flex; flex-direction: column; gap: 8px;">
+              ${(form.ingredients || []).map((ing, idx) => `
+                <div style="display: flex; gap: 8px; align-items: center; padding: 10px; background: ${CONFIG.background_color}; border-radius: 8px;">
+                  <input type="text" value="${esc(capitalize(ing.name || ''))}" 
+                    placeholder="Ingredient"
+                    onchange="updateBlendIngredient(${idx}, 'name', this.value)"
+                    style="flex: 2; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};" />
+                  <input type="text" value="${esc(ing.amount || '')}" 
+                    placeholder="Amt"
+                    onchange="updateBlendIngredient(${idx}, 'amount', this.value)"
+                    style="width: 60px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};" />
+                  <select onchange="updateBlendIngredient(${idx}, 'unit', this.value)"
+                    style="width: 80px; padding: 8px; border: 1px solid rgba(0,0,0,0.1); border-radius: 6px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color};">
+                    ${measurementUnits.map(u => `<option value="${u}" ${ing.unit === u ? 'selected' : ''}>${u || '(none)'}</option>`).join('')}
+                  </select>
+                  <button type="button" onclick="removeBlendIngredient(${idx})"
+                    style="padding: 8px; background: rgba(239,68,68,0.1); color: ${CONFIG.danger_color}; border: none; border-radius: 6px; cursor: pointer;">
+                    ✕
+                  </button>
+                </div>
+              `).join('')}
+              
+              ${(form.ingredients || []).length === 0 ? `
+                <div style="padding: 20px; text-align: center; color: ${CONFIG.text_muted}; font-size: 14px;">
+                  No ingredients yet. Click "+ Add" to start.
+                </div>
+              ` : ''}
+            </div>
+          </div>
+          
+          <!-- Notes -->
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Notes (optional)</label>
+            <textarea id="blendNotes" placeholder="Tips, variations, how to use..."
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; min-height: 80px;">${esc(form.notes || '')}</textarea>
+          </div>
+          
+          <!-- Recording URL -->
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Recording Link (optional)</label>
+            <input type="url" id="blendRecordingUrl" value="${esc(form.recordingUrl || '')}"
+              placeholder="https://youtube.com/..."
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <!-- Actions -->
+          <div style="display: flex; gap: 8px;">
+            <button onclick="state.blendForm = null; closeModal();"
+              style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="saveBlend()"
+              style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              Save Blend
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    function addBlendIngredient() {
+      if (!state.blendForm) return;
+      if (!state.blendForm.ingredients) state.blendForm.ingredients = [];
+      state.blendForm.ingredients.push({ name: '', amount: '', unit: '' });
+      renderBlendEditModal();
+    }
+
+    function updateBlendIngredient(idx, field, value) {
+      if (!state.blendForm || !state.blendForm.ingredients) return;
+      state.blendForm.ingredients[idx][field] = value;
+    }
+
+    function removeBlendIngredient(idx) {
+      if (!state.blendForm || !state.blendForm.ingredients) return;
+      state.blendForm.ingredients.splice(idx, 1);
+      renderBlendEditModal();
+    }
+
+    async function saveBlend() {
+      const name = document.getElementById('blendName')?.value.trim();
+      const notes = document.getElementById('blendNotes')?.value.trim();
+      const recordingUrl = document.getElementById('blendRecordingUrl')?.value.trim();
+      
+      if (!name) {
+        showError('Please enter a blend name');
+        return;
+      }
+      
+      if (!state.blendForm.ingredients || state.blendForm.ingredients.length === 0) {
+        showError('Please add at least one ingredient');
+        return;
+      }
+      
+      // Filter out empty ingredients and capitalize names
+      const ingredients = state.blendForm.ingredients
+        .filter(ing => ing.name && ing.name.trim())
+        .map(ing => ({
+          name: ing.name.trim().toLowerCase(),
+          amount: ing.amount?.trim() || '',
+          unit: ing.unit || ''
+        }));
+      
+      if (ingredients.length === 0) {
+        showError('Please add at least one ingredient with a name');
+        return;
+      }
+      
+      const blend = {
+        id: state.blendForm.id || `blend_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        type: 'seasoning_blend',
+        name: name,
+        blendType: state.blendForm.blendType || 'Other',
+        ingredients: ingredients,
+        notes: notes,
+        recordingUrl: recordingUrl,
+        updatedAt: new Date().toISOString()
+      };
+      
+      try {
+        if (state.blendForm.id) {
+          await storage.update(blend);
+          state.seasoningBlends = state.seasoningBlends.map(b => b.id === blend.id ? blend : b);
+          showToast('Blend updated!', 'success');
+        } else {
+          await storage.create(blend);
+          state.seasoningBlends.push(blend);
+          showToast('Blend created!', 'success');
+        }
+        
+        state.blendForm = null;
+        closeModal();
+        render();
+      } catch (e) {
+        console.error('Failed to save blend:', e);
+        showError('Failed to save blend');
+      }
+    }
+
+    async function deleteBlend(blendId) {
+      const blend = state.seasoningBlends.find(b => b.id === blendId);
+      if (!blend) return;
+      
+      try {
+        await storage.delete(blend);
+        state.seasoningBlends = state.seasoningBlends.filter(b => b.id !== blendId);
+        closeModal();
+        showToast('Blend deleted', 'success');
+        render();
+      } catch (e) {
+        console.error('Failed to delete blend:', e);
+        showError('Failed to delete blend');
+      }
+    }
+
  function renderInventory() {
       const inventory = getInventoryItems();
 // Include both old and new category names to catch all items
@@ -2906,12 +3282,7 @@ async function saveReceiptExpense() {
                 style="background:${CONFIG.primary_action_color}; color:white;">
                 + Add Item
               </button>
-            <button onclick="showIngredientImagesManager()"
-                class="px-3 py-2 rounded-lg"
-                style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};"
-                title="Manage ingredient images">
-                🖼️
-              </button>
+          
               <button onclick="consolidateInventory()"
                 class="px-3 py-2 rounded-lg"
                 style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};"
@@ -2926,6 +3297,22 @@ async function saveReceiptExpense() {
               </button>
             </div>
           </div>
+
+          <!-- Pantry Subtabs -->
+          <div class="flex gap-2 mb-4">
+            <button onclick="state.pantryTab = 'items'; render();"
+              class="px-4 py-2 rounded-lg font-medium"
+              style="background: ${(state.pantryTab || 'items') === 'items' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(state.pantryTab || 'items') === 'items' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              🥫 Items
+            </button>
+            <button onclick="state.pantryTab = 'blends'; render();"
+              class="px-4 py-2 rounded-lg font-medium"
+              style="background: ${state.pantryTab === 'blends' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'blends' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              🧂 My Blends
+            </button>
+          </div>
+
+          ${state.pantryTab === 'blends' ? renderMyBlends() : `
 
          ${expiringCount > 0 ? `
             <div class="mb-4 p-3 rounded-lg" style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3);">
@@ -3088,8 +3475,9 @@ onclick="showInventoryItemDetail('${item.id}')">
                 </div>
               `;
             }).join('')}
-          `}
+       `}
         </div>
+      `}
       `;
     }
 
@@ -7892,8 +8280,12 @@ console.log('byMonth:', byMonth);
               <div class="font-semibold text-lg text-red-700">🗑️ Clear All Data</div>
               <div class="text-sm text-red-600">Permanently delete everything</div>
             </button>
+            <button onclick="closeModal(); showIngredientImagesManager();" 
+                    class="w-full p-4 bg-amber-100 hover:bg-amber-200 rounded text-left">
+              <div class="font-semibold text-lg">🖼️ Ingredient Images</div>
+              <div class="text-sm text-gray-600">Manage default images for ingredients</div>
+            </button>
           </div>
-
          <div class="mt-6 p-4 bg-gray-100 rounded">
             <div class="text-sm text-gray-700">
               <div class="font-semibold mb-2">📊 Current Data:</div>
@@ -9061,7 +9453,8 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
           triggerChar = char;
           break;
         }
-        if (char === ' ' || char === '\n') {
+        // Only break on newline, not space (allows "chicken thighs" search)
+        if (char === '\n') {
           break;
         }
         startPos--;
@@ -9069,9 +9462,10 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
       
       const wasDropdownVisible = state.mentionDropdownVisible;
       
-      if (triggerChar && startPos >= 0) {
-        const searchTerm = text.slice(startPos + 1, cursorPos).toLowerCase();
-        state.mentionSearchTerm = searchTerm;
+     if (triggerChar && startPos >= 0) {
+        const searchTerm = text.slice(startPos + 1, cursorPos);
+        // Allow spaces in search term (e.g., "chicken th" matches "Chicken Thighs")
+        state.mentionSearchTerm = searchTerm.toLowerCase();
         state.mentionDropdownType = triggerChar;
         state.mentionDropdownVisible = true;
         state.mentionDropdownIndex = 0;
@@ -9162,6 +9556,9 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
     function getMentionDropdownItems() {
       const search = state.mentionSearchTerm.toLowerCase();
       
+      // Helper to capitalize each word
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      
       if (state.mentionDropdownType === '@') {
         // @ = Recipes
         return state.recipes
@@ -9171,7 +9568,6 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
           .map(r => ({
             id: r.__backendId || r.id,
             title: r.title,
-            isTip: r.isTip,
             type: 'recipe'
           }));
       } else {
@@ -9182,9 +9578,8 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
         (state.seasoningBlends || []).forEach(blend => {
           if (blend.name.toLowerCase().includes(search)) {
             results.push({
-              name: blend.name,
-              type: 'blend',
-              icon: '🧂'
+              name: capitalize(blend.name),
+              type: 'blend'
             });
           }
         });
@@ -9193,9 +9588,8 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
         state.inventory.forEach(item => {
           if (item.name.toLowerCase().includes(search)) {
             results.push({
-              name: item.name,
-              type: 'pantry',
-              icon: '🥫'
+              name: capitalize(item.name),
+              type: 'pantry'
             });
           }
         });
@@ -9205,9 +9599,8 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
           const alreadyAdded = results.some(r => r.name.toLowerCase() === ing.name.toLowerCase());
           if (!alreadyAdded && ing.name.toLowerCase().includes(search)) {
             results.push({
-              name: ing.name,
-              type: 'ingredient',
-              icon: '🥗'
+              name: capitalize(ing.name),
+              type: 'ingredient'
             });
           }
         });
@@ -9215,9 +9608,8 @@ Return ONLY the cleaned up narrative with the Used: line at the end. No explanat
         // If search term doesn't match anything, allow custom entry
         if (search && !results.some(r => r.name.toLowerCase() === search)) {
           results.unshift({
-            name: search,
-            type: 'custom',
-            icon: '➕'
+            name: capitalize(search),
+            type: 'custom'
           });
         }
         
@@ -9511,38 +9903,37 @@ function renderFreestyleEdit() {
                 onkeydown="handleNarrativeKeydown(event)"
               >${esc(form.narrative || '')}</textarea>
               
-          <!-- Mention Dropdown Container -->
+        <!-- Mention Dropdown Container -->
               <div id="mentionDropdownContainer" style="position: relative;">
                 ${state.mentionDropdownVisible ? `
                   <div style="position: absolute; top: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.15); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; max-height: 250px; overflow-y: auto;">
                     ${dropdownItems.length > 0 ? `
                       ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
-                        <div style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''} color: ${CONFIG.text_color};"
+                        <div style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''} color: ${CONFIG.text_color};"
                           onmouseover="this.style.background='rgba(102,126,234,0.1)'"
                           onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(102,126,234,0.15)' : 'transparent'}'"
                           onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-                          <span>${item.isTip ? '📝' : '🍽️'}</span>
                           <span>${esc(item.title)}</span>
+                          <span style="opacity: 0.4; font-size: 11px;">recipe</span>
                         </div>
                       `).join('') : dropdownItems.map((item, i) => `
-                        <div style="padding: 10px 12px; cursor: pointer; display: flex; align-items: center; gap: 8px; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''} color: ${CONFIG.text_color};"
+                        <div style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; ${i === state.mentionDropdownIndex ? 'background: rgba(102,126,234,0.15);' : ''} color: ${CONFIG.text_color};"
                           onmouseover="this.style.background='rgba(102,126,234,0.1)'"
                           onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(102,126,234,0.15)' : 'transparent'}'"
                           onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
-                          <span>${item.icon || '🏷️'}</span>
-                          <span style="flex: 1;">${esc(item.name)}</span>
-                          <span style="opacity: 0.5; font-size: 11px;">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : ''}</span>
+                          <span>${esc(item.name)}</span>
+                          <span style="opacity: 0.4; font-size: 11px;">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : 'ingredient'}</span>
                         </div>
                       `).join('')}
                     ` : `
                       <div style="padding: 12px; color: ${CONFIG.text_muted}; text-align: center; font-size: 13px;">
-                        ${state.mentionDropdownType === '@' ? 'No recipes found. Keep typing...' : 'Type to search ingredients or add new...'}
+                        ${state.mentionDropdownType === '@' ? 'No recipes found' : 'Type to search or add new'}
                       </div>
                     `}
                   </div>
                 ` : ''}
               </div>
-
+              
               <!-- To Record Checkbox -->
             <div class="mb-4 p-3 rounded" style="background:rgba(245,158,11,0.1); border:1px solid rgba(245,158,11,0.3);">
               <label class="flex items-center gap-3 cursor-pointer" style="color:${CONFIG.text_color};">
