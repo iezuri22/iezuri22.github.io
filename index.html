@@ -2855,8 +2855,14 @@ async function saveReceiptExpense() {
 
  function renderInventory() {
       const inventory = getInventoryItems();
-      const categories = ['Uncategorized', 'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Pantry', 'Snacks', 'Beverages', 'Other'];
-      
+// Include both old and new category names to catch all items
+      const categories = [
+        'Uncategorized', 
+        // New categories (INGREDIENT_CATEGORIES)
+        'Vegetables', 'Fruits', 'Proteins', 'Dairy', 'Grains', 'Herbs & Spices', 'Pantry', 'Other',
+        // Old categories (for backwards compatibility)
+        'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Snacks', 'Beverages'
+      ];      
       const grouped = {};
       categories.forEach(cat => grouped[cat] = []);
       
@@ -2887,7 +2893,7 @@ async function saveReceiptExpense() {
             <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
               🥫 Pantry
             </h2>
-            <div class="flex gap-2">
+           <div class="flex gap-2">
               <button onclick="requestNotificationPermission()"
                 class="px-3 py-2 rounded-lg"
                 style="background:${state.notificationsEnabled ? CONFIG.success_color : CONFIG.surface_color}; color:${state.notificationsEnabled ? 'white' : CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px; box-shadow: ${CONFIG.shadow};"
@@ -2904,6 +2910,12 @@ async function saveReceiptExpense() {
                 style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};"
                 title="Manage ingredient images">
                 🖼️
+              </button>
+              <button onclick="confirmClearAllInventory()"
+                class="px-3 py-2 rounded-lg"
+                style="background:${CONFIG.surface_color}; color:${CONFIG.danger_color}; box-shadow: ${CONFIG.shadow};"
+                title="Clear all inventory">
+                🗑️
               </button>
             </div>
           </div>
@@ -3440,6 +3452,32 @@ async function saveReceiptExpense() {
       } finally {
         state.isLoading = false;
         render();
+      }
+    }
+   async function confirmClearAllInventory() {
+      const count = state.inventory.length;
+      if (count === 0) {
+        showToast('Pantry is already empty', 'info');
+        return;
+      }
+      
+      if (confirm(`Are you sure you want to delete ALL ${count} items from your pantry? This cannot be undone.`)) {
+        state.isLoading = true;
+        render();
+        
+        try {
+          for (const item of [...state.inventory]) {
+            await storage.delete(item);
+          }
+          state.inventory = [];
+          showToast(`Cleared ${count} items from pantry`, 'success');
+        } catch (e) {
+          console.error('Error clearing inventory:', e);
+          showError('Failed to clear some items');
+        } finally {
+          state.isLoading = false;
+          render();
+        }
       }
     }
 
