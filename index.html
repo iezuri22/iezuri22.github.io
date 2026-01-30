@@ -12300,7 +12300,7 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
       `;
     }
 
-  function renderWeeklyPlanContent() {
+function renderWeeklyPlanContent() {
       const dates = getWeekDates(state.currentWeekStartDate);
       const meals = ['Breakfast', 'Lunch', 'Dinner'];
       
@@ -12330,7 +12330,6 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
       const isTotalOver = (totalBudget - weekExpenses.total) < 0;
 
       return `
-        <!-- Week Navigation & Date Range -->
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
           <div style="display:flex; align-items:center; gap:8px;">
             <button onclick="changeWeek(-1)"
@@ -12357,34 +12356,35 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
           </div>
         </div>
 
-        <!-- Budget Bar -->
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:10px; background:${CONFIG.surface_color}; border-radius:8px;">
-          <div style="display:flex; align-items:center; gap:12px;">
-            <div style="font-size:12px;">
-              <span style="color:${isTotalOver ? '#ef4444' : CONFIG.success_color}; font-weight:600;">$${weekExpenses.total.toFixed(0)}</span>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:12px; background:${CONFIG.surface_color}; border-radius:8px;">
+          <div>
+            <div style="font-size:14px; margin-bottom:4px;">
+              <span style="color:${isTotalOver ? '#ef4444' : CONFIG.success_color}; font-weight:700;">$${weekExpenses.total.toFixed(0)}</span>
               <span style="color:${CONFIG.text_muted};"> / $${totalBudget.toFixed(0)}</span>
             </div>
-            <div style="color:${CONFIG.text_muted}; font-size:10px;">
-              Grocery $${weekExpenses.grocery.toFixed(0)} · Takeout $${weekExpenses.takeout.toFixed(0)}
+            <div style="color:${CONFIG.text_muted}; font-size:12px;">
+              Grocery $${weekExpenses.grocery.toFixed(0)}
+            </div>
+            <div style="color:${CONFIG.text_muted}; font-size:12px;">
+              Takeout $${weekExpenses.takeout.toFixed(0)}
             </div>
           </div>
-          <div style="display:flex; gap:4px;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
             <button onclick="showAddExpenseModal('grocery')"
-              style="padding:4px 8px; background:#16a34a; color:white; font-size:9px; border:none; border-radius:4px; cursor:pointer;">
+              style="padding:6px 12px; background:#16a34a; color:white; font-size:10px; border:none; border-radius:4px; cursor:pointer;">
               + Grocery
             </button>
             <button onclick="showAddExpenseModal('takeout')"
-              style="padding:4px 8px; background:#f59e0b; color:white; font-size:9px; border:none; border-radius:4px; cursor:pointer;">
+              style="padding:6px 12px; background:#f59e0b; color:white; font-size:10px; border:none; border-radius:4px; cursor:pointer;">
               + Takeout
             </button>
             <button onclick="showManageExpensesModal()"
-              style="padding:4px 8px; background:${CONFIG.background_color}; color:${CONFIG.text_color}; font-size:9px; border:none; border-radius:4px; cursor:pointer;">
+              style="padding:6px 12px; background:${CONFIG.background_color}; color:${CONFIG.text_color}; font-size:10px; border:none; border-radius:4px; cursor:pointer;">
               Manage
             </button>
           </div>
         </div>
 
-        <!-- Days -->
         <div style="display:flex; flex-direction:column; gap:8px;">
           ${orderedDates.map((date, index) => {
             const plan = state.planData.find(p => p.date === date);
@@ -12403,16 +12403,17 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
             const dayNum = dateObj.getDate();
             
             let dateLabel = `${dayName} ${dayNum}`;
-            if (isToday) dateLabel = `Today · ${dayName} ${dayNum}`;
-            else if (isTomorrow) dateLabel = `Tomorrow · ${dayName} ${dayNum}`;
+            if (isToday) dateLabel = `Today - ${dayName} ${dayNum}`;
+            else if (isTomorrow) dateLabel = `Tomorrow - ${dayName} ${dayNum}`;
             
             const defaultOpen = isToday || isTomorrow;
             
             return `
-              <details ${defaultOpen ? 'open' : ''} style="background:${CONFIG.surface_color}; border-radius:8px; ${isToday ? 'border: 2px solid ' + CONFIG.primary_action_color : ''}">
-                <summary style="padding:12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; list-style:none;">
+              <div style="background:${CONFIG.surface_color}; border-radius:8px; ${isToday ? 'border: 2px solid ' + CONFIG.primary_action_color : ''}">
+                <div onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'; this.querySelector('.arrow').textContent = this.nextElementSibling.style.display === 'none' ? '▶' : '▼';"
+                     style="padding:12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; user-select:none;">
                   <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="color:${isToday ? CONFIG.primary_action_color : isPast ? CONFIG.text_muted : CONFIG.text_color}; font-size:12px; font-weight:${isToday ? '700' : '600'};">
+                    <span style="color:${isToday ? CONFIG.primary_action_color : isPast ? CONFIG.text_muted : CONFIG.text_color}; font-size:13px; font-weight:${isToday ? '700' : '600'};">
                       ${dateLabel}
                     </span>
                     ${mealCount > 0 ? `
@@ -12421,10 +12422,10 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                       </span>
                     ` : ''}
                   </div>
-                  <span style="color:${CONFIG.text_muted}; font-size:10px;">▼</span>
-                </summary>
+                  <span class="arrow" style="color:${CONFIG.text_muted}; font-size:10px;">${defaultOpen ? '▼' : '▶'}</span>
+                </div>
                 
-                <div style="padding:0 12px 12px 12px;">
+                <div style="padding:0 12px 12px 12px; display:${defaultOpen ? 'block' : 'none'};">
                   ${meals.map(meal => {
                     const key = meal.toLowerCase();
                     const recipeIds = plan ? (plan[key] || []) : [];
@@ -12450,7 +12451,7 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                         </div>
                         
                         ${hasRecipes ? `
-                          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+                          <div style="display:flex; flex-wrap:wrap; gap:8px;">
                             ${recipeIds.map(recipeId => {
                               const r = getRecipeById(recipeId);
                               if (!r) return '';
@@ -12459,29 +12460,29 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                               const img = (r && !isExternal) ? recipeThumb(r) : '';
                               
                               return `
-                                <div style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,255,255,0.05); border-radius:6px; flex:0 0 auto; max-width:280px;"
+                                <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:rgba(255,255,255,0.05); border-radius:8px; max-width:320px;"
                                      draggable="true"
                                      ondragstart="handleDragStart(event, '${date}', '${meal}', '${recipeId}')"
                                      ondragend="handleDragEnd(event)">
                                   ${isExternal ? `
-                                    <div style="width:28px;height:28px;border-radius:4px;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">🍴</div>
+                                    <div style="width:40px;height:40px;border-radius:6px;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">🍴</div>
                                   ` : img ? `
-                                    <img src="${esc(img)}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;flex-shrink:0;" />
+                                    <img src="${esc(img)}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0;" />
                                   ` : `
-                                    <div style="width:28px;height:28px;border-radius:4px;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>
+                                    <div style="width:40px;height:40px;border-radius:6px;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>
                                   `}
-                                  <div style="flex:1; min-width:0; max-width:140px;">
-                                    <div style="color:${CONFIG.text_color}; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                  <div style="flex:1; min-width:0; max-width:160px;">
+                                    <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                       ${esc(r.title)}
                                     </div>
                                   </div>
                                   <div style="display:flex; gap:4px; flex-shrink:0;">
                                     <button onclick="openRecipeView('${r.__backendId || r.id}')"
-                                      style="padding:2px 6px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
+                                      style="padding:4px 8px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:10px; cursor:pointer;">
                                       View
                                     </button>
                                     <button onclick="removeMealFromPlan('${date}','${meal}','${recipeId}')"
-                                      style="padding:2px 6px; background:rgba(239,68,68,0.2); color:#ef4444; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
+                                      style="padding:4px 8px; background:rgba(239,68,68,0.2); color:#ef4444; border:none; border-radius:4px; font-size:10px; cursor:pointer;">
                                       ×
                                     </button>
                                   </div>
@@ -12490,7 +12491,7 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                             }).join('')}
                           </div>
                         ` : `
-                          <div style="color:${CONFIG.text_muted}; font-size:10px; font-style:italic;">
+                          <div style="color:${CONFIG.text_muted}; font-size:11px; font-style:italic;">
                             No meals planned
                           </div>
                         `}
@@ -12498,7 +12499,7 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                     `;
                   }).join('')}
                 </div>
-              </details>
+              </div>
             `;
           }).join('')}
         </div>
