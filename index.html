@@ -595,6 +595,109 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
       }
     }
 
+   async function syncIngredientImagesToKnowledge() {
+      const allImages = { ...INGREDIENT_IMAGES, ...customIngredientImages };
+      let addedCount = 0;
+      
+      // Get ingredient names that need knowledge entries
+      const existingNames = new Set((state.ingredientKnowledge || []).map(k => k.name.toLowerCase()));
+      const deletedNames = new Set(state.deletedIngredients || []);
+      
+      // Category mapping based on ingredient name
+      const categoryMap = {
+        'chicken': 'Proteins', 'beef': 'Proteins', 'pork': 'Proteins', 'lamb': 'Proteins',
+        'steak': 'Proteins', 'bacon': 'Proteins', 'sausage': 'Proteins', 'ham': 'Proteins',
+        'salmon': 'Proteins', 'shrimp': 'Proteins', 'clams': 'Proteins', 'tilapia': 'Proteins',
+        'tuna': 'Proteins', 'eggs': 'Proteins', 'egg': 'Proteins', 'tofu': 'Proteins',
+        'turkey': 'Proteins', 'fish': 'Proteins',
+        
+        'onion': 'Vegetables', 'garlic': 'Vegetables', 'shallot': 'Vegetables',
+        'tomato': 'Vegetables', 'pepper': 'Vegetables', 'carrot': 'Vegetables',
+        'celery': 'Vegetables', 'broccoli': 'Vegetables', 'cauliflower': 'Vegetables',
+        'spinach': 'Vegetables', 'kale': 'Vegetables', 'lettuce': 'Vegetables',
+        'arugula': 'Vegetables', 'zucchini': 'Vegetables', 'squash': 'Vegetables',
+        'eggplant': 'Vegetables', 'mushroom': 'Vegetables', 'potato': 'Vegetables',
+        'corn': 'Vegetables', 'beans': 'Vegetables', 'peas': 'Vegetables',
+        'asparagus': 'Vegetables', 'sprouts': 'Vegetables', 'cucumber': 'Vegetables',
+        'avocado': 'Vegetables', 'cabbage': 'Vegetables',
+        
+        'apple': 'Fruits', 'banana': 'Fruits', 'orange': 'Fruits', 'lemon': 'Fruits',
+        'lime': 'Fruits', 'strawberr': 'Fruits', 'blueberr': 'Fruits', 'raspberr': 'Fruits',
+        'mango': 'Fruits', 'pineapple': 'Fruits', 'grapes': 'Fruits', 'peach': 'Fruits',
+        
+        'milk': 'Dairy', 'cream': 'Dairy', 'butter': 'Dairy', 'cheese': 'Dairy',
+        'cheddar': 'Dairy', 'mozzarella': 'Dairy', 'parmesan': 'Dairy', 'feta': 'Dairy',
+        'jack': 'Dairy', 'yogurt': 'Dairy',
+        
+        'bread': 'Grains', 'tortilla': 'Grains', 'pita': 'Grains', 'pasta': 'Grains',
+        'spaghetti': 'Grains', 'linguine': 'Grains', 'penne': 'Grains', 'fettuccine': 'Grains',
+        'rigatoni': 'Grains', 'farfalle': 'Grains', 'orzo': 'Grains', 'lasagna': 'Grains',
+        'noodles': 'Grains', 'rice': 'Grains', 'quinoa': 'Grains', 'couscous': 'Grains',
+        'flour': 'Grains', 'breadcrumbs': 'Grains', 'oats': 'Grains', 'cereal': 'Grains',
+        'cavatappi': 'Grains',
+        
+        'salt': 'Herbs & Spices', 'pepper': 'Herbs & Spices', 'cumin': 'Herbs & Spices',
+        'paprika': 'Herbs & Spices', 'chili': 'Herbs & Spices', 'oregano': 'Herbs & Spices',
+        'basil': 'Herbs & Spices', 'thyme': 'Herbs & Spices', 'rosemary': 'Herbs & Spices',
+        'cinnamon': 'Herbs & Spices', 'nutmeg': 'Herbs & Spices', 'bay': 'Herbs & Spices',
+        'seasoning': 'Herbs & Spices', 'powder': 'Herbs & Spices', 'flakes': 'Herbs & Spices',
+        
+        'oil': 'Pantry', 'vinegar': 'Pantry', 'sauce': 'Pantry', 'sugar': 'Pantry',
+        'honey': 'Pantry', 'syrup': 'Pantry', 'vanilla': 'Pantry', 'broth': 'Pantry',
+        'stock': 'Pantry', 'canned': 'Pantry', 'paste': 'Pantry', 'beans': 'Pantry',
+        'chickpeas': 'Pantry', 'coconut': 'Pantry', 'peanut': 'Pantry', 'almonds': 'Pantry',
+        'walnuts': 'Pantry', 'peanuts': 'Pantry', 'wine': 'Pantry', 'brandy': 'Pantry'
+      };
+      
+      function guessCategory(name) {
+        const lower = name.toLowerCase();
+        for (const [keyword, category] of Object.entries(categoryMap)) {
+          if (lower.includes(keyword)) {
+            return category;
+          }
+        }
+        return 'Other';
+      }
+      
+      for (const [name, imageUrl] of Object.entries(allImages)) {
+        const normalizedName = name.toLowerCase();
+        
+        // Skip if already exists or was deleted
+        if (existingNames.has(normalizedName) || deletedNames.has(normalizedName)) {
+          continue;
+        }
+        
+        // Create new ingredient knowledge entry
+        const knowledge = {
+          id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          type: 'ingredient_knowledge',
+          name: normalizedName,
+          category: guessCategory(normalizedName),
+          season: 'Year-round',
+          image_url: imageUrl,
+          storage: { location: 'Fridge', duration: '' },
+          freezable: null,
+          freezingInfo: { blanch: '', duration: '', instructions: '' },
+          cookingMethods: [],
+          techniques: [],
+          pairings: [],
+          notes: [],
+          createdAt: new Date().toISOString()
+        };
+        
+        state.ingredientKnowledge.push(knowledge);
+        await storage.create(knowledge);
+        addedCount++;
+        
+        // Small delay to avoid overwhelming storage
+        if (addedCount % 10 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
+      
+      return addedCount;
+    }
+
     function saveCustomIngredientImages() {
       localStorage.setItem('custom_ingredient_images', JSON.stringify(customIngredientImages));
     }
@@ -15425,33 +15528,32 @@ Keep responses helpful but concise. Use bullet points for steps.`;
                 </div>
               </div>
             </div>
-            <div class="p-4">
+          <div class="p-4">
               ${knowledge.techniques && knowledge.techniques.length > 0 ? `
-                <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
                   ${knowledge.techniques.map((tech, idx) => `
-                    <details class="rounded-lg overflow-hidden" style="background:${CONFIG.background_color};">
-                      <summary class="flex items-center justify-between p-3 cursor-pointer" style="list-style:none;">
-                        <div class="flex items-center gap-3">
-                          <div style="color:#f59e0b; font-size:1.2rem;">🎯</div>
-                          <div style="color:${CONFIG.text_color}; font-weight:500;">${esc(tech.result)}</div>
-                        </div>
-                        <span style="color:${CONFIG.text_muted}; font-size:12px;">tap for steps ▼</span>
-                      </summary>
-                      <div class="p-3" style="border-top:1px solid rgba(0,0,0,0.05);">
-                        <div style="color:${CONFIG.primary_action_color}; font-weight:600; font-size:14px; margin-bottom:8px;">
-                          ${esc(tech.method)}
-                        </div>
-                        <div style="color:${CONFIG.text_color}; font-size:14px; white-space:pre-line; line-height: 1.6;">
-                          ${esc(tech.steps)}
-                        </div>
-                        <div class="flex justify-end mt-3">
-                          <button onclick="deleteTechnique('${esc(name)}', ${idx})"
-                            style="padding: 6px 12px; background: rgba(239,68,68,0.1); border: none; border-radius: 6px; color: #ef4444; cursor: pointer; font-size: 12px;">
-                            🗑️ Remove
-                          </button>
-                        </div>
+                   <div class="flex-shrink-0 rounded-lg" style="background:${CONFIG.background_color}; min-width: 220px; max-width: 280px; padding: 12px;">
+                      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <div style="color:#f59e0b; font-size:1.3rem;">🎯</div>
+                        <div style="color:${CONFIG.text_color}; font-weight:600; font-size: 14px;">${esc(tech.result)}</div>
                       </div>
-                    </details>
+                      <div style="color:${CONFIG.primary_action_color}; font-weight:500; font-size:13px; margin-bottom: 6px;">
+                        ${esc(tech.method)}
+                      </div>
+                      <div style="color:${CONFIG.text_muted}; font-size:12px; line-height: 1.5; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">
+                        ${esc(tech.steps).slice(0, 100)}${tech.steps.length > 100 ? '...' : ''}
+                      </div>
+                      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.05);">
+                        <button onclick="viewTechniqueDetail('${esc(name)}', ${idx})"
+                          style="padding: 4px 8px; background: rgba(102,126,234,0.1); border: none; border-radius: 4px; color: #667eea; cursor: pointer; font-size: 11px;">
+                          View Full
+                        </button>
+                        <button onclick="event.stopPropagation(); deleteTechnique('${esc(name)}', ${idx})"
+                          style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: none; border-radius: 4px; color: #ef4444; cursor: pointer; font-size: 11px;">
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
                   `).join('')}
                 </div>
               ` : `
@@ -15524,29 +15626,55 @@ Keep responses helpful but concise. Use bullet points for steps.`;
                 </div>
               </div>
             </div>
-            <div class="p-4">
+         <div class="p-4">
               ${knowledge.freezable === false ? `
                 <div class="p-4 rounded-lg" style="background: rgba(239,68,68,0.1);">
                   <div style="color: #ef4444; font-weight: 500;">❌ This ingredient is not recommended for freezing</div>
                 </div>
-              ` : (knowledge.freezingInfo?.blanch || knowledge.freezingInfo?.duration || knowledge.freezingInfo?.instructions) ? `
-                <div class="p-4 rounded-lg" style="background: rgba(59,130,246,0.1);">
+              ` : (knowledge.freezingInfo?.blanch || knowledge.freezingInfo?.duration || knowledge.freezingInfo?.defrostMethod || knowledge.freezingInfo?.instructions) ? `
+                <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
                   ${knowledge.freezingInfo?.blanch ? `
-                    <div style="color:${CONFIG.text_color}; margin-bottom:8px;">
-                      <strong>Blanch:</strong> ${esc(knowledge.freezingInfo.blanch)}
+                    <div class="flex-shrink-0 p-3 rounded-lg" style="background: rgba(59,130,246,0.1); min-width: 140px;">
+                      <div style="color: #3b82f6; font-size: 1.2rem; margin-bottom: 4px;">🫧</div>
+                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-bottom: 2px;">Blanch</div>
+                      <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 14px;">${esc(knowledge.freezingInfo.blanch)}</div>
                     </div>
                   ` : ''}
                   ${knowledge.freezingInfo?.duration ? `
-                    <div style="color:${CONFIG.text_color}; margin-bottom:8px;">
-                      <strong>Freezer Life:</strong> ${esc(knowledge.freezingInfo.duration)}
+                    <div class="flex-shrink-0 p-3 rounded-lg" style="background: rgba(59,130,246,0.1); min-width: 140px;">
+                      <div style="color: #3b82f6; font-size: 1.2rem; margin-bottom: 4px;">🧊</div>
+                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-bottom: 2px;">Freezer Life</div>
+                      <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 14px;">${esc(knowledge.freezingInfo.duration)}</div>
                     </div>
                   ` : ''}
-                  ${knowledge.freezingInfo?.instructions ? `
-                    <div style="color:${CONFIG.text_color}; line-height: 1.6;">
-                      ${esc(knowledge.freezingInfo.instructions)}
+                  ${knowledge.freezingInfo?.defrostMethod ? `
+                    <div class="flex-shrink-0 p-3 rounded-lg" style="background: rgba(59,130,246,0.1); min-width: 140px;">
+                      <div style="color: #3b82f6; font-size: 1.2rem; margin-bottom: 4px;">🔥</div>
+                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-bottom: 2px;">Defrost Method</div>
+                      <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 14px;">${esc(knowledge.freezingInfo.defrostMethod)}</div>
+                    </div>
+                  ` : ''}
+                  ${knowledge.freezingInfo?.defrostTime ? `
+                    <div class="flex-shrink-0 p-3 rounded-lg" style="background: rgba(59,130,246,0.1); min-width: 140px;">
+                      <div style="color: #3b82f6; font-size: 1.2rem; margin-bottom: 4px;">⏱️</div>
+                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-bottom: 2px;">Defrost Time</div>
+                      <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 14px;">${esc(knowledge.freezingInfo.defrostTime)}</div>
+                    </div>
+                  ` : ''}
+                  ${knowledge.freezingInfo?.afterDefrost ? `
+                    <div class="flex-shrink-0 p-3 rounded-lg" style="background: rgba(59,130,246,0.1); min-width: 140px;">
+                      <div style="color: #3b82f6; font-size: 1.2rem; margin-bottom: 4px;">📅</div>
+                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-bottom: 2px;">After Defrost</div>
+                      <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 14px;">${esc(knowledge.freezingInfo.afterDefrost)}</div>
                     </div>
                   ` : ''}
                 </div>
+                ${knowledge.freezingInfo?.instructions ? `
+                  <div style="margin-top: 12px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 8px;">
+                    <div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-bottom: 4px;">Notes</div>
+                    <div style="color: ${CONFIG.text_color}; font-size: 13px; line-height: 1.5;">${esc(knowledge.freezingInfo.instructions)}</div>
+                  </div>
+                ` : ''}
               ` : `
                 <div class="text-center p-6" style="color:${CONFIG.text_muted};">
                   No freezing info added yet
@@ -15786,14 +15914,14 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       }
     }
 
-    function editFreezingInfo(ingredientName) {
+  function editFreezingInfo(ingredientName) {
       let knowledge = getIngredientKnowledge(ingredientName);
       if (!knowledge) {
         knowledge = createDefaultIngredientKnowledge(ingredientName);
       }
       
       openModal(`
-        <div style="color: ${CONFIG.text_color};">
+        <div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;">
           <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">🧊 Edit Freezing Info</h2>
           
           <div style="margin-bottom: 16px;">
@@ -15814,25 +15942,48 @@ Keep responses helpful but concise. Use bullet points for steps.`;
             </div>
           </div>
           
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Blanch Time:</label>
-            <input type="text" id="freezeBlanch" value="${esc(knowledge.freezingInfo?.blanch || '')}"
-              placeholder="e.g., 3-4 minutes"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">🫧 Blanch Time</label>
+              <input type="text" id="freezeBlanch" value="${esc(knowledge.freezingInfo?.blanch || '')}"
+                placeholder="e.g., 3-4 min"
+                style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">🧊 Freezer Life</label>
+              <input type="text" id="freezeDuration" value="${esc(knowledge.freezingInfo?.duration || '')}"
+                placeholder="e.g., 10-12 months"
+                style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+            </div>
+          </div>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">🔥 Defrost Method</label>
+              <input type="text" id="freezeDefrostMethod" value="${esc(knowledge.freezingInfo?.defrostMethod || '')}"
+                placeholder="e.g., Fridge overnight"
+                style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+            </div>
+            <div>
+              <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">⏱️ Defrost Time</label>
+              <input type="text" id="freezeDefrostTime" value="${esc(knowledge.freezingInfo?.defrostTime || '')}"
+                placeholder="e.g., 8-12 hours"
+                style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+            </div>
           </div>
           
           <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Freezer Life:</label>
-            <input type="text" id="freezeDuration" value="${esc(knowledge.freezingInfo?.duration || '')}"
-              placeholder="e.g., 10-12 months"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+            <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">📅 After Defrost (how long it lasts)</label>
+            <input type="text" id="freezeAfterDefrost" value="${esc(knowledge.freezingInfo?.afterDefrost || '')}"
+              placeholder="e.g., Use within 2-3 days"
+              style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
           </div>
           
           <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Instructions:</label>
-            <textarea id="freezeInstructions" rows="3"
-              placeholder="e.g., Blanch, ice bath, dry thoroughly, freeze in single layer then transfer to bags"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical;">${esc(knowledge.freezingInfo?.instructions || '')}</textarea>
+            <label style="display: block; margin-bottom: 6px; font-weight: 500; font-size: 14px;">📝 Additional Notes</label>
+            <textarea id="freezeInstructions" rows="2"
+              placeholder="Any other freezing tips..."
+              style="width: 100%; padding: 10px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical;">${esc(knowledge.freezingInfo?.instructions || '')}</textarea>
           </div>
           
           <input type="hidden" id="freezeIngName" value="${esc(ingredientName)}" />
@@ -15851,7 +16002,7 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       `);
     }
 
-    async function saveFreezingInfo() {
+  async function saveFreezingInfo() {
       const ingredientName = document.getElementById('freezeIngName').value;
       const freezableVal = document.querySelector('input[name="freezable"]:checked')?.value;
       
@@ -15864,6 +16015,9 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       knowledge.freezingInfo = {
         blanch: document.getElementById('freezeBlanch').value.trim(),
         duration: document.getElementById('freezeDuration').value.trim(),
+        defrostMethod: document.getElementById('freezeDefrostMethod').value.trim(),
+        defrostTime: document.getElementById('freezeDefrostTime').value.trim(),
+        afterDefrost: document.getElementById('freezeAfterDefrost').value.trim(),
         instructions: document.getElementById('freezeInstructions').value.trim()
       };
       
@@ -15889,10 +16043,18 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       
       const prompts = {
         cooking: `${displayName} cooking: List 3 methods. Format each as: "Method: temp, time". Example: "Air Fry: 400°F, 15 min". No other text.`,
-        techniques: `${displayName}: One best cooking technique in under 15 words.`,
+techniques: `${displayName} technique. Reply EXACTLY in this format:
+RESULT: [what you get, e.g., "Crispy outside, juicy inside"]
+METHOD: [technique name, e.g., "Sear then Bake"]
+STEPS: [numbered steps, brief]`,
         pairings: `${displayName} pairs with: List 8 ingredients, comma-separated, nothing else.`,
-        freezing: `Can ${displayName} freeze? Answer: Yes/No, duration, one prep tip. Under 20 words total.`,
-        notes: `${displayName}: One essential tip under 15 words.`
+freezing: `${displayName} freezing guide. Reply EXACTLY:
+FREEZABLE: Yes/No
+BLANCH: [time if needed, or "Not needed"]
+FREEZE DURATION: [how long in freezer]
+DEFROST METHOD: [how to defrost]
+DEFROST TIME: [how long to defrost]
+AFTER DEFROST: [how long it lasts after defrosting]`,        notes: `${displayName}: One essential tip under 15 words.`
       };
       
       const sectionLabels = {
@@ -15997,13 +16159,20 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       }
     }
 
-    async function saveClaudeResponseToSection() {
-      const ingredientName = document.getElementById('claudeSectionName').value;
-      const section = document.getElementById('claudeSectionType').value;
+  async function saveClaudeResponseToSection() {
+      const ingredientName = document.getElementById('claudeSectionName')?.value;
+      const section = document.getElementById('claudeSectionType')?.value;
       const response = state.claudeSectionResponse;
+      
+      console.log('Saving Claude response:', { ingredientName, section, response });
       
       if (!response) {
         showError('No response to save');
+        return;
+      }
+      
+      if (!ingredientName || !section) {
+        showError('Missing ingredient or section info');
         return;
       }
       
@@ -16019,13 +16188,18 @@ Keep responses helpful but concise. Use bullet points for steps.`;
           knowledge.cookingMethods = [...(knowledge.cookingMethods || []), ...methods];
           break;
           
-        case 'techniques':
-          // Add as a technique
+      case 'techniques':
+          // Parse structured technique response
           knowledge.techniques = knowledge.techniques || [];
+          
+          const resultMatch = response.match(/RESULT:\s*(.+?)(?=METHOD:|$)/is);
+          const methodMatch = response.match(/METHOD:\s*(.+?)(?=STEPS:|$)/is);
+          const stepsMatch = response.match(/STEPS:\s*(.+)/is);
+          
           knowledge.techniques.push({
-            result: 'Claude Suggestion',
-            method: 'Recommended Technique',
-            steps: response
+            result: resultMatch ? resultMatch[1].trim() : 'Claude Suggestion',
+            method: methodMatch ? methodMatch[1].trim() : 'Technique',
+            steps: stepsMatch ? stepsMatch[1].trim() : response
           });
           break;
           
@@ -16037,11 +16211,24 @@ Keep responses helpful but concise. Use bullet points for steps.`;
           knowledge.pairings = [...new Set([...(knowledge.pairings || []), ...pairings])];
           break;
           
-        case 'freezing':
-          // Parse freezing info
-          knowledge.freezable = response.toLowerCase().includes('yes') || response.toLowerCase().includes('can be frozen');
-          knowledge.freezingInfo = knowledge.freezingInfo || {};
-          knowledge.freezingInfo.instructions = response;
+      case 'freezing':
+          // Parse structured freezing response
+          const freezableMatch = response.match(/FREEZABLE:\s*(yes|no)/i);
+          const blanchMatch = response.match(/BLANCH:\s*(.+?)(?=FREEZE DURATION:|$)/is);
+          const durationMatch = response.match(/FREEZE DURATION:\s*(.+?)(?=DEFROST METHOD:|$)/is);
+          const defrostMethodMatch = response.match(/DEFROST METHOD:\s*(.+?)(?=DEFROST TIME:|$)/is);
+          const defrostTimeMatch = response.match(/DEFROST TIME:\s*(.+?)(?=AFTER DEFROST:|$)/is);
+          const afterDefrostMatch = response.match(/AFTER DEFROST:\s*(.+)/is);
+          
+          knowledge.freezable = freezableMatch ? freezableMatch[1].toLowerCase() === 'yes' : response.toLowerCase().includes('yes');
+          knowledge.freezingInfo = {
+            blanch: blanchMatch ? blanchMatch[1].trim() : '',
+            duration: durationMatch ? durationMatch[1].trim() : '',
+            defrostMethod: defrostMethodMatch ? defrostMethodMatch[1].trim() : '',
+            defrostTime: defrostTimeMatch ? defrostTimeMatch[1].trim() : '',
+            afterDefrost: afterDefrostMatch ? afterDefrostMatch[1].trim() : '',
+            instructions: ''
+          };
           break;
           
         case 'notes':
@@ -16414,10 +16601,16 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       knowledge.techniques = knowledge.techniques || [];
       knowledge.techniques.push(technique);
       
-      await saveIngredientKnowledge(knowledge);
-      closeModal();
-      showToast('Technique added!', 'success');
-      render();
+    try {
+        await saveIngredientKnowledge(knowledge);
+        closeModal();
+        showToast('Saved to ingredient!', 'success');
+        state.claudeSectionResponse = null; // Clear the stored response
+        render();
+      } catch (error) {
+        console.error('Save error:', error);
+        showError('Failed to save');
+      }
     }
 
     async function deleteTechnique(name, index) {
@@ -16427,6 +16620,42 @@ Keep responses helpful but concise. Use bullet points for steps.`;
         await saveIngredientKnowledge(knowledge);
         render();
       }
+    }
+
+   function viewTechniqueDetail(name, idx) {
+      const knowledge = getIngredientKnowledge(name);
+      if (!knowledge || !knowledge.techniques || !knowledge.techniques[idx]) return;
+      
+      const tech = knowledge.techniques[idx];
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px;">
+            <span style="font-size: 1.5rem;">🎯</span>
+            <h2 style="font-size: 20px; font-weight: 700; margin: 0;">${esc(tech.result)}</h2>
+          </div>
+          
+          <div style="margin-bottom: 16px;">
+            <div style="color: ${CONFIG.primary_action_color}; font-weight: 600; font-size: 15px; margin-bottom: 8px;">
+              ${esc(tech.method)}
+            </div>
+            <div style="color: ${CONFIG.text_color}; font-size: 14px; line-height: 1.7; white-space: pre-line; background: ${CONFIG.background_color}; padding: 12px; border-radius: 8px;">
+              ${esc(tech.steps)}
+            </div>
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeModal()" 
+              style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Close
+            </button>
+            <button onclick="closeModal(); deleteTechnique('${esc(name)}', ${idx})"
+              style="padding: 12px 20px; background: rgba(239,68,68,0.1); color: #ef4444; border: none; border-radius: 8px; cursor: pointer;">
+              🗑️ Delete
+            </button>
+          </div>
+        </div>
+      `);
     }
 
     function addPairing(name) {
