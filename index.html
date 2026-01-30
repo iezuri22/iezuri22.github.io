@@ -9568,21 +9568,30 @@ console.log('byMonth:', byMonth);
       });
       const allExpiringItems = [...expiredItems, ...expiringItems];
       
-      // Get budget info for this month
+  // Get budget info for this month
       const now = new Date();
       const thisMonth = now.getMonth();
       const thisYear = now.getFullYear();
-      const monthlyBudget = state.monthlyBudget || 0;
+      const thisMonthKey = `${thisYear}-${String(thisMonth + 1).padStart(2, '0')}`;
       
-      // Calculate monthly spent from purchases
-      const monthlySpent = (state.purchases || [])
-        .filter(p => {
-          if (!p.date) return false;
-          const pDate = new Date(p.date);
-          return pDate.getMonth() === thisMonth && pDate.getFullYear() === thisYear;
-        })
-        .reduce((sum, p) => sum + (parseFloat(p.total) || parseFloat(p.amount) || 0), 0);
+      // Weekly budgets
+      const weeklyGroceryBudget = state.groceryBudget || 0;
+      const weeklyTakeoutBudget = state.takeoutBudget || 0;
+      const weeklyBudget = weeklyGroceryBudget + weeklyTakeoutBudget;
       
+      // Estimate monthly budget (4.33 weeks per month)
+      const monthlyBudget = Math.round(weeklyBudget * 4.33);
+      
+      // Calculate monthly spent from budgetExpenses
+      const allExpenses = state.budgetExpenses || [];
+      const thisMonthExpenses = allExpenses.filter(exp => {
+        if (!exp.date) return false;
+        const expDate = new Date(exp.date + 'T00:00:00');
+        return expDate.getMonth() === thisMonth && expDate.getFullYear() === thisYear;
+      });
+      const monthlySpent = thisMonthExpenses.reduce((sum, exp) => sum + (exp.amount || 0), 0);
+      const monthlyGrocery = thisMonthExpenses.filter(e => e.type === 'grocery').reduce((sum, e) => sum + e.amount, 0);
+      const monthlyTakeout = thisMonthExpenses.filter(e => e.type === 'takeout').reduce((sum, e) => sum + e.amount, 0);
       // Get items marked as "want to use" from inventory
       const wantToUseItems = state.inventory.filter(i => i.wantToUse);
       const wantToUseCount = wantToUseItems.length;
@@ -9639,10 +9648,10 @@ console.log('byMonth:', byMonth);
                   <div style="color: rgba(255,255,255,0.8); font-size: 10px;">In Stock</div>
                 </div>
                 
-                <!-- Spent This Month -->
-                <div onclick="navigateTo('budget-dashboard')" style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+               <!-- Spent This Month -->
+                <div onclick="navigateTo('budget-dashboard')" style="background: ${monthlyBudget > 0 && monthlySpent > monthlyBudget ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.2)'}; backdrop-filter: blur(10px); border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
                   <div style="color: ${monthlyBudget > 0 && monthlySpent > monthlyBudget ? '#fca5a5' : 'white'}; font-size: 18px; font-weight: 700;">$${monthlySpent.toFixed(0)}</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 10px;">${monthlyBudget > 0 ? `of $${monthlyBudget}` : 'This Month'}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 10px;">${monthlyBudget > 0 ? `/ $${monthlyBudget}` : 'Spent'}</div>
                 </div>
                 
                 <!-- Expiring Soon -->
@@ -9691,85 +9700,96 @@ console.log('byMonth:', byMonth);
               <div id="homeSearchResults"></div>
             </div>
             
-            <!-- Today's Meals Card -->
+          <!-- Today's Meals Card - With Images -->
             <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 14px; margin-bottom: 12px; box-shadow: ${CONFIG.shadow};">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                <div style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 600;">Today</div>
-                <button onclick="navigateTo('meal-plan')" style="background: none; border: none; color: ${CONFIG.primary_action_color}; font-size: 12px; cursor: pointer;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <div style="color: ${CONFIG.text_color}; font-size: 15px; font-weight: 600;">🍽️ Today's Meals</div>
+                <button onclick="navigateTo('meal-plan')" style="background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 11px; cursor: pointer; padding: 4px 10px; border-radius: 6px;">
                   ${hasTodayMeals ? 'Edit' : '+ Plan'}
                 </button>
               </div>
               
               ${hasTodayMeals ? `
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
-                  <!-- Breakfast -->
-                  <div style="background: ${CONFIG.background_color}; border-radius: 10px; padding: 10px;">
-                    <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-bottom: 6px;">Breakfast</div>
-                    ${todayMeals.breakfast.length > 0 ? todayMeals.breakfast.map(r => `
-                      <div onclick="openRecipeView('${r.__backendId || r.id}')" style="cursor: pointer;">
-                        <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+                <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
+                  ${['breakfast', 'lunch', 'dinner'].map(mealType => {
+                    const meals = todayMeals[mealType];
+                    const emoji = mealType === 'breakfast' ? '🌅' : mealType === 'lunch' ? '☀️' : '🌙';
+                    const label = mealType.charAt(0).toUpperCase() + mealType.slice(1);
+                    
+                    if (meals.length === 0) {
+                      return `
+                        <div onclick="navigateTo('meal-plan')" style="flex: 1; min-width: 100px; background: ${CONFIG.background_color}; border-radius: 12px; padding: 10px; cursor: pointer; border: 1px dashed rgba(0,0,0,0.1);">
+                          <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-bottom: 4px;">${emoji} ${label}</div>
+                          <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-style: italic;">+ Add</div>
+                        </div>
+                      `;
+                    }
+                    
+                    const r = meals[0];
+                    const img = recipeThumb(r);
+                    return `
+                      <div onclick="openRecipeView('${r.__backendId || r.id}')" style="flex: 1; min-width: 100px; background: ${CONFIG.background_color}; border-radius: 12px; overflow: hidden; cursor: pointer;">
+                        <div style="height: 60px; background: rgba(0,0,0,0.05);">
+                          ${img ? `<img src="${esc(img)}" style="width: 100%; height: 100%; object-fit: cover;" />` : `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px;">${emoji}</div>`}
+                        </div>
+                        <div style="padding: 8px;">
+                          <div style="color: ${CONFIG.text_muted}; font-size: 9px; margin-bottom: 2px;">${emoji} ${label}</div>
+                          <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+                        </div>
                       </div>
-                    `).join('') : `
-                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-style: italic;">Not planned</div>
-                    `}
-                  </div>
-                  
-                  <!-- Lunch -->
-                  <div style="background: ${CONFIG.background_color}; border-radius: 10px; padding: 10px;">
-                    <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-bottom: 6px;">Lunch</div>
-                    ${todayMeals.lunch.length > 0 ? todayMeals.lunch.map(r => `
-                      <div onclick="openRecipeView('${r.__backendId || r.id}')" style="cursor: pointer;">
-                        <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
-                      </div>
-                    `).join('') : `
-                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-style: italic;">Not planned</div>
-                    `}
-                  </div>
-                  
-                  <!-- Dinner -->
-                  <div style="background: ${CONFIG.background_color}; border-radius: 10px; padding: 10px;">
-                    <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-bottom: 6px;">Dinner</div>
-                    ${todayMeals.dinner.length > 0 ? todayMeals.dinner.map(r => `
-                      <div onclick="openRecipeView('${r.__backendId || r.id}')" style="cursor: pointer;">
-                        <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
-                      </div>
-                    `).join('') : `
-                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-style: italic;">Not planned</div>
-                    `}
-                  </div>
+                    `;
+                  }).join('')}
                 </div>
               ` : `
-                <div onclick="navigateTo('meal-plan')" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 10px; cursor: pointer; border: 1px dashed rgba(0,0,0,0.1);">
-                  <div style="color: ${CONFIG.text_muted}; font-size: 20px;">🤔</div>
-                  <div>
-                    <div style="color: ${CONFIG.text_color}; font-size: 13px; font-weight: 500;">No meals planned</div>
-                    <div style="color: ${CONFIG.text_muted}; font-size: 11px;">Tap to plan your day</div>
+                <div onclick="navigateTo('meal-plan')" style="display: flex; align-items: center; gap: 12px; padding: 16px; background: linear-gradient(135deg, rgba(102,126,234,0.1), rgba(118,75,162,0.1)); border-radius: 12px; cursor: pointer; border: 2px dashed rgba(102,126,234,0.3);">
+                  <div style="font-size: 32px;">🍽️</div>
+                  <div style="flex: 1;">
+                    <div style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 600;">Plan Today's Meals</div>
+                    <div style="color: ${CONFIG.text_muted}; font-size: 12px;">What are you cooking?</div>
                   </div>
+                  <div style="color: ${CONFIG.primary_action_color}; font-size: 20px;">→</div>
                 </div>
               `}
             </div>
             
-            <!-- Yesterday's Meals (collapsed) -->
-            ${hasYesterdayMeals ? `
-              <details style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; box-shadow: ${CONFIG.shadow};">
-                <summary style="color: ${CONFIG.text_muted}; font-size: 12px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;">
-                  <span>Yesterday's meals</span>
-                  <span style="font-size: 10px;">▼</span>
-                </summary>
-                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px;">
-                  ${['breakfast', 'lunch', 'dinner'].map(meal => `
-                    <div style="text-align: center;">
-                      <div style="color: ${CONFIG.text_muted}; font-size: 9px; margin-bottom: 4px;">${meal.charAt(0).toUpperCase() + meal.slice(1)}</div>
-                      ${yesterdayMeals[meal].length > 0 ? yesterdayMeals[meal].map(r => `
-                        <div style="color: ${CONFIG.text_color}; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
-                      `).join('') : `
-                        <div style="color: ${CONFIG.text_muted}; font-size: 10px;">-</div>
-                      `}
-                    </div>
-                  `).join('')}
+            <!-- Yesterday's Meals - With Images -->
+            <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; box-shadow: ${CONFIG.shadow};">
+              <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 500; margin-bottom: 10px;">📅 Yesterday</div>
+              ${hasYesterdayMeals ? `
+                <div style="display: flex; gap: 6px; overflow-x: auto;">
+                  ${['breakfast', 'lunch', 'dinner'].map(mealType => {
+                    const meals = yesterdayMeals[mealType];
+                    const emoji = mealType === 'breakfast' ? '🌅' : mealType === 'lunch' ? '☀️' : '🌙';
+                    
+                    if (meals.length === 0) {
+                      return `
+                        <div style="flex: 1; min-width: 80px; text-align: center; padding: 8px; background: ${CONFIG.background_color}; border-radius: 8px; opacity: 0.5;">
+                          <div style="font-size: 16px; margin-bottom: 2px;">${emoji}</div>
+                          <div style="color: ${CONFIG.text_muted}; font-size: 9px;">-</div>
+                        </div>
+                      `;
+                    }
+                    
+                    const r = meals[0];
+                    const img = recipeThumb(r);
+                    return `
+                      <div onclick="openRecipeView('${r.__backendId || r.id}')" style="flex: 1; min-width: 80px; background: ${CONFIG.background_color}; border-radius: 8px; overflow: hidden; cursor: pointer;">
+                        <div style="height: 45px; background: rgba(0,0,0,0.05);">
+                          ${img ? `<img src="${esc(img)}" style="width: 100%; height: 100%; object-fit: cover; opacity: 0.8;" />` : `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 18px;">${emoji}</div>`}
+                        </div>
+                        <div style="padding: 6px; text-align: center;">
+                          <div style="color: ${CONFIG.text_color}; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
                 </div>
-              </details>
-            ` : ''}
+              ` : `
+                <div style="text-align: center; padding: 8px; color: ${CONFIG.text_muted}; font-size: 11px;">
+                  No meals logged yesterday
+                </div>
+              `}
+            </div>
             
             <!-- Use Soon - Recipes with expiring/want-to-use ingredients -->
             ${(() => {
@@ -9813,26 +9833,31 @@ console.log('byMonth:', byMonth);
               `;
             })()}
             
-            <!-- Quick Actions - Smaller -->
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px;">
-              <button onclick="showReceiptModal()" style="display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
-                <span style="font-size: 22px; margin-bottom: 2px;">📸</span>
-                <span style="color: ${CONFIG.text_color}; font-size: 10px; font-weight: 500;">Scan</span>
+          <!-- Quick Actions - Smaller -->
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-bottom: 16px;">
+              <button onclick="showReceiptModal()" style="display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 20px; margin-bottom: 2px;">📸</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 9px; font-weight: 500;">Scan</span>
               </button>
               
-              <button onclick="showWhatCanICook()" style="display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
-                <span style="font-size: 22px; margin-bottom: 2px;">🍳</span>
-                <span style="color: ${CONFIG.text_color}; font-size: 10px; font-weight: 500;">Cook</span>
+              <button onclick="showWhatCanICook()" style="display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 20px; margin-bottom: 2px;">🍳</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 9px; font-weight: 500;">Cook</span>
               </button>
               
-              <button onclick="navigateTo('recipe-stats')" style="display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
-                <span style="font-size: 22px; margin-bottom: 2px;">📊</span>
-                <span style="color: ${CONFIG.text_color}; font-size: 10px; font-weight: 500;">Stats</span>
+              <button onclick="navigateTo('grocery-list')" style="display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 20px; margin-bottom: 2px;">🛒</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 9px; font-weight: 500;">Grocery</span>
               </button>
               
-              <button onclick="navigateTo('purchase-history')" style="display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
-                <span style="font-size: 22px; margin-bottom: 2px;">🧾</span>
-                <span style="color: ${CONFIG.text_color}; font-size: 10px; font-weight: 500;">History</span>
+              <button onclick="navigateTo('recipe-stats')" style="display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 20px; margin-bottom: 2px;">📊</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 9px; font-weight: 500;">Stats</span>
+              </button>
+              
+              <button onclick="navigateTo('purchase-history')" style="display: flex; flex-direction: column; align-items: center; padding: 10px 4px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 20px; margin-bottom: 2px;">🧾</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 9px; font-weight: 500;">History</span>
               </button>
             </div>
             
