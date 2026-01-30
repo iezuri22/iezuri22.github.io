@@ -12300,77 +12300,66 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
       `;
     }
 
-    function renderWeeklyPlanContent() {
+  function renderWeeklyPlanContent() {
       const dates = getWeekDates(state.currentWeekStartDate);
       const meals = ['Breakfast', 'Lunch', 'Dinner'];
       
-      // Get today and tomorrow
       const today = new Date().toISOString().split('T')[0];
       const tomorrowDate = new Date();
       tomorrowDate.setDate(tomorrowDate.getDate() + 1);
       const tomorrow = tomorrowDate.toISOString().split('T')[0];
       
-      // Check if today is Sunday (day 0)
       const todayDayOfWeek = new Date().getDay();
       const isSunday = todayDayOfWeek === 0;
       
-      // Reorder dates: today first, then tomorrow (if not Sunday), then rest of week through Sunday
       let orderedDates = [];
       const todayIndex = dates.indexOf(today);
       
       if (todayIndex !== -1) {
-        // Today is in this week - reorder starting from today
         orderedDates = [...dates.slice(todayIndex), ...dates.slice(0, todayIndex)];
       } else {
         orderedDates = dates;
       }
       
-      // Get week range for header
       const weekStart = new Date(dates[0] + 'T00:00:00');
       const weekEnd = new Date(dates[6] + 'T00:00:00');
       const weekRange = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
       
-      // Budget info
       const weekExpenses = getWeekExpenses(state.currentWeekStartDate);
       const totalBudget = weekExpenses.budget;
       const isTotalOver = (totalBudget - weekExpenses.total) < 0;
 
       return `
         <!-- Week Navigation & Date Range -->
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex items-center gap-2">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:8px;">
             <button onclick="changeWeek(-1)"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;">
+              style="padding:4px 10px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none; border-radius:6px; cursor:pointer;">
               ←
             </button>
             <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">
               ${weekRange}
             </div>
             <button onclick="changeWeek(1)"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;">
+              style="padding:4px 10px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none; border-radius:6px; cursor:pointer;">
               →
             </button>
           </div>
-          <div class="flex gap-1">
+          <div style="display:flex; gap:4px;">
             <button onclick="setCurrentWeek()"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.primary_action_color}; color:white; font-size:10px; border:none;">
+              style="padding:4px 10px; background:${CONFIG.primary_action_color}; color:white; font-size:10px; border:none; border-radius:6px; cursor:pointer;">
               Today
             </button>
             <button onclick="copyLastWeekPlan()"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:10px; border:none;"
-              title="Copy last week">
+              style="padding:4px 10px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:10px; border:none; border-radius:6px; cursor:pointer;">
               Copy
             </button>
           </div>
         </div>
 
         <!-- Budget Bar -->
-        <div class="flex items-center justify-between mb-3 p-2 rounded-lg" style="background:${CONFIG.surface_color};">
-          <div class="flex items-center gap-3">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; padding:10px; background:${CONFIG.surface_color}; border-radius:8px;">
+          <div style="display:flex; align-items:center; gap:12px;">
             <div style="font-size:12px;">
               <span style="color:${isTotalOver ? '#ef4444' : CONFIG.success_color}; font-weight:600;">$${weekExpenses.total.toFixed(0)}</span>
               <span style="color:${CONFIG.text_muted};"> / $${totalBudget.toFixed(0)}</span>
@@ -12379,41 +12368,36 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
               Grocery $${weekExpenses.grocery.toFixed(0)} · Takeout $${weekExpenses.takeout.toFixed(0)}
             </div>
           </div>
-          <div class="flex gap-1">
+          <div style="display:flex; gap:4px;">
             <button onclick="showAddExpenseModal('grocery')"
-              class="px-2 py-1 rounded"
-              style="background:#16a34a; color:white; font-size:9px; border:none;">
+              style="padding:4px 8px; background:#16a34a; color:white; font-size:9px; border:none; border-radius:4px; cursor:pointer;">
               + Grocery
             </button>
             <button onclick="showAddExpenseModal('takeout')"
-              class="px-2 py-1 rounded"
-              style="background:#f59e0b; color:white; font-size:9px; border:none;">
+              style="padding:4px 8px; background:#f59e0b; color:white; font-size:9px; border:none; border-radius:4px; cursor:pointer;">
               + Takeout
             </button>
             <button onclick="showManageExpensesModal()"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:9px; border:none;">
+              style="padding:4px 8px; background:${CONFIG.background_color}; color:${CONFIG.text_color}; font-size:9px; border:none; border-radius:4px; cursor:pointer;">
               Manage
             </button>
           </div>
         </div>
 
         <!-- Days -->
-        <div class="grid gap-2">
+        <div style="display:flex; flex-direction:column; gap:8px;">
           ${orderedDates.map((date, index) => {
             const plan = state.planData.find(p => p.date === date);
             const isToday = date === today;
             const isTomorrow = date === tomorrow && !isSunday;
             const isPast = new Date(date) < new Date(today);
             
-            // Count meals for this day
             const mealCount = meals.reduce((count, meal) => {
               const key = meal.toLowerCase();
               const recipeIds = plan ? (plan[key] || []) : [];
               return count + recipeIds.length;
             }, 0);
             
-            // Format date label
             const dateObj = new Date(date + 'T00:00:00');
             const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
             const dayNum = dateObj.getDate();
@@ -12422,13 +12406,12 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
             if (isToday) dateLabel = `Today · ${dayName} ${dayNum}`;
             else if (isTomorrow) dateLabel = `Tomorrow · ${dayName} ${dayNum}`;
             
-            // Today and Tomorrow are open by default
             const defaultOpen = isToday || isTomorrow;
             
             return `
-              <details ${defaultOpen ? 'open' : ''} class="rounded-lg" style="background:${CONFIG.surface_color}; ${isToday ? 'border: 2px solid ' + CONFIG.primary_action_color : ''}">
-                <summary class="p-3 cursor-pointer" style="list-style:none; display:flex; justify-content:space-between; align-items:center;">
-                  <div class="flex items-center gap-2">
+              <details ${defaultOpen ? 'open' : ''} style="background:${CONFIG.surface_color}; border-radius:8px; ${isToday ? 'border: 2px solid ' + CONFIG.primary_action_color : ''}">
+                <summary style="padding:12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; list-style:none;">
+                  <div style="display:flex; align-items:center; gap:8px;">
                     <span style="color:${isToday ? CONFIG.primary_action_color : isPast ? CONFIG.text_muted : CONFIG.text_color}; font-size:12px; font-weight:${isToday ? '700' : '600'};">
                       ${dateLabel}
                     </span>
@@ -12441,34 +12424,33 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                   <span style="color:${CONFIG.text_muted}; font-size:10px;">▼</span>
                 </summary>
                 
-                <div class="px-3 pb-3">
+                <div style="padding:0 12px 12px 12px;">
                   ${meals.map(meal => {
                     const key = meal.toLowerCase();
                     const recipeIds = plan ? (plan[key] || []) : [];
                     const hasRecipes = recipeIds.length > 0;
-                    const mealEmoji = meal === 'Breakfast' ? '🌅' : meal === 'Lunch' ? '☀️' : '🌙';
 
                     return `
-                      <div class="mb-2 p-2 rounded-lg" style="background:${CONFIG.background_color};"
+                      <div style="margin-bottom:8px; padding:10px; background:${CONFIG.background_color}; border-radius:8px;"
                            ondragover="handleDragOver(event)"
                            ondragleave="handleDragLeave(event)"
                            ondrop="handleDrop(event, '${date}', '${meal}')">
-                        <div class="flex items-center justify-between mb-2">
-                          <span style="color:${CONFIG.text_muted}; font-size:10px;">${mealEmoji} ${meal}</span>
-                          <div class="flex gap-1">
+                        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:${hasRecipes ? '8px' : '0'};">
+                          <span style="color:${CONFIG.text_muted}; font-size:11px; font-weight:500;">${meal}</span>
+                          <div style="display:flex; gap:4px;">
                             <button onclick="openRecipePicker('${date}','${meal}')"
-                              style="padding:2px 8px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
+                              style="padding:3px 8px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
                               + Add
                             </button>
                             <button onclick="openExternalMealPicker('${date}','${meal}')"
-                              style="padding:2px 8px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
+                              style="padding:3px 8px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
                               External
                             </button>
                           </div>
                         </div>
                         
                         ${hasRecipes ? `
-                          <div class="flex flex-col gap-1">
+                          <div style="display:flex; flex-wrap:wrap; gap:6px;">
                             ${recipeIds.map(recipeId => {
                               const r = getRecipeById(recipeId);
                               if (!r) return '';
@@ -12477,24 +12459,23 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
                               const img = (r && !isExternal) ? recipeThumb(r) : '';
                               
                               return `
-                                <div class="flex items-center gap-2 p-2 rounded" 
-                                     style="background:rgba(255,255,255,0.03);"
+                                <div style="display:flex; align-items:center; gap:8px; padding:6px 8px; background:rgba(255,255,255,0.05); border-radius:6px; flex:0 0 auto; max-width:280px;"
                                      draggable="true"
                                      ondragstart="handleDragStart(event, '${date}', '${meal}', '${recipeId}')"
                                      ondragend="handleDragEnd(event)">
                                   ${isExternal ? `
-                                    <div style="width:32px;height:32px;border-radius:4px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🍴</div>
+                                    <div style="width:28px;height:28px;border-radius:4px;background:rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;">🍴</div>
                                   ` : img ? `
-                                    <img src="${esc(img)}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0;" />
+                                    <img src="${esc(img)}" style="width:28px;height:28px;object-fit:cover;border-radius:4px;flex-shrink:0;" />
                                   ` : `
-                                    <div style="width:32px;height:32px;border-radius:4px;background:rgba(255,255,255,0.06);flex-shrink:0;"></div>
+                                    <div style="width:28px;height:28px;border-radius:4px;background:rgba(255,255,255,0.1);flex-shrink:0;"></div>
                                   `}
-                                  <div style="flex:1; min-width:0;">
+                                  <div style="flex:1; min-width:0; max-width:140px;">
                                     <div style="color:${CONFIG.text_color}; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                       ${esc(r.title)}
                                     </div>
                                   </div>
-                                  <div class="flex gap-1">
+                                  <div style="display:flex; gap:4px; flex-shrink:0;">
                                     <button onclick="openRecipeView('${r.__backendId || r.id}')"
                                       style="padding:2px 6px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
                                       View
