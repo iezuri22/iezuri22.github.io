@@ -4024,20 +4024,17 @@ async function saveReceiptExpense() {
       }
     }
 
- function renderInventory() {
+function renderInventory() {
       const inventory = getInventoryItems();
-// Include both old and new category names to catch all items
       const categories = [
         'Uncategorized', 
-        // New categories (INGREDIENT_CATEGORIES)
         'Vegetables', 'Fruits', 'Proteins', 'Dairy', 'Grains', 'Herbs & Spices', 'Pantry', 'Other',
-        // Old categories (for backwards compatibility)
         'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Bakery', 'Frozen', 'Snacks', 'Beverages'
       ];      
       const grouped = {};
       categories.forEach(cat => grouped[cat] = []);
       
-    // Apply filter
+      // Apply filter
       let filteredInventory = inventory;
       if (state.inventoryFilter === 'expiring') {
         filteredInventory = inventory.filter(i => ['expired', 'expiring-soon'].includes(getExpirationStatus(i)));
@@ -4061,185 +4058,178 @@ async function saveReceiptExpense() {
         });
       });
 
-      // Count expiring items
+      // Counts
       const expiringCount = inventory.filter(i => ['expired', 'expiring-soon'].includes(getExpirationStatus(i))).length;
-      
-      // Count items needing verification (from receipts, not yet verified)
+      const frozenCount = inventory.filter(i => i.isFrozen).length;
+      const toUseCount = inventory.filter(i => i.wantToUse).length;
       const unverifiedItems = inventory.filter(i => i.fromReceipt && i.expirationVerified === false);
-      const unverifiedCount = unverifiedItems.length;
 
       return `
-        <div class="p-4 max-w-4xl mx-auto">
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
-              🥫 Pantry
-            </h2>
-           <div class="flex gap-2">
-              <button onclick="requestNotificationPermission()"
-                class="px-3 py-2 rounded-lg"
-                style="background:${state.notificationsEnabled ? CONFIG.success_color : CONFIG.surface_color}; color:${state.notificationsEnabled ? 'white' : CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px; box-shadow: ${CONFIG.shadow};"
-                title="${state.notificationsEnabled ? 'Notifications on' : 'Enable notifications'}">
-                🔔 ${state.notificationsEnabled ? 'On' : 'Off'}
-              </button>
+        <div class="p-3 max-w-4xl mx-auto">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex gap-1">
               <button onclick="showAddInventoryModal()"
-                class="px-3 py-2 rounded-lg"
-                style="background:${CONFIG.primary_action_color}; color:white;">
-                + Add Item
+                class="px-2 py-1 rounded"
+                style="background:${CONFIG.primary_action_color}; color:white; font-size:11px; border:none;">
+                + Add
               </button>
-          
+              <button onclick="showReceiptModal()"
+                class="px-2 py-1 rounded"
+                style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;">
+                Scan
+              </button>
               <button onclick="consolidateInventory()"
-                class="px-3 py-2 rounded-lg"
-                style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};"
-                title="Merge duplicate items">
-                🔄
+                class="px-2 py-1 rounded"
+                style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;"
+                title="Merge duplicates">
+                Merge
+              </button>
+            </div>
+            <div class="flex gap-1">
+              <button onclick="requestNotificationPermission()"
+                class="px-2 py-1 rounded"
+                style="background:${state.notificationsEnabled ? CONFIG.success_color : CONFIG.surface_color}; color:${state.notificationsEnabled ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
+                ${state.notificationsEnabled ? 'Alerts On' : 'Alerts'}
               </button>
               <button onclick="confirmClearAllInventory()"
-                class="px-3 py-2 rounded-lg"
-                style="background:${CONFIG.surface_color}; color:${CONFIG.danger_color}; box-shadow: ${CONFIG.shadow};"
-                title="Clear all inventory">
-                🗑️
+                class="px-2 py-1 rounded"
+                style="background:${CONFIG.surface_color}; color:${CONFIG.danger_color}; font-size:10px; border:none;">
+                Clear
               </button>
             </div>
           </div>
 
-       <!-- Pantry Subtabs -->
-          <div class="flex gap-2 mb-4">
+          <!-- Subtabs -->
+          <div class="flex gap-1 mb-3">
             <button onclick="state.pantryTab = 'instock'; render();"
-              class="px-4 py-2 rounded-lg font-medium"
-              style="background: ${(state.pantryTab || 'instock') === 'instock' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(state.pantryTab || 'instock') === 'instock' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              📦 In Stock (${inventory.length})
+              class="px-2 py-1 rounded"
+              style="background: ${(state.pantryTab || 'instock') === 'instock' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(state.pantryTab || 'instock') === 'instock' ? 'white' : CONFIG.text_color}; font-size:11px; border:none;">
+              In Stock (${inventory.length})
             </button>
             <button onclick="state.pantryTab = 'ingredients'; render();"
-              class="px-4 py-2 rounded-lg font-medium"
-              style="background: ${state.pantryTab === 'ingredients' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'ingredients' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              🥗 All Ingredients (${(state.ingredientKnowledge || []).length})
+              class="px-2 py-1 rounded"
+              style="background: ${state.pantryTab === 'ingredients' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'ingredients' ? 'white' : CONFIG.text_color}; font-size:11px; border:none;">
+              Ingredients (${(state.ingredientKnowledge || []).length})
             </button>
             <button onclick="state.pantryTab = 'blends'; render();"
-              class="px-4 py-2 rounded-lg font-medium"
-              style="background: ${state.pantryTab === 'blends' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'blends' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              🧂 My Blends (${(state.seasoningBlends || []).length})
+              class="px-2 py-1 rounded"
+              style="background: ${state.pantryTab === 'blends' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'blends' ? 'white' : CONFIG.text_color}; font-size:11px; border:none;">
+              Blends (${(state.seasoningBlends || []).length})
             </button>
           </div>
 
-        ${state.pantryTab === 'blends' ? renderMyBlends() : state.pantryTab === 'ingredients' ? renderAllIngredients() : `
+          ${state.pantryTab === 'blends' ? renderMyBlends() : state.pantryTab === 'ingredients' ? renderAllIngredients() : `
 
-          <!-- Filter Buttons -->
-          <div class="flex gap-2 mb-4 flex-wrap">
+          <!-- Filters -->
+          <div class="flex gap-1 mb-3 flex-wrap">
             <button onclick="state.inventoryFilter = 'all'; render();"
-              class="px-3 py-1 rounded-full text-sm"
-              style="background: ${(!state.inventoryFilter || state.inventoryFilter === 'all') ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(!state.inventoryFilter || state.inventoryFilter === 'all') ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              class="px-2 py-1 rounded"
+              style="background: ${(!state.inventoryFilter || state.inventoryFilter === 'all') ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(!state.inventoryFilter || state.inventoryFilter === 'all') ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
               All (${inventory.length})
             </button>
             <button onclick="state.inventoryFilter = 'expiring'; render();"
-              class="px-3 py-1 rounded-full text-sm"
-              style="background: ${state.inventoryFilter === 'expiring' ? '#f59e0b' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'expiring' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              ⚠️ Expiring (${expiringCount})
+              class="px-2 py-1 rounded"
+              style="background: ${state.inventoryFilter === 'expiring' ? '#f59e0b' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'expiring' ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
+              Expiring (${expiringCount})
             </button>
-            <button onclick="state.inventoryFilter = 'wantToUse'; render();"
-              class="px-3 py-1 rounded-full text-sm"
-              style="background: ${state.inventoryFilter === 'wantToUse' ? '#34d399' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'wantToUse' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              ✓ To Use (${inventory.filter(i => i.wantToUse).length})
+            <button onclick="state.inventoryFilter === 'wantToUse'; render();"
+              class="px-2 py-1 rounded"
+              style="background: ${state.inventoryFilter === 'wantToUse' ? '#34d399' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'wantToUse' ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
+              To Use (${toUseCount})
             </button>
             <button onclick="state.inventoryFilter = 'frozen'; render();"
-              class="px-3 py-1 rounded-full text-sm"
-              style="background: ${state.inventoryFilter === 'frozen' ? '#3b82f6' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'frozen' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              ❄️ Frozen (${inventory.filter(i => i.isFrozen).length})
+              class="px-2 py-1 rounded"
+              style="background: ${state.inventoryFilter === 'frozen' ? '#3b82f6' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'frozen' ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
+              Frozen (${frozenCount})
             </button>
           </div>
 
-         ${expiringCount > 0 && (!state.inventoryFilter || state.inventoryFilter === 'all') ? `
-            <div class="mb-4 p-3 rounded-lg" style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3);">
-              <div style="color:${CONFIG.danger_color}; font-size:${CONFIG.font_size * 0.9}px; font-weight: 500;">
-                ⚠️ ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon or expired
+          <!-- Expiring Alert -->
+          ${expiringCount > 0 && (!state.inventoryFilter || state.inventoryFilter === 'all') ? `
+            <div onclick="state.inventoryFilter = 'expiring'; render();" class="mb-3 p-2 rounded-lg cursor-pointer" style="background:rgba(239,68,68,0.1); border-left:3px solid #ef4444;">
+              <div style="color:#ef4444; font-size:12px; font-weight:500;">
+                ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon
               </div>
             </div>
           ` : ''}
 
-          ${unverifiedCount > 0 ? `
-            <div class="mb-4 p-4 rounded-xl" style="background: linear-gradient(135deg, rgba(245,158,11,0.1), rgba(251,191,36,0.1)); border: 1px solid rgba(245,158,11,0.3); box-shadow: ${CONFIG.shadow};">
-              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-                <div style="color: #b45309; font-size: ${CONFIG.font_size}px; font-weight: 600;">
-                  📋 Verify Expiration Dates (${unverifiedCount})
-                </div>
-                <button onclick="verifyAllItems()" style="padding: 6px 12px; background: #f59e0b; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
-                  ✓ Verify All
-                </button>
-              </div>
-              <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-bottom: 12px;">
-                These items were added from receipt scans. Tap to verify or adjust expiration dates.
-              </div>
-              <div style="display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto;">
+          <!-- Unverified Items -->
+          ${unverifiedItems.length > 0 ? `
+            <details class="mb-3">
+              <summary class="cursor-pointer px-3 py-2 rounded-lg" style="background:rgba(245,158,11,0.1); color:#b45309; font-size:12px; list-style:none; border-left:3px solid #f59e0b;">
+                Verify ${unverifiedItems.length} item${unverifiedItems.length > 1 ? 's' : ''} from receipt
+              </summary>
+              <div class="mt-2 p-2 rounded-lg" style="background:${CONFIG.surface_color}; max-height:200px; overflow-y:auto;">
                 ${unverifiedItems.map(item => {
                   const status = getExpirationStatus(item);
-                  const statusColors = {
-                    'expired': '#ef4444',
-                    'expiring-soon': '#f59e0b',
-                    'expiring': '#eab308',
-                    'fresh': '#22c55e',
-                    'frozen': '#3b82f6',
-                    'unknown': '#9ca3af'
-                  };
-                  const statusColor = statusColors[status] || '#9ca3af';
-                  
+                  const statusColor = status === 'expired' ? '#ef4444' : status === 'expiring-soon' ? '#f59e0b' : '#22c55e';
                   return `
-                    <div style="display: flex; align-items: center; gap: 12px; padding: 10px; background: ${CONFIG.surface_color}; border-radius: 8px;">
-                      <img src="${item.image_url || getIngredientImage(item.name, item.category) || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><rect fill=%22%23ddd%22 width=%2240%22 height=%2240%22/></svg>'}" 
-                           style="width: 40px; height: 40px; border-radius: 8px; object-fit: cover;"
-                           onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22><rect fill=%22%23ddd%22 width=%2240%22 height=%2240%22/></svg>'" />
-                      <div style="flex: 1; min-width: 0;">
-                        <div style="font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(item.name)}</div>
-                        <div style="font-size: 12px; color: ${statusColor};">
-                          ${item.expirationDate ? 'Expires: ' + new Date(item.expirationDate + 'T00:00:00').toLocaleDateString() : 'No expiration set'}
-                          ${item.store ? ` • ${esc(item.store)}` : ''}
+                    <div style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid rgba(0,0,0,0.05);">
+                      <div style="flex:1; min-width:0;">
+                        <div style="font-size:12px; font-weight:500; color:${CONFIG.text_color}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(item.name)}</div>
+                        <div style="font-size:10px; color:${statusColor};">
+                          ${item.expirationDate ? new Date(item.expirationDate + 'T00:00:00').toLocaleDateString() : 'No date'}
                         </div>
                       </div>
-                      <button onclick="showVerifyItemModal('${item.id}')" style="padding: 8px 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                      <button onclick="showVerifyItemModal('${item.id}')" style="padding:4px 8px; background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:10px; cursor:pointer;">
                         Edit
                       </button>
-                      <button onclick="verifyItem('${item.id}')" style="padding: 8px 12px; background: #22c55e; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                      <button onclick="verifyItem('${item.id}')" style="padding:4px 8px; background:#22c55e; color:white; border:none; border-radius:4px; font-size:10px; cursor:pointer;">
                         ✓
                       </button>
                     </div>
                   `;
                 }).join('')}
+                <button onclick="verifyAllItems()" style="width:100%; margin-top:8px; padding:8px; background:#f59e0b; color:white; border:none; border-radius:6px; font-size:11px; cursor:pointer;">
+                  Verify All
+                </button>
               </div>
-            </div>
+            </details>
           ` : ''}
 
-         ${filteredInventory.length === 0 ? `
-            <div class="p-8 rounded-xl text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              <div style="font-size:3rem; margin-bottom:1rem;">${state.inventoryFilter === 'wantToUse' ? '✓' : state.inventoryFilter === 'expiring' ? '⚠️' : state.inventoryFilter === 'frozen' ? '❄️' : '📦'}</div>
-              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem; font-weight: 600;">
-                ${state.inventoryFilter === 'wantToUse' ? 'No items marked to use' : 
-                  state.inventoryFilter === 'expiring' ? 'No expiring items' :
-                  state.inventoryFilter === 'frozen' ? 'No frozen items' :
-                  'No items in inventory'}
+          <!-- Empty State -->
+          ${filteredInventory.length === 0 ? `
+            <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
+              <div style="font-size:2rem; margin-bottom:8px;">
+                ${state.inventoryFilter === 'wantToUse' ? '✓' : state.inventoryFilter === 'expiring' ? '⚠️' : state.inventoryFilter === 'frozen' ? '❄️' : '📦'}
               </div>
-              <div style="color: ${CONFIG.text_muted}; font-size:${CONFIG.font_size * 0.9}px; margin-bottom: 16px;">
-                Scan a receipt or add items manually
+              <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:4px;">
+                ${state.inventoryFilter === 'wantToUse' ? 'No items marked' : 
+                  state.inventoryFilter === 'expiring' ? 'Nothing expiring' :
+                  state.inventoryFilter === 'frozen' ? 'Nothing frozen' :
+                  'Pantry is empty'}
               </div>
-              <div style="display: flex; gap: 8px; justify-content: center;">
-                <button onclick="showReceiptModal()" style="padding: 10px 20px; background: ${CONFIG.success_color}; color: white; border: none; border-radius: 8px; cursor: pointer;">
-                  📸 Scan Receipt
+              <div style="font-size:12px; color:${CONFIG.text_muted}; margin-bottom:12px;">
+                ${state.inventoryFilter && state.inventoryFilter !== 'all' ? 'Try a different filter' : 'Add items to get started'}
+              </div>
+              ${!state.inventoryFilter || state.inventoryFilter === 'all' ? `
+                <div style="display:flex; gap:8px; justify-content:center;">
+                  <button onclick="showReceiptModal()" style="padding:8px 16px; background:${CONFIG.success_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
+                    Scan Receipt
+                  </button>
+                  <button onclick="showAddInventoryModal()" style="padding:8px 16px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
+                    + Add Item
+                  </button>
+                </div>
+              ` : `
+                <button onclick="state.inventoryFilter = 'all'; render();" style="padding:8px 16px; background:${CONFIG.surface_color}; color:${CONFIG.primary_action_color}; border:1px solid ${CONFIG.primary_action_color}; border-radius:8px; cursor:pointer; font-size:12px;">
+                  Show All
                 </button>
-                <button onclick="showAddInventoryModal()" style="padding: 10px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer;">
-                  + Add Item
-                </button>
-              </div>
+              `}
             </div>
           ` : `
+            <!-- Items Grid -->
             ${categories.map(cat => {
               const items = grouped[cat];
               if (items.length === 0) return '';
               
-              const catEmoji = cat === 'Produce' ? '🥬' : cat === 'Meat & Seafood' ? '🥩' : cat === 'Dairy & Eggs' ? '🥛' : cat === 'Bakery' ? '🍞' : cat === 'Frozen' ? '🧊' : cat === 'Pantry' ? '🥫' : cat === 'Snacks' ? '🍿' : cat === 'Beverages' ? '🥤' : '📦';
-              
               return `
-                <div class="mb-6">
-                  <h3 class="font-semibold mb-3" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
-                    ${catEmoji} ${cat} (${items.length})
-                  </h3>
-                  <div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+                <div class="mb-4">
+                  <div style="color:${CONFIG.text_muted}; font-size:11px; font-weight:600; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                    ${cat} (${items.length})
+                  </div>
+                  <div class="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
                     ${items.map(item => {
                       const status = getExpirationStatus(item);
                       const statusColor = getExpirationColor(status);
@@ -4247,68 +4237,52 @@ async function saveReceiptExpense() {
                         Math.ceil((new Date(item.expirationDate) - new Date()) / (1000 * 60 * 60 * 24)) : null;
                       
                       let statusText = '';
-                      let statusBg = 'transparent';
                       if (item.isFrozen) {
-                        statusText = '❄️ Frozen';
-                        statusBg = 'rgba(59,130,246,0.3)';
-                      } else if (status === 'expired') {
-                        statusText = `⚠️ ${daysUntil}d`;
-                        statusBg = 'rgba(239,68,68,0.3)';
-                      } else if (status === 'expiring-soon') {
-                        statusText = `⚠️ ${daysUntil}d`;
-                        statusBg = 'rgba(239,68,68,0.2)';
-                      } else if (status === 'expiring') {
-                        statusText = `${daysUntil}d`;
-                        statusBg = 'rgba(245,158,11,0.2)';
+                        statusText = 'Frozen';
                       } else if (daysUntil !== null) {
                         statusText = `${daysUntil}d`;
                       }
                       
                       const imgUrl = item.image_url || getIngredientImage(item.name, cat);
+                      const isUrgent = status === 'expired' || status === 'expiring-soon';
                       
                       return `
-                        <div class="rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
-                             style="background:${CONFIG.surface_color}; border:2px solid ${statusColor}; box-shadow: ${CONFIG.shadow};"
-onclick="showInventoryItemDetail('${item.id}')">
-<div style="height:80px; overflow:hidden; background:${CONFIG.background_color}; position:relative;">
+                        <div onclick="showInventoryItemDetail('${item.id}')"
+                          class="rounded-lg overflow-hidden cursor-pointer"
+                          style="background:${CONFIG.surface_color}; border:${isUrgent ? '2px solid #ef4444' : item.isFrozen ? '2px solid #3b82f6' : '1px solid rgba(0,0,0,0.05)'};">
+                          <div style="height:60px; overflow:hidden; background:${CONFIG.background_color}; position:relative;">
                             ${imgUrl ? `
                               <img src="${esc(imgUrl)}" style="width:100%; height:100%; object-fit:cover;" 
-                                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                              <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; font-size:2rem;">
-                                ${catEmoji}
-                              </div>
+                                   onerror="this.style.display='none';" />
                             ` : `
-                              <div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:2rem;">
-                                ${catEmoji}
+                              <div style="height:100%; display:flex; align-items:center; justify-content:center; color:${CONFIG.text_muted}; font-size:11px;">
+                                No image
                               </div>
                             `}
-                     ${item.isFrozen ? `
-                              <div style="position:absolute; top:4px; right:4px; background:rgba(59,130,246,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem;">
-                                ❄️
-                              </div>
-                            ` : ''}
                             ${item.wantToUse ? `
-                              <div style="position:absolute; top:4px; ${item.isFrozen ? 'right:28px' : 'right:4px'}; background:rgba(52,211,153,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem;">
-                                ✓
+                              <div style="position:absolute; top:2px; right:2px; background:#34d399; color:white; border-radius:3px; padding:1px 4px; font-size:8px;">
+                                Use
                               </div>
                             ` : ''}
-                            ${status === 'expired' || status === 'expiring-soon' ? `
-                            <div style="position:absolute; top:4px; left:4px; background:rgba(239,68,68,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem; color:white;">
-                                ⚠️
+                            ${item.isFrozen ? `
+                              <div style="position:absolute; top:2px; left:2px; background:#3b82f6; color:white; border-radius:3px; padding:1px 4px; font-size:8px;">
+                                ❄
                               </div>
                             ` : ''}
                           </div>
-                          <div class="p-2">
-                            <div class="text-center truncate" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px; font-weight:500;">
+                          <div style="padding:6px;">
+                            <div style="color:${CONFIG.text_color}; font-size:10px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                               ${esc(item.name)}
                             </div>
-                            ${statusText ? `
-                              <div class="text-center mt-1" style="font-size:${CONFIG.font_size * 0.65}px; color:${statusColor};">
-                                ${statusText}
-                              </div>
-                            ` : ''}
-                            <div class="text-center" style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.6}px;">
-                              ${item.quantity || 1}${item.unit ? ' ' + item.unit : ''}
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
+                              <span style="color:${CONFIG.text_muted}; font-size:9px;">
+                                ${item.quantity || 1}${item.unit ? ' ' + item.unit : ''}
+                              </span>
+                              ${statusText ? `
+                                <span style="color:${statusColor}; font-size:9px; font-weight:500;">
+                                  ${statusText}
+                                </span>
+                              ` : ''}
                             </div>
                           </div>
                         </div>
@@ -4318,7 +4292,7 @@ onclick="showInventoryItemDetail('${item.id}')">
                 </div>
               `;
             }).join('')}
-       `}
+          `}
         </div>
       `}
       `;
