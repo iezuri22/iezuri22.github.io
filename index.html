@@ -7382,7 +7382,7 @@ function navigateTo(view) {
     }
     
    function renderBottomNav() {
-      if (state.currentView === 'home') return '';
+
       
       const navItems = [
         { id: 'home', icon: '🏠', label: 'Home' },
@@ -11036,6 +11036,181 @@ function renderFreestyleEdit() {
             `).join('')}
           </div>
         </div>`;
+    }
+
+   function renderRecipes() {
+      if (!state.recipes || !Array.isArray(state.recipes)) return '<div class="p-3">Loading...</div>';
+      
+      if (!state.recipeTab) state.recipeTab = 'user';
+      
+      const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
+      const freestyleCount = (state.freestyleMeals || []).length;
+      const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
+      const importedCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length;
+      const claudeCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'claude').length;
+      
+      if (state.recipeTab === 'freestyle') {
+        return renderFreestyleMeals();
+      }
+      
+      let list;
+      if (state.recipeTab === 'tips') {
+        list = state.recipes.filter(r => r.isTip);
+      } else if (state.recipeTab === 'chefiq') {
+        list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq');
+      } else if (state.recipeTab === 'imported') {
+        list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported');
+      } else if (state.recipeTab === 'claude') {
+        list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'claude');
+      } else {
+        list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user');
+      }
+
+      list = list.filter(r => {
+        if (state.filterFavorites && !r.favorite) return false;
+        if (state.recipeTab !== 'tips' && state.selectedCategory !== 'All' && r.category !== state.selectedCategory) return false;
+        if (state.searchTerm) {
+          const searchLower = state.searchTerm.toLowerCase();
+          if (state.searchByIngredient) {
+            const ingredients = recipeIngList(r);
+            const hasIngredient = ingredients.some(ing => (ing.name || '').toLowerCase().includes(searchLower));
+            if (!hasIngredient) return false;
+          } else {
+            if (!(r.title || '').toLowerCase().includes(searchLower)) return false;
+          }
+        }
+        if (state.filterIngredientGroup !== 'all') {
+          const recipeIngredients = recipeIngList(r);
+          const hasIngredientInGroup = recipeIngredients.some(ing => ing.group === state.filterIngredientGroup);
+          if (!hasIngredientInGroup) return false;
+        }
+        return true;
+      });
+
+      return `
+        <div class="p-3 max-w-7xl mx-auto">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <div class="flex items-center gap-1 flex-wrap">
+              <button onclick="state.recipeTab = 'user'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'user' || !state.recipeTab ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'user' || !state.recipeTab ? 'white' : CONFIG.text_color}; font-size:11px; border: none;">
+                Recipes (${userCount})
+              </button>
+              <button onclick="state.recipeTab = 'freestyle'; render();"
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'freestyle' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'freestyle' ? 'white' : CONFIG.text_color}; font-size:11px; border: none;">
+                Journal (${freestyleCount})
+              </button>
+              <button onclick="state.recipeTab = 'chefiq'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'chefiq' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'chefiq' ? 'white' : CONFIG.text_color}; font-size:11px; border: none;">
+                ChefIQ (${chefiqCount})
+              </button>
+              <button onclick="state.recipeTab = 'imported'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'imported' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'imported' ? 'white' : CONFIG.text_color}; font-size:11px; border: none;">
+                Imported (${importedCount})
+              </button>
+              <button onclick="state.recipeTab = 'claude'; render();" 
+                class="px-2 py-1 rounded"
+                style="background:${state.recipeTab === 'claude' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'claude' ? 'white' : CONFIG.text_color}; font-size:11px; border: none;">
+                Claude (${claudeCount})
+              </button>
+            </div>
+            <div class="flex gap-1">
+              <button type="button" onclick="showImportRecipeModal()"
+                class="px-2 py-1 rounded"
+                style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border: none;">
+                Import
+              </button>
+              <button type="button" onclick="openNewRecipe()"
+                class="px-2 py-1 rounded"
+                style="background:${CONFIG.primary_action_color}; color:white; font-size:11px; border: none;">
+                + New
+              </button>
+            </div>
+          </div>
+
+          <!-- Filters -->
+          <details class="mb-3">
+            <summary class="cursor-pointer px-3 py-2 rounded-lg" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:12px; list-style:none;">
+              Filters ${state.selectedCategory !== 'All' || state.filterFavorites || state.filterIngredientGroup !== 'all' ? '•' : ''}
+            </summary>
+            <div class="mt-2 p-3 rounded-lg" style="background:${CONFIG.surface_color};">
+              <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <input placeholder="${state.searchByIngredient ? 'Search by ingredient...' : 'Search recipes...'}" 
+                  class="flex-1 px-3 py-2 rounded-lg"
+                  style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size:13px;"
+                  value="${esc(state.searchTerm || '')}"
+                  oninput="state.searchTerm = this.value; render();"/>
+                <button onclick="state.searchByIngredient = !state.searchByIngredient; state.searchTerm = ''; render();"
+                  style="padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; background: ${state.searchByIngredient ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.searchByIngredient ? 'white' : CONFIG.text_color};">
+                  ${state.searchByIngredient ? 'Ingredient' : 'Name'}
+                </button>
+              </div>
+              <div class="flex gap-2 mb-3 flex-wrap">
+                <select onchange="state.selectedCategory=this.value; render();"
+                  style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(0,0,0,0.1); font-size:12px; padding:8px; border-radius:8px; flex:1;">
+                  <option value="All" ${state.selectedCategory === 'All' ? 'selected' : ''}>All Categories</option>
+                  ${MEAL_CATEGORIES.map(c => `<option value="${c}" ${state.selectedCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
+                </select>
+              </div>
+              <label class="flex items-center gap-2 cursor-pointer" style="color:${CONFIG.text_color}; font-size:13px;">
+                <input type="checkbox" ${state.filterFavorites ? 'checked' : ''} onchange="state.filterFavorites=this.checked; render();" style="width: 16px; height: 16px;">
+                Favorites Only
+              </label>
+            </div>
+          </details>
+
+          <!-- Results -->
+          ${list.length === 0 ? `
+            <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
+              <div style="font-size: 2rem; margin-bottom: 8px;">📭</div>
+              <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">
+                ${state.searchTerm ? 'No matches found' : 'No recipes yet'}
+              </div>
+              <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-bottom: 12px;">
+                ${state.searchTerm ? 'Try a different search' : 'Add your first recipe!'}
+              </div>
+              ${!state.searchTerm ? `
+                <button onclick="openNewRecipe()" style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
+                  + Add Recipe
+                </button>
+              ` : ''}
+            </div>
+          ` : `
+            <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              ${list.map(r => {
+                const id = r.__backendId || r.id;
+                const img = recipeThumb(r);
+                return `
+                <div class="rounded-lg overflow-hidden cursor-pointer"
+                  onclick="openRecipeView('${id}')"
+                  style="background:${CONFIG.surface_color};">
+                  ${img ? `
+                    <div style="height:70px; overflow:hidden;">
+                      <img src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                  ` : `
+                    <div style="height:70px; background:${CONFIG.background_color}; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                      🍽️
+                    </div>
+                  `}
+                  <div class="p-2">
+                    <div class="truncate" style="color:${CONFIG.text_color}; font-size:11px; font-weight:500;">
+                      ${esc(r.title)} ${r.favorite ? '⭐' : ''}
+                    </div>
+                    <div style="color:${CONFIG.text_muted}; font-size:9px;">
+                      ${r.category || 'Recipe'}
+                    </div>
+                  </div>
+                </div>`;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      `;
     }
 
     function renderRecipeEdit() {
