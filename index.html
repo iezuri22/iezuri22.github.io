@@ -4037,7 +4037,17 @@ async function saveReceiptExpense() {
       const grouped = {};
       categories.forEach(cat => grouped[cat] = []);
       
-      inventory.forEach(item => {
+    // Apply filter
+      let filteredInventory = inventory;
+      if (state.inventoryFilter === 'expiring') {
+        filteredInventory = inventory.filter(i => ['expired', 'expiring-soon'].includes(getExpirationStatus(i)));
+      } else if (state.inventoryFilter === 'wantToUse') {
+        filteredInventory = inventory.filter(i => i.wantToUse);
+      } else if (state.inventoryFilter === 'frozen') {
+        filteredInventory = inventory.filter(i => i.isFrozen);
+      }
+      
+      filteredInventory.forEach(item => {
         const cat = item.category || 'Uncategorized';
         if (!grouped[cat]) grouped[cat] = [];
         grouped[cat].push(item);
@@ -4111,9 +4121,33 @@ async function saveReceiptExpense() {
             </button>
           </div>
 
-          ${state.pantryTab === 'blends' ? renderMyBlends() : state.pantryTab === 'ingredients' ? renderAllIngredients() : `
+        ${state.pantryTab === 'blends' ? renderMyBlends() : state.pantryTab === 'ingredients' ? renderAllIngredients() : `
 
-         ${expiringCount > 0 ? `
+          <!-- Filter Buttons -->
+          <div class="flex gap-2 mb-4 flex-wrap">
+            <button onclick="state.inventoryFilter = 'all'; render();"
+              class="px-3 py-1 rounded-full text-sm"
+              style="background: ${(!state.inventoryFilter || state.inventoryFilter === 'all') ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(!state.inventoryFilter || state.inventoryFilter === 'all') ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              All (${inventory.length})
+            </button>
+            <button onclick="state.inventoryFilter = 'expiring'; render();"
+              class="px-3 py-1 rounded-full text-sm"
+              style="background: ${state.inventoryFilter === 'expiring' ? '#f59e0b' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'expiring' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              ⚠️ Expiring (${expiringCount})
+            </button>
+            <button onclick="state.inventoryFilter = 'wantToUse'; render();"
+              class="px-3 py-1 rounded-full text-sm"
+              style="background: ${state.inventoryFilter === 'wantToUse' ? '#34d399' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'wantToUse' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              ✓ To Use (${inventory.filter(i => i.wantToUse).length})
+            </button>
+            <button onclick="state.inventoryFilter = 'frozen'; render();"
+              class="px-3 py-1 rounded-full text-sm"
+              style="background: ${state.inventoryFilter === 'frozen' ? '#3b82f6' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'frozen' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              ❄️ Frozen (${inventory.filter(i => i.isFrozen).length})
+            </button>
+          </div>
+
+         ${expiringCount > 0 && (!state.inventoryFilter || state.inventoryFilter === 'all') ? `
             <div class="mb-4 p-3 rounded-lg" style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3);">
               <div style="color:${CONFIG.danger_color}; font-size:${CONFIG.font_size * 0.9}px; font-weight: 500;">
                 ⚠️ ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon or expired
@@ -4172,10 +4206,15 @@ async function saveReceiptExpense() {
             </div>
           ` : ''}
 
-          ${inventory.length === 0 ? `
+         ${filteredInventory.length === 0 ? `
             <div class="p-8 rounded-xl text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              <div style="font-size:3rem; margin-bottom:1rem;">📦</div>
-              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem; font-weight: 600;">No items in inventory</div>
+              <div style="font-size:3rem; margin-bottom:1rem;">${state.inventoryFilter === 'wantToUse' ? '✓' : state.inventoryFilter === 'expiring' ? '⚠️' : state.inventoryFilter === 'frozen' ? '❄️' : '📦'}</div>
+              <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem; font-weight: 600;">
+                ${state.inventoryFilter === 'wantToUse' ? 'No items marked to use' : 
+                  state.inventoryFilter === 'expiring' ? 'No expiring items' :
+                  state.inventoryFilter === 'frozen' ? 'No frozen items' :
+                  'No items in inventory'}
+              </div>
               <div style="color: ${CONFIG.text_muted}; font-size:${CONFIG.font_size * 0.9}px; margin-bottom: 16px;">
                 Scan a receipt or add items manually
               </div>
@@ -4243,10 +4282,16 @@ onclick="showInventoryItemDetail('${item.id}')">
                                 ${catEmoji}
                               </div>
                             `}
-                            ${item.isFrozen ? `
+                         ${item.isFrozen ? `
                               <div style="position:absolute; top:4px; right:4px; background:rgba(59,130,246,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem;">
                                 ❄️
                               </div>
+                            ` : ''}
+                            ${item.wantToUse ? `
+                              <div style="position:absolute; top:4px; ${item.isFrozen ? 'right:28px' : 'right:4px'}; background:rgba(52,211,153,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem;">
+                                ✓
+                              </div>
+                            ` : ''}
                             ` : ''}
                             ${status === 'expired' || status === 'expiring-soon' ? `
                               <div style="position:absolute; top:4px; left:4px; background:rgba(239,68,68,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem; color:white;">
@@ -4813,6 +4858,24 @@ async function consolidateInventory() {
             </div>
           </div>
           
+         <!-- Want to Use Toggle -->
+          <div style="margin-bottom: 16px; padding: 14px; background: ${item.wantToUse ? 'rgba(52,211,153,0.15)' : CONFIG.background_color}; border-radius: 10px; border: 2px solid ${item.wantToUse ? '#34d399' : 'transparent'};">
+            <label style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+              <input type="checkbox" 
+                ${item.wantToUse ? 'checked' : ''} 
+                onchange="toggleWantToUse('${item.id}')"
+                style="width: 20px; height: 20px; cursor: pointer;" />
+              <div>
+                <div style="font-weight: 600; color: ${CONFIG.text_color}; font-size: 14px;">
+                  ${item.wantToUse ? '✓ Marked to use' : 'I want to use this'}
+                </div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px;">
+                  ${item.wantToUse ? 'Will appear in suggested recipes' : 'Mark to get recipe suggestions'}
+                </div>
+              </div>
+            </label>
+          </div>
+          
           <!-- Actions -->
           <div style="display: flex; flex-direction: column; gap: 8px;">
             <button onclick="closeModal(); viewIngredientInfo('${esc(item.name)}')" style="width: 100%; padding: 12px; background: linear-gradient(135deg, ${CONFIG.primary_action_color} 0%, #8b5cf6 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
@@ -4834,7 +4897,22 @@ async function consolidateInventory() {
         </div>
       `);
     }
-
+async function toggleWantToUse(itemId) {
+      const item = state.inventory.find(i => i.id === itemId);
+      if (!item) return;
+      
+      item.wantToUse = !item.wantToUse;
+      
+      try {
+        await storage.update(item);
+        showToast(item.wantToUse ? 'Marked to use!' : 'Unmarked', 'success');
+        // Refresh the modal
+        showInventoryItemDetail(itemId);
+      } catch (error) {
+        console.error('Error toggling want to use:', error);
+        showError('Failed to update');
+      }
+    }
     async function toggleFreezeUnit(itemId, unitIdx) {
       const item = state.inventory.find(i => i.id === itemId);
       if (!item || !item.units || !item.units[unitIdx]) return;
@@ -9458,313 +9536,7 @@ console.log('byMonth:', byMonth);
       `;
     }
 
-   function renderHome() {
-      // Get time-based greeting
-      const hour = new Date().getHours();
-      let greeting = 'Good morning';
-      let greetingEmoji = '☀️';
-      if (hour >= 12 && hour < 17) {
-        greeting = 'Good afternoon';
-        greetingEmoji = '🌤️';
-      } else if (hour >= 17) {
-        greeting = 'Good evening';
-        greetingEmoji = '🌙';
-      }
-      
-      // Get stats
-      const recipeCount = state.recipes.filter(r => !r.isDraft && !r.isTip).length;
-      const expiringItems = state.inventory.filter(i => {
-        const status = getExpirationStatus(i);
-        return status === 'expired' || status === 'expiring-soon';
-      });
-      const todaysPlan = state.planData.find(p => p.date === new Date().toISOString().split('T')[0]);
-      const mealsCookedThisMonth = state.recipes.filter(r => {
-        const cooked = r.cookedDates || [];
-        const thisMonth = new Date().getMonth();
-        return cooked.some(d => new Date(d).getMonth() === thisMonth);
-      }).length;
-
-      return `
-        <div style="background: ${CONFIG.background_color}; min-height: 100vh;">
-          <!-- Hero Section -->
-          <div style="background: linear-gradient(135deg, ${CONFIG.gradient_start} 0%, ${CONFIG.gradient_end} 100%); padding: 32px 24px; border-radius: 0 0 32px 32px;">
-            <div class="max-w-4xl mx-auto">
-              <div style="color: white; font-size: 28px; font-weight: 700; margin-bottom: 4px;">
-                ${greetingEmoji} ${greeting}!
-              </div>
-              <div style="color: rgba(255,255,255,0.9); font-size: 16px;">
-                What's cooking today?
-              </div>
-              
-              <!-- Quick Stats -->
-              <div style="display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap;">
-                <div style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 12px 16px; flex: 1; min-width: 100px;">
-                  <div style="color: white; font-size: 24px; font-weight: 700;">${recipeCount}</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 12px;">Recipes</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 12px 16px; flex: 1; min-width: 100px;">
-                  <div style="color: white; font-size: 24px; font-weight: 700;">${state.inventory.length}</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 12px;">In Stock</div>
-                </div>
-                <div style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 12px 16px; flex: 1; min-width: 100px;">
-                  <div style="color: white; font-size: 24px; font-weight: 700;">${mealsCookedThisMonth}</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 12px;">Cooked This Month</div>
-                </div>
-              </div>
-            </div>
-          </div>
-          
-         <div class="max-w-4xl mx-auto p-4" style="margin-top: -20px;">
-            
-            <!-- Search Bar -->
-            <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 12px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
-              <div style="display: flex; gap: 8px; align-items: center;">
-                <select id="homeSearchFilter" 
-                  onchange="state.homeSearchFilter = this.value; renderHomeSearchResults();"
-                  style="padding: 10px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; cursor: pointer; min-width: 110px;">
-                  <option value="all" ${(state.homeSearchFilter || 'all') === 'all' ? 'selected' : ''}>🔍 All</option>
-                  <option value="recipes" ${state.homeSearchFilter === 'recipes' ? 'selected' : ''}>📚 Recipes</option>
-                  <option value="ingredients" ${state.homeSearchFilter === 'ingredients' ? 'selected' : ''}>🥗 Ingredients</option>
-                </select>
-                <div style="flex: 1; position: relative;">
-                  <input type="text" 
-                    id="homeSearchInput"
-                    placeholder="Search recipes & ingredients..."
-                    value="${esc(state.homeSearchTerm || '')}"
-                    oninput="state.homeSearchTerm = this.value; renderHomeSearchResults();"
-                    onfocus="if(this.value) renderHomeSearchResults();"
-                    style="width: 100%; padding: 10px 12px; padding-left: 36px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
-                  <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: ${CONFIG.text_muted};">🔍</span>
-                  ${state.homeSearchTerm ? `
-                    <button onclick="state.homeSearchTerm = ''; document.getElementById('homeSearchInput').value = ''; renderHomeSearchResults();" 
-                      style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 16px;">
-                      ✕
-                    </button>
-                  ` : ''}
-                </div>
-              </div>
-              
-              <!-- Search Results -->
-              <div id="homeSearchResults"></div>
-            </div>
-            
-           <!-- Tonight's Dinner Card -->
-            ${(() => {
-              const today = new Date().toISOString().split('T')[0];
-              const todaysPlan = state.planData.find(p => p.date === today);
-              
-              // Check for any planned meals (dinner first, then lunch, then breakfast)
-              let plannedRecipe = null;
-              let mealType = '';
-              
-              if (todaysPlan) {
-                const dinnerIds = todaysPlan.dinner || [];
-                const lunchIds = todaysPlan.lunch || [];
-                const breakfastIds = todaysPlan.breakfast || [];
-                
-                if (dinnerIds.length > 0) {
-                  plannedRecipe = getRecipeById(dinnerIds[0]);
-                  mealType = 'Dinner';
-                } else if (lunchIds.length > 0) {
-                  plannedRecipe = getRecipeById(lunchIds[0]);
-                  mealType = 'Lunch';
-                } else if (breakfastIds.length > 0) {
-                  plannedRecipe = getRecipeById(breakfastIds[0]);
-                  mealType = 'Breakfast';
-                }
-              }
-              
-              if (plannedRecipe) {
-                const recipeImg = recipeThumb(plannedRecipe);
-                return `
-                  <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
-                    <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">🍽️ Tonight's Dinner</div>
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                      ${recipeImg ? `<img src="${esc(recipeImg)}" style="width: 60px; height: 60px; border-radius: 12px; object-fit: cover;" />` : `<div style="width: 60px; height: 60px; border-radius: 12px; background: ${CONFIG.background_color}; display: flex; align-items: center; justify-content: center; font-size: 24px;">🍽️</div>`}
-                      <div style="flex: 1; min-width: 0;">
-                        <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(plannedRecipe.title)}</div>
-<div style="color: ${CONFIG.text_muted}; font-size: 13px;">${mealType || plannedRecipe.category || 'Dinner'}</div>
-</div>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
-                      <button onclick="openRecipeView('${plannedRecipe.__backendId || plannedRecipe.id}')" style="flex: 1; padding: 10px; background: ${CONFIG.background_color}; border: none; border-radius: 8px; color: ${CONFIG.text_color}; cursor: pointer; font-weight: 500;">
-                        View Recipe
-                      </button>
-                      <button onclick="markRecipeCooked('${plannedRecipe.__backendId || plannedRecipe.id}')" style="flex: 1; padding: 10px; background: ${CONFIG.success_color}; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 500;">
-                        ✓ I Made This
-                      </button>
-                    </div>
-                  </div>
-                `;
-              }
-              // Empty state - no dinner planned
-              return `
-                <div style="background: linear-gradient(135deg, ${CONFIG.surface_color} 0%, rgba(102,126,234,0.05) 100%); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow}; border: 2px dashed rgba(102,126,234,0.3);">
-                  <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 50px; height: 50px; border-radius: 12px; background: ${CONFIG.background_color}; display: flex; align-items: center; justify-content: center; font-size: 24px;">🤔</div>
-                    <div style="flex: 1;">
-                      <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 15px;">What's for dinner?</div>
-                      <div style="color: ${CONFIG.text_muted}; font-size: 13px;">No meal planned for tonight</div>
-                    </div>
-                    <button onclick="navigateTo('meal-plan')" style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 500; font-size: 13px;">
-                      Plan Now
-                    </button>
-                  </div>
-                </div>
-              `;
-            })()}
-            
-            <!-- Alert Card (if items expiring) -->
-            ${expiringItems.length > 0 ? `
-              <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow}; cursor: pointer; border-left: 4px solid ${CONFIG.warning_color};">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                  <div style="font-size: 24px;">⚠️</div>
-                  <div style="flex: 1;">
-                    <div style="color: ${CONFIG.text_color}; font-weight: 600;">${expiringItems.length} item${expiringItems.length > 1 ? 's' : ''} expiring soon</div>
-                    <div style="color: ${CONFIG.text_muted}; font-size: 14px;">${expiringItems.slice(0, 3).map(i => i.name).join(', ')}${expiringItems.length > 3 ? '...' : ''}</div>
-                  </div>
-                  <div style="color: ${CONFIG.text_muted};">→</div>
-                </div>
-              </div>
-            ` : ''}
-            
-            <!-- Use Soon - Recipes with expiring ingredients -->
-            ${(() => {
-              if (expiringItems.length === 0) return '';
-              
-              const expiringNames = expiringItems.map(i => i.name.toLowerCase());
-              const useSoonRecipes = state.recipes
-                .filter(r => !r.isDraft && !r.isTip)
-                .map(recipe => {
-                  const ingredients = recipeIngList(recipe);
-                  const matchingExpiring = ingredients.filter(ing => 
-                    expiringNames.some(exp => exp.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(exp))
-                  );
-                  return { ...recipe, matchingExpiring };
-                })
-                .filter(r => r.matchingExpiring.length > 0)
-                .sort((a, b) => b.matchingExpiring.length - a.matchingExpiring.length)
-                .slice(0, 4);
-              
-              if (useSoonRecipes.length === 0) return '';
-              
-              return `
-                <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
-                  <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">🕐 Use Soon</div>
-                  <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;">
-                    ${useSoonRecipes.map(recipe => {
-                      const img = recipeThumb(recipe);
-                      return `
-                        <div onclick="openRecipeView('${recipe.__backendId || recipe.id}')" style="flex-shrink: 0; width: 100px; cursor: pointer;">
-                          <div style="height: 70px; border-radius: 10px; overflow: hidden; background: ${CONFIG.background_color}; margin-bottom: 6px;">
-                            ${img ? `<img src="${esc(img)}" style="width: 100%; height: 100%; object-fit: cover;" />` : `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px;">🍽️</div>`}
-                          </div>
-                          <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(recipe.title)}</div>
-                          <div style="color: ${CONFIG.warning_color}; font-size: 10px;">Uses ${recipe.matchingExpiring[0]?.name || 'expiring item'}</div>
-                        </div>
-                      `;
-                    }).join('')}
-                  </div>
-                </div>
-              `;
-           })()}
-            
-            <!-- Main Navigation Cards -->
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;">
-              
-              <!-- Cook Section -->
-              <div onclick="navigateTo('recipes')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">📚</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Recipes</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${recipeCount} saved</div>
-              </div>
-              
-              <div onclick="navigateTo('meal-plan')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">📅</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Meal Plan</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">Plan your week</div>
-              </div>
-              
-            <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">🥫</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Pantry</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${state.inventory.length} in stock</div>
-              </div>
-              
-              <div onclick="navigateTo('grocery-list')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">🛒</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Grocery List</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${state.groceryItems.length} items</div>
-              </div>
-              
-            </div>
-            
-            <!-- Secondary Navigation -->
-            <div style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 16px; box-shadow: ${CONFIG.shadow}; margin-bottom: 24px;">
-              <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">More</div>
-              
-              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-                <div onclick="navigateTo('grocery-list')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
-                  <div style="font-size: 24px; margin-bottom: 4px;">🛒</div>
-                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Grocery</div>
-                </div>
-                
-                <div onclick="navigateTo('budget-dashboard')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
-                  <div style="font-size: 24px; margin-bottom: 4px;">💰</div>
-                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Budget</div>
-                </div>
-                
-                <div onclick="navigateTo('recipe-stats')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
-                  <div style="font-size: 24px; margin-bottom: 4px;">📊</div>
-                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Stats</div>
-                </div>
-                
-                <div onclick="navigateTo('purchase-history')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
-                  <div style="font-size: 24px; margin-bottom: 4px;">🧾</div>
-                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">History</div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Quick Actions -->
-            <div style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 16px; box-shadow: ${CONFIG.shadow}; margin-bottom: 16px;">
-              <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Quick Actions</div>
-              
-              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-                <button onclick="showReceiptModal()" style="display: flex; flex-direction: column; align-items: center; padding: 16px 8px; border: none; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); border-radius: 16px; cursor: pointer;">
-                  <span style="font-size: 28px; margin-bottom: 4px;">📸</span>
-                  <span style="color: white; font-size: 12px; font-weight: 600;">Scan Receipt</span>
-                </button>
-                
-                <button onclick="showWhatCanICook()" style="display: flex; flex-direction: column; align-items: center; padding: 16px 8px; border: none; background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); border-radius: 16px; cursor: pointer;">
-                  <span style="font-size: 28px; margin-bottom: 4px;">🍳</span>
-                  <span style="color: white; font-size: 12px; font-weight: 600;">What Can I Cook?</span>
-                </button>
-                
-                <button onclick="showQuickAddGrocery()" style="display: flex; flex-direction: column; align-items: center; padding: 16px 8px; border: none; background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%); border-radius: 16px; cursor: pointer;">
-                  <span style="font-size: 28px; margin-bottom: 4px;">➕</span>
-                  <span style="color: white; font-size: 12px; font-weight: 600;">Add Grocery</span>
-                </button>
-              </div>
-            </div>
-            
-            <!-- Chef Claude Card -->
-            <div onclick="toggleChefChat()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; padding: 16px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-              <div style="display: flex; align-items: center; gap: 12px;">
-                <div style="font-size: 32px;">👨‍🍳</div>
-                <div style="flex: 1;">
-                  <div style="color: white; font-weight: 700; font-size: 16px;">Ask Chef Claude</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 13px;">Cooking tips & substitutions</div>
-                </div>
-                <div style="color: white; font-size: 20px;">💬</div>
-              </div>
-            </div>
-            
-          </div>
-        </div>
-      `;
-    }
-function renderHome() {
+  function renderHome() {
       // Get time-based greeting
       const hour = new Date().getHours();
       let greeting = 'Good morning';
@@ -9802,21 +9574,44 @@ function renderHome() {
       const thisMonth = now.getMonth();
       const thisYear = now.getFullYear();
       const monthlyBudget = state.monthlyBudget || 0;
+      
+      // Calculate monthly spent from purchases
       const monthlySpent = (state.purchases || [])
         .filter(p => {
+          if (!p.date) return false;
           const pDate = new Date(p.date);
           return pDate.getMonth() === thisMonth && pDate.getFullYear() === thisYear;
         })
-        .reduce((sum, p) => sum + (p.total || 0), 0);
+        .reduce((sum, p) => sum + (parseFloat(p.total) || parseFloat(p.amount) || 0), 0);
       
-      // Get a random ingredient to use (from inventory, prioritize expiring)
-      const ingredientToUse = allExpiringItems.length > 0 
-        ? allExpiringItems[0] 
-        : state.inventory.length > 0 
-          ? state.inventory[Math.floor(Math.random() * state.inventory.length)]
-          : null;
+      // Get items marked as "want to use" from inventory
+      const wantToUseItems = state.inventory.filter(i => i.wantToUse);
+      const wantToUseCount = wantToUseItems.length;
       
-      const todaysPlan = state.planData.find(p => p.date === new Date().toISOString().split('T')[0]);
+      // Get today's plan
+      const today = new Date().toISOString().split('T')[0];
+      const todaysPlan = state.planData.find(p => p.date === today);
+      
+      // Get yesterday's plan
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayStr = yesterday.toISOString().split('T')[0];
+      const yesterdaysPlan = state.planData.find(p => p.date === yesterdayStr);
+      
+      // Helper to get meals for a plan
+      const getMealsForPlan = (plan) => {
+        if (!plan) return { breakfast: [], lunch: [], dinner: [] };
+        return {
+          breakfast: (plan.breakfast || []).map(id => getRecipeById(id)).filter(Boolean),
+          lunch: (plan.lunch || []).map(id => getRecipeById(id)).filter(Boolean),
+          dinner: (plan.dinner || []).map(id => getRecipeById(id)).filter(Boolean)
+        };
+      };
+      
+      const todayMeals = getMealsForPlan(todaysPlan);
+      const yesterdayMeals = getMealsForPlan(yesterdaysPlan);
+      const hasTodayMeals = todayMeals.breakfast.length > 0 || todayMeals.lunch.length > 0 || todayMeals.dinner.length > 0;
+      const hasYesterdayMeals = yesterdayMeals.breakfast.length > 0 || yesterdayMeals.lunch.length > 0 || yesterdayMeals.dinner.length > 0;
 
       return `
         <div style="background: ${CONFIG.background_color}; min-height: 100vh;">
@@ -9830,40 +9625,38 @@ function renderHome() {
                 What's cooking today?
               </div>
               
-              <!-- Quick Stats Bar - All Clickable -->
-              <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
+              <!-- Stats Bar - Full Width -->
+              <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px;">
                 
                 <!-- Recipes -->
-                <div onclick="navigateTo('recipes')" style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px 14px; flex-shrink: 0; min-width: 80px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                  <div style="color: white; font-size: 20px; font-weight: 700;">${recipeCount}</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 11px;">📚 Recipes</div>
+                <div onclick="navigateTo('recipes')" style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+                  <div style="color: white; font-size: 18px; font-weight: 700;">${recipeCount}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 10px;">Recipes</div>
                 </div>
                 
                 <!-- In Stock -->
-                <div onclick="navigateTo('inventory')" style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px 14px; flex-shrink: 0; min-width: 80px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                  <div style="color: white; font-size: 20px; font-weight: 700;">${inStockCount}</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 11px;">📦 In Stock</div>
+                <div onclick="navigateTo('inventory')" style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+                  <div style="color: white; font-size: 18px; font-weight: 700;">${inStockCount}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 10px;">In Stock</div>
                 </div>
                 
-                <!-- Budget -->
-                <div onclick="navigateTo('budget-dashboard')" style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px 14px; flex-shrink: 0; min-width: 100px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                  <div style="color: ${monthlyBudget > 0 && monthlySpent > monthlyBudget ? '#fca5a5' : 'white'}; font-size: 20px; font-weight: 700;">$${monthlySpent.toFixed(0)}</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 11px;">💰 ${monthlyBudget > 0 ? `of $${monthlyBudget}` : 'Spent'}</div>
+                <!-- Spent This Month -->
+                <div onclick="navigateTo('budget-dashboard')" style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+                  <div style="color: ${monthlyBudget > 0 && monthlySpent > monthlyBudget ? '#fca5a5' : 'white'}; font-size: 18px; font-weight: 700;">$${monthlySpent.toFixed(0)}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 10px;">${monthlyBudget > 0 ? `of $${monthlyBudget}` : 'This Month'}</div>
                 </div>
                 
                 <!-- Expiring Soon -->
-                <div onclick="navigateTo('inventory'); setTimeout(() => { state.inventoryFilter = 'expiring'; render(); }, 100);" style="background: ${allExpiringItems.length > 0 ? 'rgba(251,191,36,0.3)' : 'rgba(255,255,255,0.2)'}; backdrop-filter: blur(10px); border-radius: 12px; padding: 10px 14px; flex-shrink: 0; min-width: 80px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                  <div style="color: ${allExpiringItems.length > 0 ? '#fef3c7' : 'white'}; font-size: 20px; font-weight: 700;">${allExpiringItems.length}</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 11px;">⚠️ Expiring</div>
+                <div onclick="navigateTo('inventory'); setTimeout(() => { state.inventoryFilter = 'expiring'; render(); }, 100);" style="background: ${allExpiringItems.length > 0 ? 'rgba(251,191,36,0.4)' : 'rgba(255,255,255,0.2)'}; backdrop-filter: blur(10px); border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+                  <div style="color: ${allExpiringItems.length > 0 ? '#fef3c7' : 'white'}; font-size: 18px; font-weight: 700;">${allExpiringItems.length}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 10px;">Expiring</div>
                 </div>
                 
-                <!-- Ingredient to Use -->
-                ${ingredientToUse ? `
-                  <div onclick="showIngredientDetail('${esc(ingredientToUse.name.toLowerCase())}')" style="background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); border-radius: 12px; padding: 10px 14px; flex-shrink: 0; min-width: 100px; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                    <div style="color: white; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 90px;">${esc(ingredientToUse.name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '))}</div>
-                    <div style="color: rgba(255,255,255,0.8); font-size: 11px;">🥕 Use This</div>
-                  </div>
-                ` : ''}
+                <!-- Want to Use -->
+                <div onclick="navigateTo('inventory'); setTimeout(() => { state.inventoryFilter = 'wantToUse'; render(); }, 100);" style="background: ${wantToUseCount > 0 ? 'rgba(52,211,153,0.4)' : 'rgba(255,255,255,0.2)'}; backdrop-filter: blur(10px); border-radius: 10px; padding: 10px 8px; cursor: pointer; text-align: center; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+                  <div style="color: white; font-size: 18px; font-weight: 700;">${wantToUseCount}</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 10px;">To Use</div>
+                </div>
               </div>
             </div>
           </div>
@@ -9876,19 +9669,18 @@ function renderHome() {
                 <select id="homeSearchFilter" 
                   onchange="state.homeSearchFilter = this.value; renderHomeSearchResults();"
                   style="padding: 10px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; cursor: pointer; min-width: 110px;">
-                  <option value="all" ${(state.homeSearchFilter || 'all') === 'all' ? 'selected' : ''}>🔍 All</option>
-                  <option value="recipes" ${state.homeSearchFilter === 'recipes' ? 'selected' : ''}>📚 Recipes</option>
-                  <option value="ingredients" ${state.homeSearchFilter === 'ingredients' ? 'selected' : ''}>🥗 Ingredients</option>
+                  <option value="all" ${(state.homeSearchFilter || 'all') === 'all' ? 'selected' : ''}>All</option>
+                  <option value="recipes" ${state.homeSearchFilter === 'recipes' ? 'selected' : ''}>Recipes</option>
+                  <option value="ingredients" ${state.homeSearchFilter === 'ingredients' ? 'selected' : ''}>Ingredients</option>
                 </select>
                 <div style="flex: 1; position: relative;">
                   <input type="text" 
                     id="homeSearchInput"
-                    placeholder="Search recipes & ingredients..."
+                    placeholder="Search..."
                     value="${esc(state.homeSearchTerm || '')}"
                     oninput="state.homeSearchTerm = this.value; renderHomeSearchResults();"
                     onfocus="if(this.value) renderHomeSearchResults();"
-                    style="width: 100%; padding: 10px 12px; padding-left: 36px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
-                  <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: ${CONFIG.text_muted};">🔍</span>
+                    style="width: 100%; padding: 10px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
                   ${state.homeSearchTerm ? `
                     <button onclick="state.homeSearchTerm = ''; document.getElementById('homeSearchInput').value = ''; renderHomeSearchResults();" 
                       style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 16px;">
@@ -9897,122 +9689,123 @@ function renderHome() {
                   ` : ''}
                 </div>
               </div>
-              
-              <!-- Search Results -->
               <div id="homeSearchResults"></div>
             </div>
             
-            <!-- Tonight's Dinner Card -->
-            ${(() => {
-              const today = new Date().toISOString().split('T')[0];
-              const todaysPlan = state.planData.find(p => p.date === today);
-              
-              let plannedRecipe = null;
-              let mealType = '';
-              
-              if (todaysPlan) {
-                const dinnerIds = todaysPlan.dinner || [];
-                const lunchIds = todaysPlan.lunch || [];
-                const breakfastIds = todaysPlan.breakfast || [];
-                
-                if (dinnerIds.length > 0) {
-                  plannedRecipe = getRecipeById(dinnerIds[0]);
-                  mealType = 'Dinner';
-                } else if (lunchIds.length > 0) {
-                  plannedRecipe = getRecipeById(lunchIds[0]);
-                  mealType = 'Lunch';
-                } else if (breakfastIds.length > 0) {
-                  plannedRecipe = getRecipeById(breakfastIds[0]);
-                  mealType = 'Breakfast';
-                }
-              }
-              
-              if (plannedRecipe) {
-                const recipeImg = recipeThumb(plannedRecipe);
-                return `
-                  <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
-                    <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px;">🍽️ Tonight's Dinner</div>
-                    <div onclick="openRecipeView('${plannedRecipe.__backendId || plannedRecipe.id}')" style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
-                      ${recipeImg ? `<img src="${esc(recipeImg)}" style="width: 60px; height: 60px; border-radius: 12px; object-fit: cover;" />` : `<div style="width: 60px; height: 60px; border-radius: 12px; background: ${CONFIG.background_color}; display: flex; align-items: center; justify-content: center; font-size: 24px;">🍽️</div>`}
-                      <div style="flex: 1; min-width: 0;">
-                        <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(plannedRecipe.title)}</div>
-                        <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${mealType || plannedRecipe.category || 'Dinner'}</div>
-                      </div>
-                    </div>
-                    <div style="display: flex; gap: 8px; margin-top: 12px;">
-                      <button onclick="openRecipeView('${plannedRecipe.__backendId || plannedRecipe.id}')" style="flex: 1; padding: 10px; background: ${CONFIG.background_color}; border: none; border-radius: 8px; color: ${CONFIG.text_color}; cursor: pointer; font-weight: 500;">
-                        View Recipe
-                      </button>
-                      <button onclick="markRecipeCooked('${plannedRecipe.__backendId || plannedRecipe.id}')" style="flex: 1; padding: 10px; background: ${CONFIG.success_color}; border: none; border-radius: 8px; color: white; cursor: pointer; font-weight: 500;">
-                        ✓ I Made This
-                      </button>
-                    </div>
-                  </div>
-                `;
-              }
-              return `
-                <div onclick="navigateTo('meal-plan')" style="background: linear-gradient(135deg, ${CONFIG.surface_color} 0%, rgba(102,126,234,0.05) 100%); border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow}; border: 2px dashed rgba(102,126,234,0.3); cursor: pointer;">
-                  <div style="display: flex; align-items: center; gap: 12px;">
-                    <div style="width: 50px; height: 50px; border-radius: 12px; background: ${CONFIG.background_color}; display: flex; align-items: center; justify-content: center; font-size: 24px;">🤔</div>
-                    <div style="flex: 1;">
-                      <div style="color: ${CONFIG.text_color}; font-weight: 600; font-size: 15px;">What's for dinner?</div>
-                      <div style="color: ${CONFIG.text_muted}; font-size: 13px;">No meal planned for tonight</div>
-                    </div>
-                    <div style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; border: none; border-radius: 8px; color: white; font-weight: 500; font-size: 13px;">
-                      Plan Now
-                    </div>
-                  </div>
-                </div>
-              `;
-            })()}
-            
-            <!-- Alert Card (if items expiring) -->
-            ${allExpiringItems.length > 0 ? `
-              <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow}; cursor: pointer; border-left: 4px solid ${CONFIG.warning_color};">
-                <div style="display: flex; align-items: center; gap: 12px;">
-                  <div style="font-size: 24px;">⚠️</div>
-                  <div style="flex: 1;">
-                    <div style="color: ${CONFIG.text_color}; font-weight: 600;">${allExpiringItems.length} item${allExpiringItems.length > 1 ? 's' : ''} expiring soon</div>
-                    <div style="color: ${CONFIG.text_muted}; font-size: 14px;">${allExpiringItems.slice(0, 3).map(i => i.name).join(', ')}${allExpiringItems.length > 3 ? '...' : ''}</div>
-                  </div>
-                  <div style="color: ${CONFIG.text_muted};">→</div>
-                </div>
+            <!-- Today's Meals Card -->
+            <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 14px; margin-bottom: 12px; box-shadow: ${CONFIG.shadow};">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <div style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 600;">Today</div>
+                <button onclick="navigateTo('meal-plan')" style="background: none; border: none; color: ${CONFIG.primary_action_color}; font-size: 12px; cursor: pointer;">
+                  ${hasTodayMeals ? 'Edit' : '+ Plan'}
+                </button>
               </div>
+              
+              ${hasTodayMeals ? `
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
+                  <!-- Breakfast -->
+                  <div style="background: ${CONFIG.background_color}; border-radius: 10px; padding: 10px;">
+                    <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-bottom: 6px;">Breakfast</div>
+                    ${todayMeals.breakfast.length > 0 ? todayMeals.breakfast.map(r => `
+                      <div onclick="openRecipeView('${r.__backendId || r.id}')" style="cursor: pointer;">
+                        <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+                      </div>
+                    `).join('') : `
+                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-style: italic;">Not planned</div>
+                    `}
+                  </div>
+                  
+                  <!-- Lunch -->
+                  <div style="background: ${CONFIG.background_color}; border-radius: 10px; padding: 10px;">
+                    <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-bottom: 6px;">Lunch</div>
+                    ${todayMeals.lunch.length > 0 ? todayMeals.lunch.map(r => `
+                      <div onclick="openRecipeView('${r.__backendId || r.id}')" style="cursor: pointer;">
+                        <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+                      </div>
+                    `).join('') : `
+                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-style: italic;">Not planned</div>
+                    `}
+                  </div>
+                  
+                  <!-- Dinner -->
+                  <div style="background: ${CONFIG.background_color}; border-radius: 10px; padding: 10px;">
+                    <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-bottom: 6px;">Dinner</div>
+                    ${todayMeals.dinner.length > 0 ? todayMeals.dinner.map(r => `
+                      <div onclick="openRecipeView('${r.__backendId || r.id}')" style="cursor: pointer;">
+                        <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+                      </div>
+                    `).join('') : `
+                      <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-style: italic;">Not planned</div>
+                    `}
+                  </div>
+                </div>
+              ` : `
+                <div onclick="navigateTo('meal-plan')" style="display: flex; align-items: center; gap: 10px; padding: 12px; background: ${CONFIG.background_color}; border-radius: 10px; cursor: pointer; border: 1px dashed rgba(0,0,0,0.1);">
+                  <div style="color: ${CONFIG.text_muted}; font-size: 20px;">🤔</div>
+                  <div>
+                    <div style="color: ${CONFIG.text_color}; font-size: 13px; font-weight: 500;">No meals planned</div>
+                    <div style="color: ${CONFIG.text_muted}; font-size: 11px;">Tap to plan your day</div>
+                  </div>
+                </div>
+              `}
+            </div>
+            
+            <!-- Yesterday's Meals (collapsed) -->
+            ${hasYesterdayMeals ? `
+              <details style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; box-shadow: ${CONFIG.shadow};">
+                <summary style="color: ${CONFIG.text_muted}; font-size: 12px; cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center;">
+                  <span>Yesterday's meals</span>
+                  <span style="font-size: 10px;">▼</span>
+                </summary>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px;">
+                  ${['breakfast', 'lunch', 'dinner'].map(meal => `
+                    <div style="text-align: center;">
+                      <div style="color: ${CONFIG.text_muted}; font-size: 9px; margin-bottom: 4px;">${meal.charAt(0).toUpperCase() + meal.slice(1)}</div>
+                      ${yesterdayMeals[meal].length > 0 ? yesterdayMeals[meal].map(r => `
+                        <div style="color: ${CONFIG.text_color}; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+                      `).join('') : `
+                        <div style="color: ${CONFIG.text_muted}; font-size: 10px;">-</div>
+                      `}
+                    </div>
+                  `).join('')}
+                </div>
+              </details>
             ` : ''}
             
-            <!-- Use Soon - Recipes with expiring ingredients -->
+            <!-- Use Soon - Recipes with expiring/want-to-use ingredients -->
             ${(() => {
-              if (allExpiringItems.length === 0) return '';
+              const priorityItems = [...wantToUseItems, ...allExpiringItems.filter(i => !i.wantToUse)];
+              if (priorityItems.length === 0) return '';
               
-              const expiringNames = allExpiringItems.map(i => i.name.toLowerCase());
+              const priorityNames = priorityItems.map(i => i.name.toLowerCase());
               const useSoonRecipes = state.recipes
                 .filter(r => !r.isDraft && !r.isTip)
                 .map(recipe => {
                   const ingredients = recipeIngList(recipe);
-                  const matchingExpiring = ingredients.filter(ing => 
-                    expiringNames.some(exp => exp.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(exp))
+                  const matching = ingredients.filter(ing => 
+                    priorityNames.some(exp => exp.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(exp))
                   );
-                  return { ...recipe, matchingExpiring };
+                  return { ...recipe, matching };
                 })
-                .filter(r => r.matchingExpiring.length > 0)
-                .sort((a, b) => b.matchingExpiring.length - a.matchingExpiring.length)
+                .filter(r => r.matching.length > 0)
+                .sort((a, b) => b.matching.length - a.matching.length)
                 .slice(0, 4);
               
               if (useSoonRecipes.length === 0) return '';
               
               return `
-                <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
-                  <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">🕐 Use Soon</div>
-                  <div style="display: flex; gap: 10px; overflow-x: auto; padding-bottom: 4px;">
+                <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 12px 14px; margin-bottom: 12px; box-shadow: ${CONFIG.shadow};">
+                  <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Suggested Recipes</div>
+                  <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;">
                     ${useSoonRecipes.map(recipe => {
                       const img = recipeThumb(recipe);
                       return `
-                        <div onclick="openRecipeView('${recipe.__backendId || recipe.id}')" style="flex-shrink: 0; width: 100px; cursor: pointer;">
-                          <div style="height: 70px; border-radius: 10px; overflow: hidden; background: ${CONFIG.background_color}; margin-bottom: 6px;">
-                            ${img ? `<img src="${esc(img)}" style="width: 100%; height: 100%; object-fit: cover;" />` : `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px;">🍽️</div>`}
+                        <div onclick="openRecipeView('${recipe.__backendId || recipe.id}')" style="flex-shrink: 0; width: 90px; cursor: pointer;">
+                          <div style="height: 60px; border-radius: 8px; overflow: hidden; background: ${CONFIG.background_color}; margin-bottom: 4px;">
+                            ${img ? `<img src="${esc(img)}" style="width: 100%; height: 100%; object-fit: cover;" />` : `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 20px;">🍽️</div>`}
                           </div>
-                          <div style="color: ${CONFIG.text_color}; font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(recipe.title)}</div>
-                          <div style="color: ${CONFIG.warning_color}; font-size: 10px;">Uses ${recipe.matchingExpiring[0]?.name || 'expiring item'}</div>
+                          <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(recipe.title)}</div>
+                          <div style="color: ${CONFIG.primary_action_color}; font-size: 9px;">Uses ${recipe.matching[0]?.name || 'ingredient'}</div>
                         </div>
                       `;
                     }).join('')}
@@ -10021,89 +9814,36 @@ function renderHome() {
               `;
             })()}
             
-            <!-- Main Navigation Cards -->
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px;">
-              <div onclick="navigateTo('recipes')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">📚</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Recipes</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${recipeCount} saved</div>
-              </div>
+            <!-- Quick Actions - Smaller -->
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 16px;">
+              <button onclick="showReceiptModal()" style="display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 22px; margin-bottom: 2px;">📸</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 10px; font-weight: 500;">Scan</span>
+              </button>
               
-              <div onclick="navigateTo('meal-plan')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">📅</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Meal Plan</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">Plan your week</div>
-              </div>
+              <button onclick="showWhatCanICook()" style="display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 22px; margin-bottom: 2px;">🍳</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 10px; font-weight: 500;">Cook</span>
+              </button>
               
-              <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">🥫</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Pantry</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${state.inventory.length} in stock</div>
-              </div>
+              <button onclick="navigateTo('recipe-stats')" style="display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 22px; margin-bottom: 2px;">📊</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 10px; font-weight: 500;">Stats</span>
+              </button>
               
-              <div onclick="navigateTo('grocery-list')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">🛒</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Grocery List</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${state.groceryItems.length} items</div>
-              </div>
-            </div>
-            
-            <!-- Secondary Navigation -->
-            <div style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 16px; box-shadow: ${CONFIG.shadow}; margin-bottom: 24px;">
-              <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">More</div>
-              
-              <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-                <div onclick="navigateTo('grocery-list')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
-                  <div style="font-size: 24px; margin-bottom: 4px;">🛒</div>
-                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Grocery</div>
-                </div>
-                
-                <div onclick="navigateTo('budget-dashboard')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
-                  <div style="font-size: 24px; margin-bottom: 4px;">💰</div>
-                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Budget</div>
-                </div>
-                
-                <div onclick="navigateTo('recipe-stats')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
-                  <div style="font-size: 24px; margin-bottom: 4px;">📊</div>
-                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">Stats</div>
-                </div>
-                
-                <div onclick="navigateTo('purchase-history')" style="text-align: center; padding: 12px 8px; border-radius: 12px; cursor: pointer; background: rgba(0,0,0,0.02);" onmouseover="this.style.background='rgba(0,0,0,0.05)'" onmouseout="this.style.background='rgba(0,0,0,0.02)'">
-                  <div style="font-size: 24px; margin-bottom: 4px;">🧾</div>
-                  <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500;">History</div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Quick Actions -->
-            <div style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 16px; box-shadow: ${CONFIG.shadow}; margin-bottom: 16px;">
-              <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px;">Quick Actions</div>
-              
-              <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-                <button onclick="showReceiptModal()" style="display: flex; flex-direction: column; align-items: center; padding: 16px 8px; border: none; background: linear-gradient(135deg, #48bb78 0%, #38a169 100%); border-radius: 16px; cursor: pointer;">
-                  <span style="font-size: 28px; margin-bottom: 4px;">📸</span>
-                  <span style="color: white; font-size: 12px; font-weight: 600;">Scan Receipt</span>
-                </button>
-                
-                <button onclick="showWhatCanICook()" style="display: flex; flex-direction: column; align-items: center; padding: 16px 8px; border: none; background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%); border-radius: 16px; cursor: pointer;">
-                  <span style="font-size: 28px; margin-bottom: 4px;">🍳</span>
-                  <span style="color: white; font-size: 12px; font-weight: 600;">What Can I Cook?</span>
-                </button>
-                
-                <button onclick="showQuickAddGrocery()" style="display: flex; flex-direction: column; align-items: center; padding: 16px 8px; border: none; background: linear-gradient(135deg, #667eea 0%, #5a67d8 100%); border-radius: 16px; cursor: pointer;">
-                  <span style="font-size: 28px; margin-bottom: 4px;">➕</span>
-                  <span style="color: white; font-size: 12px; font-weight: 600;">Add Grocery</span>
-                </button>
-              </div>
+              <button onclick="navigateTo('purchase-history')" style="display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border: none; background: ${CONFIG.surface_color}; border-radius: 12px; cursor: pointer; box-shadow: ${CONFIG.shadow};">
+                <span style="font-size: 22px; margin-bottom: 2px;">🧾</span>
+                <span style="color: ${CONFIG.text_color}; font-size: 10px; font-weight: 500;">History</span>
+              </button>
             </div>
             
             <!-- Ask Chef Claude Card - Enhanced -->
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 20px; padding: 16px; box-shadow: ${CONFIG.shadow}; margin-bottom: 16px;">
-              <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
-                <div style="font-size: 32px;">👨‍🍳</div>
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 16px; padding: 14px; box-shadow: ${CONFIG.shadow}; margin-bottom: 16px;">
+              <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                <div style="font-size: 28px;">👨‍🍳</div>
                 <div style="flex: 1;">
-                  <div style="color: white; font-weight: 700; font-size: 16px;">Ask Chef Claude</div>
-                  <div style="color: rgba(255,255,255,0.8); font-size: 13px;">Cooking tips, substitutions & ideas</div>
+                  <div style="color: white; font-weight: 600; font-size: 14px;">Ask Chef Claude</div>
+                  <div style="color: rgba(255,255,255,0.8); font-size: 11px;">Cooking tips & ideas</div>
                 </div>
               </div>
               
@@ -10115,36 +9855,36 @@ function renderHome() {
                   value="${esc(state.homeClaudeQuestion || '')}"
                   oninput="state.homeClaudeQuestion = this.value"
                   onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); askHomeClaudeQuestion(); }"
-                  style="width: 100%; padding: 12px 50px 12px 14px; border: none; border-radius: 12px; font-size: 14px; background: rgba(255,255,255,0.95); color: #1a1a2e; box-sizing: border-box;" />
+                  style="width: 100%; padding: 10px 50px 10px 12px; border: none; border-radius: 10px; font-size: 13px; background: rgba(255,255,255,0.95); color: #1a1a2e; box-sizing: border-box;" />
                 <button onclick="askHomeClaudeQuestion()" 
-                  style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: ${CONFIG.primary_action_color}; border: none; border-radius: 8px; padding: 8px 12px; cursor: pointer; color: white; font-size: 14px;">
+                  style="position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: ${CONFIG.primary_action_color}; border: none; border-radius: 6px; padding: 6px 10px; cursor: pointer; color: white; font-size: 12px;">
                   Ask
                 </button>
               </div>
               
               <!-- Response Area -->
-              <div id="homeClaudeResponse" style="display: ${state.homeClaudeResponse ? 'block' : 'none'}; margin-top: 12px;">
-                <div style="background: rgba(255,255,255,0.95); border-radius: 12px; padding: 14px;">
-                  <div id="homeClaudeResponseText" style="color: #1a1a2e; font-size: 14px; line-height: 1.6;">
+              <div id="homeClaudeResponse" style="display: ${state.homeClaudeResponse ? 'block' : 'none'}; margin-top: 10px;">
+                <div style="background: rgba(255,255,255,0.95); border-radius: 10px; padding: 12px;">
+                  <div id="homeClaudeResponseText" style="color: #1a1a2e; font-size: 13px; line-height: 1.5;">
                     ${state.homeClaudeResponse ? formatChefMessage(state.homeClaudeResponse) : ''}
                   </div>
-                  <div style="display: flex; gap: 8px; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(0,0,0,0.1);">
-                    <button onclick="clearHomeClaudeResponse()" style="flex: 1; padding: 8px; background: rgba(0,0,0,0.05); border: none; border-radius: 8px; cursor: pointer; color: #666; font-size: 13px;">
-                      ✕ Clear
+                  <div style="display: flex; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(0,0,0,0.1);">
+                    <button onclick="clearHomeClaudeResponse()" style="flex: 1; padding: 6px; background: rgba(0,0,0,0.05); border: none; border-radius: 6px; cursor: pointer; color: #666; font-size: 11px;">
+                      Clear
                     </button>
-                    <button onclick="retryHomeClaudeQuestion()" style="flex: 1; padding: 8px; background: rgba(102,126,234,0.1); border: none; border-radius: 8px; cursor: pointer; color: #667eea; font-size: 13px;">
-                      🔄 Retry
+                    <button onclick="retryHomeClaudeQuestion()" style="flex: 1; padding: 6px; background: rgba(102,126,234,0.1); border: none; border-radius: 6px; cursor: pointer; color: #667eea; font-size: 11px;">
+                      Retry
                     </button>
-                    <button onclick="toggleChefChat()" style="flex: 1; padding: 8px; background: ${CONFIG.primary_action_color}; border: none; border-radius: 8px; cursor: pointer; color: white; font-size: 13px;">
-                      💬 Chat More
+                    <button onclick="toggleChefChat()" style="flex: 1; padding: 6px; background: ${CONFIG.primary_action_color}; border: none; border-radius: 6px; cursor: pointer; color: white; font-size: 11px;">
+                      Chat
                     </button>
                   </div>
                 </div>
               </div>
               
               <!-- Loading State -->
-              <div id="homeClaudeLoading" style="display: none; margin-top: 12px; text-align: center; padding: 16px;">
-                <div style="color: white; font-size: 14px;">⏳ Thinking...</div>
+              <div id="homeClaudeLoading" style="display: none; margin-top: 10px; text-align: center; padding: 12px;">
+                <div style="color: white; font-size: 12px;">⏳ Thinking...</div>
               </div>
             </div>
             
