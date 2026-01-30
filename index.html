@@ -9104,6 +9104,118 @@ console.log('byMonth:', byMonth);
       }
     }
 
+   function renderHomeSearchResults() {
+      const container = document.getElementById('homeSearchResults');
+      if (!container) return;
+      
+      const searchTerm = (state.homeSearchTerm || '').toLowerCase().trim();
+      const filter = state.homeSearchFilter || 'all';
+      
+      if (!searchTerm) {
+        container.innerHTML = '';
+        return;
+      }
+      
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      
+      let results = [];
+      
+      // Search recipes
+      if (filter === 'all' || filter === 'recipes') {
+        const matchingRecipes = state.recipes
+          .filter(r => !r.isDraft)
+          .filter(r => {
+            // Search by title
+            if (r.title.toLowerCase().includes(searchTerm)) return true;
+            // Search by ingredients
+            const ings = recipeIngList(r);
+            return ings.some(ing => ing.name.toLowerCase().includes(searchTerm));
+          })
+          .slice(0, 5)
+          .map(r => ({
+            type: 'recipe',
+            id: r.__backendId || r.id,
+            name: r.title,
+            subtitle: r.category || 'Recipe',
+            image: recipeThumb(r),
+            icon: r.isTip ? '📝' : '🍽️'
+          }));
+        results = results.concat(matchingRecipes);
+      }
+      
+      // Search ingredients (from inventory and ingredient knowledge)
+      if (filter === 'all' || filter === 'ingredients') {
+        const addedNames = new Set();
+        
+        // Search inventory (in stock items)
+        state.inventory
+          .filter(item => item.name.toLowerCase().includes(searchTerm))
+          .slice(0, 3)
+          .forEach(item => {
+            if (!addedNames.has(item.name.toLowerCase())) {
+              addedNames.add(item.name.toLowerCase());
+              results.push({
+                type: 'inventory',
+                id: item.id,
+                name: capitalize(item.name),
+                subtitle: 'In Stock • ' + (item.quantity || 1) + (item.unit ? ' ' + item.unit : ''),
+                image: item.image_url || getIngredientImage(item.name, item.category),
+                icon: '📦'
+              });
+            }
+          });
+        
+        // Search ingredient knowledge (library)
+        (state.ingredientKnowledge || [])
+          .filter(ing => ing.name.toLowerCase().includes(searchTerm))
+          .filter(ing => !addedNames.has(ing.name.toLowerCase()))
+          .slice(0, 3)
+          .forEach(ing => {
+            const inStock = state.inventory.some(item => item.name.toLowerCase() === ing.name.toLowerCase());
+            results.push({
+              type: 'ingredient',
+              id: ing.id,
+              name: capitalize(ing.name),
+              subtitle: inStock ? '✓ In Stock' : 'Ingredient Library',
+              image: ing.image_url || getIngredientImage(ing.name, ing.category),
+              icon: '🥗'
+            });
+          });
+      }
+      
+      if (results.length === 0) {
+        container.innerHTML = `
+          <div style="padding: 16px; text-align: center; color: ${CONFIG.text_muted};">
+            No results found for "${esc(searchTerm)}"
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = `
+        <div style="margin-top: 12px; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 12px;">
+          ${results.map(item => `
+            <div onclick="${item.type === 'recipe' ? `openRecipeView('${item.id}')` : item.type === 'inventory' ? `showInventoryItemDetail('${item.id}')` : `showIngredientDetail('${item.id}')`}"
+              style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px;"
+              onmouseover="this.style.background='rgba(0,0,0,0.03)'"
+              onmouseout="this.style.background='transparent'">
+              ${item.image ? `
+                <img src="${esc(item.image)}" style="width: 44px; height: 44px; border-radius: 8px; object-fit: cover;" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                <div style="display: none; width: 44px; height: 44px; border-radius: 8px; background: ${CONFIG.background_color}; align-items: center; justify-content: center; font-size: 20px;">${item.icon}</div>
+              ` : `
+                <div style="width: 44px; height: 44px; border-radius: 8px; background: ${CONFIG.background_color}; display: flex; align-items: center; justify-content: center; font-size: 20px;">${item.icon}</div>
+              `}
+              <div style="flex: 1; min-width: 0;">
+                <div style="color: ${CONFIG.text_color}; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(item.name)}</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px;">${esc(item.subtitle)}</div>
+              </div>
+              <div style="color: ${CONFIG.text_muted}; font-size: 12px;">→</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+    }
+
    function renderHome() {
       // Get time-based greeting
       const hour = new Date().getHours();
@@ -9160,7 +9272,39 @@ console.log('byMonth:', byMonth);
             </div>
           </div>
           
-          <div class="max-w-4xl mx-auto p-4" style="margin-top: -20px;">
+         <div class="max-w-4xl mx-auto p-4" style="margin-top: -20px;">
+            
+            <!-- Search Bar -->
+            <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 12px; margin-bottom: 16px; box-shadow: ${CONFIG.shadow};">
+              <div style="display: flex; gap: 8px; align-items: center;">
+                <select id="homeSearchFilter" 
+                  onchange="state.homeSearchFilter = this.value; renderHomeSearchResults();"
+                  style="padding: 10px 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; cursor: pointer; min-width: 110px;">
+                  <option value="all" ${(state.homeSearchFilter || 'all') === 'all' ? 'selected' : ''}>🔍 All</option>
+                  <option value="recipes" ${state.homeSearchFilter === 'recipes' ? 'selected' : ''}>📚 Recipes</option>
+                  <option value="ingredients" ${state.homeSearchFilter === 'ingredients' ? 'selected' : ''}>🥗 Ingredients</option>
+                </select>
+                <div style="flex: 1; position: relative;">
+                  <input type="text" 
+                    id="homeSearchInput"
+                    placeholder="Search recipes & ingredients..."
+                    value="${esc(state.homeSearchTerm || '')}"
+                    oninput="state.homeSearchTerm = this.value; renderHomeSearchResults();"
+                    onfocus="if(this.value) renderHomeSearchResults();"
+                    style="width: 100%; padding: 10px 12px; padding-left: 36px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+                  <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: ${CONFIG.text_muted};">🔍</span>
+                  ${state.homeSearchTerm ? `
+                    <button onclick="state.homeSearchTerm = ''; document.getElementById('homeSearchInput').value = ''; renderHomeSearchResults();" 
+                      style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 16px;">
+                      ✕
+                    </button>
+                  ` : ''}
+                </div>
+              </div>
+              
+              <!-- Search Results -->
+              <div id="homeSearchResults"></div>
+            </div>
             
            <!-- Tonight's Dinner Card -->
             ${(() => {
@@ -9299,16 +9443,16 @@ console.log('byMonth:', byMonth);
                 <div style="color: ${CONFIG.text_muted}; font-size: 13px;">Plan your week</div>
               </div>
               
-              <div onclick="navigateTo('ingredients')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">🥗</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Ingredients</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">Cooking guides</div>
+            <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="font-size: 36px; margin-bottom: 8px;">🥫</div>
+                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Pantry</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${state.inventory.length} in stock</div>
               </div>
               
-              <div onclick="navigateTo('inventory')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
-                <div style="font-size: 36px; margin-bottom: 8px;">📦</div>
-                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Inventory</div>
-                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${state.inventory.length} items</div>
+              <div onclick="navigateTo('grocery-list')" style="background: ${CONFIG.surface_color}; border-radius: 20px; padding: 20px; box-shadow: ${CONFIG.shadow}; cursor: pointer; transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.02)'" onmouseout="this.style.transform='scale(1)'">
+                <div style="font-size: 36px; margin-bottom: 8px;">🛒</div>
+                <div style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">Grocery List</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${state.groceryItems.length} items</div>
               </div>
               
             </div>
