@@ -12276,29 +12276,26 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
         render();
       }
     }
-   function renderMealPlan() {
+ function renderMealPlan() {
       return `
-        <div class="p-4 max-w-7xl mx-auto">
-          <!-- Header with tabs -->
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">
-              Meal Plan
-            </h2>
-            <div class="flex gap-2">
+        <div class="p-3 max-w-4xl mx-auto">
+          <!-- Header -->
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex gap-1">
               <button onclick="state.mealPlanTab = 'week'; render();"
-                class="px-4 py-2 rounded-lg font-medium transition-all"
-                style="background:${state.mealPlanTab === 'week' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.mealPlanTab === 'week' ? 'white' : CONFIG.text_color};">
-                This Week
+                class="px-2 py-1 rounded"
+                style="background:${state.mealPlanTab === 'week' || !state.mealPlanTab ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.mealPlanTab === 'week' || !state.mealPlanTab ? 'white' : CONFIG.text_color}; font-size:11px; border:none;">
+                Week
               </button>
-              <button onclick="state.mealPlanTab === 'ideas'; render();"
-                class="px-4 py-2 rounded-lg font-medium transition-all"
-                style="background:${state.mealPlanTab === 'ideas' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.mealPlanTab === 'ideas' ? 'white' : CONFIG.text_color};">
-                Meal Ideas
+              <button onclick="state.mealPlanTab = 'ideas'; render();"
+                class="px-2 py-1 rounded"
+                style="background:${state.mealPlanTab === 'ideas' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.mealPlanTab === 'ideas' ? 'white' : CONFIG.text_color}; font-size:11px; border:none;">
+                Ideas
               </button>
             </div>
           </div>
 
-          ${state.mealPlanTab === 'week' ? renderWeeklyPlanContent() : renderMealIdeasContent()}
+          ${state.mealPlanTab === 'ideas' ? renderMealIdeasContent() : renderWeeklyPlanContent()}
         </div>
       `;
     }
@@ -12306,220 +12303,266 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
     function renderWeeklyPlanContent() {
       const dates = getWeekDates(state.currentWeekStartDate);
       const meals = ['Breakfast', 'Lunch', 'Dinner'];
+      
+      // Get today and tomorrow
+      const today = new Date().toISOString().split('T')[0];
+      const tomorrowDate = new Date();
+      tomorrowDate.setDate(tomorrowDate.getDate() + 1);
+      const tomorrow = tomorrowDate.toISOString().split('T')[0];
+      
+      // Check if today is Sunday (day 0)
+      const todayDayOfWeek = new Date().getDay();
+      const isSunday = todayDayOfWeek === 0;
+      
+      // Reorder dates: today first, then tomorrow (if not Sunday), then rest of week through Sunday
+      let orderedDates = [];
+      const todayIndex = dates.indexOf(today);
+      
+      if (todayIndex !== -1) {
+        // Today is in this week - reorder starting from today
+        orderedDates = [...dates.slice(todayIndex), ...dates.slice(0, todayIndex)];
+      } else {
+        orderedDates = dates;
+      }
+      
+      // Get week range for header
+      const weekStart = new Date(dates[0] + 'T00:00:00');
+      const weekEnd = new Date(dates[6] + 'T00:00:00');
+      const weekRange = `${weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${weekEnd.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+      
+      // Budget info
+      const weekExpenses = getWeekExpenses(state.currentWeekStartDate);
+      const totalBudget = weekExpenses.budget;
+      const isTotalOver = (totalBudget - weekExpenses.total) < 0;
 
       return `
-        <!-- Week Navigation -->
-        <div class="flex items-center justify-between mb-4">
-          <div class="flex gap-2">
-            <button type="button" onclick="changeWeek(-1)"
-              class="px-3 py-2 rounded-lg"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};">← Prev</button>
-            <button type="button" onclick="setCurrentWeek()"
-              class="px-3 py-2 rounded-lg"
-              style="background:${CONFIG.primary_action_color}; color:white; font-size:${CONFIG.font_size * 0.85}px;">Today</button>
-            <button type="button" onclick="changeWeek(1)"
-              class="px-3 py-2 rounded-lg"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};">Next →</button>
-            <button type="button" onclick="copyLastWeekPlan()"
-              class="px-3 py-2 rounded-lg"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; box-shadow: ${CONFIG.shadow};"
-              title="Copy last week's meals">📋</button>
+        <!-- Week Navigation & Date Range -->
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <button onclick="changeWeek(-1)"
+              class="px-2 py-1 rounded"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;">
+              ←
+            </button>
+            <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">
+              ${weekRange}
+            </div>
+            <button onclick="changeWeek(1)"
+              class="px-2 py-1 rounded"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;">
+              →
+            </button>
+          </div>
+          <div class="flex gap-1">
+            <button onclick="setCurrentWeek()"
+              class="px-2 py-1 rounded"
+              style="background:${CONFIG.primary_action_color}; color:white; font-size:10px; border:none;">
+              Today
+            </button>
+            <button onclick="copyLastWeekPlan()"
+              class="px-2 py-1 rounded"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:10px; border:none;"
+              title="Copy last week">
+              Copy
+            </button>
           </div>
         </div>
 
-        ${(() => {
-          const weekExpenses = getWeekExpenses(state.currentWeekStartDate);
-          const groceryBudget = weekExpenses.groceryBudget;
-          const takeoutBudget = weekExpenses.takeoutBudget;
-          const totalBudget = weekExpenses.budget;
-          
-          const groceryRemaining = groceryBudget - weekExpenses.grocery;
-          const takeoutRemaining = takeoutBudget - weekExpenses.takeout;
-          
-          const isGroceryOver = groceryRemaining < 0;
-          const isTakeoutOver = takeoutRemaining < 0;
-          const isTotalOver = (totalBudget - weekExpenses.total) < 0;
-          
-          return `
-            <div class="mb-4 rounded-xl p-3" style="background: linear-gradient(135deg, ${CONFIG.surface_color} 0%, rgba(102, 126, 234, 0.1) 100%); border: 1px solid rgba(255,255,255,0.08);">
-              <div>
-                <!-- Top row: Budget info -->
-                <div class="flex items-center justify-between mb-2">
-                  <div class="flex items-center gap-3">
-                    <div>
-                      <span style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">Budget</span>
-                      <div style="color:${isTotalOver ? '#ef4444' : '#22c55e'}; font-size:${CONFIG.font_size * 1.1}px; font-weight:bold;">
-                        $${weekExpenses.total.toFixed(0)} / $${totalBudget.toFixed(0)}
-                      </div>
-                    </div>
-                    <div style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">
-                      🛒 $${weekExpenses.grocery.toFixed(0)}
-                    </div>
-                    <div style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.75}px;">
-                      🍔 $${weekExpenses.takeout.toFixed(0)}
-                    </div>
-                  </div>
-                  <div class="flex gap-1">
-                    <button type="button" onclick="showManageExpensesModal()"
-                      class="px-2 py-1 rounded button-hover"
-                      style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">📋</button>
-                    <button type="button" onclick="showBudgetModal()"
-                      class="px-2 py-1 rounded button-hover"
-                      style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.7}px;">⚙️</button>
-                  </div>
-                </div>
-                <!-- Bottom row: Action buttons -->
-                <div class="flex gap-1 flex-wrap">
-                  <button type="button" onclick="showAddExpenseModal('grocery')"
-                    class="px-2 py-1 rounded button-hover"
-                    style="background:#16a34a; color:white; font-size:${CONFIG.font_size * 0.7}px;">+ Grocery</button>
-                  <button type="button" onclick="showAddExpenseModal('takeout')"
-                    class="px-2 py-1 rounded button-hover"
-                    style="background:#f59e0b; color:white; font-size:${CONFIG.font_size * 0.7}px;">+ Takeout</button>
-                  <button type="button" onclick="document.getElementById('receiptInput').click()"
-                    class="px-2 py-1 rounded button-hover"
-                    style="background:#8b5cf6; color:white; font-size:${CONFIG.font_size * 0.7}px;">📷 Scan</button>
-                  <input type="file" id="receiptInput" accept="image/*" onchange="handleReceiptUpload(event)" style="display:none;" />
-                </div>
-              </div>
+        <!-- Budget Bar -->
+        <div class="flex items-center justify-between mb-3 p-2 rounded-lg" style="background:${CONFIG.surface_color};">
+          <div class="flex items-center gap-3">
+            <div style="font-size:12px;">
+              <span style="color:${isTotalOver ? '#ef4444' : CONFIG.success_color}; font-weight:600;">$${weekExpenses.total.toFixed(0)}</span>
+              <span style="color:${CONFIG.text_muted};"> / $${totalBudget.toFixed(0)}</span>
             </div>
-          `;
-        })()}
+            <div style="color:${CONFIG.text_muted}; font-size:10px;">
+              Grocery $${weekExpenses.grocery.toFixed(0)} · Takeout $${weekExpenses.takeout.toFixed(0)}
+            </div>
+          </div>
+          <div class="flex gap-1">
+            <button onclick="showAddExpenseModal('grocery')"
+              class="px-2 py-1 rounded"
+              style="background:#16a34a; color:white; font-size:9px; border:none;">
+              + Grocery
+            </button>
+            <button onclick="showAddExpenseModal('takeout')"
+              class="px-2 py-1 rounded"
+              style="background:#f59e0b; color:white; font-size:9px; border:none;">
+              + Takeout
+            </button>
+            <button onclick="showManageExpensesModal()"
+              class="px-2 py-1 rounded"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:9px; border:none;">
+              Manage
+            </button>
+          </div>
+        </div>
 
-        <!-- Days Grid -->
-        <div class="grid gap-4">
-          ${dates.map(date => {
+        <!-- Days -->
+        <div class="grid gap-2">
+          ${orderedDates.map((date, index) => {
             const plan = state.planData.find(p => p.date === date);
+            const isToday = date === today;
+            const isTomorrow = date === tomorrow && !isSunday;
+            const isPast = new Date(date) < new Date(today);
+            
+            // Count meals for this day
+            const mealCount = meals.reduce((count, meal) => {
+              const key = meal.toLowerCase();
+              const recipeIds = plan ? (plan[key] || []) : [];
+              return count + recipeIds.length;
+            }, 0);
+            
+            // Format date label
+            const dateObj = new Date(date + 'T00:00:00');
+            const dayName = dateObj.toLocaleDateString('en-US', { weekday: 'short' });
+            const dayNum = dateObj.getDate();
+            
+            let dateLabel = `${dayName} ${dayNum}`;
+            if (isToday) dateLabel = `Today · ${dayName} ${dayNum}`;
+            else if (isTomorrow) dateLabel = `Tomorrow · ${dayName} ${dayNum}`;
+            
+            // Today and Tomorrow are open by default
+            const defaultOpen = isToday || isTomorrow;
+            
             return `
-            <div class="rounded-xl p-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-              <div class="font-semibold mb-3" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
-                ${formatDateDisplay(date)}
-              </div>
-              <div class="grid gap-2">
-              ${meals.map(meal => {
-                  const key = meal.toLowerCase();
-                  const recipeIds = plan ? (plan[key] || []) : [];
-                  const hasRecipes = recipeIds.length > 0;
+              <details ${defaultOpen ? 'open' : ''} class="rounded-lg" style="background:${CONFIG.surface_color}; ${isToday ? 'border: 2px solid ' + CONFIG.primary_action_color : ''}">
+                <summary class="p-3 cursor-pointer" style="list-style:none; display:flex; justify-content:space-between; align-items:center;">
+                  <div class="flex items-center gap-2">
+                    <span style="color:${isToday ? CONFIG.primary_action_color : isPast ? CONFIG.text_muted : CONFIG.text_color}; font-size:12px; font-weight:${isToday ? '700' : '600'};">
+                      ${dateLabel}
+                    </span>
+                    ${mealCount > 0 ? `
+                      <span style="background:${CONFIG.primary_action_color}; color:white; font-size:9px; padding:2px 6px; border-radius:10px;">
+                        ${mealCount}
+                      </span>
+                    ` : ''}
+                  </div>
+                  <span style="color:${CONFIG.text_muted}; font-size:10px;">▼</span>
+                </summary>
+                
+                <div class="px-3 pb-3">
+                  ${meals.map(meal => {
+                    const key = meal.toLowerCase();
+                    const recipeIds = plan ? (plan[key] || []) : [];
+                    const hasRecipes = recipeIds.length > 0;
+                    const mealEmoji = meal === 'Breakfast' ? '🌅' : meal === 'Lunch' ? '☀️' : '🌙';
 
-                  return `
-                    <div class="p-3 rounded-lg" style="background:${CONFIG.background_color};"
-                         ondragover="handleDragOver(event)"
-                         ondragleave="handleDragLeave(event)"
-                         ondrop="handleDrop(event, '${date}', '${meal}')">
-                      <div style="color:${CONFIG.text_color}; opacity:.7; font-size:${CONFIG.font_size * .85}px; margin-bottom:8px;">${meal}</div>
-                      
-                      ${hasRecipes ? `
-                        <div class="flex gap-2 mb-2" style="flex-wrap: wrap;">
-                          ${recipeIds.map(recipeId => {
-                            const r = getRecipeById(recipeId);
-                            if (!r) return '';
-                            
-                            const isExternal = r.type === 'external';
-                            const img = (r && !isExternal) ? recipeThumb(r) : '';
-                            
-                            return `
-                              <div class="flex-1" style="min-width: 0; max-width: 50%; background:rgba(255,255,255,0.05); border-radius:8px; padding:8px;"
-                                   draggable="true"
-                                   ondragstart="handleDragStart(event, '${date}', '${meal}', '${recipeId}')"
-                                   ondragend="handleDragEnd(event)">
-                                <div class="flex items-center gap-2">
+                    return `
+                      <div class="mb-2 p-2 rounded-lg" style="background:${CONFIG.background_color};"
+                           ondragover="handleDragOver(event)"
+                           ondragleave="handleDragLeave(event)"
+                           ondrop="handleDrop(event, '${date}', '${meal}')">
+                        <div class="flex items-center justify-between mb-2">
+                          <span style="color:${CONFIG.text_muted}; font-size:10px;">${mealEmoji} ${meal}</span>
+                          <div class="flex gap-1">
+                            <button onclick="openRecipePicker('${date}','${meal}')"
+                              style="padding:2px 8px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
+                              + Add
+                            </button>
+                            <button onclick="openExternalMealPicker('${date}','${meal}')"
+                              style="padding:2px 8px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
+                              External
+                            </button>
+                          </div>
+                        </div>
+                        
+                        ${hasRecipes ? `
+                          <div class="flex flex-col gap-1">
+                            ${recipeIds.map(recipeId => {
+                              const r = getRecipeById(recipeId);
+                              if (!r) return '';
+                              
+                              const isExternal = r.type === 'external';
+                              const img = (r && !isExternal) ? recipeThumb(r) : '';
+                              
+                              return `
+                                <div class="flex items-center gap-2 p-2 rounded" 
+                                     style="background:rgba(255,255,255,0.03);"
+                                     draggable="true"
+                                     ondragstart="handleDragStart(event, '${date}', '${meal}', '${recipeId}')"
+                                     ondragend="handleDragEnd(event)">
                                   ${isExternal ? `
-                                    <div style="width:40px;height:40px;border-radius:6px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;">🍴</div>
+                                    <div style="width:32px;height:32px;border-radius:4px;background:rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;">🍴</div>
                                   ` : img ? `
-                                    <img src="${esc(img)}" 
-                                         style="width:40px;height:40px;object-fit:cover;border-radius:6px;flex-shrink:0;" />
+                                    <img src="${esc(img)}" style="width:32px;height:32px;object-fit:cover;border-radius:4px;flex-shrink:0;" />
                                   ` : `
-                                    <div style="width:40px;height:40px;border-radius:6px;background:rgba(255,255,255,0.06);flex-shrink:0;"></div>
+                                    <div style="width:32px;height:32px;border-radius:4px;background:rgba(255,255,255,0.06);flex-shrink:0;"></div>
                                   `}
                                   <div style="flex:1; min-width:0;">
-                                    <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * .85}px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                    <div style="color:${CONFIG.text_color}; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                                       ${esc(r.title)}
                                     </div>
                                   </div>
+                                  <div class="flex gap-1">
+                                    <button onclick="openRecipeView('${r.__backendId || r.id}')"
+                                      style="padding:2px 6px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
+                                      View
+                                    </button>
+                                    <button onclick="removeMealFromPlan('${date}','${meal}','${recipeId}')"
+                                      style="padding:2px 6px; background:rgba(239,68,68,0.2); color:#ef4444; border:none; border-radius:4px; font-size:9px; cursor:pointer;">
+                                      ×
+                                    </button>
+                                  </div>
                                 </div>
-                                <div class="flex gap-1 mt-2">
-                                  <button type="button" onclick="openRecipeView('${r.__backendId || r.id}')"
-                                    class="px-2 py-1 rounded button-hover"
-                                    style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * .7}px;">
-                                    View
-                                  </button>
-                                  <button type="button" onclick="removeMealFromPlan('${date}','${meal}','${recipeId}')"
-                                    class="px-2 py-1 rounded button-hover"
-                                    style="background:#dc2626;color:white;font-size:${CONFIG.font_size * .7}px;">
-                                    Remove
-                                  </button>
-                                </div>
-                              </div>
-                            `;
-                          }).join('')}
-                        </div>
-                      ` : `
-                        <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * .85}px; opacity:.5; margin-bottom:8px;">
-                          No meals planned
-                        </div>
-                      `}
-                      
-                      <div class="flex gap-1">
-                        <button type="button" onclick="openRecipePicker('${date}','${meal}')"
-                          class="px-2 py-1 rounded button-hover"
-                          style="background:${CONFIG.primary_action_color};color:${CONFIG.text_color};font-size:${CONFIG.font_size * .7}px;">
-                          ${hasRecipes ? '+ Add' : 'Add Recipe'}
-                        </button>
-                        <button type="button" onclick="openExternalMealPicker('${date}','${meal}')"
-                          class="px-2 py-1 rounded button-hover"
-                          style="background:${CONFIG.secondary_action_color};color:${CONFIG.text_color};font-size:${CONFIG.font_size * .7}px;">
-                          External
-                        </button>
+                              `;
+                            }).join('')}
+                          </div>
+                        ` : `
+                          <div style="color:${CONFIG.text_muted}; font-size:10px; font-style:italic;">
+                            No meals planned
+                          </div>
+                        `}
                       </div>
-                    </div>
-                  `;
-                }).join('')}
-              </div>
-            </div>`;
+                    `;
+                  }).join('')}
+                </div>
+              </details>
+            `;
           }).join('')}
         </div>
       `;
     }
 
     function renderMealIdeasContent() {
-      // Get meal options/ideas
       const mealOptions = state.mealOptions || [];
       
       return `
-        <div class="mb-4 p-3 rounded-lg" style="background:${CONFIG.surface_color};">
-          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; opacity:0.8;">
-            💡 Add meals you're planning to make. These will show up in your grocery list.
-          </div>
-        </div>
-
-       <div class="flex justify-between items-center mb-4">
-          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px;">
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-3">
+          <div style="color:${CONFIG.text_muted}; font-size:12px;">
             ${mealOptions.length} meal${mealOptions.length !== 1 ? 's' : ''} planned
           </div>
-          <div class="flex gap-2">
+          <div class="flex gap-1">
             <button onclick="showSuggestionsModal()"
-              class="px-3 py-2 rounded button-hover"
-              style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
-              💡 Ideas
+              class="px-2 py-1 rounded"
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;">
+              Ideas
             </button>
             <button onclick="state.currentView = 'meal-options-recipe-picker'; render();"
-              class="px-3 py-2 rounded button-hover"
-              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
-              + Add Meal
+              class="px-2 py-1 rounded"
+              style="background:${CONFIG.primary_action_color}; color:white; font-size:11px; border:none;">
+              + Add
             </button>
           </div>
         </div>
 
         ${mealOptions.length === 0 ? `
-          <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
-            <div style="font-size:3rem; margin-bottom:1rem;">🍽️</div>
-            <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No meals planned yet</div>
-            <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px;">
-              Add meals you want to make this week
+          <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
+            <div style="font-size:2rem; margin-bottom:8px;">🍽️</div>
+            <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:4px;">
+              No meals planned
             </div>
+            <div style="font-size:12px; color:${CONFIG.text_muted}; margin-bottom:12px;">
+              Add meals to build your grocery list
+            </div>
+            <button onclick="state.currentView = 'meal-options-recipe-picker'; render();"
+              style="padding:8px 16px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
+              + Add Meal
+            </button>
           </div>
         ` : `
-          <div class="grid gap-3">
+          <div class="grid gap-2">
             ${mealOptions.map(option => {
               const recipe = getRecipeById(option.recipeId || option.id || option);
               if (!recipe) return '';
@@ -12527,33 +12570,30 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
               const img = recipeThumb(recipe);
               
               return `
-                <div class="flex items-center gap-3 p-3 rounded-lg" style="background:${CONFIG.surface_color};">
+                <div class="flex items-center gap-3 p-2 rounded-lg" style="background:${CONFIG.surface_color};">
                   ${img ? `
-                    <img src="${esc(img)}" 
-                         style="width:60px; height:60px; object-fit:cover; border-radius:8px;" />
+                    <img src="${esc(img)}" style="width:40px; height:40px; object-fit:cover; border-radius:6px;" />
                   ` : `
-                    <div style="width:60px; height:60px; background:rgba(255,255,255,0.1); border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                    <div style="width:40px; height:40px; background:${CONFIG.background_color}; border-radius:6px; display:flex; align-items:center; justify-content:center; font-size:16px;">
                       🍽️
                     </div>
                   `}
-                  <div class="flex-1">
-                    <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px; font-weight:500;">
+                  <div class="flex-1" style="min-width:0;">
+                    <div style="color:${CONFIG.text_color}; font-size:12px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                       ${esc(recipe.title)}
                     </div>
-                    <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.8}px;">
-                      ${recipe.category || 'Uncategorized'}
+                    <div style="color:${CONFIG.text_muted}; font-size:10px;">
+                      ${recipe.category || 'Recipe'}
                     </div>
                   </div>
-                  <div class="flex gap-2">
+                  <div class="flex gap-1">
                     <button onclick="openRecipeView('${recipe.__backendId || recipe.id}')"
-                      class="px-3 py-1.5 rounded button-hover"
-                      style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+                      style="padding:4px 8px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:10px; cursor:pointer;">
                       View
                     </button>
                     <button onclick="removeMealOption('${option.id || option}')"
-                      class="px-3 py-1.5 rounded button-hover"
-                      style="background:#dc2626; color:white; font-size:${CONFIG.font_size * 0.8}px;">
-                      Remove
+                      style="padding:4px 8px; background:rgba(239,68,68,0.2); color:#ef4444; border:none; border-radius:4px; font-size:10px; cursor:pointer;">
+                      ×
                     </button>
                   </div>
                 </div>
@@ -12563,7 +12603,6 @@ if (!confirm('Copy last week\'s meal plan to this week? This will overwrite any 
         `}
       `;
     }
-
     function renderWeeklyPlan() {
       const dates = getWeekDates(state.currentWeekStartDate);
      const meals = ['Breakfast', 'Lunch', 'Dinner'];
