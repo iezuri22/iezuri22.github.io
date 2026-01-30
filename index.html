@@ -4282,7 +4282,7 @@ onclick="showInventoryItemDetail('${item.id}')">
                                 ${catEmoji}
                               </div>
                             `}
-                         ${item.isFrozen ? `
+                     ${item.isFrozen ? `
                               <div style="position:absolute; top:4px; right:4px; background:rgba(59,130,246,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem;">
                                 ❄️
                               </div>
@@ -4292,9 +4292,8 @@ onclick="showInventoryItemDetail('${item.id}')">
                                 ✓
                               </div>
                             ` : ''}
-                            ` : ''}
                             ${status === 'expired' || status === 'expiring-soon' ? `
-                              <div style="position:absolute; top:4px; left:4px; background:rgba(239,68,68,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem; color:white;">
+                            <div style="position:absolute; top:4px; left:4px; background:rgba(239,68,68,0.9); border-radius:4px; padding:2px 4px; font-size:0.7rem; color:white;">
                                 ⚠️
                               </div>
                             ` : ''}
