@@ -15376,24 +15376,22 @@ Keep responses helpful but concise. Use bullet points for steps.`;
                 </div>
               </div>
             </div>
-            <div class="p-4">
+           <div class="p-4">
               ${knowledge.cookingMethods && knowledge.cookingMethods.length > 0 ? `
-                <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
                   ${knowledge.cookingMethods.map((method, idx) => `
-                    <div class="flex items-center justify-between p-3 rounded-lg" style="background:${CONFIG.background_color};">
-                      <div class="flex items-center gap-3">
-                        <div style="color:#f59e0b; font-size:1.2rem;">🔥</div>
-                        <div>
-                          <div style="color:${CONFIG.text_color}; font-weight:500;">${esc(method.method)}</div>
-                          <div style="color:${CONFIG.text_muted}; font-size:13px;">
-                            ${method.temp ? esc(method.temp) + ' • ' : ''}${esc(method.time)}
-                            ${method.notes ? ` • ${esc(method.notes)}` : ''}
-                          </div>
-                        </div>
+                   <div class="flex-shrink-0 p-3 rounded-lg" style="background:${CONFIG.background_color}; min-width: 160px; max-width: 200px;">
+                      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                        <div style="color:#f59e0b; font-size:1.5rem;">🔥</div>
+                        <div style="color:${CONFIG.text_color}; font-weight:600; font-size: 15px;">${esc(method.method)}</div>
                       </div>
-                      <button onclick="deleteCookingMethod('${esc(name)}', ${idx})"
-                        style="padding: 6px; background: rgba(239,68,68,0.1); border: none; border-radius: 6px; color: #ef4444; cursor: pointer;">
-                        🗑️
+                      <div style="color:${CONFIG.text_color}; font-size: 14px; font-weight: 500; margin-bottom: 4px;">
+                        ${method.temp ? esc(method.temp) : ''}${method.temp && method.time ? ' • ' : ''}${esc(method.time)}
+                      </div>
+                      ${method.notes ? `<div style="color:${CONFIG.text_muted}; font-size: 12px; margin-bottom: 8px;">${esc(method.notes)}</div>` : ''}
+                      <button onclick="event.stopPropagation(); deleteCookingMethod('${esc(name)}', ${idx})"
+                        style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: none; border-radius: 4px; color: #ef4444; cursor: pointer; font-size: 11px;">
+                        🗑️ Remove
                       </button>
                     </div>
                   `).join('')}
@@ -15951,7 +15949,7 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       `);
     }
 
-    async function submitClaudeForSection() {
+  async function submitClaudeForSection() {
       const question = document.getElementById('claudeSectionQuestion').value;
       const btn = document.getElementById('askClaudeSectionBtn');
       
@@ -15959,18 +15957,16 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       btn.innerHTML = '⏳ Asking Claude...';
       
       try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
+        const response = await fetch(CHEF_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 500,
-            messages: [{ role: 'user', content: question + '\n\nBe concise and practical. No lengthy explanations.' }]
+            messages: [{ role: 'user', content: question + '\n\nBe concise and practical. Keep response under 150 words.' }]
           })
         });
         
         const data = await response.json();
-        const responseText = data.content?.[0]?.text || 'No response received';
+        const responseText = data.content?.[0]?.text || data.error || 'No response received';
         
         document.getElementById('claudeSectionResponse').style.display = 'block';
         document.getElementById('claudeSectionResponseText').innerHTML = formatChefMessage(responseText);
@@ -16297,7 +16293,7 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       `);
     }
 
-    async function saveCookingMethod() {
+   async function saveCookingMethod() {
       const name = document.getElementById('methodIngName').value;
       const method = {
         method: document.getElementById('newMethodType').value,
@@ -16319,10 +16315,13 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       knowledge.cookingMethods = knowledge.cookingMethods || [];
       knowledge.cookingMethods.push(method);
       
-      await saveIngredientKnowledge(knowledge);
+      // Save in background, don't await
+      saveIngredientKnowledge(knowledge);
       closeModal();
       showToast('Cooking method added!', 'success');
-      render();
+      
+      // Use requestAnimationFrame for smoother re-render
+      requestAnimationFrame(() => render());
     }
 
     async function deleteCookingMethod(name, index) {
