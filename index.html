@@ -2887,6 +2887,443 @@ async function saveReceiptExpense() {
       `;
     }
 
+   function renderAllIngredients() {
+      const ingredients = state.ingredientKnowledge || [];
+      const inventory = state.inventory || [];
+      const searchTerm = state.ingredientSearchTerm || '';
+      
+      // Filter by search
+      const filtered = searchTerm 
+        ? ingredients.filter(ing => ing.name.toLowerCase().includes(searchTerm.toLowerCase()))
+        : ingredients;
+      
+      // Sort alphabetically
+      const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
+      
+      // Group by category
+      const categories = ['Vegetables', 'Fruits', 'Proteins', 'Dairy', 'Grains', 'Herbs & Spices', 'Pantry', 'Other'];
+      const grouped = {};
+      categories.forEach(cat => grouped[cat] = []);
+      
+      sorted.forEach(ing => {
+        const cat = ing.category || 'Other';
+        if (!grouped[cat]) grouped[cat] = [];
+        grouped[cat].push(ing);
+      });
+      
+      // Helper to check if ingredient is in stock
+      const getStockCount = (ingName) => {
+        return inventory.filter(item => 
+          item.name.toLowerCase() === ingName.toLowerCase()
+        ).reduce((sum, item) => sum + (item.quantity || 1), 0);
+      };
+      
+      // Helper to capitalize
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      
+      return `
+        <div>
+          <!-- Search -->
+          <div class="mb-4">
+            <input type="text" 
+              placeholder="Search ingredients..."
+              value="${esc(searchTerm)}"
+              oninput="state.ingredientSearchTerm = this.value; render();"
+              style="width: 100%; padding: 12px 16px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <!-- Add New Ingredient Button -->
+          <div class="mb-4">
+            <button onclick="showAddIngredientKnowledgeModal()"
+              class="w-full px-4 py-3 rounded-lg font-medium"
+              style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 2px dashed rgba(0,0,0,0.2);">
+              + Add New Ingredient to Library
+            </button>
+          </div>
+          
+          ${sorted.length === 0 ? `
+            <div class="p-8 rounded-xl text-center" style="background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
+              <div style="font-size: 3rem; margin-bottom: 1rem;">🥗</div>
+              <div style="font-size: 18px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">
+                ${searchTerm ? 'No ingredients found' : 'No ingredients in library'}
+              </div>
+              <div style="color: ${CONFIG.text_muted}; margin-bottom: 16px;">
+                ${searchTerm ? 'Try a different search term' : 'Add ingredients to track their default expiration, images, and more'}
+              </div>
+            </div>
+          ` : `
+            ${categories.map(cat => {
+              const items = grouped[cat];
+              if (items.length === 0) return '';
+              
+              const catEmoji = cat === 'Vegetables' ? '🥬' : cat === 'Fruits' ? '🍎' : cat === 'Proteins' ? '🥩' : cat === 'Dairy' ? '🥛' : cat === 'Grains' ? '🌾' : cat === 'Herbs & Spices' ? '🌿' : cat === 'Pantry' ? '🥫' : '📦';
+              
+              return `
+                <div class="mb-6">
+                  <h3 class="font-semibold mb-3" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
+                    ${catEmoji} ${cat} (${items.length})
+                  </h3>
+                  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    ${items.map(ing => {
+                      const stockCount = getStockCount(ing.name);
+                      const imgUrl = ing.image_url || getIngredientImage(ing.name, ing.category);
+                      
+                      return `
+                        <div class="rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
+                             style="background:${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.1); box-shadow: ${CONFIG.shadow};"
+                             onclick="showIngredientDetail('${ing.id}')">
+                          <div style="height:70px; overflow:hidden; background:${CONFIG.background_color}; position:relative;">
+                            ${imgUrl ? `
+                              <img src="${esc(imgUrl)}" style="width:100%; height:100%; object-fit:cover;" 
+                                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
+                              <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; font-size:2rem;">
+                                ${catEmoji}
+                              </div>
+                            ` : `
+                              <div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:2rem;">
+                                ${catEmoji}
+                              </div>
+                            `}
+                            ${stockCount > 0 ? `
+                              <div style="position:absolute; top:4px; right:4px; background:${CONFIG.success_color}; color:white; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:600;">
+                                ${stockCount} in stock
+                              </div>
+                            ` : ''}
+                          </div>
+                          <div class="p-2">
+                            <div class="text-center truncate" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px; font-weight:500;">
+                              ${esc(capitalize(ing.name))}
+                            </div>
+                            <div class="text-center" style="color:${CONFIG.text_muted}; font-size:${CONFIG.font_size * 0.65}px;">
+                              ${ing.defaultExpirationDays ? ing.defaultExpirationDays + ' days shelf life' : 'No expiration set'}
+                            </div>
+                          </div>
+                        </div>
+                      `;
+                    }).join('')}
+                  </div>
+                </div>
+              `;
+            }).join('')}
+          `}
+        </div>
+      `;
+    }
+
+    function showIngredientDetail(ingredientId) {
+      const ing = (state.ingredientKnowledge || []).find(i => i.id === ingredientId);
+      if (!ing) return;
+      
+      const inventory = state.inventory || [];
+      const inStockItems = inventory.filter(item => item.name.toLowerCase() === ing.name.toLowerCase());
+      const stockCount = inStockItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
+      
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      const imgUrl = ing.image_url || getIngredientImage(ing.name, ing.category);
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;">
+          <div class="flex items-start gap-4 mb-4">
+            ${imgUrl ? `
+              <img src="${esc(imgUrl)}" style="width: 80px; height: 80px; border-radius: 12px; object-fit: cover;"
+                   onerror="this.style.display='none'" />
+            ` : ''}
+            <div class="flex-1">
+              <h2 style="font-size: 22px; font-weight: 700;">${esc(capitalize(ing.name))}</h2>
+              <div style="color: ${CONFIG.text_muted}; font-size: 14px;">
+                ${ing.category || 'Uncategorized'}
+              </div>
+              ${stockCount > 0 ? `
+                <div style="color: ${CONFIG.success_color}; font-size: 14px; font-weight: 600; margin-top: 4px;">
+                  ✓ ${stockCount} in stock
+                </div>
+              ` : `
+                <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-top: 4px;">
+                  Not in stock
+                </div>
+              `}
+            </div>
+          </div>
+          
+          <!-- Details -->
+          <div class="mb-4 p-4 rounded-lg" style="background: ${CONFIG.background_color};">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <div style="font-size: 12px; color: ${CONFIG.text_muted};">Default Shelf Life</div>
+                <div style="font-weight: 500;">${ing.defaultExpirationDays ? ing.defaultExpirationDays + ' days' : 'Not set'}</div>
+              </div>
+              <div>
+                <div style="font-size: 12px; color: ${CONFIG.text_muted};">Category</div>
+                <div style="font-weight: 500;">${ing.category || 'Other'}</div>
+              </div>
+            </div>
+          </div>
+          
+          ${inStockItems.length > 0 ? `
+            <div class="mb-4">
+              <div style="font-weight: 600; margin-bottom: 8px;">In Stock:</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${inStockItems.map(item => {
+                  const status = getExpirationStatus(item);
+                  const statusColor = status === 'expired' ? CONFIG.danger_color : status === 'expiring-soon' ? '#f59e0b' : CONFIG.success_color;
+                  return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: ${CONFIG.surface_color}; border-radius: 8px;">
+                      <div>
+                        <div style="font-weight: 500;">${item.quantity || 1}${item.unit ? ' ' + item.unit : ''}</div>
+                        <div style="font-size: 12px; color: ${statusColor};">
+                          ${item.expirationDate ? 'Exp: ' + new Date(item.expirationDate + 'T00:00:00').toLocaleDateString() : 'No expiration'}
+                          ${item.isFrozen ? ' • ❄️ Frozen' : ''}
+                        </div>
+                      </div>
+                      <button onclick="closeModal(); showInventoryItemDetail('${item.id}')"
+                        style="padding: 6px 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                        View
+                      </button>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+          
+          <!-- Actions -->
+          <div class="flex flex-col gap-2">
+            <button onclick="closeModal(); addIngredientToInventory('${ing.id}')"
+              class="w-full py-3 rounded-lg font-medium"
+              style="background: ${CONFIG.success_color}; color: white;">
+              + Add to Inventory
+            </button>
+            <button onclick="closeModal(); editIngredientKnowledge('${ing.id}')"
+              class="w-full py-3 rounded-lg font-medium"
+              style="background: ${CONFIG.primary_action_color}; color: white;">
+              ✏️ Edit Ingredient
+            </button>
+            <button onclick="if(confirm('Delete this ingredient from library?')) { deleteIngredientKnowledge('${ing.id}'); closeModal(); }"
+              class="w-full py-3 rounded-lg"
+              style="background: rgba(239,68,68,0.1); color: ${CONFIG.danger_color};">
+              🗑️ Delete from Library
+            </button>
+          </div>
+          
+          <button onclick="closeModal()" 
+            class="w-full mt-3 py-2 rounded-lg"
+            style="background: ${CONFIG.background_color}; color: ${CONFIG.text_color};">
+            Close
+          </button>
+        </div>
+      `);
+    }
+
+    function addIngredientToInventory(ingredientId) {
+      const ing = (state.ingredientKnowledge || []).find(i => i.id === ingredientId);
+      if (!ing) return;
+      
+      // Pre-fill the add inventory modal with this ingredient's info
+      state.prefillInventoryItem = {
+        name: ing.name,
+        category: ing.category,
+        defaultExpirationDays: ing.defaultExpirationDays,
+        image_url: ing.image_url
+      };
+      
+      showAddInventoryModal();
+    }
+
+    function showAddIngredientKnowledgeModal() {
+      const categories = ['Vegetables', 'Fruits', 'Proteins', 'Dairy', 'Grains', 'Herbs & Spices', 'Pantry', 'Other'];
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Add New Ingredient</h2>
+          
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Name *</label>
+            <input type="text" id="newIngName" placeholder="e.g., Chicken Breast"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Category</label>
+            <select id="newIngCategory"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};">
+              ${categories.map(cat => `<option value="${cat}">${cat}</option>`).join('')}
+            </select>
+          </div>
+          
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Default Shelf Life (days)</label>
+            <input type="number" id="newIngExpDays" placeholder="e.g., 7"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Image URL (optional)</label>
+            <input type="url" id="newIngImage" placeholder="https://..."
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeModal()"
+              style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="saveNewIngredientKnowledge()"
+              style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              Add Ingredient
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveNewIngredientKnowledge() {
+      const name = document.getElementById('newIngName')?.value.trim();
+      const category = document.getElementById('newIngCategory')?.value;
+      const expDays = document.getElementById('newIngExpDays')?.value;
+      const imageUrl = document.getElementById('newIngImage')?.value.trim();
+      
+      if (!name) {
+        showError('Please enter an ingredient name');
+        return;
+      }
+      
+      // Check for duplicates
+      const exists = (state.ingredientKnowledge || []).some(ing => 
+        ing.name.toLowerCase() === name.toLowerCase()
+      );
+      
+      if (exists) {
+        showError('This ingredient already exists');
+        return;
+      }
+      
+      const ingredient = {
+        id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        type: 'ingredient_knowledge',
+        name: name.toLowerCase(),
+        category: category || 'Other',
+        defaultExpirationDays: expDays ? parseInt(expDays) : null,
+        image_url: imageUrl || null,
+        createdAt: new Date().toISOString()
+      };
+      
+      try {
+        await storage.create(ingredient);
+        state.ingredientKnowledge.push(ingredient);
+        closeModal();
+        showToast('Ingredient added!', 'success');
+        render();
+      } catch (e) {
+        console.error('Failed to save ingredient:', e);
+        showError('Failed to save ingredient');
+      }
+    }
+
+    function editIngredientKnowledge(ingredientId) {
+      const ing = (state.ingredientKnowledge || []).find(i => i.id === ingredientId);
+      if (!ing) return;
+      
+      const categories = ['Vegetables', 'Fruits', 'Proteins', 'Dairy', 'Grains', 'Herbs & Spices', 'Pantry', 'Other'];
+      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+      
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">Edit Ingredient</h2>
+          
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Name *</label>
+            <input type="text" id="editIngName" value="${esc(capitalize(ing.name))}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Category</label>
+            <select id="editIngCategory"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};">
+              ${categories.map(cat => `<option value="${cat}" ${ing.category === cat ? 'selected' : ''}>${cat}</option>`).join('')}
+            </select>
+          </div>
+          
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Default Shelf Life (days)</label>
+            <input type="number" id="editIngExpDays" value="${ing.defaultExpirationDays || ''}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+          
+          <div class="mb-4">
+            <label style="display: block; margin-bottom: 6px; font-weight: 500;">Image URL</label>
+            <input type="url" id="editIngImage" value="${esc(ing.image_url || '')}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+            ${ing.image_url ? `
+              <img src="${esc(ing.image_url)}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px; margin-top: 8px;"
+                   onerror="this.style.display='none'" />
+            ` : ''}
+          </div>
+          
+          <div style="display: flex; gap: 8px;">
+            <button onclick="closeModal()"
+              style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+              Cancel
+            </button>
+            <button onclick="updateIngredientKnowledge('${ing.id}')"
+              style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+              Save Changes
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function updateIngredientKnowledge(ingredientId) {
+      const ing = (state.ingredientKnowledge || []).find(i => i.id === ingredientId);
+      if (!ing) return;
+      
+      const name = document.getElementById('editIngName')?.value.trim();
+      const category = document.getElementById('editIngCategory')?.value;
+      const expDays = document.getElementById('editIngExpDays')?.value;
+      const imageUrl = document.getElementById('editIngImage')?.value.trim();
+      
+      if (!name) {
+        showError('Please enter an ingredient name');
+        return;
+      }
+      
+      const updated = {
+        ...ing,
+        name: name.toLowerCase(),
+        category: category || 'Other',
+        defaultExpirationDays: expDays ? parseInt(expDays) : null,
+        image_url: imageUrl || null,
+        updatedAt: new Date().toISOString()
+      };
+      
+      try {
+        await storage.update(updated);
+        state.ingredientKnowledge = state.ingredientKnowledge.map(i => i.id === ingredientId ? updated : i);
+        closeModal();
+        showToast('Ingredient updated!', 'success');
+        render();
+      } catch (e) {
+        console.error('Failed to update ingredient:', e);
+        showError('Failed to update ingredient');
+      }
+    }
+
+    async function deleteIngredientKnowledge(ingredientId) {
+      const ing = (state.ingredientKnowledge || []).find(i => i.id === ingredientId);
+      if (!ing) return;
+      
+      try {
+        await storage.delete(ing);
+        state.ingredientKnowledge = state.ingredientKnowledge.filter(i => i.id !== ingredientId);
+        showToast('Ingredient deleted', 'success');
+        render();
+      } catch (e) {
+        console.error('Failed to delete ingredient:', e);
+        showError('Failed to delete ingredient');
+      }
+    }
+
    function renderMyBlends() {
       const blends = state.seasoningBlends || [];
       const blendTypes = ['All', 'Seasoning', 'Smoothie', 'Veggie Mix', 'Marinade', 'Other'];
@@ -3416,21 +3853,26 @@ async function saveReceiptExpense() {
             </div>
           </div>
 
-          <!-- Pantry Subtabs -->
+       <!-- Pantry Subtabs -->
           <div class="flex gap-2 mb-4">
-            <button onclick="state.pantryTab = 'items'; render();"
+            <button onclick="state.pantryTab = 'instock'; render();"
               class="px-4 py-2 rounded-lg font-medium"
-              style="background: ${(state.pantryTab || 'items') === 'items' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(state.pantryTab || 'items') === 'items' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              🥫 Items
+              style="background: ${(state.pantryTab || 'instock') === 'instock' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(state.pantryTab || 'instock') === 'instock' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              📦 In Stock (${inventory.length})
+            </button>
+            <button onclick="state.pantryTab = 'ingredients'; render();"
+              class="px-4 py-2 rounded-lg font-medium"
+              style="background: ${state.pantryTab === 'ingredients' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'ingredients' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              🥗 All Ingredients (${(state.ingredientKnowledge || []).length})
             </button>
             <button onclick="state.pantryTab = 'blends'; render();"
               class="px-4 py-2 rounded-lg font-medium"
               style="background: ${state.pantryTab === 'blends' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'blends' ? 'white' : CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
-              🧂 My Blends
+              🧂 My Blends (${(state.seasoningBlends || []).length})
             </button>
           </div>
 
-          ${state.pantryTab === 'blends' ? renderMyBlends() : `
+          ${state.pantryTab === 'blends' ? renderMyBlends() : state.pantryTab === 'ingredients' ? renderAllIngredients() : `
 
          ${expiringCount > 0 ? `
             <div class="mb-4 p-3 rounded-lg" style="background:rgba(239, 68, 68, 0.1); border:1px solid rgba(239, 68, 68, 0.3);">
@@ -4459,8 +4901,12 @@ async function consolidateInventory() {
       render();
     }
 
-  function showAddInventoryModal() {
+function showAddInventoryModal() {
       const today = new Date().toISOString().split('T')[0];
+      const prefill = state.prefillInventoryItem || {};
+      state.prefillInventoryItem = null; // Clear after use
+      
+      const capitalize = (str) => str ? str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ') : '';
       
      const frequentItems = getFrequentItems(8);
       
@@ -4468,7 +4914,7 @@ async function consolidateInventory() {
         <div style="color: #1a1a2e;">
           <h2 class="text-2xl font-bold mb-4">📦 Add Inventory Item</h2>
           
-          ${frequentItems.length > 0 ? `
+          ${!prefill.name && frequentItems.length > 0 ? `
             <div class="mb-4">
               <label class="block mb-2 font-semibold text-sm text-gray-600">Quick Add (frequently bought):</label>
               <div class="flex flex-wrap gap-2">
@@ -4488,14 +4934,21 @@ async function consolidateInventory() {
             <input type="text" id="inventoryName" 
                    class="w-full px-3 py-2 border rounded" 
                    placeholder="e.g., Chicken Breast"
+                   value="${esc(capitalize(prefill.name || ''))}"
                    oninput="updateSuggestedExpiration()" autofocus />
           </div>
           
           <div class="mb-4">
             <label class="block mb-2 font-semibold">Photo (optional):</label>
+            ${prefill.image_url ? `
+              <div class="mb-2">
+                <img src="${esc(prefill.image_url)}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;" onerror="this.style.display='none'" />
+              </div>
+            ` : ''}
             <div class="flex gap-2">
               <input type="text" id="inventoryImageUrl"
-                     class="flex-1 px-3 py-2 border rounded" placeholder="Paste image URL..." />
+                     class="flex-1 px-3 py-2 border rounded" placeholder="Paste image URL..." 
+                     value="${esc(prefill.image_url || '')}" />
               <button type="button" onclick="document.getElementById('inventoryImageUpload').click()"
                       class="px-3 py-2 bg-gray-200 rounded hover:bg-gray-300">
                 📷 Upload
@@ -4519,20 +4972,19 @@ async function consolidateInventory() {
             </div>
           </div>
           
-          <div class="mb-4">
+         <div class="mb-4">
             <label class="block mb-2 font-semibold">Category:</label>
             <select id="inventoryCategory" class="w-full px-3 py-2 border rounded"
                     onchange="updateSuggestedExpiration()">
-              <option value="Uncategorized">Uncategorized</option>
-              <option value="Produce">Produce</option>
-              <option value="Meat & Seafood">Meat & Seafood</option>
-              <option value="Dairy & Eggs">Dairy & Eggs</option>
-              <option value="Bakery">Bakery</option>
-              <option value="Frozen">Frozen</option>
-              <option value="Pantry">Pantry</option>
-              <option value="Snacks">Snacks</option>
-              <option value="Beverages">Beverages</option>
-              <option value="Other">Other</option>
+              <option value="Uncategorized" ${prefill.category === 'Uncategorized' ? 'selected' : ''}>Uncategorized</option>
+              <option value="Vegetables" ${prefill.category === 'Vegetables' ? 'selected' : ''}>Vegetables</option>
+              <option value="Fruits" ${prefill.category === 'Fruits' ? 'selected' : ''}>Fruits</option>
+              <option value="Proteins" ${prefill.category === 'Proteins' ? 'selected' : ''}>Proteins</option>
+              <option value="Dairy" ${prefill.category === 'Dairy' ? 'selected' : ''}>Dairy</option>
+              <option value="Grains" ${prefill.category === 'Grains' ? 'selected' : ''}>Grains</option>
+              <option value="Herbs & Spices" ${prefill.category === 'Herbs & Spices' ? 'selected' : ''}>Herbs & Spices</option>
+              <option value="Pantry" ${prefill.category === 'Pantry' ? 'selected' : ''}>Pantry</option>
+              <option value="Other" ${prefill.category === 'Other' ? 'selected' : ''}>Other</option>
             </select>
           </div>
           
@@ -4569,8 +5021,18 @@ async function consolidateInventory() {
         </div>
       `);
       
-      // Set initial expiration suggestion
-      setTimeout(updateSuggestedExpiration, 100);
+   // Set initial expiration from prefill if available
+      setTimeout(() => {
+        if (prefill.defaultExpirationDays) {
+          const expDate = new Date();
+          expDate.setDate(expDate.getDate() + prefill.defaultExpirationDays);
+          const expInput = document.getElementById('inventoryExpiration');
+          if (expInput) {
+            expInput.value = expDate.toISOString().split('T')[0];
+          }
+        }
+        updateSuggestedExpiration();
+      }, 100);
     }
    async function quickAddFrequentItem(name, category) {
       closeModal();
