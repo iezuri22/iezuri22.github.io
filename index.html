@@ -15884,15 +15884,15 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       showToast('Ingredient deleted', 'success');
     }
 
-    function askClaudeForSection(ingredientName, section) {
+  function askClaudeForSection(ingredientName, section) {
       const displayName = ingredientName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
       
       const prompts = {
-        cooking: `What are the best cooking methods, temperatures, and times for ${displayName}? Be concise - list 3-5 methods with temp and time.`,
-        techniques: `What's the best technique to cook ${displayName} to get the best results? Give one technique with the goal/result and brief steps.`,
-        pairings: `What ingredients pair well with ${displayName}? List 8-10 ingredients that complement it, just the names separated by commas.`,
-        freezing: `Can ${displayName} be frozen? If yes, how should it be prepared, how long does it last, and any special instructions? Be concise.`,
-        notes: `Give me 2-3 quick tips for buying, storing, or preparing ${displayName}. Be concise.`
+        cooking: `${displayName} cooking: List 3 methods. Format each as: "Method: temp, time". Example: "Air Fry: 400°F, 15 min". No other text.`,
+        techniques: `${displayName}: One best cooking technique in under 15 words.`,
+        pairings: `${displayName} pairs with: List 8 ingredients, comma-separated, nothing else.`,
+        freezing: `Can ${displayName} freeze? Answer: Yes/No, duration, one prep tip. Under 20 words total.`,
+        notes: `${displayName}: One essential tip under 15 words.`
       };
       
       const sectionLabels = {
@@ -15957,19 +15957,32 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       btn.innerHTML = '⏳ Asking Claude...';
       
       try {
-        const response = await fetch(CHEF_API_URL, {
+       const response = await fetch(CHEF_API_URL, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            messages: [{ role: 'user', content: question + '\n\nBe concise and practical. Keep response under 150 words.' }]
+            systemPrompt: 'You give extremely brief answers. Maximum 20 words. No explanations. No markdown. Just facts.',
+            messages: [{ role: 'user', content: question }]
           })
         });
         
         const data = await response.json();
         const responseText = data.content?.[0]?.text || data.error || 'No response received';
         
-        document.getElementById('claudeSectionResponse').style.display = 'block';
-        document.getElementById('claudeSectionResponseText').innerHTML = formatChefMessage(responseText);
+      document.getElementById('claudeSectionResponse').style.display = 'block';
+        
+        // Format the response nicely
+        let formattedResponse = responseText
+          .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+          .replace(/\n/g, '<br>')
+          .replace(/^[-•]\s*/gm, '• ')
+          .replace(/(\d+)\.\s+/g, '<strong>$1.</strong> ');
+        
+        document.getElementById('claudeSectionResponseText').innerHTML = `
+          <div style="font-size: 14px; line-height: 1.5; color: ${CONFIG.text_color};">
+            ${formattedResponse}
+          </div>
+        `;
         document.getElementById('claudeSectionButtons').style.display = 'none';
         document.getElementById('claudeSectionSaveButtons').style.display = 'flex';
         
@@ -16044,42 +16057,48 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       render();
     }
 
-    function parseClaudeCookingMethods(response) {
+   function parseClaudeCookingMethods(response) {
       const methods = [];
-      const lines = response.split('\n').filter(l => l.trim());
-      
-      // Try to parse structured cooking methods
-      const methodPatterns = [
-        /(?:air\s*fry|roast|bake|grill|saut[ée]|steam|boil|pan\s*fry|broil)/gi
-      ];
+      const lines = response.split(/[\n,]/).filter(l => l.trim());
       
       lines.forEach(line => {
-        const methodMatch = line.match(/(?:air\s*fry|roast|bake|grill|saut[ée]|steam|boil|pan\s*fry|broil|braise)/i);
+        // Match patterns like "Air Fry: 400°F, 15 min" or "Roast - 425F - 20 minutes"
+        const methodMatch = line.match(/(?:air\s*fry|roast|bake|grill|saut[ée]|steam|boil|pan[\s-]*fry|broil|braise|poach|simmer)/i);
         const tempMatch = line.match(/(\d+)\s*°?\s*[FC]/i);
-        const timeMatch = line.match(/(\d+(?:-\d+)?)\s*(?:min(?:ute)?s?|hour?s?)/i);
+        const timeMatch = line.match(/(\d+(?:\s*-\s*\d+)?)\s*(?:min(?:ute)?s?|hour?s?|hr)/i);
         
         if (methodMatch) {
           methods.push({
-            method: methodMatch[0].charAt(0).toUpperCase() + methodMatch[0].slice(1).toLowerCase(),
-            temp: tempMatch ? tempMatch[0] : '',
+            method: methodMatch[0].replace(/[\s-]+/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' '),
+            temp: tempMatch ? tempMatch[0].replace(/\s/g, '') : '',
             time: timeMatch ? timeMatch[0] : '',
             notes: ''
           });
         }
       });
       
-      // If no structured methods found, create a generic one
+      // If no structured methods found, try to parse the whole response
       if (methods.length === 0 && response.trim()) {
-        methods.push({
-          method: 'See Notes',
-          temp: '',
-          time: '',
-          notes: response.slice(0, 100)
+        // Try splitting by common delimiters
+        const parts = response.split(/[;.]/).filter(p => p.trim());
+        parts.forEach(part => {
+          const methodMatch = part.match(/(?:air\s*fry|roast|bake|grill|saut[ée]|steam|boil|pan[\s-]*fry|broil|braise|poach|simmer)/i);
+          if (methodMatch) {
+            const tempMatch = part.match(/(\d+)\s*°?\s*[FC]/i);
+            const timeMatch = part.match(/(\d+(?:\s*-\s*\d+)?)\s*(?:min(?:ute)?s?|hour?s?|hr)/i);
+            methods.push({
+              method: methodMatch[0].charAt(0).toUpperCase() + methodMatch[0].slice(1).toLowerCase(),
+              temp: tempMatch ? tempMatch[0] : '',
+              time: timeMatch ? timeMatch[0] : '',
+              notes: ''
+            });
+          }
         });
       }
       
       return methods;
     }
+   
     async function saveIngredientKnowledge(knowledge) {
       const existing = state.ingredientKnowledge.find(k => k.id === knowledge.id);
       
