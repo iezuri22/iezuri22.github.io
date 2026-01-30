@@ -15257,7 +15257,7 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       render();
     }
 
-   function renderIngredientDetail() {
+    function renderIngredientDetail() {
       const name = state.selectedIngredientId;
       if (!name) return '<div class="p-4">Ingredient not found</div>';
       
@@ -15267,31 +15267,32 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       }
       
       const img = getIngredientImage(name) || '';
-      const displayName = name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      const displayName = name.charAt(0).toUpperCase() + name.slice(1);
       
       // Find recipes that use this ingredient
       const relatedRecipes = state.recipes.filter(r => {
         if (r.isDraft || r.isTip) return false;
         const ingredients = (r.ingredientsRows || []).map(i => (i.name || '').toLowerCase());
         return ingredients.some(i => i.includes(name) || name.includes(i));
-      }).slice(0, 8);
+      }).slice(0, 6);
       
-      // Check if in inventory
-      const inInventory = state.inventory.find(i => 
-        i.name.toLowerCase().includes(name.toLowerCase()) || 
-        name.toLowerCase().includes(i.name.toLowerCase())
-      );
+      // Find tips related to this ingredient
+      const relatedTips = state.recipes.filter(r => {
+        if (!r.isTip) return false;
+        const tipContent = ((r.instructions || '') + ' ' + (r.title || '')).toLowerCase();
+        return tipContent.includes(name) || (r.ingredient && r.ingredient.toLowerCase() === name);
+      });
 
       return `
-        <div class="p-4">
+        <div class="p-4 max-w-2xl mx-auto">
           <!-- Header -->
           <div class="flex items-center justify-between mb-4">
-            <button onclick="state.pantryTab = 'ingredients'; navigateTo('inventory')"
+            <button onclick="navigateTo('ingredients')"
               class="px-3 py-2 rounded-lg"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
+              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
               ← Back
             </button>
-            <div class="flex gap-2">
+           <div class="flex gap-2">
               <button onclick="toggleIngredientFavorite('${esc(name)}')"
                 class="px-3 py-2 rounded-lg"
                 style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-shadow: ${CONFIG.shadow};">
@@ -15302,7 +15303,7 @@ Keep responses helpful but concise. Use bullet points for steps.`;
                 style="background:${CONFIG.primary_action_color}; color:white;">
                 ✏️ Edit
               </button>
-              <button onclick="if(confirm('Delete this ingredient?')) deleteIngredientKnowledgeFull('${esc(name)}')"
+              <button onclick="deleteIngredient('${esc(name)}')"
                 class="px-3 py-2 rounded-lg"
                 style="background: rgba(220,38,38,0.1); color: ${CONFIG.danger_color};">
                 🗑️
@@ -15310,25 +15311,34 @@ Keep responses helpful but concise. Use bullet points for steps.`;
             </div>
           </div>
           
-          <!-- Hero Card -->
-          <div class="rounded-xl overflow-hidden mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
+          <!-- Hero Section -->
+          <div class="rounded-xl overflow-hidden mb-4" style="background:${CONFIG.surface_color};">
             <div class="flex flex-col sm:flex-row">
-              <div class="sm:w-1/3" style="min-height:180px; background:${CONFIG.background_color};">
+              <div class="sm:w-1/3" style="min-height:150px; background:rgba(255,255,255,0.05);">
                 ${img ? `
-                  <img src="${esc(img)}" style="width:100%; height:100%; min-height:180px; object-fit:cover;" 
-                       onerror="this.parentElement.innerHTML='<div style=\\'height:180px; display:flex; align-items:center; justify-content:center; font-size:4rem;\\'>🥗</div>'" />
+                  <img src="${esc(img)}" style="width:100%; height:100%; min-height:150px; object-fit:cover;" 
+                       onerror="this.parentElement.innerHTML='<div style=\\'height:150px; display:flex; align-items:center; justify-content:center; font-size:4rem;\\'>🥗</div>'" />
                 ` : `
-                  <div style="height:180px; display:flex; align-items:center; justify-content:center; font-size:4rem;">🥗</div>
+                  <div style="height:150px; display:flex; align-items:center; justify-content:center; font-size:4rem;">🥗</div>
                 `}
               </div>
-              <div class="flex-1 p-4">
-                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;">
-                  <h1 style="color:${CONFIG.text_color}; font-size:24px; font-weight:bold; margin: 0;">
+             <div class="flex-1 p-4">
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <h1 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px; font-weight:bold;">
                     ${esc(displayName)}
                   </h1>
-                  ${inInventory ? `<span style="background: ${CONFIG.success_color}; color: white; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600;">✓ In Stock</span>` : ''}
+                  ${(() => {
+                    const inInventory = state.inventory.find(i => 
+                      i.name.toLowerCase().includes(name.toLowerCase()) || 
+                      name.toLowerCase().includes(i.name.toLowerCase())
+                    );
+                    if (inInventory) {
+                      return `<span style="background: ${CONFIG.success_color}; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;">✓ In Stock</span>`;
+                    }
+                    return '';
+                  })()}
                 </div>
-                <div style="color:${CONFIG.text_muted}; margin-bottom:12px; font-size: 14px;">
+                <div style="color:${CONFIG.text_color}; opacity:0.7; margin-bottom:8px;">
                   ${esc(knowledge.category || 'Uncategorized')}
                   ${knowledge.season && knowledge.season !== 'Year-round' ? ` • 📅 ${knowledge.season}` : ''}
                 </div>
@@ -15336,516 +15346,451 @@ Keep responses helpful but concise. Use bullet points for steps.`;
                 <!-- Quick Stats -->
                 <div class="flex gap-2 flex-wrap">
                   ${knowledge.storage?.duration ? `
-                    <div class="px-3 py-2 rounded-lg text-sm" style="background:${CONFIG.background_color}; color:${CONFIG.text_color};">
+                    <div class="px-3 py-1 rounded-full text-sm" style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};">
                       📦 ${esc(knowledge.storage.location || 'Store')}: ${esc(knowledge.storage.duration)}
                     </div>
                   ` : ''}
                   ${knowledge.freezable !== null ? `
-                    <div class="px-3 py-2 rounded-lg text-sm" style="background:${knowledge.freezable ? 'rgba(59,130,246,0.2)' : 'rgba(239,68,68,0.2)'}; color:${CONFIG.text_color};">
-                      ${knowledge.freezable ? '🧊 Freezable' : '❌ Cannot Freeze'}
-                    </div>
-                  ` : ''}
-                  ${knowledge.defaultExpirationDays ? `
-                    <div class="px-3 py-2 rounded-lg text-sm" style="background:${CONFIG.background_color}; color:${CONFIG.text_color};">
-                      ⏰ ${knowledge.defaultExpirationDays} days shelf life
-                    </div>
+                    <div class="px-3 py-1 rounded-full text-sm" style="background:${knowledge.freezable ? 'rgba(59,130,246,0.3)' : 'rgba(239,68,68,0.3)'}; color:${CONFIG.text_color};">
+${knowledge.freezable ? '🧊 Freezable' : '❌ Cannot Freeze'}
+</div>
                   ` : ''}
                 </div>
               </div>
             </div>
           </div>
           
-          <!-- Cooking Methods Card -->
-          <div class="rounded-xl mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-            <div class="p-4" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
-              <div class="flex items-center justify-between">
-                <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">
-                  ⏱️ Cooking Times
-                </h2>
-                <div class="flex gap-2">
-                  <button onclick="askClaudeForSection('${esc(name)}', 'cooking')"
-                    class="px-2 py-1 rounded text-xs"
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white;">
-                    🤖 Ask Claude
-                  </button>
-                  <button onclick="addCookingMethod('${esc(name)}')"
-                    class="px-2 py-1 rounded text-sm"
-                    style="background:${CONFIG.primary_action_color}; color:white;">
-                    + Add
-                  </button>
-                </div>
-              </div>
+          <!-- Cooking Methods -->
+          <div class="rounded-xl p-4 mb-4" style="background:${CONFIG.surface_color};">
+            <div class="flex items-center justify-between mb-3">
+              <h2 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">
+                ⏱️ Cooking Times
+              </h2>
+              <button onclick="addCookingMethod('${esc(name)}')"
+                class="px-2 py-1 rounded text-sm"
+                style="background:${CONFIG.primary_action_color}; color:white;">
+                + Add
+              </button>
             </div>
-            <div class="p-4">
-              ${knowledge.cookingMethods && knowledge.cookingMethods.length > 0 ? `
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                  ${knowledge.cookingMethods.map((method, idx) => `
-                    <div class="flex items-center justify-between p-3 rounded-lg" style="background:${CONFIG.background_color};">
-                      <div class="flex items-center gap-3">
-                        <div style="color:#f59e0b; font-size:1.2rem;">🔥</div>
-                        <div>
-                          <div style="color:${CONFIG.text_color}; font-weight:500;">${esc(method.method)}</div>
-                          <div style="color:${CONFIG.text_muted}; font-size:13px;">
-                            ${method.temp ? esc(method.temp) + ' • ' : ''}${esc(method.time)}
-                            ${method.notes ? ` • ${esc(method.notes)}` : ''}
-                          </div>
+            
+            ${knowledge.cookingMethods && knowledge.cookingMethods.length > 0 ? `
+              <div class="space-y-2">
+                ${knowledge.cookingMethods.map((method, idx) => `
+                  <div class="flex items-center justify-between p-3 rounded-lg" style="background:rgba(255,255,255,0.05);">
+                    <div class="flex items-center gap-3">
+                      <div style="color:${CONFIG.primary_action_color}; font-size:1.2rem;">🔥</div>
+                      <div>
+                        <div style="color:${CONFIG.text_color}; font-weight:500;">${esc(method.method)}</div>
+                        <div style="color:${CONFIG.text_color}; opacity:0.7; font-size:${CONFIG.font_size * 0.85}px;">
+                          ${method.temp ? esc(method.temp) + ' • ' : ''}${esc(method.time)}
+                          ${method.notes ? ` • ${esc(method.notes)}` : ''}
                         </div>
                       </div>
-                      <button onclick="deleteCookingMethod('${esc(name)}', ${idx})"
-                        style="padding: 6px; background: rgba(239,68,68,0.1); border: none; border-radius: 6px; color: #ef4444; cursor: pointer;">
-                        🗑️
-                      </button>
                     </div>
-                  `).join('')}
-                </div>
-              ` : `
-                <div class="text-center p-6" style="color:${CONFIG.text_muted};">
-                  No cooking times added yet
-                </div>
-              `}
-            </div>
+                    <button onclick="deleteCookingMethod('${esc(name)}', ${idx})"
+                      class="p-1 rounded hover:bg-red-500/20"
+                      style="color:#ef4444;">
+                      🗑️
+                    </button>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="text-center p-4" style="color:${CONFIG.text_color}; opacity:0.5;">
+                No cooking times added yet.<br>
+                <span style="font-size:${CONFIG.font_size * 0.85}px;">Click "+ Add" or ask Chef Claude below!</span>
+              </div>
+            `}
           </div>
 
-          <!-- Techniques Card -->
-          <div class="rounded-xl mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-            <div class="p-4" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
-              <div class="flex items-center justify-between">
-                <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">
-                  👨‍🍳 Techniques
-                </h2>
-                <div class="flex gap-2">
-                  <button onclick="askClaudeForSection('${esc(name)}', 'techniques')"
-                    class="px-2 py-1 rounded text-xs"
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white;">
-                    🤖 Ask Claude
-                  </button>
-                  <button onclick="addTechnique('${esc(name)}')"
-                    class="px-2 py-1 rounded text-sm"
-                    style="background:${CONFIG.primary_action_color}; color:white;">
-                    + Add
-                  </button>
-                </div>
+          <!-- Techniques -->
+          <div class="rounded-xl p-4 mb-4" style="background:${CONFIG.surface_color};">
+            <div class="flex items-center justify-between mb-3">
+              <h2 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">
+                👨‍🍳 Techniques
+              </h2>
+              <button onclick="addTechnique('${esc(name)}')"
+                class="px-2 py-1 rounded text-sm"
+                style="background:${CONFIG.primary_action_color}; color:white;">
+                + Add
+              </button>
+            </div>
+            
+            ${knowledge.techniques && knowledge.techniques.length > 0 ? `
+              <div class="space-y-2">
+                ${knowledge.techniques.map((tech, idx) => `
+                  <details class="rounded-lg overflow-hidden" style="background:rgba(255,255,255,0.05);">
+                    <summary class="flex items-center justify-between p-3 cursor-pointer" style="list-style:none;">
+                      <div class="flex items-center gap-3">
+                        <div style="color:#f59e0b; font-size:1.2rem;">🎯</div>
+                        <div style="color:${CONFIG.text_color}; font-weight:500;">${esc(tech.result)}</div>
+                      </div>
+                      <div class="flex items-center gap-2">
+                        <span style="color:${CONFIG.text_color}; opacity:0.5; font-size:0.8rem;">tap for steps</span>
+                        <span style="color:${CONFIG.text_color}; opacity:0.5;">▼</span>
+                      </div>
+                    </summary>
+                    <div class="p-3 pt-0" style="border-top:1px solid rgba(255,255,255,0.1);">
+                      <div style="color:${CONFIG.primary_action_color}; font-weight:600; font-size:${CONFIG.font_size * 0.85}px; margin-bottom:8px;">
+                        ${esc(tech.method)}
+                      </div>
+                      <div style="color:${CONFIG.text_color}; opacity:0.9; font-size:${CONFIG.font_size * 0.9}px; white-space:pre-line;">
+                        ${esc(tech.steps)}
+                      </div>
+                      <div class="flex justify-end mt-3">
+                        <button onclick="deleteTechnique('${esc(name)}', ${idx})"
+                          class="px-2 py-1 rounded text-sm"
+                          style="background:rgba(239,68,68,0.2); color:#ef4444;">
+                          🗑️ Remove
+                        </button>
+                      </div>
+                    </div>
+                  </details>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="text-center p-4" style="color:${CONFIG.text_color}; opacity:0.5;">
+                No techniques added yet.<br>
+                <span style="font-size:${CONFIG.font_size * 0.85}px;">Add tips like "sear then bake for juicy results"</span>
+              </div>
+            `}
+          </div>
+          
+          <!-- Pairings -->
+          <div class="rounded-xl p-4 mb-4" style="background:${CONFIG.surface_color};">
+            <div class="flex items-center justify-between mb-3">
+              <h2 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">
+                🧂 Pairs Well With
+              </h2>
+              <button onclick="addPairing('${esc(name)}')"
+                class="px-2 py-1 rounded text-sm"
+                style="background:${CONFIG.primary_action_color}; color:white;">
+                + Add
+              </button>
+            </div>
+            
+            ${knowledge.pairings && knowledge.pairings.length > 0 ? `
+              <div class="flex flex-wrap gap-2">
+                ${knowledge.pairings.map((pairing, idx) => `
+                  <div class="flex items-center gap-1 px-3 py-1 rounded-full" 
+                       style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};">
+                    <span style="text-transform:capitalize;">${esc(pairing)}</span>
+                    <button onclick="deletePairing('${esc(name)}', ${idx})"
+                      class="ml-1 hover:text-red-400"
+                      style="color:${CONFIG.text_color}; opacity:0.5;">×</button>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div class="text-center p-2" style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.9}px;">
+                No pairings added yet
+              </div>
+            `}
+          </div>
+          
+          <!-- Freezing Info -->
+          ${knowledge.freezable ? `
+            <div class="rounded-xl p-4 mb-4" style="background:${CONFIG.surface_color};">
+              <h2 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600; margin-bottom:12px;">
+                🧊 Freezing Guide
+              </h2>
+              <div class="p-3 rounded-lg" style="background:rgba(59,130,246,0.1);">
+                ${knowledge.freezingInfo?.blanch ? `
+                  <div style="color:${CONFIG.text_color}; margin-bottom:4px;">
+                    <strong>Blanch:</strong> ${esc(knowledge.freezingInfo.blanch)}
+                  </div>
+                ` : ''}
+                ${knowledge.freezingInfo?.duration ? `
+                  <div style="color:${CONFIG.text_color}; margin-bottom:4px;">
+                    <strong>Freezer Life:</strong> ${esc(knowledge.freezingInfo.duration)}
+                  </div>
+                ` : ''}
+                ${knowledge.freezingInfo?.instructions ? `
+                  <div style="color:${CONFIG.text_color};">
+                    ${esc(knowledge.freezingInfo.instructions)}
+                  </div>
+                ` : ''}
+                ${!knowledge.freezingInfo?.blanch && !knowledge.freezingInfo?.duration && !knowledge.freezingInfo?.instructions ? `
+                  <div style="color:${CONFIG.text_color}; opacity:0.6;">
+                    Click Edit to add freezing instructions
+                  </div>
+                ` : ''}
               </div>
             </div>
-            <div class="p-4">
-              ${knowledge.techniques && knowledge.techniques.length > 0 ? `
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                  ${knowledge.techniques.map((tech, idx) => `
-                    <details class="rounded-lg overflow-hidden" style="background:${CONFIG.background_color};">
-                      <summary class="flex items-center justify-between p-3 cursor-pointer" style="list-style:none;">
-                        <div class="flex items-center gap-3">
-                          <div style="color:#f59e0b; font-size:1.2rem;">🎯</div>
-                          <div style="color:${CONFIG.text_color}; font-weight:500;">${esc(tech.result)}</div>
+          ` : ''}
+          
+          <!-- Notes -->
+          <div class="rounded-xl p-4 mb-4" style="background:${CONFIG.surface_color};">
+            <div class="flex items-center justify-between mb-3">
+              <h2 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600;">
+                📝 Notes & Tips
+              </h2>
+              <button onclick="addIngredientNote('${esc(name)}')"
+                class="px-2 py-1 rounded text-sm"
+                style="background:${CONFIG.primary_action_color}; color:white;">
+                + Add
+              </button>
+            </div>
+            
+            ${(knowledge.notes && knowledge.notes.length > 0) || relatedTips.length > 0 ? `
+              <div class="space-y-2">
+                ${(knowledge.notes || []).map((note, idx) => {
+                  // Extract title from note (first line or first 50 chars)
+                  const lines = note.split('\n');
+                  let noteTitle = lines[0].replace(/^📌\s*/, '').replace(/\*\*/g, '').replace(/^#+\s*/, '').trim();
+                  if (noteTitle.length > 50) noteTitle = noteTitle.slice(0, 50) + '...';
+                  if (!noteTitle) noteTitle = 'Note';
+                  const noteContent = lines.slice(1).join('\n').trim() || note;
+                  
+                  return `
+                    <div class="rounded-lg overflow-hidden" style="background:rgba(255,255,255,0.05);">
+                   <div class="p-3 cursor-pointer flex items-center justify-between" 
+                           onclick="const el = this.nextElementSibling; el.style.cssText = el.style.display === 'none' ? 'display:block; padding:12px; border-top:1px solid rgba(255,255,255,0.1);' : 'display:none !important;'">
+                           
+                        <div style="display:flex; align-items:center; gap:8px;">
+                          <span style="color:#f59e0b;">💡</span>
+                          <span style="color:${CONFIG.text_color}; font-weight:500;">${esc(noteTitle)}</span>
                         </div>
-                        <span style="color:${CONFIG.text_muted}; font-size:12px;">tap for steps ▼</span>
-                      </summary>
-                      <div class="p-3" style="border-top:1px solid rgba(0,0,0,0.05);">
-                        <div style="color:${CONFIG.primary_action_color}; font-weight:600; font-size:14px; margin-bottom:8px;">
-                          ${esc(tech.method)}
+                        <span style="color:${CONFIG.text_color}; opacity:0.5;">▼</span>
+                      </div>
+                      <div class="note-content-${idx}" style="display:none !important; padding:12px; border-top:1px solid rgba(255,255,255,0.1);">
+                        <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; line-height:1.6;">
+                          ${formatChefMessage(noteContent)}
                         </div>
-                        <div style="color:${CONFIG.text_color}; font-size:14px; white-space:pre-line; line-height: 1.6;">
-                          ${esc(tech.steps)}
-                        </div>
-                        <div class="flex justify-end mt-3">
-                          <button onclick="deleteTechnique('${esc(name)}', ${idx})"
-                            style="padding: 6px 12px; background: rgba(239,68,68,0.1); border: none; border-radius: 6px; color: #ef4444; cursor: pointer; font-size: 12px;">
-                            🗑️ Remove
+                       <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:8px;">
+                          <button onclick="event.stopPropagation(); editIngredientNote('${esc(name)}', ${idx})"
+                            style="padding:4px 8px; border-radius:4px; font-size:12px; background:rgba(102,126,234,0.2); color:#667eea; border:none; cursor:pointer;">
+                            ✏️ Edit
+                          </button>
+                          <button onclick="event.stopPropagation(); deleteIngredientNote('${esc(name)}', ${idx})"
+                            style="padding:4px 8px; border-radius:4px; font-size:12px; background:rgba(239,68,68,0.2); color:#ef4444; border:none; cursor:pointer;">
+                            🗑️ Delete
                           </button>
                         </div>
                       </div>
-                    </details>
-                  `).join('')}
-                </div>
-              ` : `
-                <div class="text-center p-6" style="color:${CONFIG.text_muted};">
-                  No techniques added yet
-                </div>
-              `}
-            </div>
-          </div>
-          
-          <!-- Pairings Card -->
-          <div class="rounded-xl mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-            <div class="p-4" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
-              <div class="flex items-center justify-between">
-                <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">
-                  🧂 Pairs Well With
-                </h2>
-                <div class="flex gap-2">
-                  <button onclick="askClaudeForSection('${esc(name)}', 'pairings')"
-                    class="px-2 py-1 rounded text-xs"
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white;">
-                    🤖 Ask Claude
-                  </button>
-                  <button onclick="showAddPairingModal('${esc(name)}')"
-                    class="px-2 py-1 rounded text-sm"
-                    style="background:${CONFIG.primary_action_color}; color:white;">
-                    + Add
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="p-4">
-              ${knowledge.pairings && knowledge.pairings.length > 0 ? `
-                <div class="flex flex-wrap gap-2">
-                  ${knowledge.pairings.map((pairing, idx) => `
-                    <div class="flex items-center gap-1 px-3 py-2 rounded-lg" 
-                         style="background:${CONFIG.background_color}; color:${CONFIG.text_color};">
-                      <span style="text-transform:capitalize;">${esc(pairing)}</span>
-                      <button onclick="deletePairing('${esc(name)}', ${idx})"
-                        style="margin-left: 4px; background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 14px;">×</button>
                     </div>
-                  `).join('')}
-                </div>
-              ` : `
-                <div class="text-center p-6" style="color:${CONFIG.text_muted};">
-                  No pairings added yet
-                </div>
-              `}
-            </div>
-          </div>
-          
-          <!-- Freezing Guide Card -->
-          <div class="rounded-xl mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-            <div class="p-4" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
-              <div class="flex items-center justify-between">
-                <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">
-                  🧊 Freezing Guide
-                </h2>
-                <div class="flex gap-2">
-                  <button onclick="askClaudeForSection('${esc(name)}', 'freezing')"
-                    class="px-2 py-1 rounded text-xs"
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white;">
-                    🤖 Ask Claude
-                  </button>
-                  <button onclick="editFreezingInfo('${esc(name)}')"
-                    class="px-2 py-1 rounded text-sm"
-                    style="background:${CONFIG.primary_action_color}; color:white;">
-                    ✏️ Edit
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="p-4">
-              ${knowledge.freezable === false ? `
-                <div class="p-4 rounded-lg" style="background: rgba(239,68,68,0.1);">
-                  <div style="color: #ef4444; font-weight: 500;">❌ This ingredient is not recommended for freezing</div>
-                </div>
-              ` : (knowledge.freezingInfo?.blanch || knowledge.freezingInfo?.duration || knowledge.freezingInfo?.instructions) ? `
-                <div class="p-4 rounded-lg" style="background: rgba(59,130,246,0.1);">
-                  ${knowledge.freezingInfo?.blanch ? `
-                    <div style="color:${CONFIG.text_color}; margin-bottom:8px;">
-                      <strong>Blanch:</strong> ${esc(knowledge.freezingInfo.blanch)}
-                    </div>
-                  ` : ''}
-                  ${knowledge.freezingInfo?.duration ? `
-                    <div style="color:${CONFIG.text_color}; margin-bottom:8px;">
-                      <strong>Freezer Life:</strong> ${esc(knowledge.freezingInfo.duration)}
-                    </div>
-                  ` : ''}
-                  ${knowledge.freezingInfo?.instructions ? `
-                    <div style="color:${CONFIG.text_color}; line-height: 1.6;">
-                      ${esc(knowledge.freezingInfo.instructions)}
-                    </div>
-                  ` : ''}
-                </div>
-              ` : `
-                <div class="text-center p-6" style="color:${CONFIG.text_muted};">
-                  No freezing info added yet
-                </div>
-              `}
-            </div>
-          </div>
-          
-          <!-- Notes Card -->
-          <div class="rounded-xl mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-            <div class="p-4" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
-              <div class="flex items-center justify-between">
-                <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">
-                  📝 Notes & Tips
-                </h2>
-                <div class="flex gap-2">
-                  <button onclick="askClaudeForSection('${esc(name)}', 'notes')"
-                    class="px-2 py-1 rounded text-xs"
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white;">
-                    🤖 Ask Claude
-                  </button>
-                  <button onclick="addIngredientNote('${esc(name)}')"
-                    class="px-2 py-1 rounded text-sm"
-                    style="background:${CONFIG.primary_action_color}; color:white;">
-                    + Add
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div class="p-4">
-              ${knowledge.notes && knowledge.notes.length > 0 ? `
-                <div style="display: flex; flex-direction: column; gap: 8px;">
-                  ${knowledge.notes.map((note, idx) => `
-                    <div class="p-3 rounded-lg" style="background:${CONFIG.background_color};">
-                      <div style="color:${CONFIG.text_color}; font-size:14px; line-height: 1.6; white-space: pre-wrap;">${esc(note)}</div>
-                      <div class="flex justify-end gap-2 mt-2">
-                        <button onclick="editIngredientNote('${esc(name)}', ${idx})"
-                          style="padding: 4px 8px; background: rgba(102,126,234,0.1); border: none; border-radius: 4px; color: #667eea; cursor: pointer; font-size: 12px;">
-                          ✏️ Edit
-                        </button>
-                        <button onclick="deleteIngredientNote('${esc(name)}', ${idx})"
-                          style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: none; border-radius: 4px; color: #ef4444; cursor: pointer; font-size: 12px;">
-                          🗑️
-                        </button>
+                  `;
+                }).join('')}
+                ${relatedTips.map(tip => `
+                  <div class="rounded-lg overflow-hidden" style="background:rgba(245,158,11,0.1);">
+                    <div class="p-3 cursor-pointer flex items-center justify-between"
+                         onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'">
+                      <div style="display:flex; align-items:center; gap:8px;">
+                        <span>💡</span>
+                        <span style="color:${CONFIG.text_color}; font-weight:500;">${esc(tip.title)}</span>
                       </div>
+                      <span style="color:${CONFIG.text_color}; opacity:0.5;">▼</span>
                     </div>
-                  `).join('')}
-                </div>
-              ` : `
-                <div class="text-center p-6" style="color:${CONFIG.text_muted};">
-                  No notes yet
-                </div>
-              `}
-            </div>
-          </div>
-          
-          <!-- Related Recipes Card -->
-          <div class="rounded-xl mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-            <div class="p-4" style="border-bottom: 1px solid rgba(0,0,0,0.05);">
-              <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">
-                🍽️ Recipes with ${esc(displayName)}
-              </h2>
-            </div>
-            <div class="p-4">
-              ${relatedRecipes.length > 0 ? `
-                <div class="flex gap-3 overflow-x-auto pb-2" style="-webkit-overflow-scrolling:touch;">
-                  ${relatedRecipes.map(r => {
-                    const recipeImg = recipeThumb(r);
-                    return `
-                      <div onclick="openRecipeView('${r.__backendId || r.id}')"
-                        class="flex-shrink-0 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
-                        style="width:130px; background:${CONFIG.background_color};">
-                        <div style="height:90px; overflow:hidden;">
-                          ${recipeImg ? `
-                            <img src="${esc(recipeImg)}" style="width:100%; height:100%; object-fit:cover;" />
-                          ` : `
-                            <div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:2rem; background: ${CONFIG.background_color};">🍽️</div>
-                          `}
-                        </div>
-                        <div class="p-2">
-                          <div class="truncate" style="color:${CONFIG.text_color}; font-size:12px; font-weight: 500;">
-                            ${esc(r.title)}
-                          </div>
-                        </div>
+                    <div style="display:none; padding:12px; border-top:1px solid rgba(255,255,255,0.1);">
+                      <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; line-height:1.6;">
+                        ${formatChefMessage(tip.instructions || '')}
                       </div>
-                    `;
-                  }).join('')}
-                </div>
-              ` : `
-                <div class="text-center p-6" style="color:${CONFIG.text_muted};">
-                  No recipes found with this ingredient
-                </div>
-              `}
-            </div>
-          </div>
-          
-          <!-- Inventory Status Card -->
-          <div class="rounded-xl mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-            <div class="p-4">
-              ${inInventory ? `
-                <div style="display: flex; align-items: center; justify-content: space-between;">
-                  <div style="display: flex; align-items: center; gap: 12px;">
-                    <span style="font-size: 24px;">📦</span>
-                    <div>
-                      <div style="color: ${CONFIG.text_color}; font-weight: 600;">In Your Inventory</div>
-                      <div style="color: ${CONFIG.text_muted}; font-size: 13px;">${inInventory.quantity || 1}${inInventory.unit ? ' ' + inInventory.unit : ''}</div>
                     </div>
                   </div>
-                  <button onclick="closeModal(); showInventoryItemDetail('${inInventory.id}')"
-                    style="padding: 8px 16px; background: ${CONFIG.background_color}; border: none; border-radius: 8px; color: ${CONFIG.text_color}; cursor: pointer; font-size: 14px;">
+                `).join('')}
+              </div>
+            ` : `
+              <div class="text-center p-2" style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.9}px;">
+                No notes yet
+              </div>
+            `}
+          </div>
+          
+          <!-- Related Recipes -->
+          ${relatedRecipes.length > 0 ? `
+            <div class="rounded-xl p-4 mb-4" style="background:${CONFIG.surface_color};">
+              <h2 style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px; font-weight:600; margin-bottom:12px;">
+                🍽️ Recipes with ${esc(displayName)}
+              </h2>
+              <div class="flex gap-3 overflow-x-auto pb-2" style="-webkit-overflow-scrolling:touch;">
+                ${relatedRecipes.map(r => {
+                  const recipeImg = recipeThumb(r);
+                  return `
+                    <div onclick="openRecipeView('${r.__backendId || r.id}')"
+                      class="flex-shrink-0 rounded-lg overflow-hidden cursor-pointer"
+                      style="width:120px; background:rgba(255,255,255,0.05);">
+                      <div style="height:80px; overflow:hidden;">
+                        ${recipeImg ? `
+                          <img src="${esc(recipeImg)}" style="width:100%; height:100%; object-fit:cover;" />
+                        ` : `
+                          <div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:2rem;">🍽️</div>
+                        `}
+                      </div>
+                      <div class="p-2">
+                        <div class="truncate" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                          ${esc(r.title)}
+                        </div>
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          ` : ''}
+          
+          <!-- Action Buttons -->
+          <div style="display: flex; flex-direction: column; gap: 10px;">
+            ${(() => {
+              const inInventory = state.inventory.find(i => 
+                i.name.toLowerCase().includes(name.toLowerCase()) || 
+                name.toLowerCase().includes(i.name.toLowerCase())
+              );
+              if (!inInventory) {
+                return `
+                  <button onclick="addIngredientToInventory('${esc(name)}')"
+                    class="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+                    style="background: ${CONFIG.success_color}; color: white;">
+                    📦 Add to Inventory
+                  </button>
+                `;
+              }
+              return `
+                <div style="background: rgba(72, 187, 120, 0.1); border-radius: 12px; padding: 12px; display: flex; align-items: center; justify-content: space-between;">
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <span style="font-size: 20px;">📦</span>
+                    <div>
+                      <div style="color: ${CONFIG.text_color}; font-weight: 600;">In Your Inventory</div>
+                      <div style="color: ${CONFIG.text_muted}; font-size: 12px;">${inInventory.quantity || 1}${inInventory.unit ? ' ' + inInventory.unit : ''}</div>
+                    </div>
+                  </div>
+                  <button onclick="showInventoryItemMenu('${inInventory.id}')"
+                    style="padding: 6px 12px; background: ${CONFIG.surface_color}; border: none; border-radius: 8px; color: ${CONFIG.text_color}; cursor: pointer; font-size: 13px;">
                     View →
                   </button>
                 </div>
-              ` : `
-                <button onclick="addIngredientToInventoryDirect('${esc(name)}')"
-                  style="width: 100%; padding: 14px; background: ${CONFIG.success_color}; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 15px;">
-                  📦 Add to Inventory
-                </button>
-              `}
-            </div>
+              `;
+            })()}
+            
+            <button onclick="askClaudeAboutIngredient('${esc(name)}')"
+              class="w-full py-3 rounded-xl font-semibold flex items-center justify-center gap-2"
+              style="background:linear-gradient(135deg, #667eea 0%, #764ba2 100%); color:white;">
+              👨‍🍳 Ask Chef Claude about ${esc(displayName)}
+            </button>
           </div>
-          
-          <!-- Ask Claude General Button -->
-          <button onclick="askClaudeAboutIngredient('${esc(name)}')"
-            style="width: 100%; padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: ${CONFIG.shadow};">
-            👨‍🍳 Ask Chef Claude about ${esc(displayName)}
-          </button>
         </div>
       `;
     }
 
-    function addIngredientToInventoryDirect(ingredientName) {
-      const knowledge = getIngredientKnowledge(ingredientName);
-      state.prefillInventoryItem = {
-        name: ingredientName,
-        category: knowledge?.category,
-        defaultExpirationDays: knowledge?.defaultExpirationDays,
-        image_url: knowledge?.image_url || getIngredientImage(ingredientName)
-      };
-      showAddInventoryModal();
-    }
-
-    function showAddPairingModal(ingredientName) {
-      const allIngredients = new Set();
+    async function saveIngredientKnowledge(knowledge) {
+      const existing = state.ingredientKnowledge.find(k => k.id === knowledge.id);
       
-      // From inventory
-      state.inventory.forEach(item => allIngredients.add(item.name.toLowerCase()));
-      
-      // From ingredient knowledge
-      (state.ingredientKnowledge || []).forEach(ing => allIngredients.add(ing.name.toLowerCase()));
-      
-      // From INGREDIENT_IMAGES
-      Object.keys(INGREDIENT_IMAGES).forEach(name => allIngredients.add(name));
-      
-      const sortedIngredients = Array.from(allIngredients).sort();
-      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      
-      openModal(`
-        <div style="color: ${CONFIG.text_color};">
-          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">🧂 Add Pairing</h2>
-          
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Search or select ingredient:</label>
-            <input type="text" id="pairingSearch" placeholder="Type to search..."
-              oninput="filterPairingOptions(this.value)"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; margin-bottom: 8px;" />
-            
-            <div id="pairingOptions" style="max-height: 200px; overflow-y: auto; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px;">
-              ${sortedIngredients.slice(0, 50).map(ing => `
-                <div onclick="selectPairingOption('${esc(ingredientName)}', '${esc(ing)}')"
-                  class="pairing-option"
-                  style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.05);"
-                  onmouseover="this.style.background='rgba(102,126,234,0.1)'"
-                  onmouseout="this.style.background='transparent'">
-                  ${esc(capitalize(ing))}
-                </div>
-              `).join('')}
-            </div>
-          </div>
-          
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Or enter custom:</label>
-            <div style="display: flex; gap: 8px;">
-              <input type="text" id="customPairing" placeholder="e.g., lemon zest"
-                style="flex: 1; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
-              <button onclick="addCustomPairing('${esc(ingredientName)}')"
-                style="padding: 12px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
-                Add
-              </button>
-            </div>
-          </div>
-          
-          <button onclick="closeModal()" 
-            style="width: 100%; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
-            Cancel
-          </button>
-        </div>
-      `);
-    }
-
-    function filterPairingOptions(searchTerm) {
-      const allIngredients = new Set();
-      state.inventory.forEach(item => allIngredients.add(item.name.toLowerCase()));
-      (state.ingredientKnowledge || []).forEach(ing => allIngredients.add(ing.name.toLowerCase()));
-      Object.keys(INGREDIENT_IMAGES).forEach(name => allIngredients.add(name));
-      
-      const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      const filtered = Array.from(allIngredients)
-        .filter(ing => ing.includes(searchTerm.toLowerCase()))
-        .sort()
-        .slice(0, 50);
-      
-      const container = document.getElementById('pairingOptions');
-      if (container) {
-        container.innerHTML = filtered.map(ing => `
-          <div onclick="selectPairingOption('${state.selectedIngredientId}', '${esc(ing)}')"
-            class="pairing-option"
-            style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(0,0,0,0.05);"
-            onmouseover="this.style.background='rgba(102,126,234,0.1)'"
-            onmouseout="this.style.background='transparent'">
-            ${esc(capitalize(ing))}
-          </div>
-        `).join('');
+      if (existing) {
+        Object.assign(existing, knowledge);
+        await storage.update(knowledge);
+      } else {
+        state.ingredientKnowledge.push(knowledge);
+        await storage.create(knowledge);
       }
     }
 
-    async function selectPairingOption(ingredientName, pairing) {
-      await savePairing(ingredientName, pairing);
-      closeModal();
-    }
-
-    async function addCustomPairing(ingredientName) {
-      const input = document.getElementById('customPairing');
-      if (input && input.value.trim()) {
-        await savePairing(ingredientName, input.value.trim());
-        closeModal();
-      }
-    }
-
-    function editFreezingInfo(ingredientName) {
-      let knowledge = getIngredientKnowledge(ingredientName);
+    function editIngredientKnowledge(name) {
+      let knowledge = getIngredientKnowledge(name);
       if (!knowledge) {
-        knowledge = createDefaultIngredientKnowledge(ingredientName);
+        knowledge = createDefaultIngredientKnowledge(name);
       }
       
+      const currentImage = knowledge.image_url || INGREDIENT_IMAGES[name.toLowerCase()] || '';
+      
       openModal(`
-        <div style="color: ${CONFIG.text_color};">
-          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">🧊 Edit Freezing Info</h2>
+        <div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;">
+          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">✏️ Edit ${esc(name.charAt(0).toUpperCase() + name.slice(1))}</h2>
           
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Can this be frozen?</label>
-            <div style="display: flex; gap: 12px;">
-              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+          <!-- Image URL -->
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Image URL:</label>
+            <div style="display: flex; gap: 12px; align-items: flex-start;">
+              ${currentImage ? `
+                <img src="${esc(currentImage)}" style="width: 80px; height: 80px; object-fit: cover; border-radius: 8px;" 
+                     onerror="this.style.display='none'" />
+              ` : `
+                <div style="width: 80px; height: 80px; background: ${CONFIG.background_color}; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 2rem;">🥗</div>
+              `}
+              <input type="text" id="editIngImageUrl" class="flex-1 px-3 py-2 border rounded"
+                     style="background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1);"
+                     value="${esc(currentImage)}" placeholder="https://example.com/image.jpg" />
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block mb-2 font-semibold">Category:</label>
+              <select id="editIngCategory" class="w-full px-3 py-2 border rounded"
+                      style="background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1);">
+                ${INGREDIENT_CATEGORIES.map(c => `
+                  <option value="${c}" ${knowledge.category === c ? 'selected' : ''}>${c}</option>
+                `).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="block mb-2 font-semibold">Season:</label>
+              <select id="editIngSeason" class="w-full px-3 py-2 border rounded"
+                      style="background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1);">
+                ${SEASONS.map(s => `
+                  <option value="${s}" ${knowledge.season === s ? 'selected' : ''}>${s}</option>
+                `).join('')}
+              </select>
+            </div>
+          </div>
+          
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block mb-2 font-semibold">Storage Location:</label>
+              <select id="editIngStorageLoc" class="w-full px-3 py-2 border rounded"
+                      style="background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1);">
+                ${STORAGE_LOCATIONS.map(l => `
+                  <option value="${l}" ${knowledge.storage?.location === l ? 'selected' : ''}>${l}</option>
+                `).join('')}
+              </select>
+            </div>
+            <div>
+              <label class="block mb-2 font-semibold">Storage Duration:</label>
+              <input type="text" id="editIngStorageDur" class="w-full px-3 py-2 border rounded"
+                     style="background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1);"
+                     value="${esc(knowledge.storage?.duration || '')}" placeholder="e.g., 5-7 days" />
+            </div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Freezable:</label>
+            <div class="flex gap-4">
+              <label class="flex items-center gap-2">
                 <input type="radio" name="freezable" value="yes" ${knowledge.freezable === true ? 'checked' : ''} />
                 Yes
               </label>
-              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <label class="flex items-center gap-2">
                 <input type="radio" name="freezable" value="no" ${knowledge.freezable === false ? 'checked' : ''} />
                 No
               </label>
-              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+              <label class="flex items-center gap-2">
                 <input type="radio" name="freezable" value="unknown" ${knowledge.freezable === null ? 'checked' : ''} />
                 Unknown
               </label>
             </div>
           </div>
           
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Blanch Time:</label>
-            <input type="text" id="freezeBlanch" value="${esc(knowledge.freezingInfo?.blanch || '')}"
-              placeholder="e.g., 3-4 minutes"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          <div class="mb-4 p-3 rounded" style="background: ${CONFIG.background_color};">
+            <label class="block mb-2 font-semibold">🧊 Freezing Info:</label>
+            <div class="grid grid-cols-2 gap-2 mb-2">
+              <input type="text" id="editIngBlanch" class="px-3 py-2 border rounded"
+                     style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1);"
+                     value="${esc(knowledge.freezingInfo?.blanch || '')}" placeholder="Blanch time (e.g., 3-4 min)" />
+              <input type="text" id="editIngFreezeDur" class="px-3 py-2 border rounded"
+                     style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1);"
+                     value="${esc(knowledge.freezingInfo?.duration || '')}" placeholder="Freezer life (e.g., 12 months)" />
+            </div>
+            <textarea id="editIngFreezeInst" class="w-full px-3 py-2 border rounded" rows="2"
+                      style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1);"
+                      placeholder="Freezing instructions...">${esc(knowledge.freezingInfo?.instructions || '')}</textarea>
           </div>
           
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Freezer Life:</label>
-            <input type="text" id="freezeDuration" value="${esc(knowledge.freezingInfo?.duration || '')}"
-              placeholder="e.g., 10-12 months"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
-          </div>
+          <input type="hidden" id="editIngName" value="${esc(name)}" />
+          <input type="hidden" id="editIngId" value="${esc(knowledge.id)}" />
           
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Instructions:</label>
-            <textarea id="freezeInstructions" rows="3"
-              placeholder="e.g., Blanch, ice bath, dry thoroughly, freeze in single layer then transfer to bags"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical;">${esc(knowledge.freezingInfo?.instructions || '')}</textarea>
-          </div>
-          
-          <input type="hidden" id="freezeIngName" value="${esc(ingredientName)}" />
-          
-          <div style="display: flex; gap: 8px;">
-            <button onclick="closeModal()" 
-              style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" style="padding: 10px 20px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
               Cancel
             </button>
-            <button onclick="saveFreezingInfo()"
-              style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            <button onclick="saveEditedIngredientKnowledge()" style="padding: 10px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
               Save
             </button>
           </div>
@@ -15853,234 +15798,373 @@ Keep responses helpful but concise. Use bullet points for steps.`;
       `);
     }
 
-    async function saveFreezingInfo() {
-      const ingredientName = document.getElementById('freezeIngName').value;
+   async function saveEditedIngredientKnowledge() {
+      const name = document.getElementById('editIngName').value;
+      const id = document.getElementById('editIngId').value;
+      const imageUrl = document.getElementById('editIngImageUrl')?.value.trim() || '';
+      
       const freezableVal = document.querySelector('input[name="freezable"]:checked')?.value;
       
-      let knowledge = getIngredientKnowledge(ingredientName);
-      if (!knowledge) {
-        knowledge = createDefaultIngredientKnowledge(ingredientName);
-      }
-      
-      knowledge.freezable = freezableVal === 'yes' ? true : freezableVal === 'no' ? false : null;
-      knowledge.freezingInfo = {
-        blanch: document.getElementById('freezeBlanch').value.trim(),
-        duration: document.getElementById('freezeDuration').value.trim(),
-        instructions: document.getElementById('freezeInstructions').value.trim()
+      const knowledge = {
+        id: id,
+        type: 'ingredient_knowledge',
+        name: name,
+        category: document.getElementById('editIngCategory').value,
+        season: document.getElementById('editIngSeason').value,
+        image_url: imageUrl,
+        storage: {
+          location: document.getElementById('editIngStorageLoc').value,
+          duration: document.getElementById('editIngStorageDur').value.trim()
+        },
+        freezable: freezableVal === 'yes' ? true : freezableVal === 'no' ? false : null,
+        freezingInfo: {
+          blanch: document.getElementById('editIngBlanch').value.trim(),
+          duration: document.getElementById('editIngFreezeDur').value.trim(),
+          instructions: document.getElementById('editIngFreezeInst').value.trim()
+        },
+        cookingMethods: getIngredientKnowledge(name)?.cookingMethods || [],
+        pairings: getIngredientKnowledge(name)?.pairings || [],
+        notes: getIngredientKnowledge(name)?.notes || [],
+        updatedAt: new Date().toISOString()
       };
+      
+      // Also update INGREDIENT_IMAGES so it shows immediately
+      if (imageUrl) {
+        INGREDIENT_IMAGES[name.toLowerCase()] = imageUrl;
+      }
       
       await saveIngredientKnowledge(knowledge);
       closeModal();
-      showToast('Freezing info saved!', 'success');
+      showToast('Ingredient info saved!', 'success');
       render();
     }
 
-    async function deleteIngredientKnowledgeFull(ingredientName) {
-      const knowledge = getIngredientKnowledge(ingredientName);
-      if (knowledge) {
-        await storage.delete(knowledge);
-        state.ingredientKnowledge = state.ingredientKnowledge.filter(k => k.name.toLowerCase() !== ingredientName.toLowerCase());
-      }
-      state.pantryTab = 'ingredients';
-      navigateTo('inventory');
-      showToast('Ingredient deleted', 'success');
-    }
-
-    function askClaudeForSection(ingredientName, section) {
-      const displayName = ingredientName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-      
-      const prompts = {
-        cooking: `What are the best cooking methods, temperatures, and times for ${displayName}? Be concise - list 3-5 methods with temp and time.`,
-        techniques: `What's the best technique to cook ${displayName} to get the best results? Give one technique with the goal/result and brief steps.`,
-        pairings: `What ingredients pair well with ${displayName}? List 8-10 ingredients that complement it, just the names separated by commas.`,
-        freezing: `Can ${displayName} be frozen? If yes, how should it be prepared, how long does it last, and any special instructions? Be concise.`,
-        notes: `Give me 2-3 quick tips for buying, storing, or preparing ${displayName}. Be concise.`
-      };
-      
-      const sectionLabels = {
-        cooking: 'Cooking Times',
-        techniques: 'Techniques',
-        pairings: 'Pairs Well With',
-        freezing: 'Freezing Guide',
-        notes: 'Notes & Tips'
-      };
-      
+    function addCookingMethod(name) {
       openModal(`
-        <div style="color: ${CONFIG.text_color};">
-          <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">🤖 Ask Claude: ${sectionLabels[section]}</h2>
-          <div style="color: ${CONFIG.text_muted}; font-size: 13px; margin-bottom: 16px;">About ${displayName}</div>
+        <div style="color: #1a1a2e;">
+          <h2 class="text-xl font-bold mb-4">🔥 Add Cooking Method</h2>
           
-          <div style="margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Your question:</label>
-            <textarea id="claudeSectionQuestion" rows="3"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; min-height: 80px;"
-              oninput="this.style.height = 'auto'; this.style.height = this.scrollHeight + 'px';"
-            >${prompts[section]}</textarea>
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Method:</label>
+            <select id="newMethodType" class="w-full px-3 py-2 border rounded">
+              ${COOKING_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}
+            </select>
           </div>
           
-          <div id="claudeSectionResponse" style="display: none; margin-bottom: 16px;">
-            <label style="display: block; margin-bottom: 8px; font-weight: 500;">Claude's response:</label>
-            <div id="claudeSectionResponseText" style="padding: 12px; background: rgba(102,126,234,0.1); border-radius: 8px; font-size: 14px; line-height: 1.6; max-height: 300px; overflow-y: auto;"></div>
+          <div class="grid grid-cols-2 gap-4 mb-4">
+            <div>
+              <label class="block mb-2 font-semibold">Temperature:</label>
+              <input type="text" id="newMethodTemp" class="w-full px-3 py-2 border rounded"
+                     placeholder="e.g., 400°F, Med-Hi" />
+            </div>
+            <div>
+              <label class="block mb-2 font-semibold">Time:</label>
+              <input type="text" id="newMethodTime" class="w-full px-3 py-2 border rounded"
+                     placeholder="e.g., 15-20 min" />
+            </div>
           </div>
           
-          <input type="hidden" id="claudeSectionName" value="${esc(ingredientName)}" />
-          <input type="hidden" id="claudeSectionType" value="${section}" />
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Notes (optional):</label>
+            <input type="text" id="newMethodNotes" class="w-full px-3 py-2 border rounded"
+                   placeholder="e.g., flip halfway, until golden" />
+          </div>
           
-          <div id="claudeSectionButtons" style="display: flex; gap: 8px;">
-            <button onclick="closeModal()" 
-              style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+          <input type="hidden" id="methodIngName" value="${esc(name)}" />
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
               Cancel
             </button>
-            <button id="askClaudeSectionBtn" onclick="submitClaudeForSection()"
-              style="flex: 1; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-              🤖 Ask Claude
-            </button>
-          </div>
-          
-          <div id="claudeSectionSaveButtons" style="display: none; gap: 8px;">
-            <button onclick="closeModal()" 
-              style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
-              Cancel
-            </button>
-            <button onclick="saveClaudeResponseToSection()"
-              style="flex: 1; padding: 12px; background: ${CONFIG.success_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
-              ✓ Save to ${sectionLabels[section]}
+            <button onclick="saveCookingMethod()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Add
             </button>
           </div>
         </div>
       `);
     }
 
-    async function submitClaudeForSection() {
-      const question = document.getElementById('claudeSectionQuestion').value;
-      const btn = document.getElementById('askClaudeSectionBtn');
+    async function saveCookingMethod() {
+      const name = document.getElementById('methodIngName').value;
+      const method = {
+        method: document.getElementById('newMethodType').value,
+        temp: document.getElementById('newMethodTemp').value.trim(),
+        time: document.getElementById('newMethodTime').value.trim(),
+        notes: document.getElementById('newMethodNotes').value.trim()
+      };
       
-      btn.disabled = true;
-      btn.innerHTML = '⏳ Asking Claude...';
-      
-      try {
-        const response = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 500,
-            messages: [{ role: 'user', content: question + '\n\nBe concise and practical. No lengthy explanations.' }]
-          })
-        });
-        
-        const data = await response.json();
-        const responseText = data.content?.[0]?.text || 'No response received';
-        
-        document.getElementById('claudeSectionResponse').style.display = 'block';
-        document.getElementById('claudeSectionResponseText').innerHTML = formatChefMessage(responseText);
-        document.getElementById('claudeSectionButtons').style.display = 'none';
-        document.getElementById('claudeSectionSaveButtons').style.display = 'flex';
-        
-        // Store the response for saving
-        state.claudeSectionResponse = responseText;
-        
-      } catch (error) {
-        console.error('Claude API error:', error);
-        showError('Failed to get response from Claude');
-        btn.disabled = false;
-        btn.innerHTML = '🤖 Ask Claude';
-      }
-    }
-
-    async function saveClaudeResponseToSection() {
-      const ingredientName = document.getElementById('claudeSectionName').value;
-      const section = document.getElementById('claudeSectionType').value;
-      const response = state.claudeSectionResponse;
-      
-      if (!response) {
-        showError('No response to save');
+      if (!method.time) {
+        showError('Please enter a cooking time');
         return;
       }
       
-      let knowledge = getIngredientKnowledge(ingredientName);
+      let knowledge = getIngredientKnowledge(name);
       if (!knowledge) {
-        knowledge = createDefaultIngredientKnowledge(ingredientName);
+        knowledge = createDefaultIngredientKnowledge(name);
       }
       
-      switch (section) {
-        case 'cooking':
-          // Parse cooking methods from response
-          const methods = parseClaudeCookingMethods(response);
-          knowledge.cookingMethods = [...(knowledge.cookingMethods || []), ...methods];
-          break;
-          
-        case 'techniques':
-          // Add as a technique
-          knowledge.techniques = knowledge.techniques || [];
-          knowledge.techniques.push({
-            result: 'Claude Suggestion',
-            method: 'Recommended Technique',
-            steps: response
-          });
-          break;
-          
-        case 'pairings':
-          // Parse pairings from response (comma separated)
-          const pairings = response.split(/[,\n]/)
-            .map(p => p.trim().toLowerCase().replace(/[•\-\*]/g, '').trim())
-            .filter(p => p && p.length > 1 && p.length < 50);
-          knowledge.pairings = [...new Set([...(knowledge.pairings || []), ...pairings])];
-          break;
-          
-        case 'freezing':
-          // Parse freezing info
-          knowledge.freezable = response.toLowerCase().includes('yes') || response.toLowerCase().includes('can be frozen');
-          knowledge.freezingInfo = knowledge.freezingInfo || {};
-          knowledge.freezingInfo.instructions = response;
-          break;
-          
-        case 'notes':
-          // Add as note
-          knowledge.notes = knowledge.notes || [];
-          knowledge.notes.push(response);
-          break;
-      }
+      knowledge.cookingMethods = knowledge.cookingMethods || [];
+      knowledge.cookingMethods.push(method);
       
       await saveIngredientKnowledge(knowledge);
       closeModal();
-      showToast('Saved to ingredient!', 'success');
+      showToast('Cooking method added!', 'success');
       render();
     }
 
-    function parseClaudeCookingMethods(response) {
-      const methods = [];
-      const lines = response.split('\n').filter(l => l.trim());
+    async function deleteCookingMethod(name, index) {
+      const knowledge = getIngredientKnowledge(name);
+      if (knowledge && knowledge.cookingMethods) {
+        knowledge.cookingMethods.splice(index, 1);
+        await saveIngredientKnowledge(knowledge);
+        render();
+      }
+    }
+   function addTechnique(name) {
+      openModal(`
+        <div style="color: #1a1a2e;">
+          <h2 class="text-xl font-bold mb-4">👨‍🍳 Add Technique</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">🎯 Result (what you'll get):</label>
+            <input type="text" id="newTechResult" class="w-full px-3 py-2 border rounded"
+                   placeholder="e.g., Juicy with crispy skin" />
+            <div class="text-xs text-gray-500 mt-1">This is what a novice cook will see first</div>
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Method name:</label>
+            <input type="text" id="newTechMethod" class="w-full px-3 py-2 border rounded"
+                   placeholder="e.g., Sear then Bake" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Steps:</label>
+            <textarea id="newTechSteps" class="w-full px-3 py-2 border rounded" rows="4"
+                      placeholder="1. Sear 2-3 min per side on stovetop&#10;2. Transfer to 400°F oven for 15-20 min&#10;3. Rest 5 min before cutting"></textarea>
+          </div>
+          
+          <input type="hidden" id="techIngName" value="${esc(name)}" />
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveTechnique()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Add Technique
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveTechnique() {
+      const name = document.getElementById('techIngName').value;
+      const technique = {
+        result: document.getElementById('newTechResult').value.trim(),
+        method: document.getElementById('newTechMethod').value.trim(),
+        steps: document.getElementById('newTechSteps').value.trim()
+      };
       
-      // Try to parse structured cooking methods
-      const methodPatterns = [
-        /(?:air\s*fry|roast|bake|grill|saut[ée]|steam|boil|pan\s*fry|broil)/gi
-      ];
-      
-      lines.forEach(line => {
-        const methodMatch = line.match(/(?:air\s*fry|roast|bake|grill|saut[ée]|steam|boil|pan\s*fry|broil|braise)/i);
-        const tempMatch = line.match(/(\d+)\s*°?\s*[FC]/i);
-        const timeMatch = line.match(/(\d+(?:-\d+)?)\s*(?:min(?:ute)?s?|hour?s?)/i);
-        
-        if (methodMatch) {
-          methods.push({
-            method: methodMatch[0].charAt(0).toUpperCase() + methodMatch[0].slice(1).toLowerCase(),
-            temp: tempMatch ? tempMatch[0] : '',
-            time: timeMatch ? timeMatch[0] : '',
-            notes: ''
-          });
-        }
-      });
-      
-      // If no structured methods found, create a generic one
-      if (methods.length === 0 && response.trim()) {
-        methods.push({
-          method: 'See Notes',
-          temp: '',
-          time: '',
-          notes: response.slice(0, 100)
-        });
+      if (!technique.result) {
+        showError('Please enter the result (what you\'ll get)');
+        return;
+      }
+      if (!technique.steps) {
+        showError('Please enter the steps');
+        return;
       }
       
-      return methods;
+      let knowledge = getIngredientKnowledge(name);
+      if (!knowledge) {
+        knowledge = createDefaultIngredientKnowledge(name);
+      }
+      
+      knowledge.techniques = knowledge.techniques || [];
+      knowledge.techniques.push(technique);
+      
+      await saveIngredientKnowledge(knowledge);
+      closeModal();
+      showToast('Technique added!', 'success');
+      render();
     }
+
+    async function deleteTechnique(name, index) {
+      const knowledge = getIngredientKnowledge(name);
+      if (knowledge && knowledge.techniques) {
+        knowledge.techniques.splice(index, 1);
+        await saveIngredientKnowledge(knowledge);
+        render();
+      }
+    }
+
+    function addPairing(name) {
+      const pairing = prompt('Enter an ingredient that pairs well with ' + name + ':');
+      if (pairing && pairing.trim()) {
+        savePairing(name, pairing.trim());
+      }
+    }
+
+    async function savePairing(name, pairing) {
+      let knowledge = getIngredientKnowledge(name);
+      if (!knowledge) {
+        knowledge = createDefaultIngredientKnowledge(name);
+      }
+      
+      knowledge.pairings = knowledge.pairings || [];
+      if (!knowledge.pairings.includes(pairing.toLowerCase())) {
+        knowledge.pairings.push(pairing.toLowerCase());
+        await saveIngredientKnowledge(knowledge);
+        showToast('Pairing added!', 'success');
+        render();
+      }
+    }
+
+    async function deletePairing(name, index) {
+      const knowledge = getIngredientKnowledge(name);
+      if (knowledge && knowledge.pairings) {
+        knowledge.pairings.splice(index, 1);
+        await saveIngredientKnowledge(knowledge);
+        render();
+      }
+    }
+
+    function addIngredientNote(name) {
+      const note = prompt('Add a note about ' + name + ':');
+      if (note && note.trim()) {
+        saveIngredientNote(name, note.trim());
+      }
+    }
+
+    async function saveIngredientNote(name, note) {
+      let knowledge = getIngredientKnowledge(name);
+      if (!knowledge) {
+        knowledge = createDefaultIngredientKnowledge(name);
+      }
+      
+      knowledge.notes = knowledge.notes || [];
+      knowledge.notes.push(note);
+      await saveIngredientKnowledge(knowledge);
+      showToast('Note added!', 'success');
+      render();
+    }
+   function editIngredientNote(name, index) {
+      const knowledge = getIngredientKnowledge(name);
+      if (!knowledge || !knowledge.notes || !knowledge.notes[index]) return;
+      
+      const note = knowledge.notes[index];
+      
+      // Extract title and content
+      const lines = note.split('\n');
+      let noteTitle = lines[0].replace(/^📌\s*/, '').trim();
+      const noteContent = lines.slice(1).join('\n').trim();
+      
+      openModal(`
+        <div style="color: #1a1a2e; max-height: 80vh; overflow-y: auto;">
+          <h2 class="text-xl font-bold mb-4">✏️ Edit Note</h2>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Title:</label>
+            <input type="text" id="editNoteTitle" class="w-full px-3 py-2 border rounded"
+                   value="${esc(noteTitle)}" placeholder="Note title" />
+          </div>
+          
+          <div class="mb-4">
+            <label class="block mb-2 font-semibold">Content:</label>
+            <textarea id="editNoteContent" class="w-full px-3 py-2 border rounded" rows="10"
+                      placeholder="Note content...">${esc(noteContent)}</textarea>
+          </div>
+          
+          <input type="hidden" id="editNoteIngName" value="${esc(name)}" />
+          <input type="hidden" id="editNoteIndex" value="${index}" />
+          
+          <div class="flex gap-2 justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 bg-gray-300 rounded hover:bg-gray-400">
+              Cancel
+            </button>
+            <button onclick="saveEditedNote()" class="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700">
+              Save
+            </button>
+          </div>
+        </div>
+      `);
+    }
+
+    async function saveEditedNote() {
+      const name = document.getElementById('editNoteIngName').value;
+      const index = parseInt(document.getElementById('editNoteIndex').value);
+      const title = document.getElementById('editNoteTitle').value.trim();
+      const content = document.getElementById('editNoteContent').value.trim();
+      
+      if (!title) {
+        showError('Please enter a title');
+        return;
+      }
+      
+      const knowledge = getIngredientKnowledge(name);
+      if (!knowledge || !knowledge.notes) return;
+      
+      // Update the note
+      knowledge.notes[index] = `📌 ${title}\n\n${content}`;
+      
+      await saveIngredientKnowledge(knowledge);
+      closeModal();
+      showToast('Note updated!', 'success');
+      render();
+    }
+
+    async function deleteIngredientNote(name, index) {
+      const knowledge = getIngredientKnowledge(name);
+      if (knowledge && knowledge.notes) {
+        knowledge.notes.splice(index, 1);
+        await saveIngredientKnowledge(knowledge);
+        render();
+      }
+    }
+
+    function toggleIngredientFavorite(name) {
+      let knowledge = getIngredientKnowledge(name);
+      if (!knowledge) {
+        knowledge = createDefaultIngredientKnowledge(name);
+      }
+      knowledge.favorite = !knowledge.favorite;
+      saveIngredientKnowledge(knowledge);
+      render();
+    }
+
+    function askClaudeAboutIngredient(name) {
+      // Open chat with pre-filled question
+      state.chefChatOpen = true;
+      renderChefChat();
+      
+      setTimeout(() => {
+        const input = document.getElementById('chefChatInput');
+        if (input) {
+          input.value = `Tell me about ${name}: cooking times for different methods, storage tips, what it pairs well with, and any freezing instructions.`;
+          input.focus();
+        }
+      }, 100);
+    }
+
+    // ===== INITIALIZATION =====
+    async function init() {
+      await storage.init(dataHandler);
+      // Check for expiring items after data loads
+    setTimeout(() => {
+      checkExpirationNotifications();
+    }, 2000);
+      setupKeyboardShortcuts();
+      render();
+      
+      // Show welcome message on first load
+      if (state.recipes.length === 0) {
+        setTimeout(() => {
+          showToast('Welcome! Press ⚙️ to view keyboard shortcuts', 'info');
+        }, 500);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>
