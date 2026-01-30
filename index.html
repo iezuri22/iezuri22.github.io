@@ -3010,10 +3010,36 @@ async function saveReceiptExpense() {
       `;
     }
 
-    function showIngredientDetail(ingredientId) {
+   function viewIngredientInfo(ingredientName) {
+      // Check if ingredient knowledge exists, create if not
+      const name = ingredientName.toLowerCase().trim();
+      let knowledge = (state.ingredientKnowledge || []).find(k => k.name.toLowerCase() === name);
+      
+      if (!knowledge) {
+        // Create default knowledge entry
+        knowledge = createDefaultIngredientKnowledge(name);
+        state.ingredientKnowledge.push(knowledge);
+        // Save it
+        storage.create(knowledge);
+      }
+      
+      // Open the ingredient detail page
+      state.selectedIngredientId = name;
+      state.currentView = 'ingredient-detail';
+      render();
+    }
+
+   function showIngredientDetail(ingredientId) {
       const ing = (state.ingredientKnowledge || []).find(i => i.id === ingredientId);
       if (!ing) return;
       
+      // Use the full ingredient detail page
+      state.selectedIngredientId = ing.name.toLowerCase();
+      state.currentView = 'ingredient-detail';
+      render();
+      return;
+      
+      // Old modal code below (keeping as fallback but won't run)
       const inventory = state.inventory || [];
       const inStockItems = inventory.filter(item => item.name.toLowerCase() === ing.name.toLowerCase());
       const stockCount = inStockItems.reduce((sum, item) => sum + (item.quantity || 1), 0);
@@ -3974,7 +4000,7 @@ async function saveReceiptExpense() {
                         statusText = '❄️ Frozen';
                         statusBg = 'rgba(59,130,246,0.3)';
                       } else if (status === 'expired') {
-                        statusText = '⚠️ Expired';
+                        statusText = `⚠️ ${daysUntil}d`;
                         statusBg = 'rgba(239,68,68,0.3)';
                       } else if (status === 'expiring-soon') {
                         statusText = `⚠️ ${daysUntil}d`;
@@ -4576,6 +4602,9 @@ async function consolidateInventory() {
           
           <!-- Actions -->
           <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button onclick="closeModal(); viewIngredientInfo('${esc(item.name)}')" style="width: 100%; padding: 12px; background: linear-gradient(135deg, ${CONFIG.primary_action_color} 0%, #8b5cf6 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+              🥗 View Ingredient Info
+            </button>
             <button onclick="closeModal(); showEditInventoryItem('${item.id}')" style="width: 100%; padding: 12px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; cursor: pointer; font-weight: 500;">
               ✏️ Edit Item Details
             </button>
@@ -13316,8 +13345,9 @@ function renderRecordingNeeds() {
           case 'purchase-history':
           content = renderPurchaseHistory();
           break;
-          case 'ingredients':
-          content = renderIngredientLibrary();
+         case 'ingredients':
+          state.pantryTab = 'ingredients';
+          content = renderInventory();
           break;
         case 'ingredient-detail':
           content = renderIngredientDetail();
