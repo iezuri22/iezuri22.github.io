@@ -3100,20 +3100,17 @@ async function saveReceiptExpense() {
       `;
     }
 
-   function renderAllIngredients() {
+  function renderAllIngredients() {
       const ingredients = state.ingredientKnowledge || [];
       const inventory = state.inventory || [];
       const searchTerm = state.ingredientSearchTerm || '';
       
-      // Filter by search
       const filtered = searchTerm 
         ? ingredients.filter(ing => ing.name.toLowerCase().includes(searchTerm.toLowerCase()))
         : ingredients;
       
-      // Sort alphabetically
       const sorted = [...filtered].sort((a, b) => a.name.localeCompare(b.name));
       
-      // Group by category
       const categories = ['Vegetables', 'Fruits', 'Proteins', 'Dairy', 'Grains', 'Herbs & Spices', 'Pantry', 'Other'];
       const grouped = {};
       categories.forEach(cat => grouped[cat] = []);
@@ -3124,44 +3121,37 @@ async function saveReceiptExpense() {
         grouped[cat].push(ing);
       });
       
-      // Helper to check if ingredient is in stock
       const getStockCount = (ingName) => {
         return inventory.filter(item => 
           item.name.toLowerCase() === ingName.toLowerCase()
         ).reduce((sum, item) => sum + (item.quantity || 1), 0);
       };
       
-      // Helper to capitalize
       const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
       
       return `
         <div>
-          <!-- Search -->
-          <div class="mb-4">
+          <!-- Search & Add -->
+          <div class="flex gap-2 mb-3">
             <input type="text" 
               placeholder="Search ingredients..."
               value="${esc(searchTerm)}"
               oninput="state.ingredientSearchTerm = this.value; render();"
-              style="width: 100%; padding: 12px 16px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
-          </div>
-          
-          <!-- Add New Ingredient Button -->
-          <div class="mb-4">
+              style="flex:1; padding:10px 12px; border:1px solid rgba(0,0,0,0.1); border-radius:8px; font-size:13px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-sizing:border-box;" />
             <button onclick="showAddIngredientKnowledgeModal()"
-              class="w-full px-4 py-3 rounded-lg font-medium"
-              style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 2px dashed rgba(0,0,0,0.2);">
-              + Add New Ingredient to Library
+              style="padding:10px 14px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; font-size:11px; cursor:pointer; white-space:nowrap;">
+              + Add
             </button>
           </div>
           
           ${sorted.length === 0 ? `
-            <div class="p-8 rounded-xl text-center" style="background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-              <div style="font-size: 3rem; margin-bottom: 1rem;">🥗</div>
-              <div style="font-size: 18px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">
-                ${searchTerm ? 'No ingredients found' : 'No ingredients in library'}
+            <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
+              <div style="font-size:2rem; margin-bottom:8px;">📋</div>
+              <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:4px;">
+                ${searchTerm ? 'No ingredients found' : 'No ingredients yet'}
               </div>
-              <div style="color: ${CONFIG.text_muted}; margin-bottom: 16px;">
-                ${searchTerm ? 'Try a different search term' : 'Add ingredients to track their default expiration, images, and more'}
+              <div style="font-size:12px; color:${CONFIG.text_muted}; margin-bottom:12px;">
+                ${searchTerm ? 'Try a different search' : 'Add ingredients to build your library'}
               </div>
             </div>
           ` : `
@@ -3169,46 +3159,41 @@ async function saveReceiptExpense() {
               const items = grouped[cat];
               if (items.length === 0) return '';
               
-              const catEmoji = cat === 'Vegetables' ? '🥬' : cat === 'Fruits' ? '🍎' : cat === 'Proteins' ? '🥩' : cat === 'Dairy' ? '🥛' : cat === 'Grains' ? '🌾' : cat === 'Herbs & Spices' ? '🌿' : cat === 'Pantry' ? '🥫' : '📦';
-              
               return `
-                <div class="mb-6">
-                  <h3 class="font-semibold mb-3" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.1}px;">
-                    ${catEmoji} ${cat} (${items.length})
-                  </h3>
-                  <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                <div class="mb-4">
+                  <div style="color:${CONFIG.text_muted}; font-size:11px; font-weight:600; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                    ${cat} (${items.length})
+                  </div>
+                  <div class="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
                     ${items.map(ing => {
                       const stockCount = getStockCount(ing.name);
                       const imgUrl = ing.image_url || getIngredientImage(ing.name, ing.category);
                       
                       return `
-                        <div class="rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
-                             style="background:${CONFIG.surface_color}; border: 1px solid rgba(0,0,0,0.1); box-shadow: ${CONFIG.shadow};"
-                             onclick="showIngredientDetail('${ing.id}')">
-                          <div style="height:70px; overflow:hidden; background:${CONFIG.background_color}; position:relative;">
+                        <div onclick="showIngredientDetail('${ing.id}')"
+                          class="rounded-lg overflow-hidden cursor-pointer"
+                          style="background:${CONFIG.surface_color}; border:1px solid rgba(0,0,0,0.05);">
+                          <div style="height:60px; overflow:hidden; background:${CONFIG.background_color}; position:relative;">
                             ${imgUrl ? `
                               <img src="${esc(imgUrl)}" style="width:100%; height:100%; object-fit:cover;" 
-                                   onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />
-                              <div style="display:none; width:100%; height:100%; align-items:center; justify-content:center; font-size:2rem;">
-                                ${catEmoji}
-                              </div>
+                                   onerror="this.style.display='none';" />
                             ` : `
-                              <div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:2rem;">
-                                ${catEmoji}
+                              <div style="height:100%; display:flex; align-items:center; justify-content:center; color:${CONFIG.text_muted}; font-size:11px;">
+                                No image
                               </div>
                             `}
                             ${stockCount > 0 ? `
-                              <div style="position:absolute; top:4px; right:4px; background:${CONFIG.success_color}; color:white; border-radius:10px; padding:2px 8px; font-size:11px; font-weight:600;">
-                                ${stockCount} in stock
+                              <div style="position:absolute; top:2px; right:2px; background:${CONFIG.success_color}; color:white; border-radius:3px; padding:1px 5px; font-size:8px;">
+                                ${stockCount}
                               </div>
                             ` : ''}
                           </div>
-                          <div class="p-2">
-                            <div class="text-center truncate" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px; font-weight:500;">
+                          <div style="padding:6px;">
+                            <div style="color:${CONFIG.text_color}; font-size:10px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                               ${esc(capitalize(ing.name))}
                             </div>
-                            <div class="text-center" style="color:${CONFIG.text_muted}; font-size:${CONFIG.font_size * 0.65}px;">
-                              ${ing.defaultExpirationDays ? ing.defaultExpirationDays + ' days shelf life' : 'No expiration set'}
+                            <div style="color:${CONFIG.text_muted}; font-size:9px;">
+                              ${ing.defaultExpirationDays ? ing.defaultExpirationDays + 'd shelf' : '—'}
                             </div>
                           </div>
                         </div>
@@ -3563,7 +3548,7 @@ async function saveReceiptExpense() {
       }
     }
 
-   function renderMyBlends() {
+  function renderMyBlends() {
       const blends = state.seasoningBlends || [];
       const blendTypes = ['All', 'Seasoning', 'Smoothie', 'Veggie Mix', 'Marinade', 'Other'];
       const filterType = state.blendFilterType || 'All';
@@ -3572,69 +3557,63 @@ async function saveReceiptExpense() {
         ? blends 
         : blends.filter(b => b.blendType === filterType);
       
-      // Helper to capitalize words
       const capitalize = (str) => str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
       
       return `
         <div>
           <!-- Header -->
-          <div class="flex items-center justify-between mb-4">
-            <div style="color: ${CONFIG.text_muted}; font-size: 14px;">
-              ${blends.length} blend${blends.length !== 1 ? 's' : ''} saved
+          <div class="flex items-center justify-between mb-3">
+            <div style="color:${CONFIG.text_muted}; font-size:12px;">
+              ${blends.length} blend${blends.length !== 1 ? 's' : ''}
             </div>
             <button onclick="showAddBlendModal()"
-              class="px-4 py-2 rounded-lg font-medium"
-              style="background: ${CONFIG.primary_action_color}; color: white;">
+              style="padding:8px 14px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; font-size:11px; cursor:pointer;">
               + New Blend
             </button>
           </div>
           
-          <!-- Filter by type -->
-          <div class="flex gap-2 flex-wrap mb-4">
+          <!-- Filters -->
+          <div class="flex gap-1 flex-wrap mb-3">
             ${blendTypes.map(type => `
               <button onclick="state.blendFilterType = '${type}'; render();"
-                class="px-3 py-1 rounded-full text-sm"
-                style="background: ${filterType === type ? CONFIG.primary_action_color : CONFIG.background_color}; color: ${filterType === type ? 'white' : CONFIG.text_color};">
+                class="px-2 py-1 rounded"
+                style="background:${filterType === type ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${filterType === type ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
                 ${type}
               </button>
             `).join('')}
           </div>
           
           ${filteredBlends.length === 0 ? `
-            <div class="p-8 rounded-xl text-center" style="background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-              <div style="font-size: 3rem; margin-bottom: 1rem;">🧂</div>
-              <div style="font-size: 18px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">
+            <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
+              <div style="font-size:2rem; margin-bottom:8px;">🧂</div>
+              <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:4px;">
                 ${blends.length === 0 ? 'No blends yet' : 'No ' + filterType.toLowerCase() + ' blends'}
               </div>
-              <div style="color: ${CONFIG.text_muted}; margin-bottom: 16px;">
-                Create custom seasoning mixes, smoothie combos, veggie blends & more
+              <div style="font-size:12px; color:${CONFIG.text_muted}; margin-bottom:12px;">
+                Create custom seasoning mixes, smoothie combos & more
               </div>
               <button onclick="showAddBlendModal()"
-                class="px-4 py-2 rounded-lg"
-                style="background: ${CONFIG.primary_action_color}; color: white;">
-                + Create Your First Blend
+                style="padding:8px 16px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
+                + Create Blend
               </button>
             </div>
           ` : `
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
               ${filteredBlends.map(blend => `
-                <div class="rounded-xl p-4 cursor-pointer hover:scale-[1.02] transition-transform"
-                     style="background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};"
-                     onclick="showBlendDetail('${blend.id}')">
-                  <div class="flex items-start justify-between mb-2">
-                    <div>
-                      <div style="font-size: 16px; font-weight: 600; color: ${CONFIG.text_color};">
+                <div onclick="showBlendDetail('${blend.id}')"
+                  class="rounded-lg p-3 cursor-pointer"
+                  style="background:${CONFIG.surface_color}; border:1px solid rgba(0,0,0,0.05);">
+                  <div class="flex items-start justify-between mb-1">
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-size:13px; font-weight:600; color:${CONFIG.text_color}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                         ${esc(blend.name)}
                       </div>
-                      <div style="font-size: 12px; color: ${CONFIG.text_muted};">
-                        ${blend.blendType || 'Other'} • ${(blend.ingredients || []).length} ingredients
+                      <div style="font-size:10px; color:${CONFIG.text_muted};">
+                        ${blend.blendType || 'Other'} · ${(blend.ingredients || []).length} items
                       </div>
                     </div>
-                    <span style="font-size: 24px;">
-                      ${blend.blendType === 'Seasoning' ? '🧂' : blend.blendType === 'Smoothie' ? '🥤' : blend.blendType === 'Veggie Mix' ? '🥗' : blend.blendType === 'Marinade' ? '🫗' : '📦'}
-                    </span>
                   </div>
-                  <div style="font-size: 13px; color: ${CONFIG.text_muted};">
+                  <div style="font-size:10px; color:${CONFIG.text_muted}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                     ${(blend.ingredients || []).slice(0, 4).map(ing => capitalize(ing.name)).join(', ')}${(blend.ingredients || []).length > 4 ? '...' : ''}
                   </div>
                 </div>
