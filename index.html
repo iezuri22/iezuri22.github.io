@@ -584,6 +584,116 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
    // Custom ingredient images (loaded from storage, overrides defaults)
     let customIngredientImages = {};
 
+   async function syncIngredientImagesToKnowledge() {
+      const allImages = { ...INGREDIENT_IMAGES, ...customIngredientImages };
+      let addedCount = 0;
+      
+      const existingNames = new Set((state.ingredientKnowledge || []).map(k => k.name.toLowerCase()));
+      const deletedNames = new Set(state.deletedIngredients || []);
+      
+      const categoryMap = {
+        'chicken': 'Proteins', 'beef': 'Proteins', 'pork': 'Proteins', 'lamb': 'Proteins',
+        'steak': 'Proteins', 'bacon': 'Proteins', 'sausage': 'Proteins', 'ham': 'Proteins',
+        'salmon': 'Proteins', 'shrimp': 'Proteins', 'clams': 'Proteins', 'tilapia': 'Proteins',
+        'tuna': 'Proteins', 'eggs': 'Proteins', 'egg': 'Proteins', 'tofu': 'Proteins',
+        'turkey': 'Proteins', 'fish': 'Proteins',
+        'onion': 'Vegetables', 'garlic': 'Vegetables', 'shallot': 'Vegetables',
+        'tomato': 'Vegetables', 'pepper': 'Vegetables', 'carrot': 'Vegetables',
+        'celery': 'Vegetables', 'broccoli': 'Vegetables', 'cauliflower': 'Vegetables',
+        'spinach': 'Vegetables', 'kale': 'Vegetables', 'lettuce': 'Vegetables',
+        'arugula': 'Vegetables', 'zucchini': 'Vegetables', 'squash': 'Vegetables',
+        'eggplant': 'Vegetables', 'mushroom': 'Vegetables', 'potato': 'Vegetables',
+        'corn': 'Vegetables', 'beans': 'Vegetables', 'peas': 'Vegetables',
+        'asparagus': 'Vegetables', 'sprouts': 'Vegetables', 'cucumber': 'Vegetables',
+        'avocado': 'Vegetables', 'cabbage': 'Vegetables',
+        'apple': 'Fruits', 'banana': 'Fruits', 'orange': 'Fruits', 'lemon': 'Fruits',
+        'lime': 'Fruits', 'strawberr': 'Fruits', 'blueberr': 'Fruits', 'raspberr': 'Fruits',
+        'mango': 'Fruits', 'pineapple': 'Fruits', 'grapes': 'Fruits', 'peach': 'Fruits',
+        'milk': 'Dairy', 'cream': 'Dairy', 'butter': 'Dairy', 'cheese': 'Dairy',
+        'cheddar': 'Dairy', 'mozzarella': 'Dairy', 'parmesan': 'Dairy', 'feta': 'Dairy',
+        'jack': 'Dairy', 'yogurt': 'Dairy',
+        'bread': 'Grains', 'tortilla': 'Grains', 'pita': 'Grains', 'pasta': 'Grains',
+        'spaghetti': 'Grains', 'linguine': 'Grains', 'penne': 'Grains', 'fettuccine': 'Grains',
+        'rigatoni': 'Grains', 'farfalle': 'Grains', 'orzo': 'Grains', 'lasagna': 'Grains',
+        'noodles': 'Grains', 'rice': 'Grains', 'quinoa': 'Grains', 'couscous': 'Grains',
+        'flour': 'Grains', 'breadcrumbs': 'Grains', 'oats': 'Grains', 'cereal': 'Grains',
+        'cavatappi': 'Grains',
+        'salt': 'Herbs & Spices', 'cumin': 'Herbs & Spices', 'paprika': 'Herbs & Spices', 
+        'chili': 'Herbs & Spices', 'oregano': 'Herbs & Spices', 'basil': 'Herbs & Spices', 
+        'thyme': 'Herbs & Spices', 'rosemary': 'Herbs & Spices', 'cinnamon': 'Herbs & Spices', 
+        'nutmeg': 'Herbs & Spices', 'bay': 'Herbs & Spices', 'seasoning': 'Herbs & Spices',
+        'oil': 'Pantry', 'vinegar': 'Pantry', 'sauce': 'Pantry', 'sugar': 'Pantry',
+        'honey': 'Pantry', 'syrup': 'Pantry', 'vanilla': 'Pantry', 'broth': 'Pantry',
+        'stock': 'Pantry', 'canned': 'Pantry', 'paste': 'Pantry', 'chickpeas': 'Pantry', 
+        'coconut': 'Pantry', 'peanut': 'Pantry', 'almonds': 'Pantry', 'walnuts': 'Pantry', 
+        'peanuts': 'Pantry', 'wine': 'Pantry', 'brandy': 'Pantry'
+      };
+      
+      function guessCategory(name) {
+        const lower = name.toLowerCase();
+        for (const [keyword, category] of Object.entries(categoryMap)) {
+          if (lower.includes(keyword)) return category;
+        }
+        return 'Other';
+      }
+      
+      for (const [name, imageUrl] of Object.entries(allImages)) {
+        const normalizedName = name.toLowerCase();
+        if (existingNames.has(normalizedName) || deletedNames.has(normalizedName)) continue;
+        
+        const knowledge = {
+          id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          type: 'ingredient_knowledge',
+          name: normalizedName,
+          category: guessCategory(normalizedName),
+          season: 'Year-round',
+          image_url: imageUrl,
+          storage: { location: 'Fridge', duration: '' },
+          freezable: null,
+          freezingInfo: {},
+          cookingMethods: [],
+          techniques: [],
+          pairings: [],
+          notes: [],
+          createdAt: new Date().toISOString()
+        };
+        
+        state.ingredientKnowledge.push(knowledge);
+        await storage.create(knowledge);
+        addedCount++;
+        
+        if (addedCount % 10 === 0) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+      
+      return addedCount;
+    }
+
+    async function syncAllIngredientImages() {
+      if (!confirm('Add all preset ingredients (with images) to your ingredient library? This may take a moment.')) return;
+      
+      closeModal();
+      state.isLoading = true;
+      render();
+      showToast('Syncing ingredients...', 'info');
+      
+      try {
+        const count = await syncIngredientImagesToKnowledge();
+        if (count > 0) {
+          showToast(`✓ Added ${count} ingredients to library!`, 'success');
+        } else {
+          showToast('All ingredients already in library', 'info');
+        }
+      } catch (error) {
+        console.error('Sync error:', error);
+        showError('Failed to sync ingredients');
+      } finally {
+        state.isLoading = false;
+        render();
+      }
+    }
+
     function loadCustomIngredientImages() {
       const saved = localStorage.getItem('custom_ingredient_images');
       if (saved) {
