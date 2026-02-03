@@ -13430,16 +13430,17 @@ function renderGroceryList() {
                       const capitalizedName = item.name.split(' ').map(word => 
                         word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
                       ).join(' ');
-                      const itemKey = normalizeIngredient(item.name);
-                      
-                      return `
-                        <div style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:${CONFIG.surface_color}; border-radius:8px; border:1px solid rgba(0,0,0,0.05);">
-                          <div onclick="toggleGroceryItem('${itemKey}')"
+                    const itemKey = normalizeIngredient(item.name);
+
+return `
+  <div style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:${CONFIG.surface_color}; border-radius:8px; border:1px solid rgba(0,0,0,0.05);"
+       data-key="${itemKey}">
+    <div onclick="toggleGroceryItem(this.parentElement.dataset.key)"
                             style="width:20px; height:20px; border:2px solid ${CONFIG.text_muted}; border-radius:4px; cursor:pointer; flex-shrink:0;">
                           </div>
                           <span style="flex:1; color:${CONFIG.text_color}; font-size:13px;">${capitalizedName}</span>
-                          <button onclick="removeFromGroceryList('${itemKey}')"
-                            style="padding:4px 8px; background:none; color:${CONFIG.text_muted}; border:none; font-size:14px; cursor:pointer;">
+<button onclick="removeFromGroceryList(this.parentElement.dataset.key)"
+style="padding:4px 8px; background:none; color:${CONFIG.text_muted}; border:none; font-size:14px; cursor:pointer;">
                             ×
                           </button>
                         </div>
@@ -13461,11 +13462,13 @@ function renderGroceryList() {
                     const capitalizedName = item.name.split(' ').map(word => 
                       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
                     ).join(' ');
-                    const itemKey = normalizeIngredient(item.name);
-                    
-                    return `
-                      <div style="display:flex; align-items:center; gap:10px; padding:8px; margin-bottom:4px; background:${CONFIG.background_color}; border-radius:6px; opacity:0.6;">
-                        <div onclick="toggleGroceryItem('${itemKey}')"
+                   const itemKey = normalizeIngredient(item.name);
+
+return `
+  <div style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:${CONFIG.surface_color}; border-radius:8px; border:1px solid rgba(0,0,0,0.05);"
+       data-key="${itemKey}">
+    <div onclick="toggleGroceryItem(this.parentElement.dataset.key)"
+    
                           style="width:18px; height:18px; background:${CONFIG.primary_action_color}; border-radius:4px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:bold;">
                           ✓
                         </div>
