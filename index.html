@@ -6950,8 +6950,7 @@ function getPlannedMealsForWeek(weekStart) {
         render();
       })();
     }
-
-  async function toggleMealIngredient(ingredientKey) {
+async function toggleMealIngredient(ingredientKey) {
       const selId = `mealSel_${state.selectedGroceryDate}_${state.selectedGroceryMeal}_${state.selectedGroceryRecipeId}`;
       let sel = state.mealSelections.find(s => s.id === selId);
 
@@ -6971,7 +6970,7 @@ function getPlannedMealsForWeek(weekStart) {
         includedKeys.push(ingredientKey);
       }
 
-      // Optimistic update - update state immediately without full render
+      // Update state immediately
       if (sel) {
         sel.includedIngredientKeys = JSON.stringify(includedKeys);
       } else {
@@ -6986,20 +6985,111 @@ function getPlannedMealsForWeek(weekStart) {
         sel = newSel;
       }
 
-      // Update just the checkbox visually (no full render)
-      // Then save to database in background
-      try {
-        if (sel.id === selId && state.mealSelections.find(s => s.id === selId)) {
-          await storage.update(sel);
-        } else {
-          await storage.create(sel);
+      // Block real-time updates
+      state.ignoreRealtimeUntil = Date.now() + 5000;
+
+      // Debounced save - batch multiple changes
+      clearTimeout(state._ingredientSaveTimeout);
+      state._ingredientSaveTimeout = setTimeout(async () => {
+        try {
+          const currentSel = state.mealSelections.find(s => s.id === selId);
+          if (currentSel) {
+            await storage.update(currentSel);
+          }
+        } catch (e) {
+          console.error('Failed to save ingredient selection:', e);
         }
-      } catch (e) {
-        console.error('Failed to save ingredient toggle:', e);
-        showError('Failed to save');
-        render();
+      }, 500);
+    }
+
+   function handleIngredientClick(ingredientKey, element) {
+      // Toggle the visual immediately
+      const isCurrentlyChecked = element.style.background.includes('rgba(102,126,234');
+      const newChecked = !isCurrentlyChecked;
+      
+      // Update visual
+      element.style.background = newChecked ? 'rgba(102,126,234,0.1)' : CONFIG.background_color;
+      element.style.border = `1px solid ${newChecked ? CONFIG.primary_action_color : 'transparent'}`;
+      
+      const checkbox = element.querySelector('div');
+      if (checkbox) {
+        checkbox.style.background = newChecked ? CONFIG.primary_action_color : 'transparent';
+        checkbox.style.borderColor = newChecked ? CONFIG.primary_action_color : CONFIG.text_muted;
+        checkbox.innerHTML = newChecked ? '✓' : '';
       }
-   }
+      
+      // Update count
+      const r = getRecipeById(state.selectedGroceryRecipeId);
+      const list = recipeIngList(r);
+      const allItems = document.querySelectorAll('[data-ingredient-key]');
+      let checkedCount = 0;
+      allItems.forEach(item => {
+        if (item.style.background.includes('rgba(102,126,234')) checkedCount++;
+      });
+      
+      // Update state in background
+      toggleMealIngredient(ingredientKey);
+    }
+    
+    async function selectAllIngredients() {
+      const r = getRecipeById(state.selectedGroceryRecipeId);
+      if (!r) return;
+      
+      const list = recipeIngList(r);
+      const allKeys = list.map(x => normalizeIngredient(x.name));
+      
+      const selId = `mealSel_${state.selectedGroceryDate}_${state.selectedGroceryMeal}_${state.selectedGroceryRecipeId}`;
+      let sel = state.mealSelections.find(s => s.id === selId);
+      
+      if (sel) {
+        sel.includedIngredientKeys = JSON.stringify(allKeys);
+      } else {
+        sel = {
+          id: selId,
+          mealDate: state.selectedGroceryDate,
+          meal: state.selectedGroceryMeal,
+          recipeId: state.selectedGroceryRecipeId,
+          includedIngredientKeys: JSON.stringify(allKeys)
+        };
+        state.mealSelections.push(sel);
+      }
+      
+      state.ignoreRealtimeUntil = Date.now() + 3000;
+      render();
+      
+      try {
+        await storage.update(sel);
+      } catch (e) {
+        console.error('Failed to save:', e);
+      }
+    }
+    
+    async function selectNoIngredients() {
+      const selId = `mealSel_${state.selectedGroceryDate}_${state.selectedGroceryMeal}_${state.selectedGroceryRecipeId}`;
+      let sel = state.mealSelections.find(s => s.id === selId);
+      
+      if (sel) {
+        sel.includedIngredientKeys = JSON.stringify([]);
+      } else {
+        sel = {
+          id: selId,
+          mealDate: state.selectedGroceryDate,
+          meal: state.selectedGroceryMeal,
+          recipeId: state.selectedGroceryRecipeId,
+          includedIngredientKeys: JSON.stringify([])
+        };
+        state.mealSelections.push(sel);
+      }
+      
+      state.ignoreRealtimeUntil = Date.now() + 3000;
+      render();
+      
+      try {
+        await storage.update(sel);
+      } catch (e) {
+        console.error('Failed to save:', e);
+      }
+    }
 
     async function toggleAllIngredients(deselectAll) {
       const r = getRecipeById(state.selectedGroceryRecipeId);
@@ -13103,12 +13193,13 @@ if (state.recipePickerSearchTerm && !r.title.toLowerCase().includes(state.recipe
       }
     }
 
-    function renderGroceryIngredients() {
+ function renderGroceryIngredients() {
       const r = getRecipeById(state.selectedGroceryRecipeId);
       if (!r) return `<div class="p-6">Recipe not found</div>`;
 
       const list = recipeIngList(r);
-const selId = `mealSel_${state.selectedGroceryDate}_${state.selectedGroceryMeal}_${state.selectedGroceryRecipeId}`;      const sel = state.mealSelections.find(s => s.id === selId);
+      const selId = `mealSel_${state.selectedGroceryDate}_${state.selectedGroceryMeal}_${state.selectedGroceryRecipeId}`;
+      const sel = state.mealSelections.find(s => s.id === selId);
 
       let keys = [];
       try {
@@ -13116,37 +13207,55 @@ const selId = `mealSel_${state.selectedGroceryDate}_${state.selectedGroceryMeal}
       } catch (e) {
         keys = list.map(x => normalizeIngredient(x.name));
       }
+      
+      const allChecked = list.length > 0 && list.every(ing => keys.includes(normalizeIngredient(ing.name)));
+      const noneChecked = list.length > 0 && list.every(ing => !keys.includes(normalizeIngredient(ing.name)));
 
       return `
-        <div class="p-6 max-w-4xl mx-auto">
-          <div class="flex items-center justify-between mb-6">
+        <div class="p-3 max-w-4xl mx-auto">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
             <div>
-              <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.5}px;">Choose Ingredients</h2>
-              <p style="color:${CONFIG.text_color}; opacity:.7; font-size:${CONFIG.font_size * .9}px;">
-                ${esc(r.title)} • ${formatDateDisplay(state.selectedGroceryDate)} ${esc(state.selectedGroceryMeal)}
+              <h2 style="color:${CONFIG.text_color}; font-size:14px; font-weight:700;">Choose Ingredients</h2>
+              <p style="color:${CONFIG.text_muted}; font-size:11px;">
+                ${esc(r.title)} · ${formatDateDisplay(state.selectedGroceryDate)} ${esc(state.selectedGroceryMeal)}
               </p>
             </div>
-            <button type="button" onclick="state.currentView='grocery-list'; render();"
-              class="px-4 py-2 rounded button-hover"
-              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px;">
+            <button onclick="state.currentView='grocery-list'; render();"
+              style="padding:6px 12px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:6px; font-size:11px; cursor:pointer;">
               Done
             </button>
           </div>
+          
+          <!-- Select All / None buttons -->
+          <div style="display:flex; gap:8px; margin-bottom:12px;">
+            <button onclick="selectAllIngredients()"
+              style="padding:6px 12px; background:${allChecked ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${allChecked ? 'white' : CONFIG.text_color}; border:none; border-radius:6px; font-size:11px; cursor:pointer;">
+              Select All
+            </button>
+            <button onclick="selectNoIngredients()"
+              style="padding:6px 12px; background:${noneChecked ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${noneChecked ? 'white' : CONFIG.text_color}; border:none; border-radius:6px; font-size:11px; cursor:pointer;">
+              Select None
+            </button>
+            <div style="flex:1;"></div>
+            <span style="color:${CONFIG.text_muted}; font-size:11px; align-self:center;">
+              ${keys.length} of ${list.length} selected
+            </span>
+          </div>
 
-          <div class="rounded p-4" style="background:${CONFIG.surface_color};">
+          <div style="background:${CONFIG.surface_color}; border-radius:8px; padding:8px;">
             ${list.length ? list.map(ing => {
               const k = normalizeIngredient(ing.name);
               const checked = keys.includes(k);
               return `
-              <label class="flex items-center justify-between gap-3 p-3 rounded mb-2"
-                style="background:rgba(255,255,255,0.04); color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px;">
-                <div class="flex items-center gap-3">
-                  <input type="checkbox" ${checked ? 'checked' : ''}
-                    onchange="toggleMealIngredient('${k}')" />
-                  <span>${esc(ing.qty)}${ing.unit ? ' ' + esc(ing.unit) : ''} ${esc(ing.name)}</span>
-                </div>
-              </label>`;
-            }).join('') : `<div style="color:${CONFIG.text_color};opacity:.7;">No ingredients on this recipe yet.</div>`}
+                <div data-ingredient-key="${k}" 
+                     onclick="handleIngredientClick('${k}', this)"
+                     style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:${checked ? 'rgba(102,126,234,0.1)' : CONFIG.background_color}; border-radius:6px; cursor:pointer; border:1px solid ${checked ? CONFIG.primary_action_color : 'transparent'};">
+                  <div style="width:20px; height:20px; border-radius:4px; border:2px solid ${checked ? CONFIG.primary_action_color : CONFIG.text_muted}; background:${checked ? CONFIG.primary_action_color : 'transparent'}; display:flex; align-items:center; justify-content:center; color:white; font-size:12px; flex-shrink:0;">
+                    ${checked ? '✓' : ''}
+                  </div>
+                  <span style="color:${CONFIG.text_color}; font-size:13px;">${esc(ing.qty)}${ing.unit ? ' ' + esc(ing.unit) : ''} ${esc(ing.name)}</span>
+                </div>`;
+            }).join('') : `<div style="color:${CONFIG.text_muted}; padding:12px; text-align:center;">No ingredients on this recipe yet.</div>`}
           </div>
         </div>`;
     }
