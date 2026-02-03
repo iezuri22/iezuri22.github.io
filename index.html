@@ -7038,10 +7038,11 @@ function getPlannedMealsForWeek(weekStart) {
       }
     }
 
- async function toggleGroceryItem(ingredientKey) {
-      // Prevent double-clicks
-      if (state._groceryToggling) return;
-      state._groceryToggling = true;
+async function toggleGroceryItem(ingredientKey) {
+      // Prevent same item double-clicks
+      if (state._toggledItems?.[ingredientKey]) return;
+      if (!state._toggledItems) state._toggledItems = {};
+      state._toggledItems[ingredientKey] = true;
       
       try {
         let item = state.groceryItems.find(gi => gi.ingredientKey === ingredientKey);
@@ -7052,7 +7053,7 @@ function getPlannedMealsForWeek(weekStart) {
         } else {
           if (state.groceryItems.length >= 999) {
             showError('Maximum limit reached');
-            state._groceryToggling = false;
+            delete state._toggledItems[ingredientKey];
             return;
           }
           item = {
@@ -7065,29 +7066,51 @@ function getPlannedMealsForWeek(weekStart) {
         }
         
         // Block real-time updates
-        state.ignoreRealtimeUntil = Date.now() + 3000;
+        state.ignoreRealtimeUntil = Date.now() + 5000;
         
-        // Save to database first
+        // Immediately update checkbox visually (no render)
+        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
+        checkboxes.forEach(cb => {
+          if (cb.onclick?.toString().includes(ingredientKey) || 
+              cb.getAttribute('onclick')?.includes(ingredientKey)) {
+            cb.checked = item.checked;
+            const parentDiv = cb.parentElement;
+            if (parentDiv) {
+              if (item.checked) {
+                parentDiv.style.opacity = '0.5';
+                const textSpan = parentDiv.querySelector('span');
+                if (textSpan) textSpan.style.textDecoration = 'line-through';
+              } else {
+                parentDiv.style.opacity = '1';
+                const textSpan = parentDiv.querySelector('span');
+                if (textSpan) textSpan.style.textDecoration = 'none';
+              }
+            }
+          }
+        });
+        
+        // Save to database (don't await - fire and forget)
         if (isNew) {
-          await storage.create(item);
+          storage.create(item).catch(e => console.error('Save failed:', e));
         } else {
-          await storage.update(item);
+          storage.update(item).catch(e => console.error('Update failed:', e));
         }
         
-        // Then render
-        render();
+        // Debounced render - only render once after user stops clicking
+        clearTimeout(state._groceryRenderTimeout);
+        state._groceryRenderTimeout = setTimeout(() => {
+          render();
+        }, 800);
         
       } catch (e) {
-        console.error('Failed to save grocery toggle:', e);
-        showError('Failed to update');
-        render();
+        console.error('Failed to toggle grocery:', e);
       } finally {
+        // Allow this item to be toggled again after a short delay
         setTimeout(() => {
-          state._groceryToggling = false;
-        }, 500);
+          delete state._toggledItems[ingredientKey];
+        }, 300);
       }
     }
-
    async function removeFromGroceryList(ingredientKey) {
       // Optimistic update - remove from UI immediately
       const selectionsWithIngredient = state.mealSelections.filter(sel => {
