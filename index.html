@@ -7039,77 +7039,62 @@ function getPlannedMealsForWeek(weekStart) {
     }
 
 async function toggleGroceryItem(ingredientKey) {
-      // Prevent same item double-clicks
-      if (state._toggledItems?.[ingredientKey]) return;
-      if (!state._toggledItems) state._toggledItems = {};
-      state._toggledItems[ingredientKey] = true;
+      // Track pending toggles
+      if (!state._pendingToggles) state._pendingToggles = {};
       
-      try {
-        let item = state.groceryItems.find(gi => gi.ingredientKey === ingredientKey);
-        let isNew = false;
-
-        if (item) {
-          item.checked = !item.checked;
-        } else {
-          if (state.groceryItems.length >= 999) {
-            showError('Maximum limit reached');
-            delete state._toggledItems[ingredientKey];
-            return;
-          }
-          item = {
-            id: `grocery_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-            ingredientKey: ingredientKey,
-            checked: true
-          };
-          state.groceryItems.push(item);
-          isNew = true;
-        }
-        
-        // Block real-time updates
-        state.ignoreRealtimeUntil = Date.now() + 5000;
-        
-        // Immediately update checkbox visually (no render)
-        const checkboxes = document.querySelectorAll('input[type="checkbox"]');
-        checkboxes.forEach(cb => {
-          if (cb.onclick?.toString().includes(ingredientKey) || 
-              cb.getAttribute('onclick')?.includes(ingredientKey)) {
-            cb.checked = item.checked;
-            const parentDiv = cb.parentElement;
-            if (parentDiv) {
-              if (item.checked) {
-                parentDiv.style.opacity = '0.5';
-                const textSpan = parentDiv.querySelector('span');
-                if (textSpan) textSpan.style.textDecoration = 'line-through';
-              } else {
-                parentDiv.style.opacity = '1';
-                const textSpan = parentDiv.querySelector('span');
-                if (textSpan) textSpan.style.textDecoration = 'none';
-              }
-            }
-          }
-        });
-        
-        // Save to database (don't await - fire and forget)
-        if (isNew) {
-          storage.create(item).catch(e => console.error('Save failed:', e));
-        } else {
-          storage.update(item).catch(e => console.error('Update failed:', e));
-        }
-        
-        // Debounced render - only render once after user stops clicking
-        clearTimeout(state._groceryRenderTimeout);
-        state._groceryRenderTimeout = setTimeout(() => {
-          render();
-        }, 800);
-        
-      } catch (e) {
-        console.error('Failed to toggle grocery:', e);
-      } finally {
-        // Allow this item to be toggled again after a short delay
-        setTimeout(() => {
-          delete state._toggledItems[ingredientKey];
-        }, 300);
+      // If already pending, cancel it (user is toggling back)
+      if (state._pendingToggles[ingredientKey]) {
+        clearTimeout(state._pendingToggles[ingredientKey].timeout);
+        delete state._pendingToggles[ingredientKey];
+        return;
       }
+      
+      // Find or create item
+      let item = state.groceryItems.find(gi => gi.ingredientKey === ingredientKey);
+      let isNew = false;
+      let newCheckedState;
+
+      if (item) {
+        newCheckedState = !item.checked;
+      } else {
+        newCheckedState = true;
+        isNew = true;
+        item = {
+          id: `grocery_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          ingredientKey: ingredientKey,
+          checked: true
+        };
+        state.groceryItems.push(item);
+      }
+      
+      // Apply change to state immediately
+      item.checked = newCheckedState;
+      
+      // Block real-time sync
+      state.ignoreRealtimeUntil = Date.now() + 5000;
+      
+      // Mark as pending
+      state._pendingToggles[ingredientKey] = {
+        item: item,
+        isNew: isNew,
+        timeout: setTimeout(async () => {
+          // Save to database
+          try {
+            if (isNew) {
+              await storage.create(item);
+            } else {
+              await storage.update(item);
+            }
+          } catch (e) {
+            console.error('Failed to save:', e);
+          }
+          delete state._pendingToggles[ingredientKey];
+        }, 100)
+      };
+      
+      // Debounced render
+      clearTimeout(state._groceryRenderTimeout);
+      state._groceryRenderTimeout = setTimeout(() => render(), 600);
     }
    async function removeFromGroceryList(ingredientKey) {
       // Optimistic update - remove from UI immediately
