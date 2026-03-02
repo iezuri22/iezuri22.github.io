@@ -13637,8 +13637,37 @@ return `
       renderSwipeSetupSection(mealType);
     }
 
+    function getRemixRecipes() {
+      const remixes = [];
+      const seen = new Set();
+      for (const [dateStr, dayData] of Object.entries(state.mealDays || {})) {
+        for (const [mealType, meal] of Object.entries(dayData.meals || {})) {
+          if (meal.actualType === 'remix' && meal.remixInfo && meal.remixInfo.baseRecipeId) {
+            const key = `${meal.remixInfo.baseRecipeId}__${(meal.remixInfo.modifications || '').trim().toLowerCase()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            const baseRecipe = getRecipeById(meal.remixInfo.baseRecipeId);
+            if (!baseRecipe) continue;
+            const remixId = `remix_${remixes.length}_${meal.remixInfo.baseRecipeId}`;
+            remixes.push({
+              ...baseRecipe,
+              id: remixId,
+              __backendId: remixId,
+              title: baseRecipe.title + ' (Remix)',
+              _isRemix: true,
+              _remixModifications: meal.remixInfo.modifications,
+              _baseRecipeId: meal.remixInfo.baseRecipeId
+            });
+          }
+        }
+      }
+      return remixes;
+    }
+
     function getFilteredSetupRecipes() {
       let recipes = state.recipes.filter(r => !r.isDraft && !r.isTip);
+      // Include remix meals from history
+      recipes = [...recipes, ...getRemixRecipes()];
       const term = normalizeString(state.swipeSetupSearchTerm);
       if (term) {
         recipes = recipes.filter(r => (r.title || '').toLowerCase().includes(term));
@@ -13670,28 +13699,30 @@ return `
       const selected = state.swipeSettings[mealType] || [];
 
       container.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-          <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">${selected.length} of ${state.recipes.filter(r => !r.isDraft && !r.isTip).length} selected</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+          <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">${selected.length} selected</span>
           <div style="display: flex; gap: 12px;">
             <button onclick="selectAllSwipeRecipes('${mealType}')" style="background: none; border: none; color: ${CONFIG.primary_action_color}; font-size: ${CONFIG.type_caption}; cursor: pointer;">Select all</button>
             <button onclick="deselectAllSwipeRecipes('${mealType}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; cursor: pointer;">Clear</button>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 360px; overflow-y: auto; padding-bottom: 8px;">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; max-height: 420px; overflow-y: auto; padding-bottom: 8px;">
           ${recipes.map(r => {
             const id = r.__backendId || r.id;
             const isSelected = selected.includes(id);
             const img = recipeThumb(r);
             return `
-              <div onclick="toggleSwipeSetupRecipe('${mealType}', '${id}')" style="position: relative; border-radius: 12px; overflow: hidden; cursor: pointer; background: ${CONFIG.background_color}; border: 2px solid ${isSelected ? CONFIG.primary_action_color : 'transparent'}; transition: border-color 0.2s;">
-                <div style="height: 80px; background: ${CONFIG.surface_elevated};">
-                  ${img ? `<img loading="lazy" src="${esc(img)}" style="width: 100%; height: 100%; object-fit: cover; opacity: ${isSelected ? '1' : '0.6'};" onerror="this.style.display='none'" />` : `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 28px; opacity: ${isSelected ? '1' : '0.5'};">🍽️</div>`}
+              <div onclick="toggleSwipeSetupRecipe('${mealType}', '${id}')" style="position: relative; border-radius: 10px; overflow: hidden; cursor: pointer; background: ${CONFIG.background_color}; border: 2px solid ${isSelected ? CONFIG.primary_action_color : 'transparent'}; transition: border-color 0.2s;">
+                <div style="aspect-ratio: 1; background: ${CONFIG.surface_elevated}; overflow: hidden;">
+                  ${img ? `<img loading="lazy" src="${esc(img)}" style="width: 100%; height: 100%; object-fit: cover; opacity: ${isSelected ? '1' : '0.6'};" onerror="this.style.display='none'" />` : `<div style="height: 100%; display: flex; align-items: center; justify-content: center; font-size: 24px; opacity: ${isSelected ? '1' : '0.5'};">🍽️</div>`}
                 </div>
-                ${isSelected ? `<div style="position: absolute; top: 6px; right: 6px; width: 22px; height: 22px; background: ${CONFIG.primary_action_color}; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
-                  <svg width="12" height="12" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                ${isSelected ? `<div style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: ${CONFIG.primary_action_color}; border-radius: 50%; display: flex; align-items: center; justify-content: center;">
+                  <svg width="11" height="11" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
                 </div>` : ''}
-                <div style="padding: 6px 8px;">
+                ${r._isRemix ? `<div style="position: absolute; top: 4px; left: 4px; background: rgba(232,93,93,0.9); color: white; font-size: 9px; font-weight: 600; padding: 2px 5px; border-radius: 4px; letter-spacing: 0.3px;">REMIX</div>` : ''}
+                <div style="padding: 4px 6px;">
                   <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+                  ${r._isRemix && r._remixModifications ? `<div style="color: ${CONFIG.text_muted}; font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px;">${esc(r._remixModifications)}</div>` : ''}
                 </div>
               </div>
             `;
@@ -13919,10 +13950,21 @@ return `
         return buildSwipeDeck(mealType);
       }
 
+      // Resolve remix IDs to their base recipe IDs
+      const resolvedIds = new Set();
+      allowedIds.forEach(id => {
+        if (id.startsWith('remix_')) {
+          const baseId = id.replace(/^remix_\d+_/, '');
+          if (baseId) resolvedIds.add(baseId);
+        } else {
+          resolvedIds.add(id);
+        }
+      });
+
       const recipes = state.recipes.filter(r => {
         if (r.isDraft || r.isTip) return false;
         const id = r.__backendId || r.id;
-        return allowedIds.includes(id);
+        return resolvedIds.has(id);
       });
 
       if (recipes.length === 0) return buildSwipeDeck(mealType);
