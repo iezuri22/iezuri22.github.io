@@ -280,6 +280,59 @@
       .freestyle-grid { grid-template-columns: 1fr; }
     }
 
+    /* ===== RECIPE SELECTION GRID ===== */
+    .recipe-select-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      max-height: 520px;
+      overflow-y: auto;
+      padding-bottom: 8px;
+    }
+    .recipe-select-grid .rs-thumb {
+      width: 80px;
+      height: 80px;
+      flex-shrink: 0;
+      border-radius: 8px;
+      overflow: hidden;
+      position: relative;
+      margin: 0 auto;
+    }
+    .recipe-select-grid .rs-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .recipe-select-grid .rs-name {
+      color: #f5f5f7;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.2;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      text-align: center;
+      margin-top: 4px;
+    }
+    @media (min-width: 768px) {
+      .recipe-select-grid {
+        grid-template-columns: repeat(5, 1fr);
+      }
+      .recipe-select-grid .rs-thumb {
+        width: 100px;
+        height: 100px;
+      }
+      .recipe-select-grid .rs-name {
+        font-size: 15px;
+      }
+    }
+    @media (min-width: 1024px) {
+      .recipe-select-grid {
+        grid-template-columns: repeat(6, 1fr);
+      }
+    }
+
     /* ===== SWIPE CARD STYLES ===== */
     .swipe-container {
       position: relative;
@@ -13708,28 +13761,24 @@ return `
             <button onclick="deselectAllSwipeRecipes('${mealType}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; cursor: pointer;">Clear</button>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-height: 520px; overflow-y: auto; padding-bottom: 8px;">
+        <div class="recipe-select-grid">
           ${recipes.map(r => {
             const id = r.__backendId || r.id;
             const isSelected = selected.includes(id);
             const img = recipeThumb(r);
             return `
               <div onclick="toggleSwipeSetupRecipe('${mealType}', '${id}')" style="cursor: pointer;">
-                <div style="position: relative; border-radius: 8px; overflow: hidden; border: 2px solid ${isSelected ? CONFIG.primary_action_color : 'transparent'}; transition: border-color 0.2s;">
-                  <div style="aspect-ratio: 1; position: relative; background: ${CONFIG.surface_elevated}; overflow: hidden;">
-                    <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
-                      <svg width="28" height="28" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-12.75H6A2.25 2.25 0 003.75 6v12a2.25 2.25 0 002.25 2.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75"/></svg>
-                    </div>
-                    ${img ? `<img loading="lazy" src="${esc(img)}" style="position: relative; width: 100%; height: 100%; object-fit: cover;" onerror="this.style.display='none'" />` : ''}
+                <div class="rs-thumb" style="border: 2px solid ${isSelected ? CONFIG.primary_action_color : 'transparent'}; transition: border-color 0.2s; background: ${CONFIG.surface_elevated};">
+                  <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+                    <svg width="22" height="22" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-12.75H6A2.25 2.25 0 003.75 6v12a2.25 2.25 0 002.25 2.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75"/></svg>
                   </div>
-                  ${isSelected ? `<div style="position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; background: ${CONFIG.primary_action_color}; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.4);">
-                    <svg width="11" height="11" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+                  ${img ? `<img loading="lazy" src="${esc(img)}" style="position: relative;" onerror="this.style.display='none'" />` : ''}
+                  ${isSelected ? `<div style="position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; background: ${CONFIG.primary_action_color}; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.4);">
+                    <svg width="10" height="10" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
                   </div>` : ''}
-                  ${r._isRemix ? `<div style="position: absolute; top: 4px; left: 4px; background: rgba(232,93,93,0.9); color: white; font-size: 8px; font-weight: 700; padding: 1px 4px; border-radius: 3px; letter-spacing: 0.3px; text-transform: uppercase;">Remix</div>` : ''}
+                  ${r._isRemix ? `<div style="position: absolute; top: 3px; left: 3px; background: rgba(232,93,93,0.9); color: white; font-size: 7px; font-weight: 700; padding: 1px 3px; border-radius: 3px; letter-spacing: 0.3px; text-transform: uppercase;">Remix</div>` : ''}
                 </div>
-                <div style="padding: 3px 2px 0;">
-                  <div style="color: ${CONFIG.text_color}; font-size: 13px; font-weight: 600; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${esc(r.title)}</div>
-                </div>
+                <div class="rs-name">${esc(r.title)}</div>
               </div>
             `;
           }).join('')}
@@ -13783,31 +13832,31 @@ return `
       return `
         <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 100px;">
           <!-- Header -->
-          <div style="padding: ${CONFIG.space_2xl} ${CONFIG.space_md} ${CONFIG.space_lg};">
+          <div style="padding: ${CONFIG.space_md} 8px 8px;">
             ${state.swipeSettings.setupCompleted ? `
-              <button onclick="navigateTo('swipe')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 20px; cursor: pointer; margin-bottom: 8px;">←</button>
+              <button onclick="navigateTo('swipe')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 20px; cursor: pointer; margin-bottom: 4px;">←</button>
             ` : ''}
             <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_title}; font-weight: ${CONFIG.type_title_weight}; letter-spacing: ${CONFIG.type_title_tracking};">
               Set Up Your Meals
             </div>
-            <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_body}; margin-top: ${CONFIG.space_xs};">
+            <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_body}; margin-top: 2px;">
               Choose which recipes appear when you swipe
             </div>
             ${showDefaults ? `
-              <div style="background: rgba(232,93,93,0.1); border-radius: 10px; padding: 10px 14px; margin-top: 12px;">
+              <div style="background: rgba(232,93,93,0.1); border-radius: 10px; padding: 8px 12px; margin-top: 8px;">
                 <span style="color: ${CONFIG.primary_action_color}; font-size: ${CONFIG.type_caption}; font-weight: 500;">We picked some defaults. Adjust as needed.</span>
               </div>
             ` : ''}
           </div>
 
-          <div style="padding: 0 ${CONFIG.space_md};">
+          <div style="padding: 0 8px;">
             <!-- Search & Filters -->
-            <div style="margin-bottom: ${CONFIG.space_md};">
+            <div style="margin-bottom: 8px;">
               <input type="text" placeholder="Search recipes..."
                 value="${esc(state.swipeSetupSearchTerm || '')}"
                 oninput="state.swipeSetupSearchTerm = this.value; if(state.swipeSetupExpandedSection) renderSwipeSetupSection(state.swipeSetupExpandedSection);"
-                style="width: 100%; padding: 12px ${CONFIG.space_md}; border-radius: 12px; font-size: ${CONFIG.type_body}; box-sizing: border-box; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: none;" />
-              <div style="display: flex; gap: 6px; margin-top: 8px; overflow-x: auto;">
+                style="width: 100%; padding: 10px 12px; border-radius: 10px; font-size: ${CONFIG.type_body}; box-sizing: border-box; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: none;" />
+              <div style="display: flex; gap: 6px; margin-top: 6px; overflow-x: auto;">
                 ${[
                   { key: 'all', label: 'All' },
                   { key: 'favorites', label: 'Favorites' },
@@ -13846,7 +13895,7 @@ return `
                   </button>
                   <!-- Expanded Content -->
                   ${isExpanded ? `
-                    <div id="swipe-setup-${section.key}" style="background: ${CONFIG.surface_color}; padding: 8px 12px 12px; border-radius: 0 0 12px 12px;">
+                    <div id="swipe-setup-${section.key}" style="background: ${CONFIG.surface_color}; padding: 6px 8px 8px; border-radius: 0 0 12px 12px;">
                     </div>
                     <!-- section populated after render -->
                   ` : ''}
