@@ -5967,6 +5967,30 @@ function renderReceiptModal() {
     // localStorage-based food log for tracking what the user actually eats.
     // ============================================================
 
+    const SAVED_RECIPES_KEY = 'savedRecipes';
+
+    function getSavedRecipes() {
+      try { return JSON.parse(localStorage.getItem(SAVED_RECIPES_KEY) || '[]'); }
+      catch { return []; }
+    }
+
+    function toggleSaveRecipe(recipeId) {
+      let saved = getSavedRecipes();
+      if (saved.includes(recipeId)) {
+        saved = saved.filter(id => id !== recipeId);
+        showToast('Removed from saved', 'success');
+      } else {
+        saved.push(recipeId);
+        showToast('Saved!', 'success');
+      }
+      localStorage.setItem(SAVED_RECIPES_KEY, JSON.stringify(saved));
+      render();
+    }
+
+    function isRecipeSaved(recipeId) {
+      return getSavedRecipes().includes(recipeId);
+    }
+
     const FOOD_LOG_KEY = 'foodLog';
 
     function getFoodLog() {
@@ -5996,6 +6020,7 @@ function renderReceiptModal() {
         mealType: entry.mealType || detectMealType(),
         dateCooked: dateCooked,
         photo: entry.photo || null,
+        myPhoto: entry.myPhoto || null, // User's personal cooking photo (separate from recipe stock photo)
         notes: entry.notes || null,
         wouldMakeAgain: null, // null = unrated, true = thumbs up, false = meh
         status: entry.status || 'eaten' // 'planned' or 'eaten'
@@ -6538,89 +6563,99 @@ function renderReceiptModal() {
     // ============================================================
     function renderMyMeals() {
       const log = getFoodLog();
-      const favorites = getCookAgainMeals();
       const mealSlots = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-      // Collect all dates that have entries, plus today and nearby dates
-      const allDates = new Set();
-      const today = getToday();
-      allDates.add(today);
-      log.forEach(e => allDates.add(e.dateCooked.split('T')[0]));
-      const sortedDates = [...allDates].sort((a, b) => b.localeCompare(a));
+      // Initialize myMealsDate if not set
+      if (!state.myMealsDate) state.myMealsDate = getToday();
+      const dateStr = state.myMealsDate;
+      const dateLabel = getFoodLogDateLabel(dateStr);
+      const todayStr = getToday();
+      const showTodayBtn = dateStr !== todayStr;
 
-      // Favorites section
-      let favSection = '';
-      if (favorites.length > 0) {
-        favSection = `
-          <div style="margin-bottom: ${CONFIG.space_lg};">
-            <div style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Make Again</div>
-            <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
-              ${favorites.map(entry => `
-                <div onclick="openFoodLogDetail('${entry.id}')" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 80px;">
-                  <div style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden; margin: 0 auto 6px; border: 2px solid ${CONFIG.primary_action_color}; background: ${CONFIG.surface_elevated};">
-                    ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">🍽</div>`}
-                  </div>
-                  <div style="font-size: 11px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}</div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        `;
-      }
+      // Get entries for the current date
+      const dayEntries = log.filter(e => e.dateCooked.split('T')[0] === dateStr);
 
-      let logContent = '';
-      if (log.length === 0) {
-        logContent = `
-          <div style="text-align: center; padding: ${CONFIG.space_2xl} ${CONFIG.space_md};">
-            <div style="font-size: 48px; opacity: 0.3; margin-bottom: ${CONFIG.space_md};">🍽</div>
-            <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">No meals logged yet</div>
-            <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: ${CONFIG.space_lg};">Swipe right on recipes or tap + to log what you eat</div>
-          </div>
-        `;
-      } else {
-        logContent = sortedDates.map(dateStr => {
-          const label = getFoodLogDateLabel(dateStr);
-          const dayEntries = log.filter(e => e.dateCooked.split('T')[0] === dateStr);
-
-          // Build slots
-          const slotHtml = mealSlots.map(slot => {
-            const slotEntries = dayEntries.filter(e => e.mealType === slot);
-            if (slot === 'snack') {
-              // Snacks: show all entries + add button
-              if (slotEntries.length === 0) {
-                return renderEmptyMealSlot(slot, dateStr);
-              }
-              return slotEntries.map(entry => renderFilledMealSlot(entry, dateStr)).join('') + renderEmptyMealSlot(slot, dateStr, true);
-            }
-            // Non-snack: show single entry or empty
-            const entry = slotEntries[0];
-            if (!entry) {
-              return renderEmptyMealSlot(slot, dateStr);
-            }
-            return renderFilledMealSlot(entry, dateStr);
-          }).join('');
-
-          return `
-            <div style="margin-bottom: ${CONFIG.space_lg};">
-              <div style="font-size: ${CONFIG.type_caption}; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: ${CONFIG.space_sm}; padding: 0 4px;">${esc(label)}</div>
-              <div style="display: flex; flex-direction: column; gap: 8px;">
-                ${slotHtml}
-              </div>
-            </div>
-          `;
-        }).join('');
-      }
+      // Build slots for this day
+      const slotHtml = mealSlots.map(slot => {
+        const slotEntries = dayEntries.filter(e => e.mealType === slot);
+        if (slot === 'snack') {
+          if (slotEntries.length === 0) {
+            return renderEmptyMealSlot(slot, dateStr);
+          }
+          return slotEntries.map(entry => renderFilledMealSlot(entry, dateStr)).join('') + renderEmptyMealSlot(slot, dateStr, true);
+        }
+        const entry = slotEntries[0];
+        if (!entry) {
+          return renderEmptyMealSlot(slot, dateStr);
+        }
+        return renderFilledMealSlot(entry, dateStr);
+      }).join('');
 
       return `
-        <div style="padding: ${CONFIG.space_md}; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
-          ${favSection}
-          <div style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Food Log</div>
-          ${logContent}
+        <div id="my-meals-swipe-zone" style="padding: ${CONFIG.space_md}; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
+          <!-- Date Navigation Header -->
+          <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: ${CONFIG.space_lg}; padding: 8px 0;">
+            <button onclick="navigateMyMealsDate(-1)" style="width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+            </button>
+            <div style="text-align: center; min-width: 180px;">
+              <div style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color};">${esc(dateLabel)}</div>
+              ${showTodayBtn ? `<button onclick="state.myMealsDate = getToday(); render();" style="font-size: 12px; color: ${CONFIG.primary_action_color}; background: none; border: none; cursor: pointer; margin-top: 2px; font-weight: 600;">Jump to Today</button>` : ''}
+            </div>
+            <button onclick="navigateMyMealsDate(1)" style="width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+            </button>
+          </div>
+
+          <!-- Meal Slots for this day -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${slotHtml}
+          </div>
+
+          ${dayEntries.length === 0 ? `
+            <div style="text-align: center; padding: ${CONFIG.space_xl} ${CONFIG.space_md}; margin-top: ${CONFIG.space_md};">
+              <div style="font-size: 40px; opacity: 0.3; margin-bottom: ${CONFIG.space_sm};">🍽</div>
+              <div style="color: ${CONFIG.text_muted}; font-size: 14px;">No meals logged for this day</div>
+              <div style="color: ${CONFIG.text_tertiary}; font-size: 12px; margin-top: 4px;">Tap + to log what you ate</div>
+            </div>
+          ` : ''}
         </div>
+        <!-- FAB -->
         <button onclick="showQuickLogModal()" style="position: fixed; bottom: 76px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 28px; cursor: pointer; z-index: 45; box-shadow: 0 4px 16px rgba(232,93,93,0.4); display: flex; align-items: center; justify-content: center;" title="Log a meal">
           <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
         </button>
       `;
+    }
+
+    function navigateMyMealsDate(direction) {
+      if (!state.myMealsDate) state.myMealsDate = getToday();
+      const d = new Date(state.myMealsDate + 'T12:00:00');
+      d.setDate(d.getDate() + direction);
+      state.myMealsDate = d.toISOString().split('T')[0];
+      render();
+    }
+
+    function initMyMealsSwipeGestures() {
+      const zone = document.getElementById('my-meals-swipe-zone');
+      if (!zone) return;
+      let startX = 0, startY = 0, swiping = false;
+      zone.addEventListener('touchstart', (e) => {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+        swiping = true;
+      }, { passive: true });
+      zone.addEventListener('touchend', (e) => {
+        if (!swiping) return;
+        swiping = false;
+        const endX = e.changedTouches[0].clientX;
+        const endY = e.changedTouches[0].clientY;
+        const dx = endX - startX;
+        const dy = endY - startY;
+        if (Math.abs(dx) > 100 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+          if (dx > 0) navigateMyMealsDate(-1); // swipe right = prev day
+          else navigateMyMealsDate(1); // swipe left = next day
+        }
+      }, { passive: true });
     }
 
     function renderEmptyMealSlot(mealType, dateStr, isAddMore) {
@@ -6641,7 +6676,8 @@ function renderReceiptModal() {
 
     function renderFilledMealSlot(entry, dateStr) {
       const isPlanned = entry.status === 'planned';
-      const thumb = entry.photo || entry.image;
+      const hasMyPhoto = !!(entry.myPhoto || (entry.photo && entry.photo.startsWith('data:')));
+      const thumb = hasMyPhoto ? (entry.myPhoto || entry.photo) : (entry.photo || entry.image);
       const ratingIcon = entry.wouldMakeAgain === true ? ' 👍' : entry.wouldMakeAgain === false ? ' 👎' : '';
       const statusLabel = isPlanned ? 'Planned' : 'Cooked';
       const statusColor = isPlanned ? CONFIG.text_muted : CONFIG.success_color;
@@ -6673,8 +6709,9 @@ function renderReceiptModal() {
           ` : ''}
           <!-- Main card content -->
           <div onclick="openFoodLogDetail('${entry.id}')" class="card-press" style="display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer; transition: background 0.15s;">
-            <div style="width: 56px; height: 56px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated}; ${isPlanned ? 'opacity: 0.7;' : ''}">
+            <div style="width: 56px; height: 56px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated}; ${isPlanned ? 'opacity: 0.7;' : ''} position: relative;">
               ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.4;">🍽</div>`}
+              ${hasMyPhoto ? `<div style="position: absolute; bottom: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: ${CONFIG.primary_action_color}; display: flex; align-items: center; justify-content: center;"><svg width="10" height="10" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/></svg></div>` : ''}
             </div>
             <div style="flex: 1; min-width: 0;">
               <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${isPlanned ? 'opacity: 0.8;' : ''}">${esc(entry.recipeName)}${ratingIcon}</div>
@@ -6690,16 +6727,16 @@ function renderReceiptModal() {
     }
 
     function openAddMealForSlot(mealType, dateStr) {
-      // Open a choice modal: swipe or quick log
+      // Open a choice modal: pick from recipes or log manually
       openModal(`
         <div style="color: ${CONFIG.text_color};">
           <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">Add ${capitalize(mealType)}</h3>
           <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${getFoodLogDateLabel(dateStr)}</div>
 
-          <button onclick="closeModal(); openSwipeForFoodLog('${mealType}', '${dateStr}')"
+          <button onclick="closeModal(); showRecipePickerForSlot('${mealType}', '${dateStr}')"
             style="width: 100%; padding: 14px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-            <svg width="20" height="20" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>
-            Swipe to choose a recipe
+            <svg width="20" height="20" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+            Pick from recipes
           </button>
           <button onclick="closeModal(); showQuickLogModalForSlot('${mealType}', '${dateStr}')"
             style="width: 100%; padding: 14px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
@@ -6709,6 +6746,116 @@ function renderReceiptModal() {
           <button onclick="closeModal()" style="width: 100%; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer; margin-top: 4px;">Cancel</button>
         </div>
       `);
+    }
+
+    function showRecipePickerForSlot(mealType, dateStr) {
+      const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+      state._pickerMealType = mealType;
+      state._pickerDateStr = dateStr;
+      state._pickerSearch = '';
+
+      const renderPickerGrid = (searchTerm) => {
+        let filtered = recipes;
+        if (searchTerm) {
+          const s = searchTerm.toLowerCase();
+          filtered = recipes.filter(r => (r.title || '').toLowerCase().includes(s));
+        }
+        return filtered.map(r => {
+          const id = r.__backendId || r.id;
+          const img = recipeThumb(r);
+          return `
+            <div onclick="selectRecipeForSlot('${id}', '${esc(mealType)}', '${esc(dateStr)}')" class="card-press"
+              style="cursor: pointer; border-radius: 8px; overflow: hidden; background: ${CONFIG.surface_color};">
+              <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
+                ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.4;">🍽️</div>`}
+              </div>
+              <div style="padding: 6px; font-size: 11px; font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+            </div>`;
+        }).join('');
+      };
+
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; max-height: 80vh; display: flex; flex-direction: column;">
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_sm};">Pick from Recipes</h3>
+          <input type="text" id="recipePickerSearch" placeholder="Search recipes..."
+            oninput="document.getElementById('recipePickerGrid').innerHTML = window._renderPickerGrid(this.value);"
+            style="width: 100%; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; margin-bottom: ${CONFIG.space_sm};" />
+          <div id="recipePickerGrid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; overflow-y: auto; max-height: 55vh; padding-bottom: 8px;">
+            ${renderPickerGrid('')}
+          </div>
+          <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+        </div>
+      `);
+      // Expose render function for search filtering
+      window._renderPickerGrid = renderPickerGrid;
+    }
+
+    function selectRecipeForSlot(recipeId, mealType, dateStr) {
+      const recipe = state.recipes.find(r => (r.__backendId || r.id) === recipeId);
+      if (!recipe) { closeModal(); return; }
+      closeModal();
+      const isFuture = isFutureDate(dateStr);
+      // Pre-fill with recipe data, then let user add their photo
+      state._quickLogPhoto = null;
+      state._quickLogMealType = mealType;
+      state._quickLogDateStr = dateStr;
+      state._selectedRecipeForLog = recipe;
+      const ingredients = recipeIngList(recipe).map(i => i.name).filter(Boolean);
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">Log ${esc(recipe.title)}</h3>
+          <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_md};">${capitalize(mealType)} — ${getFoodLogDateLabel(dateStr)}</div>
+
+          ${recipeThumb(recipe) ? `<div style="width: 100%; height: 120px; border-radius: 12px; overflow: hidden; margin-bottom: ${CONFIG.space_md}; background: ${CONFIG.surface_elevated};"><img src="${esc(recipeThumb(recipe))}" style="width:100%;height:100%;object-fit:cover;" /></div>` : ''}
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <button onclick="document.getElementById('quickLogPhotoInput').click()" id="quickLogPhotoBtn"
+              style="width: 100%; padding: 14px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; background: transparent; color: ${CONFIG.text_muted}; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+              Add my photo
+            </button>
+            <input type="file" id="quickLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQuickLogPhoto(this)" />
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Notes <span style="opacity: 0.5;">(optional)</span></label>
+            <textarea id="quickLogNotes" rows="2" placeholder="How was it?"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};"></textarea>
+          </div>
+
+          <button onclick="submitRecipeSlotLog()"
+            style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            ${isFuture ? 'Plan it' : 'Log it'}
+          </button>
+          <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+        </div>
+      `);
+    }
+
+    function submitRecipeSlotLog() {
+      const recipe = state._selectedRecipeForLog;
+      if (!recipe) return;
+      const notes = document.getElementById('quickLogNotes')?.value.trim() || null;
+      const dateStr = state._quickLogDateStr || getToday();
+      const isFuture = isFutureDate(dateStr);
+      const ingredients = recipeIngList(recipe).map(i => i.name).filter(Boolean);
+      addFoodLogEntry({
+        recipeId: recipe.__backendId || recipe.id,
+        recipeName: recipe.title,
+        image: recipeThumb(recipe) || null,
+        ingredients,
+        category: recipe.category,
+        mealType: state._quickLogMealType || 'dinner',
+        myPhoto: state._quickLogPhoto || null,
+        photo: state._quickLogPhoto || null,
+        notes,
+        dateStr: dateStr,
+        status: isFuture ? 'planned' : 'eaten'
+      });
+      closeModal();
+      showToast(isFuture ? 'Meal planned!' : 'Meal logged!', 'success');
+      state._selectedRecipeForLog = null;
+      render();
     }
 
     function openSwipeForFoodLog(mealType, dateStr) {
@@ -6799,19 +6946,39 @@ function renderReceiptModal() {
       const entry = log.find(e => e.id === logId);
       if (!entry) return '<div style="padding: 24px; color: #8e8e93;">Entry not found.</div>';
 
-      const thumb = entry.photo || entry.image;
+      const recipeImage = entry.image; // Stock/recipe photo (auto-populated, not editable)
+      const myPhoto = entry.myPhoto || (entry.photo && entry.photo.startsWith('data:') ? entry.photo : null); // User's personal photo
+      const displayPhoto = myPhoto || recipeImage; // Show user photo first, fall back to recipe photo
       const timeStr = formatLogTime(entry.dateCooked);
       const dateLabel = getFoodLogDateLabel(entry.dateCooked.split('T')[0]);
 
       return `
         <div style="padding: ${CONFIG.space_md}; padding-bottom: 100px; max-width: 600px; margin: 0 auto;">
-          <!-- Photo -->
-          <div style="width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: ${CONFIG.surface_elevated}; margin-bottom: ${CONFIG.space_md}; position: relative;">
-            ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:64px;opacity:0.3;">🍽️</div>`}
-            <button onclick="triggerFoodLogPhoto('${logId}')" style="position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border: none; color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
-              ${thumb ? 'Change photo' : 'Add photo'}
-            </button>
+          <!-- Recipe Photo (stock/default - not editable) -->
+          ${recipeImage ? `
+          <div style="margin-bottom: ${CONFIG.space_sm};">
+            <div style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_tertiary}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Recipe Photo</div>
+            <div style="width: 100%; height: 120px; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_elevated};">
+              <img src="${esc(recipeImage)}" style="width:100%;height:100%;object-fit:cover; opacity: 0.8;" />
+            </div>
+          </div>
+          ` : ''}
+
+          <!-- My Photo (user's personal cooking photo) -->
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <div style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_tertiary}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">My Photo</div>
+            <div style="width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: ${CONFIG.surface_elevated}; position: relative;">
+              ${myPhoto ? `<img src="${esc(myPhoto)}" style="width:100%;height:100%;object-fit:cover;" />` : `
+                <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+                  <svg width="40" height="40" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                  <span style="font-size: 13px; color: ${CONFIG.text_tertiary};">Add my photo</span>
+                </div>
+              `}
+              <button onclick="triggerFoodLogPhoto('${logId}')" style="position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border: none; color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                ${myPhoto ? 'Change my photo' : 'Add my photo'}
+              </button>
+            </div>
           </div>
           <input type="file" id="foodLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleFoodLogPhoto('${logId}', this)" />
 
@@ -6906,7 +7073,7 @@ function renderReceiptModal() {
           canvas.width = w; canvas.height = h;
           canvas.getContext('2d').drawImage(img, 0, 0, w, h);
           const base64 = canvas.toDataURL('image/jpeg', 0.7);
-          updateFoodLogEntry(logId, { photo: base64, status: 'eaten' });
+          updateFoodLogEntry(logId, { myPhoto: base64, photo: base64, status: 'eaten' });
           showToast('Photo saved!', 'success');
           render();
         };
@@ -6930,11 +7097,120 @@ function renderReceiptModal() {
     }
 
     // ============================================================
+    // MY PLATES - Photo Gallery
+    // ============================================================
+
+    function renderMyPlates() {
+      const log = getFoodLog();
+      // Only entries with a personal photo (myPhoto field, or photo that's a base64 data URL — not a recipe stock URL)
+      const photosEntries = log.filter(e => {
+        if (e.myPhoto) return true;
+        if (e.photo && e.photo.startsWith('data:')) return true;
+        return false;
+      });
+
+      // Group by recipe name
+      const groups = {};
+      photosEntries.forEach(e => {
+        const key = (e.recipeName || 'Unknown').toLowerCase().trim();
+        if (!groups[key]) groups[key] = { name: e.recipeName, entries: [] };
+        groups[key].entries.push(e);
+      });
+
+      // Get cover photo preferences from localStorage
+      const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
+
+      // Flatten for grid display
+      const allPhotos = photosEntries.map(e => ({
+        id: e.id,
+        photo: e.myPhoto || e.photo,
+        recipeName: e.recipeName,
+        mealType: e.mealType,
+        date: e.dateCooked?.split('T')[0] || '',
+        dateLabel: getFoodLogDateLabel(e.dateCooked?.split('T')[0] || getToday())
+      }));
+
+      if (allPhotos.length === 0) {
+        return `
+          <div style="padding: ${CONFIG.space_md}; padding-bottom: 80px; max-width: 600px; margin: 0 auto; text-align: center;">
+            <div style="padding: ${CONFIG.space_2xl} ${CONFIG.space_md};">
+              <div style="font-size: 48px; opacity: 0.3; margin-bottom: ${CONFIG.space_md};">
+                <svg width="48" height="48" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto;"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+              </div>
+              <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">No photos yet</div>
+              <div style="color: ${CONFIG.text_muted}; font-size: 14px;">Your cooking photos will appear here.<br>Add photos when logging meals!</div>
+            </div>
+          </div>
+        `;
+      }
+
+      return `
+        <div style="padding: 0; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: ${CONFIG.background_color};">
+            ${allPhotos.map(p => `
+              <div onclick="showPlateFullscreen('${p.id}')" style="aspect-ratio: 1; overflow: hidden; cursor: pointer; position: relative;">
+                <img src="${esc(p.photo)}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" />
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function showPlateFullscreen(logId) {
+      const log = getFoodLog();
+      const entry = log.find(e => e.id === logId);
+      if (!entry) return;
+      const photo = entry.myPhoto || entry.photo;
+      const dateLabel = getFoodLogDateLabel(entry.dateCooked?.split('T')[0] || getToday());
+
+      // Find all photos for same recipe
+      const sameName = log.filter(e =>
+        (e.recipeName || '').toLowerCase().trim() === (entry.recipeName || '').toLowerCase().trim() &&
+        (e.myPhoto || (e.photo && e.photo.startsWith('data:')))
+      );
+      const hasMultiple = sameName.length > 1;
+      const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
+      const coverKey = (entry.recipeName || '').toLowerCase().trim();
+      const isCover = coverPrefs[coverKey] === logId;
+
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; text-align: center;">
+          <div style="width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden; margin-bottom: ${CONFIG.space_md}; background: ${CONFIG.surface_elevated};">
+            <img src="${esc(photo)}" style="width: 100%; height: 100%; object-fit: cover;" />
+          </div>
+          <div style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${esc(entry.recipeName)}</div>
+          <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: 4px;">${dateLabel}</div>
+          <div style="font-size: 12px; color: ${CONFIG.text_tertiary}; margin-bottom: ${CONFIG.space_md};">${capitalize(entry.mealType || 'meal')}</div>
+          ${hasMultiple ? `
+            <button onclick="setAsCoverPhoto('${logId}', '${esc(coverKey)}')"
+              style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid ${isCover ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; background: ${isCover ? 'rgba(232,93,93,0.15)' : CONFIG.surface_elevated}; color: ${isCover ? CONFIG.primary_action_color : CONFIG.text_color}; font-size: 14px; cursor: pointer; margin-bottom: 8px;">
+              ${isCover ? 'Cover photo' : 'Set as cover'}
+            </button>
+          ` : ''}
+          <button onclick="closeModal()" style="width: 100%; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+        </div>
+      `);
+    }
+
+    function setAsCoverPhoto(logId, coverKey) {
+      const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
+      coverPrefs[coverKey] = logId;
+      localStorage.setItem('myPlatesCovers', JSON.stringify(coverPrefs));
+      showToast('Set as cover photo!', 'success');
+      closeModal();
+    }
+
+    // ============================================================
     // QUICK LOG MODAL (floating + button)
     // ============================================================
     function showQuickLogModal() {
       state._quickLogPhoto = null;
       state._quickLogMealType = 'dinner';
+      // Use the current My Meals date if on that view
+      if (state.currentView === 'my-meals' && state.myMealsDate) {
+        state._quickLogDateStr = state.myMealsDate;
+      }
       openModal(`
         <div style="color: ${CONFIG.text_color};">
           <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_lg};">Log a Meal</h3>
@@ -9002,6 +9278,7 @@ function navigateTo(view) {
   if (view === 'grocery') view = 'grocery-list';
   if (view === 'pantry') view = 'inventory';
   if (view === 'budget') view = 'budget-dashboard';
+  // recipes nav id maps directly to 'recipes' view (already exists)
 
   // Save current scroll position before navigating away
   const app = document.getElementById('app');
@@ -9043,6 +9320,7 @@ function navigateTo(view) {
       const pageTitles = {
         'recipes': 'Recipes',
         'my-meals': 'My Meals',
+        'my-plates': 'My Plates',
         'food-log-detail': 'Meal Detail',
         'recipe-edit': 'Edit Recipe',
         'recipe-view': 'Recipe',
@@ -9069,13 +9347,19 @@ function navigateTo(view) {
         <nav style="background: ${CONFIG.surface_color}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);" class="p-3 sticky top-0 z-50">
           <div class="max-w-4xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <button onclick="navigateTo('${state.currentView === 'food-log-detail' ? 'my-meals' : 'home'}')" style="color: ${CONFIG.text_muted}; font-size: 20px;" title="Back">
+              <button onclick="navigateTo('${state.currentView === 'food-log-detail' || state.currentView === 'my-plates' ? 'my-meals' : 'home'}')" style="color: ${CONFIG.text_muted}; font-size: 20px;" title="Back">
                 ←
               </button>
               <span style="color: ${CONFIG.text_color}; font-weight: ${CONFIG.type_header_weight}; font-size: ${CONFIG.type_header}; letter-spacing: ${CONFIG.type_header_tracking};">${pageTitle}</span>
             </div>
             
             <div class="flex items-center gap-1">
+              ${state.currentView === 'my-meals' ? `
+              <!-- My Plates camera icon -->
+              <button onclick="navigateTo('my-plates')" class="p-2 rounded-lg" style="color: ${CONFIG.text_color}; background: transparent;" title="My Plates">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+              </button>
+              ` : ''}
               <!-- Timer -->
               <button onclick="showTimerModal()" class="relative p-2 rounded-lg" style="color: ${CONFIG.text_color}; background: ${state.activeTimers.length > 0 ? 'rgba(232,93,93,0.15)' : 'transparent'};">
                 <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
@@ -9101,31 +9385,28 @@ function navigateTo(view) {
           inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>',
           active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>'
         },
-        'my-meals': {
+        recipes: {
           inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>',
           active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>'
+        },
+        'my-meals': {
+          inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>',
+          active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>'
         },
         grocery: {
           inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>',
           active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>'
-        },
-        pantry: {
-          inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H2.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>',
-          active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H2.25c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z"/></svg>'
-        },
-        budget: {
-          inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
-          active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
         }
       };
 
       const navItems = [
         { id: 'home', label: 'Home' },
+        { id: 'recipes', label: 'Recipes' },
         { id: 'my-meals', label: 'My Meals' },
-        { id: 'grocery', label: 'Grocery' },
-        { id: 'pantry', label: 'Pantry' },
-        { id: 'budget', label: 'Budget' }
+        { id: 'grocery', label: 'Grocery' }
       ];
+
+      const isMoreActive = ['inventory', 'pantry', 'ingredients', 'ingredient-detail', 'budget', 'budget-dashboard'].includes(state.currentView);
 
       return `
         <nav style="position: fixed; bottom: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; box-shadow: 0 -2px 16px rgba(0,0,0,0.3); z-index: 40; padding-bottom: env(safe-area-inset-bottom);">
@@ -9133,10 +9414,9 @@ function navigateTo(view) {
             ${navItems.map(item => {
               const isActive = item.id === state.currentView ||
                 (item.id === 'home' && ['swipe', 'swipe-confirm'].includes(state.currentView)) ||
-                (item.id === 'my-meals' && ['my-meals', 'food-log-detail', 'recipes', 'recipe-view', 'recipe-edit', 'freestyle-edit'].includes(state.currentView)) ||
-                (item.id === 'grocery' && ['grocery', 'grocery-list', 'grocery-select-meals', 'grocery-ingredients'].includes(state.currentView)) ||
-                (item.id === 'pantry' && ['pantry', 'inventory', 'ingredients', 'ingredient-detail'].includes(state.currentView)) ||
-                (item.id === 'budget' && ['budget', 'budget-dashboard'].includes(state.currentView));
+                (item.id === 'recipes' && ['recipes', 'recipe-view', 'recipe-edit', 'freestyle-edit'].includes(state.currentView)) ||
+                (item.id === 'my-meals' && ['my-meals', 'food-log-detail', 'my-plates'].includes(state.currentView)) ||
+                (item.id === 'grocery' && ['grocery', 'grocery-list', 'grocery-select-meals', 'grocery-ingredients'].includes(state.currentView));
 
               const onClick = `navigateTo('${item.id}')`;
               const iconSvg = isActive ? navIcons[item.id].active : navIcons[item.id].inactive;
@@ -9157,10 +9437,18 @@ function navigateTo(view) {
                 </button>
               `;
             }).join('')}
+            <!-- More menu -->
+            <button onclick="showMoreMenu()" style="display: flex; flex-direction: column; align-items: center; padding: 4px 8px; border: none; background: transparent; cursor: pointer;">
+              <span style="color: ${isMoreActive ? CONFIG.primary_action_color : CONFIG.text_muted}; ${isMoreActive ? 'filter: drop-shadow(0 0 6px rgba(232,93,93,0.3));' : ''}">
+                <svg width="24" height="24" fill="${isMoreActive ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+              </span>
+              <span style="font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; color: ${isMoreActive ? CONFIG.primary_action_color : CONFIG.text_muted};">More</span>
+            </button>
           </div>
         </nav>
       `;
     }
+
    function showWhatCanICook() {
       // Find recipes that match inventory items
       const inventoryNames = state.inventory.map(i => i.name.toLowerCase());
@@ -9635,6 +9923,8 @@ function navigateTo(view) {
     
     function showMoreMenu() {
      const menuItems = [
+        { id: 'inventory', icon: '📦', label: 'Pantry' },
+        { id: 'budget-dashboard', icon: '💰', label: 'Budget' },
         { id: 'swipe-setup', icon: '🃏', label: 'Swipe Options' },
         { id: 'settings', icon: '⚙️', label: 'Settings', action: 'showSettingsMenu()' }
       ];
@@ -12848,6 +13138,23 @@ function renderFreestyleEditHeader(form) {
         </div>`;
     }
 
+   function renderRecipeFilterPills() {
+      const pills = [
+        { id: 'all', label: 'All' },
+        { id: 'saved', label: 'Saved' },
+        { id: 'quick', label: 'Quick &lt;30min' },
+        { id: 'have-ingredients', label: 'Have Ingredients' }
+      ];
+      return pills.map(pill => {
+        const active = (state.recipeFilterPill || 'all') === pill.id;
+        const borderColor = active ? 'rgba(232,93,93,0.4)' : 'rgba(255,255,255,0.12)';
+        const bgColor = active ? 'rgba(232,93,93,0.15)' : 'transparent';
+        const txtColor = active ? CONFIG.primary_action_color : CONFIG.text_muted;
+        const fw = active ? '600' : '400';
+        return '<button onclick="state.recipeFilterPill = \'' + pill.id + '\'; render();" style="flex-shrink: 0; padding: 6px 14px; border-radius: 20px; border: 1px solid ' + borderColor + '; background: ' + bgColor + '; color: ' + txtColor + '; font-size: 13px; font-weight: ' + fw + '; cursor: pointer; white-space: nowrap;">' + pill.label + '</button>';
+      }).join('');
+    }
+
    function renderRecipes() {
       if (!state.recipes || !Array.isArray(state.recipes)) return '<div class="p-3">Loading...</div>';
       
@@ -12877,7 +13184,23 @@ function renderFreestyleEditHeader(form) {
       }
 
       list = list.filter(r => {
-        if (state.filterFavorites && !r.favorite) return false;
+        // Filter pill logic
+        const pill = state.recipeFilterPill || 'all';
+        if (pill === 'saved') {
+          if (!isRecipeSaved(r.__backendId || r.id)) return false;
+        } else if (pill === 'quick') {
+          // Estimate: recipes with <=6 ingredients are "quick"
+          const ingCount = recipeIngList(r).length;
+          if (ingCount > 6) return false;
+        } else if (pill === 'have-ingredients') {
+          const ingredients = recipeIngList(r);
+          if (ingredients.length === 0) return false;
+          const inventoryNames = (state.inventory || []).map(i => i.name.toLowerCase());
+          const matchCount = ingredients.filter(ing =>
+            inventoryNames.some(inv => inv.includes((ing.name || '').toLowerCase()) || (ing.name || '').toLowerCase().includes(inv))
+          ).length;
+          if (matchCount / ingredients.length < 0.5) return false;
+        }
         if (state.recipeTab !== 'tips' && state.selectedCategory !== 'All' && r.category !== state.selectedCategory) return false;
         if (state.searchTerm) {
           const searchLower = state.searchTerm.toLowerCase();
@@ -12942,10 +13265,15 @@ function renderFreestyleEditHeader(form) {
             </div>
           </div>
 
-          <!-- Filters -->
+          <!-- Filter Pills -->
+          <div style="display: flex; gap: 8px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
+            ${renderRecipeFilterPills()}
+          </div>
+
+          <!-- Search & Filters -->
           <details class="mb-3">
             <summary class="cursor-pointer px-3 py-2 rounded-lg" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:12px; list-style:none;">
-              Filters ${state.selectedCategory !== 'All' || state.filterFavorites || state.filterIngredientGroup !== 'all' ? '•' : ''}
+              More Filters ${state.selectedCategory !== 'All' || state.filterIngredientGroup !== 'all' ? '•' : ''}
             </summary>
             <div class="mt-2 p-3 rounded-lg" style="background:${CONFIG.surface_color};">
               <div style="display: flex; gap: 8px; margin-bottom: 12px;">
@@ -12966,10 +13294,6 @@ function renderFreestyleEditHeader(form) {
                   ${MEAL_CATEGORIES.map(c => `<option value="${c}" ${state.selectedCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
                 </select>
               </div>
-              <label class="flex items-center gap-2 cursor-pointer" style="color:${CONFIG.text_color}; font-size:13px;">
-                <input type="checkbox" ${state.filterFavorites ? 'checked' : ''} onchange="state.filterFavorites=this.checked; render();" style="width: 16px; height: 16px;">
-                Favorites Only
-              </label>
             </div>
           </details>
 
@@ -12994,22 +13318,29 @@ function renderFreestyleEditHeader(form) {
               ${list.map(r => {
                 const id = r.__backendId || r.id;
                 const img = recipeThumb(r);
+                const saved = isRecipeSaved(id);
                 return `
                 <div class="rounded-lg overflow-hidden cursor-pointer"
-                  onclick="openRecipeView('${id}')"
-                  style="background:${CONFIG.surface_color};">
-                  ${img ? `
-                    <div style="height:70px; overflow:hidden;">
-                      <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
-                    </div>
-                  ` : `
-                    <div style="height:70px; background:${CONFIG.background_color}; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
-                      🍽️
-                    </div>
-                  `}
-                  <div class="p-2">
+                  style="background:${CONFIG.surface_color}; position: relative;">
+                  <div onclick="openRecipeView('${id}')">
+                    ${img ? `
+                      <div style="height:70px; overflow:hidden;">
+                        <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
+                      </div>
+                    ` : `
+                      <div style="height:70px; background:${CONFIG.background_color}; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                        🍽️
+                      </div>
+                    `}
+                  </div>
+                  <!-- Bookmark icon -->
+                  <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}')"
+                    style="position: absolute; top: 4px; right: 4px; z-index: 2; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                    <svg width="14" height="14" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+                  </button>
+                  <div class="p-2" onclick="openRecipeView('${id}')">
                     <div class="truncate" style="color:${CONFIG.text_color}; font-size:11px; font-weight:500;">
-                      ${esc(r.title)} ${r.favorite ? '⭐' : ''}
+                      ${esc(r.title)}
                     </div>
                     <div style="color:${CONFIG.text_muted}; font-size:9px;">
                       ${r.category || 'Recipe'}
@@ -16410,6 +16741,7 @@ function renderGroceryList() {
       'swipe-setup': renderSwipeSetup,
       'swipe-confirm': renderSwipeConfirm,
       'my-meals': renderMyMeals,
+      'my-plates': renderMyPlates,
       'food-log-detail': renderFoodLogDetail
     };
 
@@ -16455,6 +16787,10 @@ ${renderChefChatButton()}
       // Initialize date swipe gestures for home view (both tabs)
       if (state.currentView === 'home' || state.currentView === 'swipe') {
         initDateSwipeGestures();
+      }
+      // Initialize swipe gestures for My Meals date navigation
+      if (state.currentView === 'my-meals') {
+        initMyMealsSwipeGestures();
       }
 
       // Populate swipe setup expanded section after render
