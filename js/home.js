@@ -317,13 +317,14 @@ function renderSwipeTab() {
   const idx = state.swipeIndex;
 
   if (!deck || deck.length === 0) {
+    const hasRecipes = state.recipes.filter(r => !r.isDraft && !r.isTip).length > 0;
     return `
       <div class="max-w-4xl mx-auto" style="padding: ${CONFIG.space_2xl} ${CONFIG.space_md}; text-align: center;">
         <div style="font-size: 36px; margin-bottom: ${CONFIG.space_md};">🍽️</div>
-        <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">No Recipes Available</div>
-        <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: ${CONFIG.space_lg};">Add recipes or update swipe settings</div>
-        <button onclick="navigateTo('recipes')" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
-          Go to Recipes
+        <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">${hasRecipes ? 'No recipes selected' : 'No Recipes Available'}</div>
+        <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: ${CONFIG.space_lg};">${hasRecipes ? 'Tap below to choose which recipes appear in your swipe deck.' : 'Add some recipes first, then set up your meals.'}</div>
+        <button onclick="navigateTo('${hasRecipes ? 'swipe-setup' : 'recipes'}')" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+          ${hasRecipes ? 'Set Up Your Meals' : 'Go to Recipes'}
         </button>
       </div>
     `;
@@ -2312,10 +2313,21 @@ function renderSwipeSetup() {
 }
 
 async function completeSwipeSetup() {
-  state.swipeSettings.setupCompleted = true;
-  await saveSwipeSettings();
-  showToast('Swipe settings saved!', 'success');
-  startSwipe();
+  try {
+    state.swipeSettings.setupCompleted = true;
+    // Save to localStorage immediately as primary persistence
+    saveToLS('swipeSettings', state.swipeSettings);
+    // Also try Supabase sync (non-blocking)
+    saveSwipeSettings().catch(e => console.warn('Supabase swipe settings sync failed:', e));
+    showToast('Swipe settings saved!', 'success');
+    startSwipe();
+  } catch (e) {
+    console.error('completeSwipeSetup error:', e);
+    // Even if something fails, ensure settings are saved and we navigate
+    saveToLS('swipeSettings', state.swipeSettings);
+    showToast('Settings saved!', 'success');
+    startSwipe();
+  }
 }
 
 function buildSwipeDeckFiltered(mealType) {

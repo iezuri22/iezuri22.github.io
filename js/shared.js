@@ -1545,8 +1545,10 @@ function getExpiringItems() { return getInventoryItems().filter(item => { const 
 function checkExpirationNotifications() {
   const expiringItems = getExpiringItems(); if (expiringItems.length === 0) return;
   const today = new Date().toISOString().split('T')[0];
-  if (state.lastNotificationCheck === today) return;
+  const dismissKey = 'yummy_expiration_dismissed_' + today;
+  if (sessionStorage.getItem(dismissKey) || state.lastNotificationCheck === today) return;
   state.lastNotificationCheck = today;
+  sessionStorage.setItem(dismissKey, '1');
   const expired = expiringItems.filter(i => getExpirationStatus(i) === 'expired');
   const expiringSoon = expiringItems.filter(i => getExpirationStatus(i) === 'expiring-soon');
   let message = '';
@@ -1556,9 +1558,15 @@ function checkExpirationNotifications() {
   if (state.notificationsEnabled && Notification.permission === 'granted') { new Notification('Meal Planner', { body: message }); }
 }
 
+function dismissExpirationAlert() {
+  document.getElementById('expirationAlert')?.remove();
+  const today = new Date().toISOString().split('T')[0];
+  sessionStorage.setItem('yummy_expiration_dismissed_' + today, '1');
+}
+
 function showExpirationAlert(message, items) {
   document.getElementById('expirationAlert')?.remove();
-  const alertHtml = `<div id="expirationAlert" class="fixed top-16 left-4 right-4 z-50 p-4 rounded-lg shadow-lg" style="background:${CONFIG.danger_color}; max-width:400px; margin:0 auto;"><div class="flex items-start gap-3"><div style="font-size:1.5rem;">&#9888;&#65039;</div><div class="flex-1"><div style="color:white; font-weight:600; margin-bottom:4px;">Items Need Attention</div><div style="color:rgba(255,255,255,0.9); font-size:14px; margin-bottom:8px;">${message}</div><div class="flex gap-2"><button onclick="navigateTo('inventory'); document.getElementById('expirationAlert')?.remove();" class="px-3 py-1 rounded text-sm" style="background:white; color:${CONFIG.danger_color}; font-weight:500;">View Inventory</button><button onclick="document.getElementById('expirationAlert')?.remove();" class="px-3 py-1 rounded text-sm" style="background:rgba(255,255,255,0.2); color:white;">Dismiss</button></div></div></div></div>`;
+  const alertHtml = `<div id="expirationAlert" class="fixed top-16 left-4 right-4 z-50 p-4 rounded-lg shadow-lg" style="background:${CONFIG.danger_color}; max-width:400px; margin:0 auto;"><div class="flex items-start gap-3"><div style="font-size:1.5rem;">&#9888;&#65039;</div><div class="flex-1"><div style="color:white; font-weight:600; margin-bottom:4px;">Items Need Attention</div><div style="color:rgba(255,255,255,0.9); font-size:14px; margin-bottom:8px;">${message}</div><div class="flex gap-2"><button onclick="navigateTo('inventory'); dismissExpirationAlert();" class="px-3 py-1 rounded text-sm" style="background:white; color:${CONFIG.danger_color}; font-weight:500;">View Inventory</button><button onclick="dismissExpirationAlert();" class="px-3 py-1 rounded text-sm" style="background:rgba(255,255,255,0.2); color:white;">Dismiss</button></div></div></div></div>`;
   document.body.insertAdjacentHTML('beforeend', alertHtml);
   setTimeout(() => { document.getElementById('expirationAlert')?.remove(); }, 10000);
 }
@@ -3326,6 +3334,10 @@ document.addEventListener('click', function initAudio() {
 
 // --- Save swipe settings ---
 async function saveSwipeSettings() {
+  // Always save to localStorage first (reliable)
+  saveToLS('swipeSettings', state.swipeSettings);
+
+  // Then sync to Supabase
   const config = {
     id: 'config_swipeSettings',
     type: 'config',
@@ -3338,10 +3350,14 @@ async function saveSwipeSettings() {
   };
   state.swipeSettings.lastUpdated = config.lastUpdated;
 
-  // Try create first (for first-time save), then update if already exists
-  const result = await storage.create(config);
-  if (!result?.isOk) {
-    await storage.update(config);
+  try {
+    // Try update first (most common case), then create if it doesn't exist
+    const result = await storage.update(config);
+    if (!result?.isOk) {
+      await storage.create(config);
+    }
+  } catch (e) {
+    console.warn('Supabase swipe settings save failed (localStorage save succeeded):', e);
   }
 }
 
