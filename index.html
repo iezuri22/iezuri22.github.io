@@ -5963,6 +5963,945 @@ function renderReceiptModal() {
     }
 
     // ============================================================
+    // SECTION 10B: FOOD LOG SYSTEM
+    // localStorage-based food log for tracking what the user actually eats.
+    // ============================================================
+
+    const FOOD_LOG_KEY = 'foodLog';
+
+    function getFoodLog() {
+      try {
+        return JSON.parse(localStorage.getItem(FOOD_LOG_KEY) || '[]');
+      } catch { return []; }
+    }
+
+    function saveFoodLog(log) {
+      localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(log));
+    }
+
+    function addFoodLogEntry(entry) {
+      const log = getFoodLog();
+      const logEntry = {
+        id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+        recipeId: entry.recipeId || null,
+        recipeName: entry.recipeName || 'Unknown',
+        image: entry.image || null,
+        ingredients: entry.ingredients || [],
+        category: entry.category || 'Other',
+        mealType: entry.mealType || detectMealType(),
+        dateCooked: entry.dateCooked || new Date().toISOString(),
+        photo: entry.photo || null,
+        notes: entry.notes || null,
+        wouldMakeAgain: null // null = unrated, true = thumbs up, false = meh
+      };
+      log.unshift(logEntry);
+      saveFoodLog(log);
+      return logEntry;
+    }
+
+    function updateFoodLogEntry(logId, updates) {
+      const log = getFoodLog();
+      const idx = log.findIndex(e => e.id === logId);
+      if (idx === -1) return null;
+      Object.assign(log[idx], updates);
+      saveFoodLog(log);
+      return log[idx];
+    }
+
+    function deleteFoodLogEntry(logId) {
+      const log = getFoodLog().filter(e => e.id !== logId);
+      saveFoodLog(log);
+    }
+
+    function getFoodLogGroupedByDate() {
+      const log = getFoodLog();
+      const groups = {};
+      log.forEach(entry => {
+        const date = entry.dateCooked.split('T')[0];
+        if (!groups[date]) groups[date] = [];
+        groups[date].push(entry);
+      });
+      // Sort each group by time (newest first)
+      Object.values(groups).forEach(g => g.sort((a, b) => new Date(b.dateCooked) - new Date(a.dateCooked)));
+      // Return sorted date keys
+      const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
+      return { groups, sortedDates };
+    }
+
+    function getFoodLogDateLabel(dateStr) {
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+      if (dateStr === today) return 'Today';
+      if (dateStr === yesterday) return 'Yesterday';
+      const d = new Date(dateStr + 'T12:00:00');
+      const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+      const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+      return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`;
+    }
+
+    function getTopFoodPatterns(days = 14) {
+      const log = getFoodLog();
+      const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+      const recent = log.filter(e => e.dateCooked >= cutoff);
+      const counts = {};
+      recent.forEach(e => {
+        // Count by recipe name (normalize)
+        const name = (e.recipeName || '').toLowerCase().trim();
+        if (!name) return;
+        // Use a simplified key for grouping
+        const key = name.split(/\s+/).slice(0, 2).join(' ');
+        if (!counts[key]) counts[key] = { name: e.recipeName, count: 0, category: e.category };
+        counts[key].count++;
+      });
+      return Object.values(counts)
+        .filter(c => c.count >= 2)
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 3);
+    }
+
+    function getCookAgainMeals() {
+      const log = getFoodLog();
+      const seen = new Set();
+      return log.filter(e => {
+        if (e.wouldMakeAgain !== true) return false;
+        const key = e.recipeId || e.recipeName;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function getUnexploredCategories() {
+      const log = getFoodLog();
+      const cutoff = new Date(Date.now() - 14 * 86400000).toISOString();
+      const recent = log.filter(e => e.dateCooked >= cutoff);
+      const eatenCats = new Set(recent.map(e => (e.category || '').toLowerCase()));
+      const allCats = [...new Set(state.recipes.map(r => r.category).filter(Boolean))];
+      return allCats.filter(c => !eatenCats.has(c.toLowerCase()));
+    }
+
+    function formatLogTime(isoStr) {
+      const d = new Date(isoStr);
+      let h = d.getHours(), m = d.getMinutes();
+      const ampm = h >= 12 ? 'PM' : 'AM';
+      h = h % 12 || 12;
+      return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+    }
+
+    // ============================================================
+    // SECTION 10C: SMART GROCERY LIST (localStorage only)
+    // Generates grocery suggestions from eating history.
+    // ============================================================
+
+    const GROCERY_KEY = 'smartGroceryList_v1';
+    const GROCERY_CATEGORIES = [
+      'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Pantry & Dry Goods',
+      'Spices & Seasonings', 'Frozen', 'Household', 'Other'
+    ];
+
+    // Map existing ING_GROUPS to the user-facing grocery categories
+    function mapToGroceryCategory(group) {
+      const map = {
+        'Produce': 'Produce',
+        'Beef': 'Meat & Seafood', 'Poultry': 'Meat & Seafood', 'Pork': 'Meat & Seafood',
+        'Lamb & Goat': 'Meat & Seafood', 'Seafood': 'Meat & Seafood',
+        'Dairy & Eggs': 'Dairy & Eggs',
+        'Grains & Pasta': 'Pantry & Dry Goods', 'Pantry': 'Pantry & Dry Goods',
+        'Spices & Seasonings': 'Spices & Seasonings',
+        'Prepared': 'Frozen', 'Other': 'Other'
+      };
+      return map[group] || 'Other';
+    }
+
+    function getSmartGroceryList() {
+      try { return JSON.parse(localStorage.getItem(GROCERY_KEY) || '[]'); }
+      catch { return []; }
+    }
+
+    function saveSmartGroceryList(list) {
+      localStorage.setItem(GROCERY_KEY, JSON.stringify(list));
+    }
+
+    function getGroceryBadgeCount() {
+      return getSmartGroceryList().filter(i => !i.checked).length;
+    }
+
+    // Analyze food log + mealDays for frequently eaten meals
+    function getFrequentMeals() {
+      const log = getFoodLog();
+      const recipeCount = {};
+
+      // Count from food log entries
+      log.forEach(entry => {
+        const key = entry.recipeId || entry.recipeName;
+        if (!key) return;
+        if (!recipeCount[key]) {
+          recipeCount[key] = {
+            recipeId: entry.recipeId,
+            name: entry.recipeName,
+            image: entry.image,
+            count: 0,
+            wouldMakeAgain: false,
+            ingredients: entry.ingredients || []
+          };
+        }
+        recipeCount[key].count++;
+        if (entry.wouldMakeAgain === true) recipeCount[key].wouldMakeAgain = true;
+      });
+
+      // Also count from mealDays (logged meals)
+      Object.values(state.mealDays).forEach(day => {
+        if (!day.meals) return;
+        ['breakfast', 'lunch', 'dinner'].forEach(mt => {
+          const meal = day.meals[mt];
+          if (!meal || meal.status !== 'logged') return;
+          const rid = meal.actualRecipeId || meal.plannedRecipeId;
+          if (!rid) return;
+          const recipe = getRecipeById(rid);
+          if (!recipe) return;
+          const key = rid;
+          if (!recipeCount[key]) {
+            recipeCount[key] = {
+              recipeId: rid,
+              name: recipe.title,
+              image: recipe.image_url,
+              count: 0,
+              wouldMakeAgain: false,
+              ingredients: recipeIngList(recipe).map(i => i.name)
+            };
+          }
+          recipeCount[key].count++;
+        });
+      });
+
+      // Filter: logged 2+ times OR marked "would make again"
+      return Object.values(recipeCount)
+        .filter(m => m.count >= 2 || m.wouldMakeAgain)
+        .sort((a, b) => b.count - a.count);
+    }
+
+    // Get ingredient suggestions with frequency data
+    function getSuggestedIngredients() {
+      const frequentMeals = getFrequentMeals();
+      const ingredientMap = {};
+
+      frequentMeals.forEach(meal => {
+        const recipe = meal.recipeId ? getRecipeById(meal.recipeId) : null;
+        const ingredients = recipe ? recipeIngList(recipe) : [];
+
+        if (ingredients.length > 0) {
+          ingredients.forEach(ing => {
+            const key = normalizeIngredient(ing.name);
+            if (!key) return;
+            if (!ingredientMap[key]) {
+              ingredientMap[key] = {
+                name: ing.name,
+                category: mapToGroceryCategory(ing.group || 'Other'),
+                qty: ing.qty || '',
+                unit: ing.unit || '',
+                mealCount: 0,
+                mealNames: []
+              };
+            }
+            ingredientMap[key].mealCount += meal.count;
+            if (!ingredientMap[key].mealNames.includes(meal.name)) {
+              ingredientMap[key].mealNames.push(meal.name);
+            }
+          });
+        } else if (meal.ingredients && meal.ingredients.length > 0) {
+          // Fallback to ingredient names from food log entry
+          meal.ingredients.forEach(ingName => {
+            const key = normalizeIngredient(ingName);
+            if (!key) return;
+            if (!ingredientMap[key]) {
+              ingredientMap[key] = {
+                name: ingName,
+                category: 'Other',
+                qty: '',
+                unit: '',
+                mealCount: 0,
+                mealNames: []
+              };
+            }
+            ingredientMap[key].mealCount += meal.count;
+            if (!ingredientMap[key].mealNames.includes(meal.name)) {
+              ingredientMap[key].mealNames.push(meal.name);
+            }
+          });
+        }
+      });
+
+      return Object.values(ingredientMap).sort((a, b) => b.mealCount - a.mealCount);
+    }
+
+    function addSuggestedToGrocery(name, category, qty, unit, mealNames) {
+      const list = getSmartGroceryList();
+      const key = normalizeIngredient(name);
+      const existing = list.find(i => normalizeIngredient(i.name) === key);
+      if (existing) {
+        // Already in list — remove it (toggle behavior)
+        const filtered = list.filter(i => normalizeIngredient(i.name) !== key);
+        saveSmartGroceryList(filtered);
+        return false;
+      }
+      list.push({
+        id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        name: name,
+        category: category || 'Other',
+        qty: qty || '',
+        unit: unit || '',
+        checked: false,
+        manual: false,
+        sourceMeals: mealNames || [],
+        addedAt: Date.now()
+      });
+      saveSmartGroceryList(list);
+      return true;
+    }
+
+    function addMealToGrocery(recipeId) {
+      const recipe = getRecipeById(recipeId);
+      if (!recipe) return;
+      const ingredients = recipeIngList(recipe);
+      if (ingredients.length === 0) return;
+      const list = getSmartGroceryList();
+      let added = 0;
+
+      ingredients.forEach(ing => {
+        const key = normalizeIngredient(ing.name);
+        if (!key) return;
+        const existing = list.find(i => normalizeIngredient(i.name) === key);
+        if (existing) {
+          // Combine: add source meal if not already there
+          if (!existing.sourceMeals.includes(recipe.title)) {
+            existing.sourceMeals.push(recipe.title);
+          }
+          // Combine quantity if both numeric
+          if (ing.qty && existing.qty) {
+            const existNum = parseFloat(existing.qty);
+            const newNum = parseFloat(ing.qty);
+            if (!isNaN(existNum) && !isNaN(newNum) && existing.unit === (ing.unit || '')) {
+              existing.qty = String(existNum + newNum);
+            }
+          }
+        } else {
+          list.push({
+            id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+            name: ing.name,
+            category: mapToGroceryCategory(ing.group || 'Other'),
+            qty: ing.qty || '',
+            unit: ing.unit || '',
+            checked: false,
+            manual: false,
+            sourceMeals: [recipe.title],
+            addedAt: Date.now()
+          });
+          added++;
+        }
+      });
+
+      saveSmartGroceryList(list);
+      showToast(`Added ingredients from ${recipe.title}`, 'success');
+      render();
+    }
+
+    function addManualGroceryItemSmart() {
+      const input = document.getElementById('groceryManualInput');
+      if (!input) return;
+      const name = input.value.trim();
+      if (!name) return;
+
+      const list = getSmartGroceryList();
+      const key = normalizeIngredient(name);
+      if (list.find(i => normalizeIngredient(i.name) === key)) {
+        showToast('Already on your list', 'info');
+        input.value = '';
+        return;
+      }
+
+      list.push({
+        id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+        name: name,
+        category: 'Other',
+        qty: '',
+        unit: '',
+        checked: false,
+        manual: true,
+        sourceMeals: [],
+        addedAt: Date.now()
+      });
+      saveSmartGroceryList(list);
+      input.value = '';
+      showToast(`${capitalize(name)} added`, 'success');
+      render();
+      // Refocus input after render
+      setTimeout(() => {
+        const newInput = document.getElementById('groceryManualInput');
+        if (newInput) newInput.focus();
+      }, 50);
+    }
+
+    function toggleSmartGroceryItem(itemId) {
+      const list = getSmartGroceryList();
+      const item = list.find(i => i.id === itemId);
+      if (!item) return;
+      item.checked = !item.checked;
+      saveSmartGroceryList(list);
+
+      // Optimistic UI toggle
+      const row = document.querySelector(`[data-gro-id="${itemId}"]`);
+      if (row) {
+        const cb = row.querySelector('.gro-checkbox');
+        const label = row.querySelector('.gro-label');
+        if (item.checked) {
+          if (cb) { cb.style.background = CONFIG.primary_action_color; cb.style.borderColor = CONFIG.primary_action_color; cb.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; }
+          if (label) { label.style.textDecoration = 'line-through'; label.style.opacity = '0.4'; }
+        } else {
+          if (cb) { cb.style.background = 'transparent'; cb.style.borderColor = CONFIG.text_muted; cb.innerHTML = ''; }
+          if (label) { label.style.textDecoration = 'none'; label.style.opacity = '1'; }
+        }
+      }
+
+      // Update badge
+      _updateGroceryBadge();
+
+      // Debounced re-render to reorder
+      clearTimeout(state._smartGroceryRenderTimeout);
+      state._smartGroceryRenderTimeout = setTimeout(() => {
+        if (['grocery-list'].includes(state.currentView)) render();
+      }, 1200);
+    }
+
+    function removeSmartGroceryItem(itemId) {
+      let list = getSmartGroceryList();
+      list = list.filter(i => i.id !== itemId);
+      saveSmartGroceryList(list);
+      const row = document.querySelector(`[data-gro-id="${itemId}"]`);
+      if (row) {
+        row.style.transition = 'opacity 150ms, transform 150ms';
+        row.style.opacity = '0';
+        row.style.transform = 'translateX(-20px)';
+        setTimeout(() => row.remove(), 150);
+      }
+      _updateGroceryBadge();
+      clearTimeout(state._smartGroceryRenderTimeout);
+      state._smartGroceryRenderTimeout = setTimeout(() => {
+        if (['grocery-list'].includes(state.currentView)) render();
+      }, 600);
+    }
+
+    function clearCheckedGrocery() {
+      let list = getSmartGroceryList();
+      list = list.filter(i => !i.checked);
+      saveSmartGroceryList(list);
+      showToast('Checked items cleared', 'success');
+      render();
+    }
+
+    function clearAllGrocerySmart() {
+      if (!confirm('Clear your entire grocery list?')) return;
+      saveSmartGroceryList([]);
+      showToast('Grocery list cleared', 'success');
+      render();
+    }
+
+    function _updateGroceryBadge() {
+      const badge = document.getElementById('grocery-badge');
+      const count = getGroceryBadgeCount();
+      if (badge) {
+        badge.textContent = count;
+        badge.style.display = count > 0 ? 'flex' : 'none';
+      }
+    }
+
+    // Cache suggestions for click handler (avoids inline escaping issues)
+    let _cachedSuggestions = [];
+    function handleSuggestClick(idx) {
+      const s = _cachedSuggestions[idx];
+      if (!s) return;
+      addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames);
+      render();
+    }
+
+    function showAddFromMealModal() {
+      const frequentMeals = getFrequentMeals();
+      // Also get all recipes that have ingredients as fallback
+      const allMeals = [];
+      const seen = new Set();
+
+      // Frequent meals first
+      frequentMeals.forEach(m => {
+        const key = m.recipeId || m.name;
+        if (seen.has(key)) return;
+        seen.add(key);
+        allMeals.push(m);
+      });
+
+      // Then all logged food entries with recipe IDs
+      const log = getFoodLog();
+      log.forEach(entry => {
+        const key = entry.recipeId || entry.recipeName;
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        allMeals.push({
+          recipeId: entry.recipeId,
+          name: entry.recipeName,
+          image: entry.image,
+          count: 1,
+          wouldMakeAgain: entry.wouldMakeAgain === true
+        });
+      });
+
+      // Also add recipes not in food log
+      state.recipes.filter(r => !r.isDraft && !r.isTip && recipeIngList(r).length > 0).forEach(r => {
+        if (seen.has(r.id)) return;
+        seen.add(r.id);
+        allMeals.push({
+          recipeId: r.id,
+          name: r.title,
+          image: r.image_url,
+          count: 0,
+          wouldMakeAgain: false
+        });
+      });
+
+      openModal(`
+        <div style="color: ${CONFIG.text_color}; max-height: 70vh; display: flex; flex-direction: column;">
+          <h2 style="font-size: 17px; font-weight: 600; margin-bottom: 12px;">Add from a meal</h2>
+          <div style="overflow-y: auto; flex: 1; margin: 0 -16px; padding: 0 16px;">
+            ${allMeals.length === 0 ? `
+              <div style="text-align: center; padding: 24px; color: ${CONFIG.text_muted};">
+                No meals with ingredients found. Log some meals first!
+              </div>
+            ` : allMeals.map(m => {
+              const recipe = m.recipeId ? getRecipeById(m.recipeId) : null;
+              const ingCount = recipe ? recipeIngList(recipe).length : 0;
+              return `
+                <div onclick="addMealToGrocery('${esc(m.recipeId || '')}'); closeModal();"
+                     style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};"
+                     class="card-press">
+                  ${m.image ? `<img src="${esc(m.image)}" style="width: 44px; height: 44px; border-radius: 10px; object-fit: cover;">` :
+                    `<div style="width: 44px; height: 44px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px;">🍽</div>`}
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(m.name)}</div>
+                    <div style="font-size: 11px; color: ${CONFIG.text_muted};">
+                      ${ingCount > 0 ? `${ingCount} ingredients` : ''}
+                      ${m.count >= 2 ? ` · Logged ${m.count}x` : ''}
+                      ${m.wouldMakeAgain ? ' · Would make again' : ''}
+                    </div>
+                  </div>
+                  <svg width="20" height="20" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                </div>
+              `;
+            }).join('')}
+          </div>
+          <button onclick="closeModal()" style="margin-top: 12px; padding: 10px; background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color}; border: none; border-radius: 10px; cursor: pointer; width: 100%; font-size: 14px;">
+            Done
+          </button>
+        </div>
+      `);
+    }
+
+    // ============================================================
+    // MY MEALS PAGE — Food log view (replaces Recipes tab)
+    // ============================================================
+    function renderMyMeals() {
+      const { groups, sortedDates } = getFoodLogGroupedByDate();
+      const favorites = getCookAgainMeals();
+      const hasEntries = sortedDates.length > 0;
+
+      let favSection = '';
+      if (favorites.length > 0) {
+        favSection = `
+          <div style="margin-bottom: ${CONFIG.space_lg};">
+            <div style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Make Again</div>
+            <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
+              ${favorites.map(entry => `
+                <div onclick="openFoodLogDetail('${entry.id}')" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 80px;">
+                  <div style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden; margin: 0 auto 6px; border: 2px solid ${CONFIG.primary_action_color}; background: ${CONFIG.surface_elevated};">
+                    ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">🍽️</div>`}
+                  </div>
+                  <div style="font-size: 11px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}</div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      let logContent = '';
+      if (!hasEntries) {
+        logContent = `
+          <div style="text-align: center; padding: ${CONFIG.space_2xl} ${CONFIG.space_md};">
+            <div style="font-size: 48px; opacity: 0.3; margin-bottom: ${CONFIG.space_md};">🍽️</div>
+            <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">No meals logged yet</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: ${CONFIG.space_lg};">Swipe right on recipes or tap + to log what you eat</div>
+          </div>
+        `;
+      } else {
+        logContent = sortedDates.map(dateStr => {
+          const label = getFoodLogDateLabel(dateStr);
+          const entries = groups[dateStr];
+          return `
+            <div style="margin-bottom: ${CONFIG.space_lg};">
+              <div style="font-size: ${CONFIG.type_caption}; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: ${CONFIG.space_sm}; padding: 0 4px;">${esc(label)}</div>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                ${entries.map(entry => {
+                  const mealPill = entry.mealType ? `<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-weight: 500;">${capitalize(entry.mealType)}</span>` : '';
+                  const timeStr = formatLogTime(entry.dateCooked);
+                  const thumb = entry.photo || entry.image;
+                  const ratingIcon = entry.wouldMakeAgain === true ? ' 👍' : entry.wouldMakeAgain === false ? ' 👎' : '';
+                  return `
+                    <div onclick="openFoodLogDetail('${entry.id}')" class="card-press" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; cursor: pointer; transition: background 0.15s;">
+                      <div style="width: 64px; height: 64px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated};">
+                        ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;opacity:0.4;">🍽️</div>`}
+                      </div>
+                      <div style="flex: 1; min-width: 0;">
+                        <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}${ratingIcon}</div>
+                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                          ${mealPill}
+                          <span style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_tertiary};">${timeStr}</span>
+                        </div>
+                      </div>
+                      <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      return `
+        <div style="padding: ${CONFIG.space_md}; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
+          ${favSection}
+          <div style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Food Log</div>
+          ${logContent}
+        </div>
+        <!-- Floating Quick Log Button -->
+        <button onclick="showQuickLogModal()" style="position: fixed; bottom: 76px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 28px; cursor: pointer; z-index: 45; box-shadow: 0 4px 16px rgba(232,93,93,0.4); display: flex; align-items: center; justify-content: center;" title="Log a meal">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        </button>
+      `;
+    }
+
+    // ============================================================
+    // FOOD LOG DETAIL VIEW
+    // ============================================================
+    function openFoodLogDetail(logId) {
+      state._viewingLogId = logId;
+      state.currentView = 'food-log-detail';
+      render();
+    }
+
+    function renderFoodLogDetail() {
+      const logId = state._viewingLogId;
+      const log = getFoodLog();
+      const entry = log.find(e => e.id === logId);
+      if (!entry) return '<div style="padding: 24px; color: #8e8e93;">Entry not found.</div>';
+
+      const thumb = entry.photo || entry.image;
+      const timeStr = formatLogTime(entry.dateCooked);
+      const dateLabel = getFoodLogDateLabel(entry.dateCooked.split('T')[0]);
+
+      return `
+        <div style="padding: ${CONFIG.space_md}; padding-bottom: 100px; max-width: 600px; margin: 0 auto;">
+          <!-- Photo -->
+          <div style="width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: ${CONFIG.surface_elevated}; margin-bottom: ${CONFIG.space_md}; position: relative;">
+            ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:64px;opacity:0.3;">🍽️</div>`}
+            <button onclick="triggerFoodLogPhoto('${logId}')" style="position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border: none; color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+              ${thumb ? 'Change photo' : 'Add photo'}
+            </button>
+          </div>
+          <input type="file" id="foodLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleFoodLogPhoto('${logId}', this)" />
+
+          <!-- Title & meta -->
+          <div style="font-size: 22px; font-weight: 700; color: ${CONFIG.text_color}; margin-bottom: 4px;">${esc(entry.recipeName)}</div>
+          <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${CONFIG.space_lg};">
+            ${entry.mealType ? `<span style="font-size: 12px; padding: 3px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-weight: 500;">${capitalize(entry.mealType)}</span>` : ''}
+            <span style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_tertiary};">${dateLabel} at ${timeStr}</span>
+          </div>
+
+          <!-- Rating -->
+          <div style="margin-bottom: ${CONFIG.space_lg};">
+            <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Would you make this again?</div>
+            <div style="display: flex; gap: 12px;">
+              <button onclick="rateFoodLogEntry('${logId}', true)" style="flex: 1; padding: 14px; border-radius: 12px; border: 2px solid ${entry.wouldMakeAgain === true ? CONFIG.success_color : 'rgba(255,255,255,0.1)'}; background: ${entry.wouldMakeAgain === true ? 'rgba(50,215,75,0.1)' : 'transparent'}; color: ${entry.wouldMakeAgain === true ? CONFIG.success_color : CONFIG.text_muted}; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                👍 Yes!
+              </button>
+              <button onclick="rateFoodLogEntry('${logId}', false)" style="flex: 1; padding: 14px; border-radius: 12px; border: 2px solid ${entry.wouldMakeAgain === false ? CONFIG.danger_color : 'rgba(255,255,255,0.1)'}; background: ${entry.wouldMakeAgain === false ? 'rgba(255,69,58,0.1)' : 'transparent'}; color: ${entry.wouldMakeAgain === false ? CONFIG.danger_color : CONFIG.text_muted}; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                👎 Meh
+              </button>
+            </div>
+          </div>
+
+          <!-- Notes -->
+          <div style="margin-bottom: ${CONFIG.space_lg};">
+            <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Notes</div>
+            <textarea id="foodLogNotes" rows="3" placeholder="How was it? Would you make it again?"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};"
+              onblur="saveFoodLogNotes('${logId}')">${esc(entry.notes || '')}</textarea>
+          </div>
+
+          <!-- Category & ingredients -->
+          ${entry.category ? `<div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_tertiary}; margin-bottom: 4px;">Category: ${esc(entry.category)}</div>` : ''}
+          ${entry.ingredients && entry.ingredients.length > 0 ? `
+            <div style="margin-top: ${CONFIG.space_sm};">
+              <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; margin-bottom: 4px;">Ingredients</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                ${entry.ingredients.map(ing => `<span style="font-size: 12px; padding: 3px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted};">${esc(ing)}</span>`).join('')}
+              </div>
+            </div>
+          ` : ''}
+
+          ${entry.recipeId ? `
+            <button onclick="openRecipeView('${entry.recipeId}')" style="width: 100%; margin-top: ${CONFIG.space_lg}; padding: 14px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+              View Recipe
+            </button>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function triggerFoodLogPhoto(logId) {
+      document.getElementById('foodLogPhotoInput')?.click();
+    }
+
+    function handleFoodLogPhoto(logId, input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        // Compress and store
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 800;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = h * maxDim / w; w = maxDim; }
+            else { w = w * maxDim / h; h = maxDim; }
+          }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          const base64 = canvas.toDataURL('image/jpeg', 0.7);
+          updateFoodLogEntry(logId, { photo: base64 });
+          showToast('Photo saved!', 'success');
+          render();
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function rateFoodLogEntry(logId, wouldMakeAgain) {
+      const entry = getFoodLog().find(e => e.id === logId);
+      if (!entry) return;
+      // Toggle: if same rating, clear it
+      const newRating = entry.wouldMakeAgain === wouldMakeAgain ? null : wouldMakeAgain;
+      updateFoodLogEntry(logId, { wouldMakeAgain: newRating });
+      render();
+    }
+
+    function saveFoodLogNotes(logId) {
+      const notes = document.getElementById('foodLogNotes')?.value || '';
+      updateFoodLogEntry(logId, { notes: notes.trim() || null });
+    }
+
+    // ============================================================
+    // QUICK LOG MODAL (floating + button)
+    // ============================================================
+    function showQuickLogModal() {
+      state._quickLogPhoto = null;
+      state._quickLogMealType = 'dinner';
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_lg};">Log a Meal</h3>
+
+          <div style="margin-bottom: ${CONFIG.space_sm};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">What did you eat?</label>
+            <input type="text" id="quickLogName" placeholder="e.g., Chicken tacos, leftover pizza"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" autofocus />
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Meal type</label>
+            <div id="quickLogMealPills" style="display: flex; gap: 8px; flex-wrap: wrap;">
+              ${['breakfast','lunch','dinner','snack'].map(mt => `
+                <button onclick="selectQuickLogMealType('${mt}')" id="qlpill-${mt}"
+                  style="padding: 8px 16px; border-radius: 20px; border: 1px solid ${mt === 'dinner' ? 'rgba(232,93,93,0.4)' : 'rgba(255,255,255,0.15)'}; background: ${mt === 'dinner' ? 'rgba(232,93,93,0.15)' : 'transparent'}; color: ${mt === 'dinner' ? '#e85d5d' : 'rgba(255,255,255,0.6)'}; font-size: 13px; font-weight: ${mt === 'dinner' ? '600' : '400'}; cursor: pointer;">
+                  ${capitalize(mt)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <button onclick="document.getElementById('quickLogPhotoInput').click()" id="quickLogPhotoBtn"
+              style="width: 100%; padding: 14px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; background: transparent; color: ${CONFIG.text_muted}; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+              Add a photo
+            </button>
+            <input type="file" id="quickLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQuickLogPhoto(this)" />
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Notes <span style="opacity: 0.5;">(optional)</span></label>
+            <textarea id="quickLogNotes" rows="2" placeholder="How was it? Would you make it again?"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};"></textarea>
+          </div>
+
+          <button onclick="submitQuickLog()"
+            style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            Log it
+          </button>
+          <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+        </div>
+      `);
+    }
+
+    function selectQuickLogMealType(mt) {
+      state._quickLogMealType = mt;
+      ['breakfast','lunch','dinner','snack'].forEach(t => {
+        const btn = document.getElementById('qlpill-' + t);
+        if (!btn) return;
+        const active = t === mt;
+        btn.style.border = `1px solid ${active ? 'rgba(232,93,93,0.4)' : 'rgba(255,255,255,0.15)'}`;
+        btn.style.background = active ? 'rgba(232,93,93,0.15)' : 'transparent';
+        btn.style.color = active ? '#e85d5d' : 'rgba(255,255,255,0.6)';
+        btn.style.fontWeight = active ? '600' : '400';
+      });
+    }
+
+    function handleQuickLogPhoto(input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 800;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = h * maxDim / w; w = maxDim; }
+            else { w = w * maxDim / h; h = maxDim; }
+          }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          state._quickLogPhoto = canvas.toDataURL('image/jpeg', 0.7);
+          const btn = document.getElementById('quickLogPhotoBtn');
+          if (btn) {
+            btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="#32d74b" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg> Photo added!';
+            btn.style.borderColor = 'rgba(50,215,75,0.3)';
+            btn.style.color = '#32d74b';
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function submitQuickLog() {
+      const name = document.getElementById('quickLogName')?.value.trim();
+      if (!name) {
+        showToast('Please enter what you ate', 'error');
+        return;
+      }
+      const notes = document.getElementById('quickLogNotes')?.value.trim() || null;
+      addFoodLogEntry({
+        recipeName: name,
+        mealType: state._quickLogMealType || 'dinner',
+        photo: state._quickLogPhoto || null,
+        notes
+      });
+      closeModal();
+      showToast('Meal logged!', 'success');
+      render();
+    }
+
+    // ============================================================
+    // PATTERN DETECTION & COOK AGAIN (Home screen sections)
+    // ============================================================
+    function renderPatternSection() {
+      const patterns = getTopFoodPatterns(14);
+      if (patterns.length === 0) return '';
+
+      const unexplored = getUnexploredCategories();
+
+      return `
+        <div style="padding: 0 ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_md};">
+          <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 14px 16px;">
+            <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; margin-bottom: 8px;">You've been eating a lot of:</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: ${unexplored.length > 0 ? '10px' : '0'};">
+              ${patterns.map(p => `
+                <span style="font-size: 13px; padding: 4px 12px; border-radius: 16px; background: rgba(232,93,93,0.1); color: ${CONFIG.primary_action_color}; font-weight: 500;">
+                  ${esc(p.name)} (${p.count}x)
+                </span>
+              `).join('')}
+            </div>
+            ${unexplored.length > 0 ? `
+              <button onclick="filterSwipeDeckToUnexplored()" style="background: none; border: none; color: ${CONFIG.primary_action_color}; font-size: ${CONFIG.type_caption}; cursor: pointer; padding: 0; text-decoration: underline; opacity: 0.8;">
+                Try something different?
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+    function filterSwipeDeckToUnexplored() {
+      const unexplored = getUnexploredCategories();
+      if (unexplored.length === 0) {
+        showToast('You\'ve explored all categories!', 'success');
+        return;
+      }
+      const unexploredLower = new Set(unexplored.map(c => c.toLowerCase()));
+      const mealType = state.swipeMealType || detectMealType();
+      state.swipeDeck = state.recipes.filter(r => {
+        const cat = (r.category || '').toLowerCase();
+        return unexploredLower.has(cat) && !r.isDraft && !r.isTip;
+      });
+      if (state.swipeDeck.length === 0) {
+        showToast('No recipes found in unexplored categories', 'info');
+        return;
+      }
+      // Shuffle
+      for (let i = state.swipeDeck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [state.swipeDeck[i], state.swipeDeck[j]] = [state.swipeDeck[j], state.swipeDeck[i]];
+      }
+      state.swipeIndex = 0;
+      state.homeTab = 'swipe';
+      showToast(`Showing ${state.swipeDeck.length} recipes from categories you haven\'t tried`, 'success');
+      render();
+    }
+
+    function renderCookAgainRow() {
+      const favorites = getCookAgainMeals();
+      if (favorites.length === 0) return '';
+
+      return `
+        <div style="padding: 0 ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_md};">
+          <div style="font-size: ${CONFIG.type_caption}; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Cook Again</div>
+          <div style="display: flex; gap: 14px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
+            ${favorites.map(entry => `
+              <div onclick="${entry.recipeId ? `openRecipeView('${entry.recipeId}')` : `openFoodLogDetail('${entry.id}')`}" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 64px;">
+                <div style="width: 56px; height: 56px; border-radius: 50%; overflow: hidden; margin: 0 auto 6px; border: 2px solid ${CONFIG.primary_action_color}; background: ${CONFIG.surface_elevated};">
+                  ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;">🍽️</div>`}
+                </div>
+                <div style="font-size: 11px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}</div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    // ============================================================
     // SECTION 11: UI COMPONENTS
     // Reusable UI elements: modals, toasts, empty states.
     // ============================================================
@@ -7745,6 +8684,8 @@ function navigateTo(view) {
       // Get page title based on current view
       const pageTitles = {
         'recipes': 'Recipes',
+        'my-meals': 'My Meals',
+        'food-log-detail': 'Meal Detail',
         'recipe-edit': 'Edit Recipe',
         'recipe-view': 'Recipe',
         'freestyle-edit': 'Freestyle',
@@ -7770,7 +8711,7 @@ function navigateTo(view) {
         <nav style="background: ${CONFIG.surface_color}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);" class="p-3 sticky top-0 z-50">
           <div class="max-w-4xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <button onclick="navigateTo('home')" style="color: ${CONFIG.text_muted}; font-size: 20px;" title="Home">
+              <button onclick="navigateTo('${state.currentView === 'food-log-detail' ? 'my-meals' : 'home'}')" style="color: ${CONFIG.text_muted}; font-size: 20px;" title="Back">
                 ←
               </button>
               <span style="color: ${CONFIG.text_color}; font-weight: ${CONFIG.type_header_weight}; font-size: ${CONFIG.type_header}; letter-spacing: ${CONFIG.type_header_tracking};">${pageTitle}</span>
@@ -7802,7 +8743,7 @@ function navigateTo(view) {
           inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>',
           active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>'
         },
-        recipes: {
+        'my-meals': {
           inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>',
           active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>'
         },
@@ -7822,7 +8763,7 @@ function navigateTo(view) {
 
       const navItems = [
         { id: 'home', label: 'Home' },
-        { id: 'recipes', label: 'Recipes' },
+        { id: 'my-meals', label: 'My Meals' },
         { id: 'grocery', label: 'Grocery' },
         { id: 'pantry', label: 'Pantry' },
         { id: 'budget', label: 'Budget' }
@@ -7834,7 +8775,7 @@ function navigateTo(view) {
             ${navItems.map(item => {
               const isActive = item.id === state.currentView ||
                 (item.id === 'home' && ['swipe', 'swipe-confirm'].includes(state.currentView)) ||
-                (item.id === 'recipes' && ['recipe-view', 'recipe-edit', 'freestyle-edit'].includes(state.currentView)) ||
+                (item.id === 'my-meals' && ['my-meals', 'food-log-detail', 'recipes', 'recipe-view', 'recipe-edit', 'freestyle-edit'].includes(state.currentView)) ||
                 (item.id === 'grocery' && ['grocery', 'grocery-list', 'grocery-select-meals', 'grocery-ingredients'].includes(state.currentView)) ||
                 (item.id === 'pantry' && ['pantry', 'inventory', 'ingredients', 'ingredient-detail'].includes(state.currentView)) ||
                 (item.id === 'budget' && ['budget', 'budget-dashboard'].includes(state.currentView));
@@ -7845,9 +8786,15 @@ function navigateTo(view) {
                 ? `color: ${CONFIG.primary_action_color}; filter: drop-shadow(0 0 6px rgba(232,93,93,0.3));`
                 : `color: ${CONFIG.text_muted};`;
 
+              // Grocery badge
+              const groceryBadge = item.id === 'grocery' ? (() => {
+                const count = getGroceryBadgeCount();
+                return count > 0 ? `<span id="grocery-badge" style="position: absolute; top: -2px; right: -4px; background: ${CONFIG.danger_color}; color: white; font-size: 9px; font-weight: 700; min-width: 16px; height: 16px; border-radius: 8px; display: flex; align-items: center; justify-content: center; padding: 0 4px;">${count}</span>` : '<span id="grocery-badge" style="display:none;"></span>';
+              })() : '';
+
               return `
                 <button onclick="${onClick}" style="display: flex; flex-direction: column; align-items: center; padding: 4px 8px; border: none; background: transparent; cursor: pointer;">
-                  <span style="${iconStyle}">${iconSvg}</span>
+                  <span style="position: relative; ${iconStyle}">${iconSvg}${groceryBadge}</span>
                   <span style="font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; color: ${isActive ? CONFIG.primary_action_color : CONFIG.text_muted};">${item.label}</span>
                 </button>
               `;
@@ -9038,10 +9985,16 @@ function navigateTo(view) {
       return `
         <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 80px;">
           ${renderHomeHeader(viewDate)}
+          ${renderCookAgainRow()}
+          ${renderPatternSection()}
           ${renderHomeTabs()}
           ${tabContent}
         </div>
         ${calendarOverlay}
+        <!-- Floating Quick Log Button -->
+        <button onclick="showQuickLogModal()" style="position: fixed; bottom: 76px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 28px; cursor: pointer; z-index: 45; box-shadow: 0 4px 16px rgba(232,93,93,0.4); display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease;" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'">
+          <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        </button>
       `;
     }
 
@@ -9192,7 +10145,7 @@ function navigateTo(view) {
 
             <!-- Active card -->
             <div class="swipe-card entering" data-active="true">
-              <div class="swipe-overlay like">Cook!</div>
+              <div class="swipe-overlay like">I ate this!</div>
               <div class="swipe-overlay nope">Skip</div>
               ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder">🍽️</div>`}
               <div class="card-body">
@@ -9223,7 +10176,7 @@ function navigateTo(view) {
           <div class="swipe-hint-arrows">
             <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Skip</span>
             <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
-            <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Cook! →</span>
+            <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">I ate this! →</span>
           </div>
         </div>
       `;
@@ -10321,6 +11274,8 @@ function navigateTo(view) {
       dayData.meals[meal].remixInfo = { name, notes, baseRecipeId: null };
       dayData.meals[meal].loggedAt = Date.now();
       dayData.meals[meal].expanded = false;
+      // Also log to food log
+      addFoodLogEntry({ recipeName: name, mealType: meal, notes: notes || null });
       closeModal();
       await saveMealDay(dateStr);
       showToast(`${capitalize(meal)} logged!`, 'success');
@@ -13368,149 +14323,158 @@ function renderGroceryByMeal(unchecked, checked) {
 }
 
 function renderGroceryList() {
-      const groceryList = getGroceryList();
+      const groceryList = getSmartGroceryList();
       const unchecked = groceryList.filter(item => !item.checked);
       const checked = groceryList.filter(item => item.checked);
+      const suggestions = getSuggestedIngredients();
 
+      // Filter suggestions to exclude items already on the list
+      const listKeys = new Set(groceryList.map(i => normalizeIngredient(i.name)));
+      const filteredSuggestions = suggestions.filter(s => !listKeys.has(normalizeIngredient(s.name)));
+      _cachedSuggestions = filteredSuggestions;
+
+      // Group unchecked items by category
       const groupedUnchecked = {};
       unchecked.forEach(item => {
-        const group = item.group || 'Other';
-        if (!groupedUnchecked[group]) groupedUnchecked[group] = [];
-        groupedUnchecked[group].push(item);
+        const cat = item.category || 'Other';
+        if (!groupedUnchecked[cat]) groupedUnchecked[cat] = [];
+        groupedUnchecked[cat].push(item);
+      });
+      const sortedCats = GROCERY_CATEGORIES.filter(c => groupedUnchecked[c]);
+      Object.keys(groupedUnchecked).forEach(c => {
+        if (!GROCERY_CATEGORIES.includes(c)) sortedCats.push(c);
       });
 
-      const sortedGroups = ING_GROUPS.filter(g => groupedUnchecked[g]);
-      Object.keys(groupedUnchecked).forEach(g => {
-        if (!ING_GROUPS.includes(g)) sortedGroups.push(g);
+      // Group checked items by category
+      const groupedChecked = {};
+      checked.forEach(item => {
+        const cat = item.category || 'Other';
+        if (!groupedChecked[cat]) groupedChecked[cat] = [];
+        groupedChecked[cat].push(item);
       });
+
+      // Empty state
+      if (groceryList.length === 0 && filteredSuggestions.length === 0) {
+        return `
+          <div class="p-3 max-w-4xl mx-auto">
+            ${emptyState('🛒', "Your grocery list is empty. Log some meals first and we'll help you build your list.", 'Log a Meal', "navigateTo('home')")}
+          </div>
+        `;
+      }
 
       return `
-        <div class="p-3 max-w-4xl mx-auto">
-          <!-- Header -->
-          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
-            <div style="display:flex; gap:4px;">
-              <button onclick="state.groceryViewMode = 'all'; render();"
-                style="padding:4px 8px; border-radius:6px; background:${state.groceryViewMode === 'all' || !state.groceryViewMode ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.groceryViewMode === 'all' || !state.groceryViewMode ? 'white' : CONFIG.text_color}; font-size:11px; border:none; cursor:pointer;">
-                All
-              </button>
-              <button onclick="state.groceryViewMode = 'by-meal'; render();"
-                style="padding:4px 8px; border-radius:6px; background:${state.groceryViewMode === 'by-meal' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.groceryViewMode === 'by-meal' ? 'white' : CONFIG.text_color}; font-size:11px; border:none; cursor:pointer;">
-                By Meal
-              </button>
-            </div>
-            <div style="display:flex; gap:4px;">
-              <button onclick="showAddManualItemModal();"
-                style="padding:4px 8px; border-radius:6px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none; cursor:pointer;">
-                + Add
-              </button>
-              <button onclick="navigateTo('grocery-select-meals');"
-                style="padding:4px 8px; border-radius:6px; background:${CONFIG.primary_action_color}; color:white; font-size:11px; border:none; cursor:pointer;">
-                From Meals
-              </button>
-              ${groceryList.length > 0 ? `
-                <button onclick="if(confirm('Clear all items?')) clearAllGroceryItems();"
-                  style="padding:4px 8px; border-radius:6px; background:${CONFIG.surface_color}; color:${CONFIG.danger_color}; font-size:11px; border:none; cursor:pointer;">
-                  Clear
-                </button>
-              ` : ''}
-            </div>
+        <div class="p-3 max-w-4xl mx-auto" style="padding-bottom: 80px;">
+
+          <!-- Manual Add Input -->
+          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+            <input type="text" id="groceryManualInput" placeholder="Add an item..."
+              onkeydown="if(event.key==='Enter') addManualGroceryItemSmart();"
+              style="flex: 1; padding: 10px 14px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;"
+            />
+            <button onclick="addManualGroceryItemSmart()"
+              style="padding: 10px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap;">
+              Add
+            </button>
           </div>
 
-          <!-- Stats -->
-          ${groceryList.length > 0 ? `
-            <div style="display:flex; gap:8px; margin-bottom:12px;">
-              <div style="background:${CONFIG.surface_color}; padding:8px 12px; border-radius:8px; font-size:11px;">
-                <span style="color:${CONFIG.text_muted};">To buy:</span>
-                <span data-grocery-stat="unchecked" style="color:${CONFIG.text_color}; font-weight:600;"> ${unchecked.length}</span>
-              </div>
-              <div style="background:${CONFIG.surface_color}; padding:8px 12px; border-radius:8px; font-size:11px;">
-                <span style="color:${CONFIG.text_muted};">Done:</span>
-                <span data-grocery-stat="checked" style="color:${CONFIG.success_color}; font-weight:600;"> ${checked.length}</span>
+          <!-- Suggestions Section -->
+          ${filteredSuggestions.length > 0 ? `
+            <div style="margin-bottom: 20px;">
+              <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">Based on what you eat</div>
+              <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+                ${filteredSuggestions.slice(0, 12).map((s, idx) => `
+                  <button data-sug-idx="${idx}" onclick="handleSuggestClick(${idx})"
+                    style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer; white-space: nowrap;"
+                    class="card-press">
+                    <svg width="14" height="14" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                    ${esc(capitalize(s.name))}
+                    <span style="color: ${CONFIG.text_muted}; font-size: 10px;">${s.mealCount}x</span>
+                  </button>
+                `).join('')}
               </div>
             </div>
           ` : ''}
 
-          ${groceryList.length === 0 ? `
-            <div style="padding:24px; border-radius:12px; text-align:center; background:${CONFIG.surface_color};">
-              <div style="font-size:2rem; margin-bottom:8px;">🛒</div>
-              <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:4px;">
-                List is empty
-              </div>
-              <div style="font-size:12px; color:${CONFIG.text_muted}; margin-bottom:12px;">
-                Add items or generate from meals
-              </div>
-              <div style="display:flex; gap:8px; justify-content:center;">
-                <button onclick="showAddManualItemModal()" style="padding:8px 16px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); border-radius:8px; cursor:pointer; font-size:12px;">
-                  + Add Item
+          <!-- Add from a meal button -->
+          <button onclick="showAddFromMealModal()"
+            style="width: 100%; padding: 12px; margin-bottom: 16px; background: ${CONFIG.surface_color}; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"
+            class="card-press">
+            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+            Add from a meal
+          </button>
+
+          <!-- Clear buttons -->
+          ${groceryList.length > 0 ? `
+            <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+              ${checked.length > 0 ? `
+                <button onclick="clearCheckedGrocery()"
+                  style="flex: 1; padding: 8px; background: ${CONFIG.surface_color}; border: none; border-radius: 8px; color: ${CONFIG.text_muted}; font-size: 12px; cursor: pointer;">
+                  Clear checked (${checked.length})
                 </button>
-                <button onclick="navigateTo('grocery-select-meals')" style="padding:8px 16px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
-                  From Meals
-                </button>
-              </div>
+              ` : ''}
+              <button onclick="clearAllGrocerySmart()"
+                style="flex: 1; padding: 8px; background: ${CONFIG.surface_color}; border: none; border-radius: 8px; color: ${CONFIG.danger_color}; font-size: 12px; cursor: pointer;">
+                Clear all
+              </button>
             </div>
-          ` : state.groceryViewMode === 'by-meal' ? `
-            <div style="background:${CONFIG.surface_color}; border-radius:12px; padding:12px;">
-              ${renderGroceryByMeal(unchecked, checked)}
-            </div>
-          ` : `
-            <!-- To Buy -->
-            ${unchecked.length > 0 ? `
-              <div style="margin-bottom:12px;">
-                ${sortedGroups.map(group => `
-                  <div style="margin-bottom:12px;">
-                    <div style="color:${CONFIG.text_muted}; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid rgba(255,255,255,0.06);">
-                      ${esc(group)} (${groupedUnchecked[group].length})
-                    </div>
-                    ${groupedUnchecked[group].map(item => {
-                      const capitalizedName = capitalize(item.name);
-                    const itemKey = normalizeIngredient(item.name);
+          ` : ''}
 
-return `
-  <div style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:${CONFIG.surface_color}; border-radius:8px; border:1px solid rgba(255,255,255,0.06);"
-       data-key="${itemKey}">
-    <div onclick="toggleGroceryItem(this.parentElement.dataset.key)"
-                            style="width:20px; height:20px; border:2px solid ${CONFIG.text_muted}; border-radius:4px; cursor:pointer; flex-shrink:0;">
-                          </div>
-                          <span style="flex:1; color:${CONFIG.text_color}; font-size:13px;">${capitalizedName}</span>
-<button onclick="removeFromGroceryList(this.parentElement.dataset.key)"
-style="padding:4px 8px; background:none; color:${CONFIG.text_muted}; border:none; font-size:14px; cursor:pointer;">
-                            ×
-                          </button>
-                        </div>
-                      `;
-                    }).join('')}
-                  </div>
-                `).join('')}
+          <!-- Grocery Items by Category -->
+          ${sortedCats.map(cat => `
+            <div style="margin-bottom: 16px;">
+              <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                ${esc(cat)} (${groupedUnchecked[cat].length})
               </div>
-            ` : ''}
+              ${groupedUnchecked[cat].map(item => _renderGroceryRow(item, false)).join('')}
+              ${(groupedChecked[cat] || []).map(item => _renderGroceryRow(item, true)).join('')}
+            </div>
+          `).join('')}
 
-            <!-- Checked Off -->
-            ${checked.length > 0 ? `
-              <details style="margin-top:12px;">
-                <summary style="color:${CONFIG.text_muted}; font-size:11px; cursor:pointer; padding:8px 0;">
-                  Checked off (${checked.length})
-                </summary>
-                <div style="margin-top:8px;">
-                  ${checked.map(item => {
-                    const capitalizedName = capitalize(item.name);
-                   const itemKey = normalizeIngredient(item.name);
-
-return `
-  <div style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:${CONFIG.surface_color}; border-radius:8px; border:1px solid rgba(255,255,255,0.06);"
-       data-key="${itemKey}">
-    <div onclick="toggleGroceryItem(this.parentElement.dataset.key)"
-    
-                          style="width:18px; height:18px; background:${CONFIG.primary_action_color}; border-radius:4px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:white; font-size:11px; font-weight:bold;">
-                          ✓
-                        </div>
-                        <span style="flex:1; color:${CONFIG.text_muted}; font-size:12px; text-decoration:line-through;">${capitalizedName}</span>
-                      </div>
-                    `;
-                  }).join('')}
+          <!-- Remaining checked items in categories with no unchecked -->
+          ${(() => {
+            const catsWithUnchecked = new Set(sortedCats);
+            const remainingCheckedCats = Object.keys(groupedChecked).filter(c => !catsWithUnchecked.has(c));
+            if (remainingCheckedCats.length === 0) return '';
+            return remainingCheckedCats.map(cat => `
+              <div style="margin-bottom: 16px;">
+                <div style="color: ${CONFIG.text_muted}; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                  ${esc(cat)} (${groupedChecked[cat].length})
                 </div>
-              </details>
-            ` : ''}
-          `}
+                ${groupedChecked[cat].map(item => _renderGroceryRow(item, true)).join('')}
+              </div>
+            `).join('');
+          })()}
+
+        </div>
+      `;
+    }
+
+    function _renderGroceryRow(item, isChecked) {
+      const name = capitalize(item.name);
+      const qtyLabel = item.qty ? `${item.qty}${item.unit ? ' ' + item.unit : ''}` : '';
+      const sourceLabel = item.sourceMeals && item.sourceMeals.length > 0
+        ? item.sourceMeals.join(', ') : '';
+
+      return `
+        <div data-gro-id="${esc(item.id)}"
+             style="display: flex; align-items: center; gap: 10px; padding: 10px; margin-bottom: 3px; background: ${CONFIG.surface_color}; border-radius: 8px;">
+          <div class="gro-checkbox" onclick="toggleSmartGroceryItem('${esc(item.id)}')"
+               style="width: 22px; height: 22px; border: 2px solid ${isChecked ? CONFIG.primary_action_color : CONFIG.text_muted}; border-radius: 50%; cursor: pointer; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: ${isChecked ? CONFIG.primary_action_color : 'transparent'}; transition: all 150ms ease;">
+            ${isChecked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+          </div>
+          <div class="gro-label" style="flex: 1; min-width: 0; ${isChecked ? 'text-decoration: line-through; opacity: 0.4;' : ''}">
+            <div style="display: flex; align-items: baseline; gap: 6px;">
+              <span style="color: ${CONFIG.text_color}; font-size: 14px;">${esc(name)}</span>
+              ${qtyLabel ? `<span style="color: ${CONFIG.text_muted}; font-size: 11px;">${esc(qtyLabel)}</span>` : ''}
+            </div>
+            ${sourceLabel ? `<div style="color: ${CONFIG.text_tertiary}; font-size: 10px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">from ${esc(sourceLabel)}</div>` : ''}
+          </div>
+          ${!isChecked ? `
+            <button onclick="removeSmartGroceryItem('${esc(item.id)}')"
+              style="padding: 4px; background: none; border: none; color: ${CONFIG.text_muted}; font-size: 16px; cursor: pointer; flex-shrink: 0; line-height: 1;">
+              ×
+            </button>
+          ` : ''}
         </div>
       `;
     }
@@ -14278,6 +15242,20 @@ return `
       dayData.meals[meal].actualRecipeId = dayData.meals[meal].plannedRecipeId;
       dayData.meals[meal].photoUrl = photoBase64 || null;
       dayData.meals[meal].loggedAt = Date.now();
+      // Also log to food log
+      const recipe = getRecipeById(dayData.meals[meal].plannedRecipeId);
+      if (recipe) {
+        const ings = recipeIngList(recipe);
+        addFoodLogEntry({
+          recipeId: recipe.__backendId || recipe.id,
+          recipeName: recipe.title || recipe.name || 'Recipe',
+          image: recipeThumb(recipe),
+          ingredients: ings.map(i => i.name),
+          category: recipe.category || 'Other',
+          mealType: meal,
+          photo: photoBase64 || null
+        });
+      }
       await saveMealDay(dateStr);
       showToast(`${capitalize(meal)} logged!`, 'success');
       render();
@@ -14290,6 +15268,19 @@ return `
       dayData.meals[meal].actualType = 'different_recipe';
       dayData.meals[meal].actualRecipeId = actualRecipeId;
       dayData.meals[meal].loggedAt = Date.now();
+      // Also log to food log
+      const recipe = getRecipeById(actualRecipeId);
+      if (recipe) {
+        const ings = recipeIngList(recipe);
+        addFoodLogEntry({
+          recipeId: recipe.__backendId || recipe.id,
+          recipeName: recipe.title || recipe.name || 'Recipe',
+          image: recipeThumb(recipe),
+          ingredients: ings.map(i => i.name),
+          category: recipe.category || 'Other',
+          mealType: meal
+        });
+      }
       await saveMealDay(dateStr);
       showToast(`${capitalize(meal)} logged!`, 'success');
       render();
@@ -14302,6 +15293,12 @@ return `
       dayData.meals[meal].actualType = 'takeout';
       dayData.meals[meal].takeoutInfo = takeoutInfo;
       dayData.meals[meal].loggedAt = Date.now();
+      // Also log to food log
+      addFoodLogEntry({
+        recipeName: takeoutInfo?.restaurant ? `${takeoutInfo.restaurant} - ${takeoutInfo.meal || 'Takeout'}` : (takeoutInfo?.meal || 'Takeout'),
+        mealType: meal,
+        category: 'Takeout'
+      });
       await saveMealDay(dateStr);
       showToast(`${capitalize(meal)} logged!`, 'success');
       render();
@@ -14417,11 +15414,33 @@ return `
       if (idx >= deck.length) return;
       const recipe = deck[idx];
       const card = document.querySelector('.swipe-card[data-active="true"]');
+      const doLog = () => {
+        // Log recipe as "I ate this" in food log
+        const ings = recipeIngList(recipe);
+        const entry = addFoodLogEntry({
+          recipeId: recipe.__backendId || recipe.id,
+          recipeName: recipe.title || recipe.name || 'Recipe',
+          image: recipeThumb(recipe),
+          ingredients: ings.map(i => i.name),
+          category: recipe.category || 'Other',
+          mealType: state.swipeMealType || detectMealType()
+        });
+        // Advance swipe deck
+        state.swipeIndex++;
+        if (state.swipeIndex >= deck.length) {
+          state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(state.swipeMealType) : buildSwipeDeck(state.swipeMealType);
+          state.swipeIndex = 0;
+        }
+        showToast('Logged! Tap to add a photo.', 'success');
+        // Store last logged entry id for potential photo add
+        state._lastLoggedEntryId = entry.id;
+        render();
+      };
       if (card) {
         card.classList.add('fly-right');
-        setTimeout(() => confirmHomeSwipeSelection(recipe.__backendId || recipe.id), 350);
+        setTimeout(doLog, 350);
       } else {
-        confirmHomeSwipeSelection(recipe.__backendId || recipe.id);
+        doLog();
       }
     }
 
@@ -14971,7 +15990,9 @@ return `
       'external-meal-picker': renderExternalMealPicker,
       'swipe': renderSwipeHome,
       'swipe-setup': renderSwipeSetup,
-      'swipe-confirm': renderSwipeConfirm
+      'swipe-confirm': renderSwipeConfirm,
+      'my-meals': renderMyMeals,
+      'food-log-detail': renderFoodLogDetail
     };
 
     // ===== MAIN RENDER =====
@@ -16131,8 +17152,8 @@ ${message.content}`
       // Don't show button if chat is already open
       if (state.chefChatOpen) return '';
       
-      // Position above bottom nav on non-home pages
-      const bottomPosition = state.currentView !== 'home' ? '70px' : '24px';
+      // Position above bottom nav; on home push up to avoid quick-log FAB
+      const bottomPosition = state.currentView === 'home' ? '140px' : '70px';
       
       return `
         <button onclick="toggleChefChat()"
