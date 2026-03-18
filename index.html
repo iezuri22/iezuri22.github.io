@@ -5981,6 +5981,11 @@ function renderReceiptModal() {
 
     function addFoodLogEntry(entry) {
       const log = getFoodLog();
+      // Build dateCooked: if a dateStr (YYYY-MM-DD) is provided, use noon on that day; else use provided ISO or now
+      let dateCooked = entry.dateCooked || new Date().toISOString();
+      if (entry.dateStr) {
+        dateCooked = entry.dateStr + 'T12:00:00';
+      }
       const logEntry = {
         id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
         recipeId: entry.recipeId || null,
@@ -5989,11 +5994,18 @@ function renderReceiptModal() {
         ingredients: entry.ingredients || [],
         category: entry.category || 'Other',
         mealType: entry.mealType || detectMealType(),
-        dateCooked: entry.dateCooked || new Date().toISOString(),
+        dateCooked: dateCooked,
         photo: entry.photo || null,
         notes: entry.notes || null,
-        wouldMakeAgain: null // null = unrated, true = thumbs up, false = meh
+        wouldMakeAgain: null, // null = unrated, true = thumbs up, false = meh
+        status: entry.status || 'eaten' // 'planned' or 'eaten'
       };
+      // If there's already an entry for this date+mealType, replace it
+      const dateKey = logEntry.dateCooked.split('T')[0];
+      const existingIdx = log.findIndex(e => e.dateCooked.split('T')[0] === dateKey && e.mealType === logEntry.mealType && logEntry.mealType !== 'snack');
+      if (existingIdx !== -1 && logEntry.mealType !== 'snack') {
+        log.splice(existingIdx, 1);
+      }
       log.unshift(logEntry);
       saveFoodLog(log);
       return logEntry;
@@ -6011,6 +6023,25 @@ function renderReceiptModal() {
     function deleteFoodLogEntry(logId) {
       const log = getFoodLog().filter(e => e.id !== logId);
       saveFoodLog(log);
+    }
+
+    function getFoodLogEntryForSlot(dateStr, mealType) {
+      const log = getFoodLog();
+      return log.find(e => e.dateCooked.split('T')[0] === dateStr && e.mealType === mealType) || null;
+    }
+
+    function swapFoodLogEntry(oldLogId, newEntry) {
+      const log = getFoodLog();
+      const oldIdx = log.findIndex(e => e.id === oldLogId);
+      const oldEntry = oldIdx !== -1 ? log[oldIdx] : null;
+      if (oldIdx !== -1) log.splice(oldIdx, 1);
+      saveFoodLog(log);
+      const created = addFoodLogEntry(newEntry);
+      return { oldEntry, newEntry: created };
+    }
+
+    function markFoodLogEaten(logId) {
+      updateFoodLogEntry(logId, { status: 'eaten' });
     }
 
     function getFoodLogGroupedByDate() {
@@ -6506,10 +6537,18 @@ function renderReceiptModal() {
     // MY MEALS PAGE — Food log view (replaces Recipes tab)
     // ============================================================
     function renderMyMeals() {
-      const { groups, sortedDates } = getFoodLogGroupedByDate();
+      const log = getFoodLog();
       const favorites = getCookAgainMeals();
-      const hasEntries = sortedDates.length > 0;
+      const mealSlots = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+      // Collect all dates that have entries, plus today and nearby dates
+      const allDates = new Set();
+      const today = getToday();
+      allDates.add(today);
+      log.forEach(e => allDates.add(e.dateCooked.split('T')[0]));
+      const sortedDates = [...allDates].sort((a, b) => b.localeCompare(a));
+
+      // Favorites section
       let favSection = '';
       if (favorites.length > 0) {
         favSection = `
@@ -6519,7 +6558,7 @@ function renderReceiptModal() {
               ${favorites.map(entry => `
                 <div onclick="openFoodLogDetail('${entry.id}')" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 80px;">
                   <div style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden; margin: 0 auto 6px; border: 2px solid ${CONFIG.primary_action_color}; background: ${CONFIG.surface_elevated};">
-                    ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">🍽️</div>`}
+                    ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;">🍽</div>`}
                   </div>
                   <div style="font-size: 11px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}</div>
                 </div>
@@ -6530,10 +6569,10 @@ function renderReceiptModal() {
       }
 
       let logContent = '';
-      if (!hasEntries) {
+      if (log.length === 0) {
         logContent = `
           <div style="text-align: center; padding: ${CONFIG.space_2xl} ${CONFIG.space_md};">
-            <div style="font-size: 48px; opacity: 0.3; margin-bottom: ${CONFIG.space_md};">🍽️</div>
+            <div style="font-size: 48px; opacity: 0.3; margin-bottom: ${CONFIG.space_md};">🍽</div>
             <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">No meals logged yet</div>
             <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: ${CONFIG.space_lg};">Swipe right on recipes or tap + to log what you eat</div>
           </div>
@@ -6541,32 +6580,31 @@ function renderReceiptModal() {
       } else {
         logContent = sortedDates.map(dateStr => {
           const label = getFoodLogDateLabel(dateStr);
-          const entries = groups[dateStr];
+          const dayEntries = log.filter(e => e.dateCooked.split('T')[0] === dateStr);
+
+          // Build slots
+          const slotHtml = mealSlots.map(slot => {
+            const slotEntries = dayEntries.filter(e => e.mealType === slot);
+            if (slot === 'snack') {
+              // Snacks: show all entries + add button
+              if (slotEntries.length === 0) {
+                return renderEmptyMealSlot(slot, dateStr);
+              }
+              return slotEntries.map(entry => renderFilledMealSlot(entry, dateStr)).join('') + renderEmptyMealSlot(slot, dateStr, true);
+            }
+            // Non-snack: show single entry or empty
+            const entry = slotEntries[0];
+            if (!entry) {
+              return renderEmptyMealSlot(slot, dateStr);
+            }
+            return renderFilledMealSlot(entry, dateStr);
+          }).join('');
+
           return `
             <div style="margin-bottom: ${CONFIG.space_lg};">
               <div style="font-size: ${CONFIG.type_caption}; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: ${CONFIG.space_sm}; padding: 0 4px;">${esc(label)}</div>
-              <div style="display: flex; flex-direction: column; gap: 2px;">
-                ${entries.map(entry => {
-                  const mealPill = entry.mealType ? `<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-weight: 500;">${capitalize(entry.mealType)}</span>` : '';
-                  const timeStr = formatLogTime(entry.dateCooked);
-                  const thumb = entry.photo || entry.image;
-                  const ratingIcon = entry.wouldMakeAgain === true ? ' 👍' : entry.wouldMakeAgain === false ? ' 👎' : '';
-                  return `
-                    <div onclick="openFoodLogDetail('${entry.id}')" class="card-press" style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 12px; cursor: pointer; transition: background 0.15s;">
-                      <div style="width: 64px; height: 64px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated};">
-                        ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;opacity:0.4;">🍽️</div>`}
-                      </div>
-                      <div style="flex: 1; min-width: 0;">
-                        <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}${ratingIcon}</div>
-                        <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
-                          ${mealPill}
-                          <span style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_tertiary};">${timeStr}</span>
-                        </div>
-                      </div>
-                      <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
-                    </div>
-                  `;
-                }).join('')}
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                ${slotHtml}
               </div>
             </div>
           `;
@@ -6579,11 +6617,171 @@ function renderReceiptModal() {
           <div style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Food Log</div>
           ${logContent}
         </div>
-        <!-- Floating Quick Log Button -->
         <button onclick="showQuickLogModal()" style="position: fixed; bottom: 76px; right: 20px; width: 56px; height: 56px; border-radius: 50%; background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 28px; cursor: pointer; z-index: 45; box-shadow: 0 4px 16px rgba(232,93,93,0.4); display: flex; align-items: center; justify-content: center;" title="Log a meal">
           <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
         </button>
       `;
+    }
+
+    function renderEmptyMealSlot(mealType, dateStr, isAddMore) {
+      const label = isAddMore ? '+ Add another snack' : `+ Add ${mealType}`;
+      return `
+        <div onclick="openAddMealForSlot('${mealType}', '${dateStr}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; border-radius: 12px; cursor: pointer; border: 1.5px dashed rgba(255,255,255,0.12); background: transparent; transition: background 0.15s;">
+          <div style="width: 48px; height: 48px; border-radius: 8px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.04);">
+            <svg width="20" height="20" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          </div>
+          <div style="flex: 1;">
+            <div style="font-size: 14px; color: ${CONFIG.text_tertiary};">${label}</div>
+            <div style="font-size: 11px; color: ${CONFIG.text_tertiary}; opacity: 0.6; margin-top: 2px;">${capitalize(mealType)}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderFilledMealSlot(entry, dateStr) {
+      const isPlanned = entry.status === 'planned';
+      const thumb = entry.photo || entry.image;
+      const ratingIcon = entry.wouldMakeAgain === true ? ' 👍' : entry.wouldMakeAgain === false ? ' 👎' : '';
+      const statusLabel = isPlanned ? 'Planned' : 'Cooked';
+      const statusColor = isPlanned ? CONFIG.text_muted : CONFIG.success_color;
+      const borderStyle = isPlanned ? '1.5px dashed rgba(255,255,255,0.15)' : '1.5px solid rgba(255,255,255,0.06)';
+      const bgColor = isPlanned ? 'transparent' : CONFIG.surface_color;
+
+      return `
+        <div style="position: relative; border-radius: 12px; border: ${borderStyle}; background: ${bgColor}; overflow: hidden;">
+          <!-- Status label -->
+          <div style="position: absolute; top: 8px; left: 10px; z-index: 2;">
+            <span style="font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; padding: 2px 8px; border-radius: 6px; background: ${isPlanned ? 'rgba(255,255,255,0.08)' : 'rgba(50,215,75,0.15)'}; color: ${statusColor};">${statusLabel}</span>
+          </div>
+          <!-- Action buttons (top right) -->
+          <div style="position: absolute; top: 6px; right: 6px; z-index: 2; display: flex; gap: 4px;">
+            <button onclick="event.stopPropagation(); openSwapMeal('${entry.id}', '${entry.mealType}', '${dateStr}')" title="Swap meal"
+              style="width: 30px; height: 30px; border-radius: 8px; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+            </button>
+            <button onclick="event.stopPropagation(); showEditMealModal('${entry.id}')" title="Edit meal"
+              style="width: 30px; height: 30px; border-radius: 8px; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
+            </button>
+          </div>
+          ${isPlanned ? `
+            <button onclick="event.stopPropagation(); markFoodLogEaten('${entry.id}'); showToast('Marked as eaten!', 'success'); render();"
+              style="position: absolute; bottom: 8px; right: 10px; z-index: 2; padding: 4px 12px; border-radius: 8px; border: none; background: rgba(50,215,75,0.2); color: ${CONFIG.success_color}; font-size: 11px; font-weight: 600; cursor: pointer; backdrop-filter: blur(8px);">
+              I ate this
+            </button>
+          ` : ''}
+          <!-- Main card content -->
+          <div onclick="openFoodLogDetail('${entry.id}')" class="card-press" style="display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer; transition: background 0.15s;">
+            <div style="width: 56px; height: 56px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated}; ${isPlanned ? 'opacity: 0.7;' : ''}">
+              ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.4;">🍽</div>`}
+            </div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; ${isPlanned ? 'opacity: 0.8;' : ''}">${esc(entry.recipeName)}${ratingIcon}</div>
+              <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                <span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-weight: 500;">${capitalize(entry.mealType)}</span>
+                ${entry.notes ? `<span style="font-size: 11px; color: ${CONFIG.text_tertiary};">Has notes</span>` : ''}
+              </div>
+            </div>
+            <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+          </div>
+        </div>
+      `;
+    }
+
+    function openAddMealForSlot(mealType, dateStr) {
+      // Open a choice modal: swipe or quick log
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">Add ${capitalize(mealType)}</h3>
+          <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${getFoodLogDateLabel(dateStr)}</div>
+
+          <button onclick="closeModal(); openSwipeForFoodLog('${mealType}', '${dateStr}')"
+            style="width: 100%; padding: 14px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <svg width="20" height="20" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"/></svg>
+            Swipe to choose a recipe
+          </button>
+          <button onclick="closeModal(); showQuickLogModalForSlot('${mealType}', '${dateStr}')"
+            style="width: 100%; padding: 14px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+            <svg width="20" height="20" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
+            Log manually
+          </button>
+          <button onclick="closeModal()" style="width: 100%; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer; margin-top: 4px;">Cancel</button>
+        </div>
+      `);
+    }
+
+    function openSwipeForFoodLog(mealType, dateStr) {
+      // Navigate to home, set swipe for this meal type and date
+      state.viewingDate = dateStr;
+      state.homeTab = 'swipe';
+      state.swipeMealType = mealType;
+      state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(mealType) : buildSwipeDeck(mealType);
+      state.swipeIndex = 0;
+      state._returnToFoodLog = true;
+      navigateTo('home');
+    }
+
+    function showQuickLogModalForSlot(mealType, dateStr) {
+      state._quickLogPhoto = null;
+      state._quickLogMealType = mealType;
+      state._quickLogDateStr = dateStr;
+      const isFuture = isFutureDate(dateStr);
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">Log ${capitalize(mealType)}</h3>
+          <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${getFoodLogDateLabel(dateStr)}</div>
+
+          <div style="margin-bottom: ${CONFIG.space_sm};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">What did you eat?</label>
+            <input type="text" id="quickLogName" placeholder="e.g., Chicken tacos, leftover pizza"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" autofocus />
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <button onclick="document.getElementById('quickLogPhotoInput').click()" id="quickLogPhotoBtn"
+              style="width: 100%; padding: 14px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; background: transparent; color: ${CONFIG.text_muted}; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+              Add a photo
+            </button>
+            <input type="file" id="quickLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQuickLogPhoto(this)" />
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Notes <span style="opacity: 0.5;">(optional)</span></label>
+            <textarea id="quickLogNotes" rows="2" placeholder="How was it?"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};"></textarea>
+          </div>
+
+          <button onclick="submitQuickLogForSlot()"
+            style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            ${isFuture ? 'Plan it' : 'Log it'}
+          </button>
+          <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+        </div>
+      `);
+    }
+
+    function submitQuickLogForSlot() {
+      const name = document.getElementById('quickLogName')?.value.trim();
+      if (!name) {
+        showToast('Please enter what you ate', 'error');
+        return;
+      }
+      const notes = document.getElementById('quickLogNotes')?.value.trim() || null;
+      const dateStr = state._quickLogDateStr || getToday();
+      const isFuture = isFutureDate(dateStr);
+      addFoodLogEntry({
+        recipeName: name,
+        mealType: state._quickLogMealType || 'dinner',
+        photo: state._quickLogPhoto || null,
+        notes,
+        dateStr: dateStr,
+        status: isFuture ? 'planned' : 'eaten'
+      });
+      closeModal();
+      showToast(isFuture ? 'Meal planned!' : 'Meal logged!', 'success');
+      render();
     }
 
     // ============================================================
@@ -6618,11 +6816,31 @@ function renderReceiptModal() {
           <input type="file" id="foodLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleFoodLogPhoto('${logId}', this)" />
 
           <!-- Title & meta -->
-          <div style="font-size: 22px; font-weight: 700; color: ${CONFIG.text_color}; margin-bottom: 4px;">${esc(entry.recipeName)}</div>
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px;">
+            <div style="font-size: 22px; font-weight: 700; color: ${CONFIG.text_color}; flex: 1;">${esc(entry.recipeName)}</div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+              <button onclick="openSwapMeal('${logId}', '${entry.mealType}', '${entry.dateCooked.split('T')[0]}')" title="Swap meal"
+                style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_color}; color: ${CONFIG.text_muted}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+              </button>
+              <button onclick="showEditMealModal('${logId}')" title="Edit meal"
+                style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_color}; color: ${CONFIG.text_muted}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
+              </button>
+            </div>
+          </div>
           <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${CONFIG.space_lg};">
             ${entry.mealType ? `<span style="font-size: 12px; padding: 3px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-weight: 500;">${capitalize(entry.mealType)}</span>` : ''}
-            <span style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_tertiary};">${dateLabel} at ${timeStr}</span>
+            <span style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_tertiary};">${dateLabel}</span>
+            ${entry.status === 'planned' ? `<span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08); color: ${CONFIG.text_muted}; font-weight: 600;">Planned</span>` : `<span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(50,215,75,0.15); color: ${CONFIG.success_color}; font-weight: 600;">Cooked</span>`}
           </div>
+          ${entry.status === 'planned' ? `
+            <button onclick="markFoodLogEaten('${logId}'); showToast('Marked as eaten!', 'success'); render();"
+              style="width: 100%; padding: 14px; background: rgba(50,215,75,0.15); border: 1px solid rgba(50,215,75,0.3); border-radius: 12px; color: ${CONFIG.success_color}; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: ${CONFIG.space_lg}; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+              I ate this
+            </button>
+          ` : ''}
 
           <!-- Rating -->
           <div style="margin-bottom: ${CONFIG.space_lg};">
@@ -6688,7 +6906,7 @@ function renderReceiptModal() {
           canvas.width = w; canvas.height = h;
           canvas.getContext('2d').drawImage(img, 0, 0, w, h);
           const base64 = canvas.toDataURL('image/jpeg', 0.7);
-          updateFoodLogEntry(logId, { photo: base64 });
+          updateFoodLogEntry(logId, { photo: base64, status: 'eaten' });
           showToast('Photo saved!', 'success');
           render();
         };
@@ -6812,14 +7030,154 @@ function renderReceiptModal() {
         return;
       }
       const notes = document.getElementById('quickLogNotes')?.value.trim() || null;
+      const dateStr = state._quickLogDateStr || getToday();
+      const isFuture = isFutureDate(dateStr);
       addFoodLogEntry({
         recipeName: name,
         mealType: state._quickLogMealType || 'dinner',
         photo: state._quickLogPhoto || null,
-        notes
+        notes,
+        dateStr: dateStr,
+        status: isFuture ? 'planned' : 'eaten'
       });
       closeModal();
-      showToast('Meal logged!', 'success');
+      showToast(isFuture ? 'Meal planned!' : 'Meal logged!', 'success');
+      render();
+    }
+
+    // ============================================================
+    // SWAP MEAL — Open swipe deck to replace a logged meal
+    // ============================================================
+    function openSwapMeal(logId, mealType, dateStr) {
+      state._swapTargetLogId = logId;
+      state._swapMealType = mealType;
+      state._swapDateStr = dateStr;
+      state.viewingDate = dateStr;
+      state.homeTab = 'swipe';
+      state.swipeMealType = mealType;
+      state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(mealType) : buildSwipeDeck(mealType);
+      state.swipeIndex = 0;
+      state._returnToFoodLog = true;
+      navigateTo('home');
+    }
+
+    // Override handleHomeSwipeRight when in swap mode
+    const _origHandleHomeSwipeRight = null; // handled inline in handleHomeSwipeRight
+
+    // ============================================================
+    // EDIT MEAL MODAL — Manual override for food log entries
+    // ============================================================
+    function showEditMealModal(logId) {
+      const log = getFoodLog();
+      const entry = log.find(e => e.id === logId);
+      if (!entry) return;
+
+      state._editLogId = logId;
+      state._editLogPhoto = entry.photo || null;
+
+      openModal(`
+        <div style="color: ${CONFIG.text_color};">
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_lg};">Edit Meal</h3>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Meal name</label>
+            <input type="text" id="editMealName" value="${esc(entry.recipeName)}"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" />
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <button onclick="document.getElementById('editMealPhotoInput').click()" id="editMealPhotoBtn"
+              style="width: 100%; padding: 14px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; background: transparent; color: ${CONFIG.text_muted}; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+              ${(entry.photo) ? 'Change photo' : 'Add photo'}
+            </button>
+            <input type="file" id="editMealPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleEditMealPhoto(this)" />
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_md};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Notes</label>
+            <textarea id="editMealNotes" rows="2" placeholder="How was it?"
+              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};">${esc(entry.notes || '')}</textarea>
+          </div>
+
+          <div style="margin-bottom: ${CONFIG.space_lg};">
+            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Would make again?</label>
+            <div style="display: flex; gap: 8px;">
+              <button onclick="state._editLogRating = true; document.getElementById('editRateUp').style.borderColor='rgba(50,215,75,0.5)'; document.getElementById('editRateUp').style.background='rgba(50,215,75,0.1)'; document.getElementById('editRateDown').style.borderColor='rgba(255,255,255,0.1)'; document.getElementById('editRateDown').style.background='transparent';"
+                id="editRateUp" style="flex: 1; padding: 12px; border-radius: 10px; border: 2px solid ${entry.wouldMakeAgain === true ? 'rgba(50,215,75,0.5)' : 'rgba(255,255,255,0.1)'}; background: ${entry.wouldMakeAgain === true ? 'rgba(50,215,75,0.1)' : 'transparent'}; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; text-align: center;">
+                👍 Yes
+              </button>
+              <button onclick="state._editLogRating = false; document.getElementById('editRateDown').style.borderColor='rgba(255,69,58,0.5)'; document.getElementById('editRateDown').style.background='rgba(255,69,58,0.1)'; document.getElementById('editRateUp').style.borderColor='rgba(255,255,255,0.1)'; document.getElementById('editRateUp').style.background='transparent';"
+                id="editRateDown" style="flex: 1; padding: 12px; border-radius: 10px; border: 2px solid ${entry.wouldMakeAgain === false ? 'rgba(255,69,58,0.5)' : 'rgba(255,255,255,0.1)'}; background: ${entry.wouldMakeAgain === false ? 'rgba(255,69,58,0.1)' : 'transparent'}; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; text-align: center;">
+                👎 Nah
+              </button>
+            </div>
+          </div>
+
+          <button onclick="submitEditMeal()"
+            style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            Save Changes
+          </button>
+          <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+        </div>
+      `);
+
+      // Initialize rating state
+      state._editLogRating = entry.wouldMakeAgain;
+    }
+
+    function handleEditMealPhoto(input) {
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxDim = 800;
+          let w = img.width, h = img.height;
+          if (w > maxDim || h > maxDim) {
+            if (w > h) { h = h * maxDim / w; w = maxDim; }
+            else { w = w * maxDim / h; h = maxDim; }
+          }
+          canvas.width = w; canvas.height = h;
+          canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+          state._editLogPhoto = canvas.toDataURL('image/jpeg', 0.7);
+          const btn = document.getElementById('editMealPhotoBtn');
+          if (btn) {
+            btn.innerHTML = '<svg width="20" height="20" fill="none" stroke="#32d74b" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg> Photo updated!';
+            btn.style.borderColor = 'rgba(50,215,75,0.3)';
+            btn.style.color = '#32d74b';
+          }
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function submitEditMeal() {
+      const logId = state._editLogId;
+      if (!logId) return;
+      const name = document.getElementById('editMealName')?.value.trim();
+      if (!name) {
+        showToast('Please enter a meal name', 'error');
+        return;
+      }
+      const notes = document.getElementById('editMealNotes')?.value.trim() || null;
+      const updates = {
+        recipeName: name,
+        notes: notes,
+        wouldMakeAgain: state._editLogRating !== undefined ? state._editLogRating : null
+      };
+      // If photo was changed/added
+      if (state._editLogPhoto) {
+        updates.photo = state._editLogPhoto;
+        // Adding a photo marks as eaten
+        updates.status = 'eaten';
+      }
+      updateFoodLogEntry(logId, updates);
+      closeModal();
+      showToast('Meal updated!', 'success');
       render();
     }
 
@@ -10145,7 +10503,7 @@ function navigateTo(view) {
 
             <!-- Active card -->
             <div class="swipe-card entering" data-active="true">
-              <div class="swipe-overlay like">I ate this!</div>
+              <div class="swipe-overlay like">${isFutureDay ? 'Plan this!' : 'I ate this!'}</div>
               <div class="swipe-overlay nope">Skip</div>
               ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder">🍽️</div>`}
               <div class="card-body">
@@ -10176,7 +10534,7 @@ function navigateTo(view) {
           <div class="swipe-hint-arrows">
             <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Skip</span>
             <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
-            <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">I ate this! →</span>
+            <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">${isFutureDay ? 'Plan this! →' : 'I ate this! →'}</span>
           </div>
         </div>
       `;
@@ -10278,6 +10636,16 @@ function navigateTo(view) {
     }
 
     function onSwipeExit() {
+      // If we came from food log, go back there
+      if (state._returnToFoodLog) {
+        state._returnToFoodLog = false;
+        state._swapTargetLogId = null;
+        state._swapMealType = null;
+        state._swapDateStr = null;
+        state.homeTab = 'selected';
+        navigateTo('my-meals');
+        return;
+      }
       state.homeTab = 'selected';
       state.todaySwipeMealSlot = null;
       render();
@@ -11275,7 +11643,7 @@ function navigateTo(view) {
       dayData.meals[meal].loggedAt = Date.now();
       dayData.meals[meal].expanded = false;
       // Also log to food log
-      addFoodLogEntry({ recipeName: name, mealType: meal, notes: notes || null });
+      addFoodLogEntry({ recipeName: name, mealType: meal, notes: notes || null, dateStr: dateStr, status: 'eaten' });
       closeModal();
       await saveMealDay(dateStr);
       showToast(`${capitalize(meal)} logged!`, 'success');
@@ -15253,7 +15621,9 @@ function renderGroceryList() {
           ingredients: ings.map(i => i.name),
           category: recipe.category || 'Other',
           mealType: meal,
-          photo: photoBase64 || null
+          photo: photoBase64 || null,
+          dateStr: dateStr,
+          status: 'eaten'
         });
       }
       await saveMealDay(dateStr);
@@ -15278,7 +15648,9 @@ function renderGroceryList() {
           image: recipeThumb(recipe),
           ingredients: ings.map(i => i.name),
           category: recipe.category || 'Other',
-          mealType: meal
+          mealType: meal,
+          dateStr: dateStr,
+          status: 'eaten'
         });
       }
       await saveMealDay(dateStr);
@@ -15297,7 +15669,9 @@ function renderGroceryList() {
       addFoodLogEntry({
         recipeName: takeoutInfo?.restaurant ? `${takeoutInfo.restaurant} - ${takeoutInfo.meal || 'Takeout'}` : (takeoutInfo?.meal || 'Takeout'),
         mealType: meal,
-        category: 'Takeout'
+        category: 'Takeout',
+        dateStr: dateStr,
+        status: 'eaten'
       });
       await saveMealDay(dateStr);
       showToast(`${capitalize(meal)} logged!`, 'success');
@@ -15415,25 +15789,69 @@ function renderGroceryList() {
       const recipe = deck[idx];
       const card = document.querySelector('.swipe-card[data-active="true"]');
       const doLog = () => {
-        // Log recipe as "I ate this" in food log
+        const dateStr = state.viewingDate || getToday();
+        const mealType = state.swipeMealType || detectMealType();
+        const isFuture = isFutureDate(dateStr);
         const ings = recipeIngList(recipe);
-        const entry = addFoodLogEntry({
-          recipeId: recipe.__backendId || recipe.id,
-          recipeName: recipe.title || recipe.name || 'Recipe',
-          image: recipeThumb(recipe),
-          ingredients: ings.map(i => i.name),
-          category: recipe.category || 'Other',
-          mealType: state.swipeMealType || detectMealType()
-        });
+        const newName = recipe.title || recipe.name || 'Recipe';
+
+        // Check if this is a swap operation
+        if (state._swapTargetLogId) {
+          const oldLog = getFoodLog().find(e => e.id === state._swapTargetLogId);
+          const oldName = oldLog ? oldLog.recipeName : 'old meal';
+          // Remove old entry and add new one
+          deleteFoodLogEntry(state._swapTargetLogId);
+          const entry = addFoodLogEntry({
+            recipeId: recipe.__backendId || recipe.id,
+            recipeName: newName,
+            image: recipeThumb(recipe),
+            ingredients: ings.map(i => i.name),
+            category: recipe.category || 'Other',
+            mealType: state._swapMealType || mealType,
+            dateStr: state._swapDateStr || dateStr,
+            status: isFuture ? 'planned' : 'eaten'
+          });
+          showToast(`Swapped! ${oldName} → ${newName}`, 'success');
+          state._swapTargetLogId = null;
+          state._swapMealType = null;
+          state._swapDateStr = null;
+          state._returnToFoodLog = true;
+          state._lastLoggedEntryId = entry.id;
+        } else {
+          const entry = addFoodLogEntry({
+            recipeId: recipe.__backendId || recipe.id,
+            recipeName: newName,
+            image: recipeThumb(recipe),
+            ingredients: ings.map(i => i.name),
+            category: recipe.category || 'Other',
+            mealType: mealType,
+            dateStr: dateStr,
+            status: isFuture ? 'planned' : 'eaten'
+          });
+          const dateLabel = getFoodLogDateLabel(dateStr);
+          const mealLabel = capitalize(mealType);
+          if (isFuture) {
+            showToast(`Planned for ${mealLabel} on ${dateLabel}`, 'success');
+          } else {
+            showToast(`Added to ${mealLabel} on ${dateLabel}`, 'success');
+          }
+          state._lastLoggedEntryId = entry.id;
+        }
+
         // Advance swipe deck
         state.swipeIndex++;
         if (state.swipeIndex >= deck.length) {
           state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(state.swipeMealType) : buildSwipeDeck(state.swipeMealType);
           state.swipeIndex = 0;
         }
-        showToast('Logged! Tap to add a photo.', 'success');
-        // Store last logged entry id for potential photo add
-        state._lastLoggedEntryId = entry.id;
+
+        // Return to food log if needed
+        if (state._returnToFoodLog) {
+          state._returnToFoodLog = false;
+          state.homeTab = 'selected';
+          navigateTo('my-meals');
+          return;
+        }
         render();
       };
       if (card) {
