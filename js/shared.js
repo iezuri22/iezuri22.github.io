@@ -1199,7 +1199,7 @@ function addFoodLogEntry(entry) {
     image: entry.image || null, ingredients: entry.ingredients || [],
     category: entry.category || 'Other', mealType: entry.mealType || detectMealType(),
     dateCooked: dateCooked, photo: entry.photo || null, myPhoto: entry.myPhoto || null,
-    notes: entry.notes || null, wouldMakeAgain: null, status: entry.status || 'eaten'
+    notes: entry.notes || null, wouldMakeAgain: null, status: entry.status || 'planned'
   };
   const dateKey = logEntry.dateCooked.split('T')[0];
   const existingIdx = log.findIndex(e => e.dateCooked.split('T')[0] === dateKey && e.mealType === logEntry.mealType && logEntry.mealType !== 'snack');
@@ -3214,7 +3214,7 @@ function selectRecipeForSlot(recipeId, mealType, dateStr) {
 
       <button onclick="submitRecipeSlotLog()"
         style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
-        ${isFuture ? 'Plan it' : 'Log it'}
+        Add to meal plan
       </button>
       <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
     </div>
@@ -3239,7 +3239,7 @@ function submitRecipeSlotLog() {
     photo: state._quickLogPhoto || null,
     notes,
     dateStr: dateStr,
-    status: isFuture ? 'planned' : 'eaten'
+    status: 'planned'
   });
   closeModal();
   showToast(isFuture ? 'Meal planned!' : 'Meal logged!', 'success');
@@ -3280,7 +3280,7 @@ function showQuickLogModalForSlot(mealType, dateStr) {
 
       <button onclick="submitQuickLogForSlot()"
         style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
-        ${isFuture ? 'Plan it' : 'Log it'}
+        Add to meal plan
       </button>
       <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
     </div>
@@ -3302,7 +3302,7 @@ function submitQuickLogForSlot() {
     photo: state._quickLogPhoto || null,
     notes,
     dateStr: dateStr,
-    status: isFuture ? 'planned' : 'eaten'
+    status: 'planned'
   });
   closeModal();
   showToast(isFuture ? 'Meal planned!' : 'Meal logged!', 'success');

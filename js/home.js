@@ -369,7 +369,7 @@ function renderSwipeTab() {
         ` : ''}
 
         <div class="swipe-card entering" data-active="true">
-          <div class="swipe-overlay like">${isFutureDay ? 'Plan this!' : 'I ate this!'}</div>
+          <div class="swipe-overlay like">Add!</div>
           <div class="swipe-overlay nope">Skip</div>
           ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder">🍽️</div>`}
           <div class="card-body">
@@ -398,7 +398,7 @@ function renderSwipeTab() {
       <div class="swipe-hint-arrows">
         <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Skip</span>
         <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
-        <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">${isFutureDay ? 'Plan this! →' : 'I ate this! →'}</span>
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Add! →</span>
       </div>
     </div>
   `;
@@ -1226,7 +1226,7 @@ async function submitCustomMealForm(meal) {
   dayData.meals[meal].remixInfo = { name, notes, baseRecipeId: null };
   dayData.meals[meal].loggedAt = Date.now();
   dayData.meals[meal].expanded = false;
-  addFoodLogEntry({ recipeName: name, mealType: meal, notes: notes || null, dateStr: dateStr, status: 'eaten' });
+  addFoodLogEntry({ recipeName: name, mealType: meal, notes: notes || null, dateStr: dateStr, status: 'planned' });
   closeModal();
   await saveMealDay(dateStr);
   showToast(`${capitalize(meal)} logged!`, 'success');
@@ -1396,7 +1396,7 @@ async function logMealAsMatched(meal, photoBase64) {
       mealType: meal,
       photo: photoBase64 || null,
       dateStr: dateStr,
-      status: 'eaten'
+      status: 'planned'
     });
   }
   await saveMealDay(dateStr);
@@ -1422,7 +1422,7 @@ async function logMealAsDifferent(meal, actualRecipeId) {
       category: recipe.category || 'Other',
       mealType: meal,
       dateStr: dateStr,
-      status: 'eaten'
+      status: 'planned'
     });
   }
   await saveMealDay(dateStr);
@@ -1442,7 +1442,7 @@ async function logMealAsTakeout(meal, takeoutInfo) {
     mealType: meal,
     category: 'Takeout',
     dateStr: dateStr,
-    status: 'eaten'
+    status: 'planned'
   });
   await saveMealDay(dateStr);
   showToast(`${capitalize(meal)} logged!`, 'success');
@@ -1491,7 +1491,6 @@ function handleHomeSwipeRight() {
   const doLog = () => {
     const dateStr = state.viewingDate || getToday();
     const mealType = state.swipeMealType || detectMealType();
-    const isFuture = isFutureDate(dateStr);
     const ings = recipeIngList(recipe);
     const newName = recipe.title || recipe.name || 'Recipe';
 
@@ -1507,7 +1506,7 @@ function handleHomeSwipeRight() {
         category: recipe.category || 'Other',
         mealType: state._swapMealType || mealType,
         dateStr: state._swapDateStr || dateStr,
-        status: isFuture ? 'planned' : 'eaten'
+        status: 'planned'
       });
       showToast(`Swapped! ${oldName} → ${newName}`, 'success');
       state._swapTargetLogId = null;
@@ -1524,15 +1523,11 @@ function handleHomeSwipeRight() {
         category: recipe.category || 'Other',
         mealType: mealType,
         dateStr: dateStr,
-        status: isFuture ? 'planned' : 'eaten'
+        status: 'planned'
       });
       const dateLabel = getFoodLogDateLabel(dateStr);
       const mealLabel = capitalize(mealType);
-      if (isFuture) {
-        showToast(`Planned for ${mealLabel} on ${dateLabel}`, 'success');
-      } else {
-        showToast(`Added to ${mealLabel} on ${dateLabel}`, 'success');
-      }
+      showToast(`Added to ${mealLabel} on ${dateLabel}`, 'success');
       state._lastLoggedEntryId = entry.id;
     }
 
@@ -1549,6 +1544,7 @@ function handleHomeSwipeRight() {
       return;
     }
     render();
+    setTimeout(initSwipeGestures, 100);
   };
   if (card) {
     card.classList.add('fly-right');
@@ -1570,6 +1566,7 @@ function handleHomeSwipeLeft() {
       state.swipeIndex = 0;
     }
     render();
+    setTimeout(initSwipeGestures, 100);
   };
   if (card) {
     card.classList.add('fly-left');
@@ -2570,6 +2567,31 @@ function init() {
   } else {
     state.currentView = 'home';
   }
+
+  // Restore swap-for-slot state from cross-page navigation (My Meals → Home swipe)
+  const swipeSlotData = sessionStorage.getItem('yummy_swipe_slot');
+  if (swipeSlotData) {
+    try {
+      const slot = JSON.parse(swipeSlotData);
+      sessionStorage.removeItem('yummy_swipe_slot');
+      state.viewingDate = slot.dateStr;
+      state.homeTab = 'swipe';
+      state.swipeMealType = slot.mealType;
+      state.todaySwipeMealSlot = slot.mealType;
+      if (slot.swapLogId) {
+        state._swapTargetLogId = slot.swapLogId;
+        state._swapMealType = slot.mealType;
+        state._swapDateStr = slot.dateStr;
+      }
+      state._returnToFoodLog = !!slot.returnToFoodLog;
+      state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(slot.mealType) : buildSwipeDeck(slot.mealType);
+      state.swipeIndex = 0;
+    } catch (e) {
+      console.error('Failed to restore swipe slot state:', e);
+      sessionStorage.removeItem('yummy_swipe_slot');
+    }
+  }
+
   checkExpirationNotifications();
   setInterval(() => {
     if (state.currentView === 'home' && isToday(state.viewingDate)) {
