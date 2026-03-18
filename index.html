@@ -16724,6 +16724,117 @@ function renderGroceryList() {
     }
 
     // ===== MY KITCHEN =====
+    // --- Kitchen: Category gradient mapping ---
+    const KITCHEN_CATEGORY_GRADIENTS = {
+      'Proteins': 'linear-gradient(135deg, #8b1a1a, #3d0c0c)',
+      'Grains & Pasta': 'linear-gradient(135deg, #b8860b, #3e2723)',
+      'Vegetables': 'linear-gradient(135deg, #2e7d32, #1b3a1b)',
+      'Dairy': 'linear-gradient(135deg, #455a64, #1a237e)',
+      'Pantry Staples': 'linear-gradient(135deg, #8d6e63, #2c2c2c)',
+      'Spices': 'linear-gradient(135deg, #bf5700, #5c1a00)',
+      'Other': 'linear-gradient(135deg, #424242, #1a1a1a)'
+    };
+
+    function getIngredientGradient(ingredientName) {
+      // Check custom ingredients first
+      const customIngs = getCustomKitchenIngredients();
+      for (const ci of customIngs) {
+        if (ci.name === ingredientName) return KITCHEN_CATEGORY_GRADIENTS[ci.category] || KITCHEN_CATEGORY_GRADIENTS['Other'];
+      }
+      // Check hardcoded
+      for (const [catName, catData] of Object.entries(KITCHEN_INGREDIENTS)) {
+        for (const item of catData.items) {
+          if (item.name === ingredientName) return KITCHEN_CATEGORY_GRADIENTS[catName] || KITCHEN_CATEGORY_GRADIENTS['Other'];
+        }
+      }
+      return KITCHEN_CATEGORY_GRADIENTS['Other'];
+    }
+
+    // --- Kitchen: Custom ingredients persistence ---
+    function getCustomKitchenIngredients() {
+      try { return JSON.parse(localStorage.getItem('customKitchenIngredients') || '[]'); }
+      catch { return []; }
+    }
+    function saveCustomKitchenIngredients(items) {
+      localStorage.setItem('customKitchenIngredients', JSON.stringify(items));
+    }
+    function addCustomKitchenIngredient(name, category, photoDataUrl) {
+      const items = getCustomKitchenIngredients();
+      if (items.some(i => i.name.toLowerCase() === name.toLowerCase())) {
+        showToast('Ingredient already exists');
+        return;
+      }
+      items.push({ name, category: category || 'Other', photo: photoDataUrl || '', tips: null });
+      saveCustomKitchenIngredients(items);
+      // Auto-link: scan existing recipes for this ingredient
+      autoLinkRecipesToIngredient(name);
+      showToast(`${name} added to Kitchen`);
+      state._showAddIngredientModal = false;
+      render();
+    }
+
+    // --- Kitchen: Recipe-ingredient linking persistence ---
+    function getKitchenRecipeLinks(ingredientName) {
+      try { return JSON.parse(localStorage.getItem('kitchenRecipeLinks_' + ingredientName) || '{}'); }
+      catch { return {}; }
+    }
+    function saveKitchenRecipeLinks(ingredientName, links) {
+      localStorage.setItem('kitchenRecipeLinks_' + ingredientName, JSON.stringify(links));
+    }
+    function removeRecipeFromIngredient(ingredientName, recipeId) {
+      const links = getKitchenRecipeLinks(ingredientName);
+      links[recipeId] = 'excluded';
+      saveKitchenRecipeLinks(ingredientName, links);
+      showToast('Removed from ' + ingredientName);
+      render();
+    }
+    function addRecipeToIngredient(ingredientName, recipeId) {
+      const links = getKitchenRecipeLinks(ingredientName);
+      links[recipeId] = 'included';
+      saveKitchenRecipeLinks(ingredientName, links);
+      state._showLinkRecipeModal = false;
+      render();
+    }
+    function autoLinkRecipesToIngredient(ingredientName) {
+      // This is handled dynamically in getMatchingRecipesForIngredient
+      // No-op — matching is computed at render time with exclusion/inclusion overrides
+    }
+
+    function getAllKitchenIngredientNames() {
+      const names = [];
+      Object.values(KITCHEN_INGREDIENTS).forEach(cat => cat.items.forEach(item => names.push(item.name)));
+      getCustomKitchenIngredients().forEach(ci => names.push(ci.name));
+      return names;
+    }
+
+    function getMatchingRecipesForIngredient(ingredientName) {
+      const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+      const links = getKitchenRecipeLinks(ingredientName);
+      const lowerName = ingredientName.toLowerCase();
+
+      // Auto-match by keyword
+      const autoMatched = recipes.filter(r => {
+        const ings = recipeIngList(r);
+        return ings.some(ing => {
+          const ingName = (ing.name || '').toLowerCase();
+          return ingName.includes(lowerName) || lowerName.includes(ingName);
+        });
+      });
+
+      // Build final set: auto-matched minus excluded, plus manually included
+      const resultMap = {};
+      autoMatched.forEach(r => {
+        const id = r.__backendId || r.id;
+        if (links[id] !== 'excluded') resultMap[id] = r;
+      });
+      // Add manually included
+      recipes.forEach(r => {
+        const id = r.__backendId || r.id;
+        if (links[id] === 'included') resultMap[id] = r;
+      });
+      return Object.values(resultMap);
+    }
+
     const KITCHEN_INGREDIENTS = {
       'Proteins': {
         items: [
@@ -16782,28 +16893,99 @@ function renderGroceryList() {
       }
     };
 
+    function renderKitchenIngredientCard(item, catName) {
+      const count = getMatchingRecipesForIngredient(item.name).length;
+      const gradient = KITCHEN_CATEGORY_GRADIENTS[catName] || KITCHEN_CATEGORY_GRADIENTS['Other'];
+      const hasPhoto = item.photo && item.photo.startsWith('data:');
+      return `
+        <div onclick="openKitchenIngredient('${esc(item.name)}')" class="card-press"
+          style="cursor: pointer; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+          <div style="width: 100%; aspect-ratio: 1; overflow: hidden; display: flex; align-items: center; justify-content: center; ${hasPhoto ? '' : 'background: ' + gradient + ';'}">
+            ${hasPhoto
+              ? `<img loading="lazy" src="${esc(item.photo)}" style="width:100%;height:100%;object-fit:cover;" />`
+              : `<span style="font-size: 20px; font-weight: 700; color: #f5f5f7; text-align: center; padding: 12px; line-height: 1.2; word-break: break-word;">${esc(item.name)}</span>`
+            }
+          </div>
+          <div style="padding: 8px;">
+            <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(item.name)}</div>
+            <div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 2px;">${count} recipe${count !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderAddIngredientModal() {
+      if (!state._showAddIngredientModal) return '';
+      const categories = ['Proteins', 'Grains & Pasta', 'Vegetables', 'Dairy', 'Pantry Staples', 'Spices', 'Other'];
+      return `
+        <div onclick="if(event.target===this){state._showAddIngredientModal=false;render();}" style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:24px;">
+          <div style="background:${CONFIG.surface_elevated};border-radius:16px;width:100%;max-width:380px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
+            <h3 style="font-size:20px;font-weight:700;color:${CONFIG.text_color};margin:0 0 20px 0;">Add Ingredient</h3>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;color:${CONFIG.text_muted};display:block;margin-bottom:6px;">Ingredient Name *</label>
+              <input id="addIngName" type="text" placeholder="e.g. Avocado" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:15px;background:${CONFIG.background_color};color:${CONFIG.text_color};box-sizing:border-box;font-family:${CONFIG.font_family};outline:none;" />
+            </div>
+            <div style="margin-bottom:16px;">
+              <label style="font-size:13px;font-weight:600;color:${CONFIG.text_muted};display:block;margin-bottom:6px;">Category</label>
+              <select id="addIngCategory" style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:15px;background:${CONFIG.background_color};color:${CONFIG.text_color};box-sizing:border-box;font-family:${CONFIG.font_family};outline:none;-webkit-appearance:none;">
+                ${categories.map(c => `<option value="${c}">${c}</option>`).join('')}
+              </select>
+            </div>
+            <div style="margin-bottom:20px;">
+              <label style="font-size:13px;font-weight:600;color:${CONFIG.text_muted};display:block;margin-bottom:6px;">Photo (optional)</label>
+              <div style="display:flex;align-items:center;gap:12px;">
+                <div id="addIngPhotoPreview" style="width:64px;height:64px;border-radius:10px;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+                  <svg width="24" height="24" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"/></svg>
+                </div>
+                <input id="addIngPhotoInput" type="file" accept="image/*" capture="environment" style="display:none;" onchange="handleAddIngredientPhoto(this)" />
+                <button onclick="document.getElementById('addIngPhotoInput').click()" style="padding:8px 16px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:none;color:${CONFIG.text_color};font-size:13px;cursor:pointer;font-family:${CONFIG.font_family};">Choose Photo</button>
+              </div>
+            </div>
+            <div style="display:flex;gap:10px;">
+              <button onclick="state._showAddIngredientModal=false;render();" style="flex:1;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:none;color:${CONFIG.text_color};font-size:15px;cursor:pointer;font-family:${CONFIG.font_family};">Cancel</button>
+              <button onclick="submitAddIngredient()" style="flex:1;padding:12px;border-radius:10px;border:none;background:${CONFIG.primary_action_color};color:white;font-size:15px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};">Add to Kitchen</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function handleAddIngredientPhoto(input) {
+      if (!input.files || !input.files[0]) return;
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        state._addIngredientPhoto = e.target.result;
+        const preview = document.getElementById('addIngPhotoPreview');
+        if (preview) preview.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:cover;" />';
+      };
+      reader.readAsDataURL(input.files[0]);
+    }
+
+    function submitAddIngredient() {
+      const nameEl = document.getElementById('addIngName');
+      const catEl = document.getElementById('addIngCategory');
+      if (!nameEl || !nameEl.value.trim()) { showToast('Please enter an ingredient name'); return; }
+      addCustomKitchenIngredient(nameEl.value.trim(), catEl ? catEl.value : 'Other', state._addIngredientPhoto || '');
+      state._addIngredientPhoto = '';
+    }
+
     function renderKitchen() {
       const searchTerm = state.kitchenSearch || '';
+      const customIngredients = getCustomKitchenIngredients();
 
-      // Count recipes per ingredient
-      const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
-      const ingredientRecipeCounts = {};
-      recipes.forEach(r => {
-        const ings = recipeIngList(r);
-        ings.forEach(ing => {
-          const name = (ing.name || '').toLowerCase();
-          Object.values(KITCHEN_INGREDIENTS).forEach(cat => {
-            cat.items.forEach(item => {
-              if (name.includes(item.name.toLowerCase()) || item.name.toLowerCase().includes(name)) {
-                ingredientRecipeCounts[item.name] = (ingredientRecipeCounts[item.name] || 0) + 1;
-              }
-            });
-          });
-        });
+      // Build combined categories: hardcoded + custom
+      const allCategories = {};
+      Object.entries(KITCHEN_INGREDIENTS).forEach(([catName, catData]) => {
+        allCategories[catName] = { items: [...catData.items] };
+      });
+      customIngredients.forEach(ci => {
+        const cat = ci.category || 'Other';
+        if (!allCategories[cat]) allCategories[cat] = { items: [] };
+        allCategories[cat].items.push({ name: ci.name, photo: ci.photo || '', tips: ci.tips });
       });
 
       let categoriesHtml = '';
-      Object.entries(KITCHEN_INGREDIENTS).forEach(([catName, catData]) => {
+      Object.entries(allCategories).forEach(([catName, catData]) => {
         let items = catData.items;
         if (searchTerm) {
           const s = searchTerm.toLowerCase();
@@ -16815,21 +16997,7 @@ function renderGroceryList() {
           <div style="margin-bottom: ${CONFIG.space_lg};">
             <h3 style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm}; padding-left: 4px;">${catName}</h3>
             <div class="kitchen-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
-              ${items.map(item => {
-                const count = ingredientRecipeCounts[item.name] || 0;
-                return `
-                  <div onclick="openKitchenIngredient('${esc(item.name)}')" class="card-press"
-                    style="cursor: pointer; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-                    <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
-                      <img loading="lazy" src="${esc(item.image)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;opacity:0.3;\\'>🥘</div>'" />
-                    </div>
-                    <div style="padding: 8px;">
-                      <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(item.name)}</div>
-                      <div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 2px;">${count} recipe${count !== 1 ? 's' : ''}</div>
-                    </div>
-                  </div>
-                `;
-              }).join('')}
+              ${items.map(item => renderKitchenIngredientCard(item, catName)).join('')}
             </div>
           </div>
         `;
@@ -16839,7 +17007,9 @@ function renderGroceryList() {
       if (!categoriesHtml && searchTerm) {
         categoriesHtml = `
           <div style="text-align: center; padding: ${CONFIG.space_xl} ${CONFIG.space_md};">
-            <div style="font-size: 40px; opacity: 0.3; margin-bottom: ${CONFIG.space_sm};">🔍</div>
+            <div style="font-size: 40px; opacity: 0.3; margin-bottom: ${CONFIG.space_sm};">
+              <svg width="40" height="40" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            </div>
             <div style="color: ${CONFIG.text_muted}; font-size: 14px;">No ingredients match "${esc(searchTerm)}"</div>
           </div>
         `;
@@ -16847,18 +17017,25 @@ function renderGroceryList() {
 
       return `
         <div style="padding: ${CONFIG.space_md}; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
-          <!-- Search bar -->
+          <!-- Search bar + Add button -->
           <div style="position: sticky; top: 0; z-index: 10; padding: ${CONFIG.space_sm} 0; background: ${CONFIG.background_color};">
-            <div style="position: relative;">
-              <svg width="18" height="18" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-              <input type="text" id="kitchenSearch" placeholder="Search an ingredient..." value="${esc(searchTerm)}"
-                oninput="state.kitchenSearch = this.value; render();"
-                style="width: 100%; padding: 12px 12px 12px 40px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-size: 15px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box; font-family: ${CONFIG.font_family};" />
+            <div style="display: flex; gap: 8px; align-items: center;">
+              <div style="position: relative; flex: 1;">
+                <svg width="18" height="18" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+                <input type="text" id="kitchenSearch" placeholder="Search an ingredient..." value="${esc(searchTerm)}"
+                  oninput="state.kitchenSearch = this.value; render();"
+                  style="width: 100%; padding: 12px 12px 12px 40px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-size: 15px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box; font-family: ${CONFIG.font_family};" />
+              </div>
+              <button onclick="state._showAddIngredientModal=true;state._addIngredientPhoto='';render();" style="padding: 10px 14px; border-radius: 12px; border: none; background: ${CONFIG.primary_action_color}; color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: ${CONFIG.font_family}; display: flex; align-items: center; gap: 4px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                Add
+              </button>
             </div>
           </div>
 
           ${categoriesHtml}
         </div>
+        ${renderAddIngredientModal()}
       `;
     }
 
@@ -17023,29 +17200,68 @@ function renderGroceryList() {
       `;
     }
 
+    function renderLinkRecipeModal(ingredientName) {
+      if (!state._showLinkRecipeModal) return '';
+      const searchTerm = (state._linkRecipeSearch || '').toLowerCase();
+      const allRecipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+      const alreadyLinked = getMatchingRecipesForIngredient(ingredientName);
+      const linkedIds = new Set(alreadyLinked.map(r => r.__backendId || r.id));
+      let filtered = allRecipes.filter(r => !linkedIds.has(r.__backendId || r.id));
+      if (searchTerm) filtered = filtered.filter(r => (r.title || '').toLowerCase().includes(searchTerm));
+      return `
+        <div onclick="if(event.target===this){state._showLinkRecipeModal=false;render();}" style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center;">
+          <div style="background:${CONFIG.surface_elevated};border-radius:16px 16px 0 0;width:100%;max-width:600px;max-height:70vh;display:flex;flex-direction:column;box-shadow:0 -4px 32px rgba(0,0,0,0.5);">
+            <div style="padding:20px 20px 12px;">
+              <h3 style="font-size:18px;font-weight:700;color:${CONFIG.text_color};margin:0 0 12px;">Link a Recipe to ${esc(ingredientName)}</h3>
+              <input type="text" placeholder="Search recipes..." value="${esc(state._linkRecipeSearch || '')}"
+                oninput="state._linkRecipeSearch=this.value;render();"
+                style="width:100%;padding:10px 12px;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:15px;background:${CONFIG.background_color};color:${CONFIG.text_color};box-sizing:border-box;font-family:${CONFIG.font_family};outline:none;" />
+            </div>
+            <div style="overflow-y:auto;padding:0 20px 20px;flex:1;">
+              ${filtered.length === 0 ? `<div style="text-align:center;padding:24px;color:${CONFIG.text_muted};font-size:14px;">No recipes found</div>` :
+                filtered.slice(0, 30).map(r => {
+                  const id = r.__backendId || r.id;
+                  const img = recipeThumb(r);
+                  return `
+                    <div onclick="addRecipeToIngredient('${esc(ingredientName)}','${esc(id)}')" class="card-press" style="display:flex;align-items:center;gap:12px;padding:10px;cursor:pointer;background:${CONFIG.surface_color};border-radius:10px;margin-bottom:6px;">
+                      <div style="width:48px;height:48px;border-radius:8px;overflow:hidden;flex-shrink:0;background:${CONFIG.surface_elevated};">
+                        ${img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><svg width="20" height="20" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg></div>`}
+                      </div>
+                      <div style="flex:1;min-width:0;">
+                        <div style="font-size:14px;font-weight:600;color:${CONFIG.text_color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.title)}</div>
+                        ${r.cookTime ? `<div style="font-size:12px;color:${CONFIG.text_muted};margin-top:2px;">${esc(r.cookTime)}</div>` : ''}
+                      </div>
+                      <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                    </div>
+                  `;
+                }).join('')
+              }
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     function renderKitchenDetail() {
       const name = state.kitchenSelectedIngredient;
       if (!name) return '<div style="padding: 16px;">Ingredient not found</div>';
 
-      // Find ingredient data
+      // Find ingredient data from hardcoded or custom
       let ingredientData = null;
       Object.values(KITCHEN_INGREDIENTS).forEach(cat => {
         cat.items.forEach(item => {
           if (item.name === name) ingredientData = item;
         });
       });
+      if (!ingredientData) {
+        const customIngs = getCustomKitchenIngredients();
+        const ci = customIngs.find(i => i.name === name);
+        if (ci) ingredientData = { name: ci.name, photo: ci.photo || '', tips: ci.tips };
+      }
+      if (!ingredientData) ingredientData = { name, photo: '', tips: null };
 
-      if (!ingredientData) ingredientData = { name, image: '', tips: null };
-
-      // Find matching recipes
-      const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
-      const matchingRecipes = recipes.filter(r => {
-        const ings = recipeIngList(r);
-        return ings.some(ing => {
-          const ingName = (ing.name || '').toLowerCase();
-          return ingName.includes(name.toLowerCase()) || name.toLowerCase().includes(ingName);
-        });
-      });
+      // Get matching recipes using the linking system
+      const matchingRecipes = getMatchingRecipesForIngredient(name);
 
       // Count from food log
       const log = getFoodLog();
@@ -17085,84 +17301,92 @@ function renderGroceryList() {
           </div>`;
       }
 
-      function renderEditableSingleTip(text, field, label) {
-        if (isEditing(field, 0)) {
+      // Cooking Methods section (kept as full section)
+      function renderMethodsSection(methods) {
+        const hasItems = methods && methods.length > 0;
+        return `
+          <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
+            <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Cooking Methods</div>
+            ${hasItems ? methods.map((m, i) => renderEditableTipItem(m, 'methods', i)).join('') : `<div style="color: ${CONFIG.text_muted}; font-size: 13px; padding: 4px 0;">No methods yet</div>`}
+            ${isAdding('methods') ? `
+              <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 0;">
+                <input id="tip-add-methods" type="text" placeholder="Type your method..." autofocus style="flex:1; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveNewKitchenSectionTip('${esc(name)}','methods',this.value)}" />
+                <button onclick="saveNewKitchenSectionTip('${esc(name)}','methods',document.getElementById('tip-add-methods').value)" style="background: none; border: none; color: ${CONFIG.success_color}; cursor: pointer; padding: 6px; font-size: 16px;">✓</button>
+              </div>
+            ` : `
+              <button onclick="startAddKitchenSectionTip('${esc(name)}','methods')" style="width: 100%; padding: 8px; background: none; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 13px; margin-top: 6px;">+ Add</button>
+            `}
+          </div>`;
+      }
+
+      // Quick Tips: horizontal scroll of Storage, Prep, Seasoning cards
+      function renderQuickTipCard(text, field, label, iconSvg) {
+        const hasContent = !!text;
+        const displayText = hasContent ? text : 'No tip yet';
+        return `
+          <div onclick="startEditKitchenTip('${esc(name)}','${field}',0)" style="min-width:140px;max-width:180px;flex-shrink:0;background:rgba(255,255,255,0.05);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;">
+              <div style="opacity:0.6;">${iconSvg}</div>
+              <button onclick="event.stopPropagation();deleteKitchenTipFromSection('${esc(name)}','${field}',0)" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:2px;opacity:0.5;">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            </div>
+            <div style="font-size:12px;font-weight:700;color:${CONFIG.text_muted};text-transform:uppercase;letter-spacing:0.5px;">${label}</div>
+            <div style="font-size:13px;color:${hasContent ? CONFIG.text_color : CONFIG.text_muted};line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">${esc(displayText)}</div>
+          </div>
+        `;
+      }
+
+      function renderQuickTipsRow(tipsData) {
+        const storageIcon = '<svg width="16" height="16" fill="none" stroke="' + CONFIG.text_color + '" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z"/></svg>';
+        const prepIcon = '<svg width="16" height="16" fill="none" stroke="' + CONFIG.text_color + '" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1.001A3.75 3.75 0 0012 18z"/></svg>';
+        const seasoningIcon = '<svg width="16" height="16" fill="none" stroke="' + CONFIG.text_color + '" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/></svg>';
+
+        // Check if editing any quick tip
+        if (isEditing('storage', 0) || isEditing('prep', 0) || isEditing('pairings', 0)) {
+          const editField = isEditing('storage', 0) ? 'storage' : isEditing('prep', 0) ? 'prep' : 'pairings';
+          const editLabel = editField === 'storage' ? 'Storage' : editField === 'prep' ? 'Prep' : 'Seasoning';
+          const editVal = tipsData[editField] || '';
           return `
             <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
-              <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">${label}</div>
-              <textarea id="tip-edit-${field}-0" style="width:100%; min-height: 60px; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 8px; color: ${CONFIG.text_color}; font-size: 14px; line-height: 1.4; outline: none; resize: vertical; font-family: inherit;">${esc(text)}</textarea>
-              <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
-                <button onclick="saveKitchenTipEdit('${esc(name)}','${field}',0,document.getElementById('tip-edit-${field}-0').value)" style="background: ${CONFIG.primary_action_color}; border: none; color: white; cursor: pointer; padding: 4px 12px; border-radius: 6px; font-size: 13px;">✓ Save</button>
+              <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Edit ${editLabel}</div>
+              <textarea id="tip-edit-${editField}-0" style="width:100%; min-height: 60px; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 8px; color: ${CONFIG.text_color}; font-size: 14px; line-height: 1.4; outline: none; resize: vertical; font-family: inherit; box-sizing: border-box;">${esc(editVal)}</textarea>
+              <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 6px;">
+                <button onclick="state._editingKitchenTip=null;render();" style="background: none; border: 1px solid rgba(255,255,255,0.1); color: ${CONFIG.text_muted}; cursor: pointer; padding: 4px 12px; border-radius: 6px; font-size: 13px;">Cancel</button>
+                <button onclick="saveKitchenTipEdit('${esc(name)}','${editField}',0,document.getElementById('tip-edit-${editField}-0').value)" style="background: ${CONFIG.primary_action_color}; border: none; color: white; cursor: pointer; padding: 4px 12px; border-radius: 6px; font-size: 13px;">Save</button>
               </div>
             </div>`;
         }
+
         return `
-          <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
-              <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px;">${label}</div>
-              <div style="display: flex; gap: 4px;">
-                <button onclick="startEditKitchenTip('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px;">
-                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
-                </button>
-                <button onclick="deleteKitchenTipFromSection('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; padding: 2px;">
-                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
-                </button>
+          <div style="margin-bottom: 10px;">
+            <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-left: 4px;">Quick Tips</div>
+            <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;" onscroll="this.style.scrollbarWidth='none'">
+              ${renderQuickTipCard(tipsData.storage, 'storage', 'Storage', storageIcon)}
+              ${renderQuickTipCard(tipsData.prep, 'prep', 'Prep', prepIcon)}
+              ${renderQuickTipCard(tipsData.pairings, 'pairings', 'Seasoning', seasoningIcon)}
+              <div onclick="state._addingQuickTip=true;render();" style="min-width:140px;flex-shrink:0;background:none;border:1px dashed rgba(255,255,255,0.1);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
+                <svg width="24" height="24" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                <span style="font-size:12px;color:${CONFIG.text_muted};">Add tip</span>
               </div>
             </div>
-            <div style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4;">${esc(text)}</div>
-          </div>`;
-      }
-
-      function renderTipSection(items, field, label) {
-        const hasItems = field === 'methods' ? (items && items.length > 0) : !!items;
-        return `
-          <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
-            <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">${label}</div>
-            ${field === 'methods' ? `
-              ${hasItems ? items.map((m, i) => renderEditableTipItem(m, 'methods', i)).join('') : `<div style="color: ${CONFIG.text_muted}; font-size: 13px; padding: 4px 0;">No tips yet</div>`}
-            ` : `
-              ${hasItems ? renderSingleTipContent(items, field) : `<div style="color: ${CONFIG.text_muted}; font-size: 13px; padding: 4px 0;">No tips yet</div>`}
-            `}
-            ${isAdding(field) ? `
-              <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 0;">
-                <input id="tip-add-${field}" type="text" placeholder="Type your tip..." autofocus style="flex:1; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveNewKitchenSectionTip('${esc(name)}','${field}',this.value)}" />
-                <button onclick="saveNewKitchenSectionTip('${esc(name)}','${field}',document.getElementById('tip-add-${field}').value)" style="background: none; border: none; color: ${CONFIG.success_color}; cursor: pointer; padding: 6px; font-size: 16px;">✓</button>
-              </div>
-            ` : `
-              <button onclick="startAddKitchenSectionTip('${esc(name)}','${field}')" style="width: 100%; padding: 8px; background: none; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 13px; margin-top: 6px;">+ Add</button>
-            `}
-          </div>`;
-      }
-
-      function renderSingleTipContent(text, field) {
-        if (isEditing(field, 0)) {
-          return `
-            <div style="padding: 4px 0;">
-              <textarea id="tip-edit-${field}-0" style="width:100%; min-height: 50px; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 8px; color: ${CONFIG.text_color}; font-size: 14px; line-height: 1.4; outline: none; resize: vertical; font-family: inherit;">${esc(text)}</textarea>
-              <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
-                <button onclick="saveKitchenTipEdit('${esc(name)}','${field}',0,document.getElementById('tip-edit-${field}-0').value)" style="background: ${CONFIG.primary_action_color}; border: none; color: white; cursor: pointer; padding: 4px 12px; border-radius: 6px; font-size: 13px;">✓ Save</button>
-              </div>
-            </div>`;
-        }
-        return `
-          <div style="display: flex; align-items: flex-start; gap: 10px; padding: 4px 0;">
-            <span style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4; flex: 1;">${esc(text)}</span>
-            <button onclick="startEditKitchenTip('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px; flex-shrink: 0;">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
-            </button>
-            <button onclick="deleteKitchenTipFromSection('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; padding: 2px; flex-shrink: 0;">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
-            </button>
-          </div>`;
+          </div>
+        `;
       }
 
       const tipsData = tips || { methods: [], storage: '', prep: '', pairings: '', customNotes: [] };
+      const gradient = getIngredientGradient(name);
+      const hasPhoto = ingredientData.photo && ingredientData.photo.startsWith('data:');
 
       return `
         <div style="padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
-          <!-- 1. Hero image + ingredient name -->
-          <div style="position: relative; width: 100%; height: 220px; overflow: hidden; background: ${CONFIG.surface_elevated};">
-            ${ingredientData.image ? `<img src="${esc(ingredientData.image)}&w=600&h=300&fit=crop" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />` : ''}
+          <!-- 1. Hero: gradient or photo with ingredient name -->
+          <div style="position: relative; width: 100%; height: 220px; overflow: hidden; background: ${gradient};">
+            ${hasPhoto ? `<img src="${esc(ingredientData.photo)}" style="width:100%;height:100%;object-fit:cover;" />` : `
+              <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
+                <span style="font-size:48px;font-weight:700;color:rgba(255,255,255,0.15);text-align:center;padding:24px;">${esc(name)}</span>
+              </div>
+            `}
             <div style="position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(13,13,20,0.9));"></div>
             <button onclick="navigateTo('kitchen')" style="position: absolute; top: 12px; left: 12px; width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
               <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
@@ -17173,7 +17397,7 @@ function renderGroceryList() {
           </div>
 
           <div style="padding: 0 ${CONFIG.space_md};">
-            <!-- 2. Cooking stats banner (always shown, right below hero) -->
+            <!-- 2. Cooking stats banner -->
             <div onclick="showKitchenIngredientMeals('${esc(name)}')" class="card-press" style="cursor: pointer; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 14px 16px; margin-top: ${CONFIG.space_md}; display: flex; align-items: center; gap: 12px;">
               <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(50,215,75,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
                 <span style="font-size: 22px; font-weight: 700; color: ${CONFIG.success_color};">${monthEntries.length}</span>
@@ -17185,14 +17409,12 @@ function renderGroceryList() {
               <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
             </div>
 
-            <!-- 3. How to cook section with per-section add/delete -->
+            <!-- 3. How to cook section -->
             <div style="margin-top: ${CONFIG.space_lg};">
               <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">How to cook ${esc(name.toLowerCase())}</h2>
 
-              ${renderTipSection(tipsData.methods, 'methods', 'Cooking Methods')}
-              ${renderTipSection(tipsData.storage, 'storage', 'Storage')}
-              ${renderTipSection(tipsData.prep, 'prep', 'Prep')}
-              ${renderTipSection(tipsData.pairings, 'pairings', 'Seasoning Pairings')}
+              ${renderMethodsSection(tipsData.methods)}
+              ${renderQuickTipsRow(tipsData)}
 
               <!-- Custom notes -->
               <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
@@ -17221,7 +17443,7 @@ function renderGroceryList() {
               </div>
             </div>
 
-            <!-- 4. Recipes section (3 columns) -->
+            <!-- 4. Recipes section (3 columns) with X buttons and + Link -->
             <div style="margin-top: ${CONFIG.space_lg};">
               <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Recipes with ${esc(name)}</h2>
               ${matchingRecipes.length > 0 ? `
@@ -17230,29 +17452,39 @@ function renderGroceryList() {
                     const img = recipeThumb(r);
                     const id = r.__backendId || r.id;
                     return `
-                      <div onclick="state.viewingFromKitchen = true; state.selectedRecipeId = '${id}'; navigateTo('recipe-view')" class="card-press"
-                        style="cursor: pointer; border-radius: 10px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
-                        <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
-                          ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.3;">🍽</div>`}
+                      <div style="position:relative; border-radius: 10px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
+                        <div onclick="state.viewingFromKitchen = true; state.selectedRecipeId = '${id}'; navigateTo('recipe-view')" class="card-press"
+                          style="cursor: pointer;">
+                          <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
+                            ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><svg width="24" height="24" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:0.3;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg></div>`}
+                          </div>
+                          <div style="padding: 6px;">
+                            <div style="font-size: 12px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">${esc(r.title)}</div>
+                            ${r.cookTime ? `<div style="font-size: 10px; color: ${CONFIG.text_muted}; margin-top: 2px;">${esc(r.cookTime)}</div>` : ''}
+                          </div>
                         </div>
-                        <div style="padding: 6px;">
-                          <div style="font-size: 12px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">${esc(r.title)}</div>
-                          ${r.cookTime ? `<div style="font-size: 10px; color: ${CONFIG.text_muted}; margin-top: 2px;">${esc(r.cookTime)}</div>` : ''}
-                        </div>
+                        <button onclick="event.stopPropagation();removeRecipeFromIngredient('${esc(name)}','${esc(id)}')" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.7);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;">
+                          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                       </div>
                     `;
                   }).join('')}
                 </div>
               ` : `
                 <div style="text-align: center; padding: ${CONFIG.space_lg}; background: ${CONFIG.surface_color}; border-radius: 12px;">
-                  <div style="font-size: 32px; opacity: 0.3; margin-bottom: 8px;">🍽</div>
+                  <svg width="32" height="32" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:0.3;margin-bottom:8px;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
                   <div style="color: ${CONFIG.text_muted}; font-size: 14px;">No recipes with ${esc(name)} yet</div>
                   <div style="color: ${CONFIG.text_tertiary}; font-size: 12px; margin-top: 4px;">Add some recipes that use ${esc(name)}</div>
                 </div>
               `}
+              <button onclick="state._showLinkRecipeModal=true;state._linkRecipeSearch='';render();" style="width:100%;padding:10px;background:none;border:1px dashed rgba(255,255,255,0.15);border-radius:10px;color:${CONFIG.text_muted};cursor:pointer;font-size:13px;margin-top:10px;font-family:${CONFIG.font_family};display:flex;align-items:center;justify-content:center;gap:6px;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                Link a recipe
+              </button>
             </div>
           </div>
         </div>
+        ${renderLinkRecipeModal(name)}
       `;
     }
 
