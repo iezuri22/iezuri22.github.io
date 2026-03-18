@@ -14,8 +14,8 @@ function renderPatternSection() {
   const unexplored = getUnexploredCategories();
 
   return `
-    <div style="padding: 0 ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_md};">
-      <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 10px 12px;">
+    <div style="padding: 0 12px; margin-bottom: 8px;">
+      <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 8px 12px;">
         <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; margin-bottom: 8px;">You've been eating a lot of:</div>
         <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: ${unexplored.length > 0 ? '10px' : '0'};">
           ${patterns.map(p => `
@@ -66,9 +66,9 @@ function renderCookAgainRow() {
   if (favorites.length === 0) return '';
 
   return `
-    <div style="padding: 0 ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_md};">
-      <div style="font-size: ${CONFIG.type_caption}; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Cook Again</div>
-      <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
+    <div style="padding: 0 12px; margin-bottom: 8px;">
+      <div style="font-size: ${CONFIG.type_caption}; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Cook Again</div>
+      <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
         ${favorites.map(entry => `
           <div onclick="${entry.recipeId ? `openRecipeView('${entry.recipeId}')` : `openFoodLogDetail('${entry.id}')`}" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 52px;">
             <div style="width: 48px; height: 48px; border-radius: 50%; overflow: hidden; margin: 0 auto 4px; border: 2px solid ${CONFIG.primary_action_color}; background: ${CONFIG.surface_elevated};">
@@ -254,33 +254,27 @@ function renderHomeHeader(dateStr) {
   const isTodayDay = isToday(dateStr);
 
   return `
-    <div class="max-w-4xl mx-auto" style="padding: ${CONFIG.space_md} ${CONFIG.space_md} 0;">
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${CONFIG.space_xs};">
-        <button onclick="goToPreviousDay()" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; padding: 6px;">
-          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
-        </button>
-        <div style="text-align: center; flex: 1; cursor: pointer;" onclick="openDatePicker()">
-          <div style="color: ${CONFIG.text_color}; font-size: 20px; font-weight: 700;">${dateLabel}</div>
-          <div style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; margin-top: 2px;">${fullDate}</div>
-        </div>
-        <div style="display: flex; align-items: center; gap: 4px;">
-          <button onclick="goToNextDay()" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; padding: 8px;">
-            <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
-          </button>
-          <button onclick="navigateTo('swipe-setup')" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; padding: 6px;" title="Swipe Settings">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
-          </button>
-        </div>
+    <div style="height: 48px; display: flex; align-items: center; padding: 0 12px;">
+      <button onclick="goToPreviousDay()" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; padding: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+      </button>
+      <div style="flex: 1; text-align: center; cursor: pointer;" onclick="openDatePicker()">
+        <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 700; line-height: 1.2;">${dateLabel}</div>
+        <div style="font-size: 11px; color: ${CONFIG.text_muted};">${fullDate}</div>
       </div>
-
-      ${!isTodayDay ? `
-        <div style="text-align: center; margin-bottom: ${CONFIG.space_sm};">
-          <button onclick="goToToday()"
-            style="background: ${CONFIG.primary_subtle}; border: 1px solid rgba(232, 93, 93, 0.3); color: ${CONFIG.primary_action_color}; padding: 6px 16px; border-radius: 20px; font-size: ${CONFIG.type_caption}; font-weight: 500; cursor: pointer;">
-            Go to Today
-          </button>
-        </div>
-      ` : ''}
+      <div style="display: flex; align-items: center; gap: 2px;">
+        ${!isTodayDay ? `<button onclick="goToToday()" style="background: none; border: none; cursor: pointer; color: ${CONFIG.primary_action_color}; font-size: 11px; font-weight: 600; padding: 4px 6px;">Today</button>` : ''}
+        <button onclick="goToNextDay()" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; padding: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+        </button>
+        <button onclick="showTimerModal()" style="position: relative; background: none; border: none; cursor: pointer; color: ${CONFIG.text_color}; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px; background: ${state.activeTimers.length > 0 ? 'rgba(232,93,93,0.15)' : 'transparent'};">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          ${state.activeTimers.length > 0 ? `<span style="position:absolute;top:2px;right:2px;background:${CONFIG.danger_color};color:white;font-size:10px;padding:2px 5px;border-radius:10px;">${state.activeTimers.length}</span>` : ''}
+        </button>
+        <button onclick="navigateTo('swipe-setup')" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;" title="Settings">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </button>
+      </div>
     </div>
   `;
 }
@@ -290,12 +284,10 @@ function renderHomeTabs() {
   const selectedActive = state.homeTab === 'selected';
 
   return `
-    <div style="padding: 0 ${CONFIG.space_md} ${CONFIG.space_sm};">
-      <div class="max-w-4xl mx-auto">
-        <div class="home-tab-toggle">
-          <button class="home-tab-btn ${swipeActive ? 'active' : ''}" onclick="setHomeTab('swipe')">Swipe</button>
-          <button class="home-tab-btn ${selectedActive ? 'active' : ''}" onclick="setHomeTab('selected')">Selected</button>
-        </div>
+    <div style="padding: 0 12px 4px;">
+      <div class="home-tab-toggle">
+        <button class="home-tab-btn ${swipeActive ? 'active' : ''}" onclick="setHomeTab('swipe')">Swipe</button>
+        <button class="home-tab-btn ${selectedActive ? 'active' : ''}" onclick="setHomeTab('selected')">Selected</button>
       </div>
     </div>
   `;
@@ -319,7 +311,7 @@ function renderSwipeTab() {
   if (!deck || deck.length === 0) {
     const hasRecipes = state.recipes.filter(r => !r.isDraft && !r.isTip).length > 0;
     return `
-      <div class="max-w-4xl mx-auto" style="padding: ${CONFIG.space_2xl} ${CONFIG.space_md}; text-align: center;">
+      <div style="padding: 32px 12px; text-align: center;">
         <div style="font-size: 36px; margin-bottom: ${CONFIG.space_md};">🍽️</div>
         <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">${hasRecipes ? 'No recipes selected' : 'No Recipes Available'}</div>
         <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: ${CONFIG.space_lg};">${hasRecipes ? 'Tap below to choose which recipes appear in your swipe deck.' : 'Add some recipes first, then set up your meals.'}</div>
@@ -342,13 +334,13 @@ function renderSwipeTab() {
   const mealLabel = capitalize(mealType);
 
   return `
-    <div class="max-w-4xl mx-auto" style="padding: 0 ${CONFIG.space_md};">
-      <div style="text-align: center; margin-bottom: 8px;">
-        <div style="font-size: 13px; font-weight: 400; color: rgba(255,255,255,0.6);">What's for</div>
-        <div style="font-size: 16px; font-weight: 600; color: #ffffff;">${mealLabel}</div>
+    <div style="padding: 0 12px;">
+      <div style="text-align: center; margin-bottom: 6px;">
+        <div style="font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.6);">What's for</div>
+        <div style="font-size: 15px; font-weight: 600; color: #ffffff;">${mealLabel}</div>
       </div>
 
-      <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 12px;">
+      <div style="display: flex; gap: 6px; justify-content: center; margin-bottom: 8px;">
         ${['breakfast', 'lunch', 'dinner'].map(mt => {
           const active = mt === state.swipeMealType;
           const alreadySelected = dayData.meals[mt].status !== 'none';
@@ -370,8 +362,10 @@ function renderSwipeTab() {
         ` : ''}
 
         <div class="swipe-card entering" data-active="true">
-          <div class="swipe-overlay like">Add!</div>
-          <div class="swipe-overlay nope">Skip</div>
+          <div class="swipe-tint like"></div>
+          <div class="swipe-tint nope"></div>
+          <div class="swipe-overlay like">SMASH</div>
+          <div class="swipe-overlay nope">PASS</div>
           ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder">🍽️</div>`}
           <div class="card-body">
             <div class="card-title">${esc(recipe.title)}</div>
@@ -385,21 +379,21 @@ function renderSwipeTab() {
       </div>
 
       <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 0;">
-        <button onclick="handleHomeSwipeLeft()" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255, 69, 58, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #ff453a; transition: all 0.2s ease;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">
+        <button id="swipe-btn-nope" onclick="handleHomeSwipeLeft()" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255, 69, 58, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #ff453a; transition: all 0.2s ease;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">
           ✕
         </button>
         <button onclick="openRecipeView('${recipe.__backendId || recipe.id}'); state.viewingFromSwipe = true;" style="width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; color: rgba(255,255,255,0.6); transition: all 0.2s ease;">
           👁️
         </button>
-        <button onclick="handleHomeSwipeRight()" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(50, 215, 75, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #32d74b; transition: all 0.2s ease;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">
+        <button id="swipe-btn-like" onclick="handleHomeSwipeRight()" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(50, 215, 75, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #32d74b; transition: all 0.2s ease;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">
           ♥
         </button>
       </div>
 
       <div class="swipe-hint-arrows">
-        <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Skip</span>
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Pass</span>
         <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
-        <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Add! →</span>
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Smash →</span>
       </div>
     </div>
   `;
@@ -414,10 +408,10 @@ function renderSelectedTab() {
   const progressBar = renderDayProgressBar(dayData, mealOrder);
 
   return `
-    <div class="max-w-4xl mx-auto" style="padding: 0 ${CONFIG.space_md};">
+    <div style="padding: 0 12px;">
       ${progressBar}
     </div>
-    <div class="max-w-4xl mx-auto" style="padding: 0 ${CONFIG.space_md};">
+    <div style="padding: 0 12px;">
       ${renderMealSection('breakfast', dayData.meals.breakfast, dateStr, isPastDay, isFutureDay)}
       ${renderMealSection('lunch', dayData.meals.lunch, dateStr, isPastDay, isFutureDay)}
       ${renderMealSection('dinner', dayData.meals.dinner, dateStr, isPastDay, isFutureDay)}
@@ -1548,8 +1542,13 @@ function handleHomeSwipeRight() {
     setTimeout(initSwipeGestures, 100);
   };
   if (card) {
+    // Flash the SMASH overlay and green tint before flying off
+    const likeOverlay = card.querySelector('.swipe-overlay.like');
+    const likeTint = card.querySelector('.swipe-tint.like');
+    if (likeOverlay) likeOverlay.style.opacity = 1;
+    if (likeTint) likeTint.style.opacity = 0.7;
     card.classList.add('fly-right');
-    setTimeout(doLog, 350);
+    setTimeout(doLog, 300);
   } else {
     doLog();
   }
@@ -1570,8 +1569,13 @@ function handleHomeSwipeLeft() {
     setTimeout(initSwipeGestures, 100);
   };
   if (card) {
+    // Flash the PASS overlay and red tint before flying off
+    const nopeOverlay = card.querySelector('.swipe-overlay.nope');
+    const nopeTint = card.querySelector('.swipe-tint.nope');
+    if (nopeOverlay) nopeOverlay.style.opacity = 1;
+    if (nopeTint) nopeTint.style.opacity = 0.7;
     card.classList.add('fly-left');
-    setTimeout(advance, 350);
+    setTimeout(advance, 300);
   } else {
     advance();
   }
@@ -1717,10 +1721,14 @@ function handleSwipeRight() {
   const recipe = deck[idx];
   const card = document.querySelector('.swipe-card[data-active="true"]');
   if (card) {
+    const likeOverlay = card.querySelector('.swipe-overlay.like');
+    const likeTint = card.querySelector('.swipe-tint.like');
+    if (likeOverlay) likeOverlay.style.opacity = 1;
+    if (likeTint) likeTint.style.opacity = 0.7;
     card.classList.add('fly-right');
     setTimeout(() => {
       confirmSwipeSelection(recipe.__backendId || recipe.id);
-    }, 350);
+    }, 300);
   } else {
     confirmSwipeSelection(recipe.__backendId || recipe.id);
   }
@@ -1737,6 +1745,10 @@ function handleSwipeLeft() {
 
   const card = document.querySelector('.swipe-card[data-active="true"]');
   if (card) {
+    const nopeOverlay = card.querySelector('.swipe-overlay.nope');
+    const nopeTint = card.querySelector('.swipe-tint.nope');
+    if (nopeOverlay) nopeOverlay.style.opacity = 1;
+    if (nopeTint) nopeTint.style.opacity = 0.7;
     card.classList.add('fly-left');
     setTimeout(() => {
       state.swipeIndex++;
@@ -1745,7 +1757,7 @@ function handleSwipeLeft() {
         state.swipeIndex = 0;
       }
       render();
-    }, 350);
+    }, 300);
   } else {
     state.swipeIndex++;
     if (state.swipeIndex >= deck.length) {
@@ -1802,7 +1814,12 @@ function initSwipeGestures() {
     if (!card) return;
 
     let startX = 0, startY = 0, currentX = 0, isDragging = false;
-    const threshold = 100;
+    const cardWidth = card.offsetWidth || 300;
+    const appearThreshold = cardWidth * 0.30;
+    const commitThreshold = cardWidth * 0.60;
+
+    const likeBtn = document.getElementById('swipe-btn-like');
+    const nopeBtn = document.getElementById('swipe-btn-nope');
 
     const onStart = (x, y) => {
       startX = x;
@@ -1819,28 +1836,54 @@ function initSwipeGestures() {
       const rotation = currentX * 0.08;
       card.style.transform = `translateX(${currentX}px) rotate(${rotation}deg)`;
 
+      const absDrag = Math.abs(currentX);
       const likeOverlay = card.querySelector('.swipe-overlay.like');
       const nopeOverlay = card.querySelector('.swipe-overlay.nope');
-      if (likeOverlay) likeOverlay.style.opacity = Math.min(currentX / threshold, 1);
-      if (nopeOverlay) nopeOverlay.style.opacity = Math.min(-currentX / threshold, 1);
+      const likeTint = card.querySelector('.swipe-tint.like');
+      const nopeTint = card.querySelector('.swipe-tint.nope');
+
+      // Calculate opacity: 0 at 30%, 1 at 60%
+      const progress = Math.max(0, Math.min((absDrag - appearThreshold) / (commitThreshold - appearThreshold), 1));
+
+      if (currentX > 0) {
+        if (likeOverlay) likeOverlay.style.opacity = progress;
+        if (nopeOverlay) nopeOverlay.style.opacity = 0;
+        if (likeTint) likeTint.style.opacity = progress * 0.7;
+        if (nopeTint) nopeTint.style.opacity = 0;
+        if (likeBtn && absDrag > commitThreshold) { likeBtn.classList.add('swipe-btn-glow-green'); } else if (likeBtn) { likeBtn.classList.remove('swipe-btn-glow-green'); }
+        if (nopeBtn) nopeBtn.classList.remove('swipe-btn-glow-red');
+      } else {
+        if (nopeOverlay) nopeOverlay.style.opacity = progress;
+        if (likeOverlay) likeOverlay.style.opacity = 0;
+        if (nopeTint) nopeTint.style.opacity = progress * 0.7;
+        if (likeTint) likeTint.style.opacity = 0;
+        if (nopeBtn && absDrag > commitThreshold) { nopeBtn.classList.add('swipe-btn-glow-red'); } else if (nopeBtn) { nopeBtn.classList.remove('swipe-btn-glow-red'); }
+        if (likeBtn) likeBtn.classList.remove('swipe-btn-glow-green');
+      }
     };
 
     const onEnd = () => {
       if (!isDragging) return;
       isDragging = false;
       card.classList.remove('dragging');
+      if (likeBtn) likeBtn.classList.remove('swipe-btn-glow-green');
+      if (nopeBtn) nopeBtn.classList.remove('swipe-btn-glow-red');
 
-      if (currentX > threshold) {
+      if (currentX > commitThreshold) {
         state.currentView === 'home' ? handleHomeSwipeRight() : handleSwipeRight();
-      } else if (currentX < -threshold) {
+      } else if (currentX < -commitThreshold) {
         state.currentView === 'home' ? handleHomeSwipeLeft() : handleSwipeLeft();
       } else {
         card.style.transition = 'transform 0.3s ease';
         card.style.transform = 'translateX(0) rotate(0deg)';
         const likeOverlay = card.querySelector('.swipe-overlay.like');
         const nopeOverlay = card.querySelector('.swipe-overlay.nope');
+        const likeTint = card.querySelector('.swipe-tint.like');
+        const nopeTint = card.querySelector('.swipe-tint.nope');
         if (likeOverlay) likeOverlay.style.opacity = 0;
         if (nopeOverlay) nopeOverlay.style.opacity = 0;
+        if (likeTint) likeTint.style.opacity = 0;
+        if (nopeTint) nopeTint.style.opacity = 0;
       }
     };
 
@@ -1934,8 +1977,10 @@ function renderSwipe() {
         ` : ''}
 
         <div class="swipe-card entering" data-active="true">
-          <div class="swipe-overlay like">Cook!</div>
-          <div class="swipe-overlay nope">Skip</div>
+          <div class="swipe-tint like"></div>
+          <div class="swipe-tint nope"></div>
+          <div class="swipe-overlay like">SMASH</div>
+          <div class="swipe-overlay nope">PASS</div>
           ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder">🍽️</div>`}
           <div class="card-body">
             <div class="card-title">${esc(recipe.title)}</div>
@@ -1949,21 +1994,21 @@ function renderSwipe() {
       </div>
 
       <div style="display: flex; align-items: center; justify-content: center; gap: 24px; padding: 16px 0;">
-        <button onclick="handleSwipeLeft()" style="width: 56px; height: 56px; border-radius: 50%; border: 2px solid ${CONFIG.danger_color}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+        <button id="swipe-btn-nope" onclick="handleSwipeLeft()" style="width: 56px; height: 56px; border-radius: 50%; border: 2px solid ${CONFIG.danger_color}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
           ✕
         </button>
         <button onclick="openRecipeView('${recipe.__backendId || recipe.id}'); state.viewingFromSwipe = true;" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid ${CONFIG.text_muted}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
           👁️
         </button>
-        <button onclick="handleSwipeRight()" style="width: 56px; height: 56px; border-radius: 50%; border: 2px solid ${CONFIG.success_color}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+        <button id="swipe-btn-like" onclick="handleSwipeRight()" style="width: 56px; height: 56px; border-radius: 50%; border: 2px solid ${CONFIG.success_color}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
           ♥
         </button>
       </div>
 
       <div class="swipe-hint-arrows">
-        <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Skip</span>
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Pass</span>
         <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
-        <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Cook! →</span>
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Smash →</span>
       </div>
     </div>
   `;

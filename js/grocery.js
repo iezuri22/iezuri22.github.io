@@ -290,17 +290,17 @@ function renderGroceryList() {
       // Empty state
       if (groceryList.length === 0 && filteredSuggestions.length === 0) {
         return `
-          <div class="p-3 max-w-4xl mx-auto">
+          <div style="padding: 12px;">
             ${emptyState('🛒', "Your grocery list is empty. Log some meals first and we'll help you build your list.", 'Log a Meal', "navigateTo('home')")}
           </div>
         `;
       }
 
       return `
-        <div class="p-3 max-w-4xl mx-auto" style="padding-bottom: 72px;">
+        <div style="padding: 0 12px; padding-bottom: 72px;">
 
           <!-- Manual Add Input -->
-          <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
             <input type="text" id="groceryManualInput" placeholder="Add an item..."
               onkeydown="if(event.key==='Enter') addManualGroceryItemSmart();"
               style="flex: 1; padding: 8px 12px; height: 40px; box-sizing: border-box; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;"
@@ -313,8 +313,8 @@ function renderGroceryList() {
 
           <!-- Suggestions Section -->
           ${filteredSuggestions.length > 0 ? `
-            <div style="margin-bottom: 20px;">
-              <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">Based on what you eat</div>
+            <div style="margin-bottom: 12px;">
+              <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 6px;">Based on what you eat</div>
               <div style="display: flex; flex-wrap: wrap; gap: 6px;">
                 ${filteredSuggestions.slice(0, 12).map((s, idx) => `
                   <button data-sug-idx="${idx}" onclick="handleSuggestClick(${idx})"
@@ -331,7 +331,7 @@ function renderGroceryList() {
 
           <!-- Add from a meal button -->
           <button onclick="showAddFromMealModal()"
-            style="width: 100%; padding: 12px; margin-bottom: 16px; background: ${CONFIG.surface_color}; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"
+            style="width: 100%; padding: 10px; margin-bottom: 12px; background: ${CONFIG.surface_color}; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"
             class="card-press">
             <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
             Add from a meal
@@ -356,7 +356,7 @@ function renderGroceryList() {
           <!-- Grocery Items by Category -->
           ${sortedCats.map(cat => `
             <div style="margin-bottom: 12px;">
-              <div style="color: ${CONFIG.text_muted}; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+              <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.06);">
                 ${esc(cat)} (${groupedUnchecked[cat].length})
               </div>
               ${groupedUnchecked[cat].map(item => _renderGroceryRow(item, false)).join('')}
@@ -371,7 +371,7 @@ function renderGroceryList() {
             if (remainingCheckedCats.length === 0) return '';
             return remainingCheckedCats.map(cat => `
               <div style="margin-bottom: 12px;">
-                <div style="color: ${CONFIG.text_muted}; font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.06);">
                   ${esc(cat)} (${groupedChecked[cat].length})
                 </div>
                 ${groupedChecked[cat].map(item => _renderGroceryRow(item, true)).join('')}

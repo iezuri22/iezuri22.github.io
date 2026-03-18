@@ -474,9 +474,9 @@ function renderKitchen() {
     }
     if (items.length === 0) return;
     categoriesHtml += `
-      <div style="margin-bottom: ${CONFIG.space_md};">
-        <h3 style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm}; padding-left: 4px;">${catName}</h3>
-        <div class="kitchen-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+      <div style="margin-bottom: 12px;">
+        <h3 style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 6px;">${catName}</h3>
+        <div class="kitchen-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
           ${items.map(item => renderKitchenIngredientCard(item, catName)).join('')}
         </div>
       </div>
@@ -493,22 +493,24 @@ function renderKitchen() {
     `;
   }
   return `
-    <div style="padding: ${CONFIG.space_md}; padding-bottom: 72px; max-width: 600px; margin: 0 auto;">
-      <div style="position: sticky; top: 0; z-index: 10; padding: ${CONFIG.space_sm} 0; background: ${CONFIG.background_color};">
+    <div style="padding: 0; padding-bottom: 72px;">
+      <div style="position: sticky; top: 48px; z-index: 10; padding: 8px 12px; background: ${CONFIG.background_color};">
         <div style="display: flex; gap: 8px; align-items: center;">
           <div style="position: relative; flex: 1;">
-            <svg width="18" height="18" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
             <input type="text" id="kitchenSearch" placeholder="Search an ingredient..." value="${esc(searchTerm)}"
               oninput="state.kitchenSearch = this.value; render();"
-              style="width: 100%; padding: 10px 10px 10px 36px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box; font-family: ${CONFIG.font_family};" />
+              style="width: 100%; height: 40px; padding: 0 10px 0 34px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box; font-family: ${CONFIG.font_family};" />
           </div>
-          <button onclick="state._showAddIngredientModal=true;state._addIngredientPhoto='';render();" style="padding: 8px 12px; border-radius: 10px; border: none; background: ${CONFIG.primary_action_color}; color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: ${CONFIG.font_family}; display: flex; align-items: center; gap: 4px;">
+          <button onclick="state._showAddIngredientModal=true;state._addIngredientPhoto='';render();" style="height: 40px; padding: 0 12px; border-radius: 10px; border: none; background: ${CONFIG.primary_action_color}; color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: ${CONFIG.font_family}; display: flex; align-items: center; gap: 4px;">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
             Add
           </button>
         </div>
       </div>
-      ${categoriesHtml}
+      <div style="padding: 0 12px;">
+        ${categoriesHtml}
+      </div>
     </div>
     ${renderAddIngredientModal()}
     ${state._showDeleteIngredientModal && state.kitchenSelectedIngredient ? renderDeleteIngredientModal(state.kitchenSelectedIngredient) : ''}
@@ -1088,18 +1090,18 @@ function renderKitchenDetail() {
   `;
 
   return `
-    <div style="padding-bottom: 72px; max-width: 600px; margin: 0 auto;">
-      <div style="position: relative; width: 100%; height: 180px; overflow: hidden; background: ${gradient};">
+    <div style="padding-bottom: 72px;">
+      <div style="position: relative; width: 100%; height: 200px; overflow: hidden; background: ${gradient};">
         ${heroPhoto ? `<img src="${esc(heroPhoto)}" style="width:100%;height:100%;object-fit:cover;" />` : `
           <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
             <span style="font-size:48px;font-weight:700;color:rgba(255,255,255,0.15);text-align:center;padding:24px;">${esc(name)}</span>
           </div>
         `}
         <div style="position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(13,13,20,0.9));"></div>
-        <button onclick="navigateTo('kitchen')" style="position: absolute; top: 12px; left: 12px; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+        <button onclick="window.location.href='/kitchen.html'" style="position: absolute; top: 12px; left: 12px; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
         </button>
-        <div style="position: absolute; bottom: 16px; left: 16px;">
+        <div style="position: absolute; bottom: 12px; left: 12px;">
           <h1 style="font-size: 20px; font-weight: 700; color: white; margin: 0;">${esc(name)}</h1>
         </div>
         <input id="ingredientPhotoInput" type="file" accept="image/*" capture="environment" style="display:none;" onchange="handleIngredientPhotoUpload('${esc(name)}',this)" />
@@ -1108,8 +1110,8 @@ function renderKitchenDetail() {
         </button>
       </div>
 
-      <div style="padding: 0 ${CONFIG.space_md};">
-        <div onclick="showKitchenIngredientMeals('${esc(name)}')" class="card-press" style="cursor: pointer; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 10px 12px; margin-top: ${CONFIG.space_md}; display: flex; align-items: center; gap: 12px;">
+      <div style="padding: 0 12px;">
+        <div onclick="showKitchenIngredientMeals('${esc(name)}')" class="card-press" style="cursor: pointer; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 10px 12px; margin-top: 12px; display: flex; align-items: center; gap: 12px;">
           <div style="width: 36px; height: 36px; border-radius: 12px; background: rgba(50,215,75,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
             <span style="font-size: 22px; font-weight: 700; color: ${CONFIG.success_color};">${monthEntries.length}</span>
           </div>
@@ -1120,14 +1122,14 @@ function renderKitchenDetail() {
           <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
         </div>
 
-        <div style="margin-top: ${CONFIG.space_lg};">
-          <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">How to cook ${esc(name.toLowerCase())}</h2>
+        <div style="margin-top: 16px;">
+          <h2 style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">How to cook ${esc(name.toLowerCase())}</h2>
           ${renderMethodsSection(tipsData.methods)}
           ${quickTipsRowHtml}
         </div>
 
-        <div style="margin-top: ${CONFIG.space_lg};">
-          <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Recipes with ${esc(name)}</h2>
+        <div style="margin-top: 16px;">
+          <h2 style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">Recipes with ${esc(name)}</h2>
           ${matchingRecipes.length > 0 ? `
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
               ${matchingRecipes.map(r => {

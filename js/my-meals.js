@@ -25,15 +25,17 @@ function renderMyMeals() {
       }
       return slotEntries.map(entry => renderFilledMealSlot(entry, dateStr)).join('') + renderEmptyMealSlot(slot, dateStr, true);
     }
-    const entry = slotEntries[0];
-    if (!entry) {
+    if (slotEntries.length === 0) {
       return renderEmptyMealSlot(slot, dateStr);
     }
-    return renderFilledMealSlot(entry, dateStr);
+    // Show latest entry (first in array since unshift) with stacked badge
+    const latestEntry = slotEntries[0];
+    const extraCount = slotEntries.length - 1;
+    return renderFilledMealSlot(latestEntry, dateStr, extraCount, slotEntries) + renderAddAnotherRow(slot, dateStr);
   }).join('');
 
   return `
-    <div id="my-meals-swipe-zone" style="padding: ${CONFIG.space_md}; padding-bottom: 72px; max-width: 600px; margin: 0 auto;">
+    <div id="my-meals-swipe-zone" style="padding: 0 12px; padding-bottom: 72px;">
       <!-- Date Navigation Header -->
       <div style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: ${CONFIG.space_md}; padding: 4px 0;">
         <button onclick="navigateMyMealsDate(-1)" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; color: ${CONFIG.text_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;">
@@ -115,7 +117,8 @@ function renderEmptyMealSlot(mealType, dateStr, isAddMore) {
   `;
 }
 
-function renderFilledMealSlot(entry, dateStr) {
+function renderFilledMealSlot(entry, dateStr, extraCount, allSlotEntries) {
+  extraCount = extraCount || 0;
   const isPlanned = entry.status !== 'eaten';
   const hasMyPhoto = !!(entry.myPhoto || (entry.photo && entry.photo.startsWith('data:')));
   const thumb = hasMyPhoto ? (entry.myPhoto || entry.photo) : (entry.photo || entry.image);
@@ -126,6 +129,8 @@ function renderFilledMealSlot(entry, dateStr) {
   const bgColor = isPlanned ? 'transparent' : CONFIG.surface_color;
   const escapedName = esc(entry.recipeName).replace(/'/g, "\\'");
   const escapedDateLabel = esc(getFoodLogDateLabel(dateStr)).replace(/'/g, "\\'");
+  const stackedIds = allSlotEntries ? allSlotEntries.map(e => e.id).join(',') : '';
+  const onclickTarget = extraCount > 0 ? `openStackedMealDetail('${entry.mealType}', '${dateStr}', '${stackedIds}')` : `openFoodLogDetail('${entry.id}')`;
 
   return `
     <div style="position: relative; border-radius: 10px; border: ${borderStyle}; background: ${bgColor}; overflow: hidden;">
@@ -141,7 +146,7 @@ function renderFilledMealSlot(entry, dateStr) {
         </button>
       </div>
       <!-- Main card content -->
-      <div onclick="openFoodLogDetail('${entry.id}')" class="card-press" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; transition: background 0.15s;">
+      <div onclick="${onclickTarget}" class="card-press" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; transition: background 0.15s;">
         <div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated}; ${isPlanned ? 'opacity: 0.7;' : ''} position: relative;">
           ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.4;">🍽</div>`}
           ${hasMyPhoto ? `<div style="position: absolute; bottom: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: ${CONFIG.primary_action_color}; display: flex; align-items: center; justify-content: center;"><svg width="10" height="10" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/></svg></div>` : ''}
@@ -154,8 +159,18 @@ function renderFilledMealSlot(entry, dateStr) {
             ${entry.notes ? `<span style="font-size: 11px; color: ${CONFIG.text_tertiary};">Has notes</span>` : ''}
           </div>
         </div>
+        ${extraCount > 0 ? `<span style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: rgba(255,255,255,0.08); color: ${CONFIG.text_muted}; font-weight: 600; flex-shrink: 0;">+${extraCount}</span>` : ''}
         <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
       </div>
+    </div>
+  `;
+}
+
+function renderAddAnotherRow(mealType, dateStr) {
+  return `
+    <div onclick="openAddMealForSlot('${mealType}', '${dateStr}')"
+      style="display: flex; align-items: center; justify-content: center; height: 36px; border-radius: 8px; cursor: pointer; border: 1px dashed rgba(255,255,255,0.08); background: transparent; margin-top: 4px;">
+      <span style="font-size: 12px; color: ${CONFIG.text_tertiary};">+ Add another ${mealType}</span>
     </div>
   `;
 }
@@ -431,6 +446,75 @@ function submitQuickLogForSlot() {
   closeModal();
   showToast('Meal added!', 'success');
   render();
+}
+
+// ============================================================
+// STACKED MEAL DETAIL VIEW
+// ============================================================
+function openStackedMealDetail(mealType, dateStr, idsStr) {
+  const ids = idsStr.split(',');
+  const log = getFoodLog();
+  const entries = ids.map(id => log.find(e => e.id === id)).filter(Boolean);
+  if (entries.length === 0) return;
+  if (entries.length === 1) { openFoodLogDetail(entries[0].id); return; }
+
+  const dateLabel = getFoodLogDateLabel(dateStr);
+  const rows = entries.map((entry, i) => {
+    const isPlanned = entry.status !== 'eaten';
+    const hasMyPhoto = !!(entry.myPhoto || (entry.photo && entry.photo.startsWith('data:')));
+    const thumb = hasMyPhoto ? (entry.myPhoto || entry.photo) : (entry.photo || entry.image);
+    const statusLabel = isPlanned ? 'Planned' : 'Cooked';
+    const statusColor = isPlanned ? CONFIG.text_muted : CONFIG.success_color;
+    const escapedName = esc(entry.recipeName).replace(/'/g, "\\'");
+    const escapedDateLabel = esc(dateLabel).replace(/'/g, "\\'");
+
+    return `
+      <div style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; background: ${CONFIG.surface_color}; ${i === 0 ? 'border: 1px solid rgba(255,255,255,0.1);' : ''}">
+        <div style="width: 48px; height: 48px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated};">
+          ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;opacity:0.4;">🍽</div>`}
+        </div>
+        <div style="flex: 1; min-width: 0;" onclick="closeModal(); openFoodLogDetail('${entry.id}');" class="card-press" style="cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}</div>
+            ${i === 0 ? `<span style="font-size: 10px; padding: 1px 6px; border-radius: 6px; background: rgba(232,93,93,0.15); color: ${CONFIG.primary_action_color}; font-weight: 600;">Latest</span>` : ''}
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px;">
+            <span style="font-size: 10px; color: ${statusColor}; font-weight: 500;">${statusLabel}</span>
+            ${entry.notes ? `<span style="font-size: 10px; color: ${CONFIG.text_tertiary};">Has notes</span>` : ''}
+          </div>
+        </div>
+        <button onclick="event.stopPropagation(); confirmDeleteStackedMeal('${entry.id}', '${escapedName}', '${mealType}', '${dateStr}')" title="Delete"
+          style="width: 28px; height: 28px; border-radius: 8px; border: none; background: rgba(255,69,58,0.1); color: ${CONFIG.danger_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+        </button>
+      </div>
+    `;
+  }).join('');
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${capitalize(mealType)} Meals</h3>
+      <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_md};">${dateLabel} &middot; ${entries.length} meals</div>
+      <div style="display: flex; flex-direction: column; gap: 8px; max-height: 60vh; overflow-y: auto;">
+        ${rows}
+      </div>
+      <button onclick="closeModal()" style="width: 100%; margin-top: 12px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Close</button>
+    </div>
+  `);
+}
+
+function confirmDeleteStackedMeal(logId, name, mealType, dateStr) {
+  openModal(`
+    <div style="color: ${CONFIG.text_color}; text-align: center;">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">Delete Meal?</h3>
+      <div style="font-size: 14px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">Remove "${name}" from this slot?</div>
+      <div style="display: flex; gap: 8px;">
+        <button onclick="closeModal()" style="flex: 1; padding: 12px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: ${CONFIG.text_color}; cursor: pointer;">Cancel</button>
+        <button onclick="deleteFoodLogEntry('${logId}'); closeModal(); render(); showToast('Meal removed', 'success');"
+          style="flex: 1; padding: 12px; background: rgba(255,69,58,0.15); border: 1px solid rgba(255,69,58,0.3); border-radius: 10px; color: ${CONFIG.danger_color}; font-weight: 600; cursor: pointer;">Delete</button>
+      </div>
+    </div>
+  `);
 }
 
 // ============================================================

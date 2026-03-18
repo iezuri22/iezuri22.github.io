@@ -1559,17 +1559,65 @@ function renderRecipeFilterPills() {
   const pills = [
     { id: 'all', label: 'All' },
     { id: 'saved', label: 'Saved' },
-    { id: 'quick', label: 'Quick &lt;30min' },
+    { id: 'quick', label: 'Quick <30min' },
     { id: 'have-ingredients', label: 'Have Ingredients' }
   ];
-  return pills.map(pill => {
-    const active = (state.recipeFilterPill || 'all') === pill.id;
-    const borderColor = active ? 'rgba(232,93,93,0.4)' : 'rgba(255,255,255,0.12)';
-    const bgColor = active ? 'rgba(232,93,93,0.15)' : 'transparent';
-    const txtColor = active ? CONFIG.primary_action_color : CONFIG.text_muted;
-    const fw = active ? '600' : '400';
-    return '<button onclick="state.recipeFilterPill = \'' + pill.id + '\'; render();" style="flex-shrink: 0; padding: 6px 10px; border-radius: 16px; border: 1px solid ' + borderColor + '; background: ' + bgColor + '; color: ' + txtColor + '; font-size: 12px; font-weight: ' + fw + '; cursor: pointer; white-space: nowrap;">' + pill.label + '</button>';
-  }).join('');
+  // Source type pills
+  const sourcePills = [
+    { id: 'src-user', label: 'My Recipes', tab: 'user' },
+    { id: 'src-freestyle', label: 'Journal', tab: 'freestyle' },
+    { id: 'src-chefiq', label: 'ChefIQ', tab: 'chefiq' },
+    { id: 'src-imported', label: 'Imported', tab: 'imported' },
+    { id: 'src-claude', label: 'Claude', tab: 'claude' }
+  ];
+  const allPills = pills.map(pill => {
+    const active = (state.recipeFilterPill || 'all') === pill.id && (!state.recipeTab || state.recipeTab === 'user');
+    return _renderPillBtn(pill.label, active, `state.recipeFilterPill = '${pill.id}'; if(state.recipeTab === 'freestyle') { state.recipeTab = 'user'; } render();`);
+  }).join('') + '<span style="width:1px;height:20px;background:rgba(255,255,255,0.1);flex-shrink:0;margin:0 4px;"></span>' + sourcePills.map(sp => {
+    const active = state.recipeTab === sp.tab;
+    return _renderPillBtn(sp.label, active, `state.recipeTab = '${sp.tab}'; state.recipeFilterPill = 'all'; render();`);
+  }).join('') + `<button onclick="showRecipeMoreFilters()" style="flex-shrink:0;padding:6px 10px;border-radius:16px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:${CONFIG.text_muted};font-size:12px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/></svg>More</button>`;
+  return allPills;
+}
+
+function _renderPillBtn(label, active, onclick) {
+  const borderColor = active ? 'rgba(232,93,93,0.4)' : 'rgba(255,255,255,0.12)';
+  const bgColor = active ? 'rgba(232,93,93,0.15)' : 'transparent';
+  const txtColor = active ? CONFIG.primary_action_color : CONFIG.text_muted;
+  const fw = active ? '600' : '400';
+  return `<button onclick="${onclick}" style="flex-shrink:0;padding:6px 10px;border-radius:16px;border:1px solid ${borderColor};background:${bgColor};color:${txtColor};font-size:12px;font-weight:${fw};cursor:pointer;white-space:nowrap;">${label}</button>`;
+}
+
+function showRecipeMoreFilters() {
+  const content = `
+    <div style="color:${CONFIG.text_color};">
+      <h3 style="font-size:17px;font-weight:600;margin-bottom:12px;">Filters</h3>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <input id="recipeModalSearchInput" placeholder="${state.searchByIngredient ? 'Search by ingredient...' : 'Search recipes...'}"
+          style="flex:1;padding:8px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:13px;"
+          value="${esc(state.searchTerm || '')}" />
+        <button onclick="state.searchByIngredient = !state.searchByIngredient; document.getElementById('recipeModalSearchInput').placeholder = state.searchByIngredient ? 'Search by ingredient...' : 'Search recipes...';"
+          style="padding:8px 12px;border-radius:8px;border:none;cursor:pointer;font-size:12px;background:${state.searchByIngredient ? CONFIG.primary_action_color : CONFIG.surface_color};color:${state.searchByIngredient ? 'white' : CONFIG.text_color};">
+          ${state.searchByIngredient ? 'Ingredient' : 'Name'}
+        </button>
+      </div>
+      <select id="recipeModalCategory" style="width:100%;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);font-size:13px;padding:8px;border-radius:8px;margin-bottom:16px;">
+        <option value="All" ${state.selectedCategory === 'All' ? 'selected' : ''}>All Categories</option>
+        ${MEAL_CATEGORIES.map(c => `<option value="${c}" ${state.selectedCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:8px;">
+        <button onclick="state.searchTerm = document.getElementById('recipeModalSearchInput').value; state.selectedCategory = document.getElementById('recipeModalCategory').value; closeModal(); render();"
+          style="flex:1;padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Apply</button>
+        <button onclick="state.searchTerm='';state.selectedCategory='All';state.searchByIngredient=false;state.filterIngredientGroup='all';closeModal();render();"
+          style="flex:1;padding:10px;background:${CONFIG.surface_color};color:${CONFIG.text_color};border:none;border-radius:8px;font-size:14px;cursor:pointer;">Reset</button>
+      </div>
+      <div style="margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:8px;">
+        <button onclick="closeModal();showImportRecipeModal();" style="flex:1;padding:10px;background:${CONFIG.surface_color};color:${CONFIG.text_color};border:none;border-radius:8px;font-size:13px;cursor:pointer;">Import Recipe</button>
+        <button onclick="closeModal();openNewRecipe();" style="flex:1;padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">+ New Recipe</button>
+      </div>
+    </div>
+  `;
+  openModal(content);
 }
 
 function renderRecipes() {
@@ -1638,86 +1686,15 @@ function renderRecipes() {
   });
 
   return `
-    <div class="p-3 max-w-7xl mx-auto">
-      <!-- Header -->
-      <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
-        <div class="flex items-center gap-1 flex-wrap">
-          <button onclick="state.recipeTab = 'user'; render();"
-            class="px-2 py-1 rounded"
-            style="background:${state.recipeTab === 'user' || !state.recipeTab ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'user' || !state.recipeTab ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
-            Recipes (${userCount})
-          </button>
-          <button onclick="state.recipeTab = 'freestyle'; render();"
-            class="px-2 py-1 rounded"
-            style="background:${state.recipeTab === 'freestyle' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'freestyle' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
-            Journal (${freestyleCount})
-          </button>
-          <button onclick="state.recipeTab = 'chefiq'; render();"
-            class="px-2 py-1 rounded"
-            style="background:${state.recipeTab === 'chefiq' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'chefiq' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
-            ChefIQ (${chefiqCount})
-          </button>
-          <button onclick="state.recipeTab = 'imported'; render();"
-            class="px-2 py-1 rounded"
-            style="background:${state.recipeTab === 'imported' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'imported' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
-            Imported (${importedCount})
-          </button>
-          <button onclick="state.recipeTab = 'claude'; render();"
-            class="px-2 py-1 rounded"
-            style="background:${state.recipeTab === 'claude' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'claude' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
-            Claude (${claudeCount})
-          </button>
-        </div>
-        <div class="flex gap-1">
-          <button type="button" onclick="showImportRecipeModal()"
-            class="px-2 py-1 rounded"
-            style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
-            Import
-          </button>
-          <button type="button" onclick="openNewRecipe()"
-            class="px-2 py-1 rounded"
-            style="background:${CONFIG.primary_action_color}; color:white; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
-            + New
-          </button>
-        </div>
-      </div>
-
-      <!-- Filter Pills -->
-      <div style="display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
+    <div style="padding: 0;">
+      <!-- Filter Pills - single scrollable row -->
+      <div style="display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
         ${renderRecipeFilterPills()}
       </div>
 
-      <!-- Search & Filters -->
-      <details class="mb-3">
-        <summary class="cursor-pointer px-3 py-2 rounded-lg" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:12px; list-style:none;">
-          More Filters ${state.selectedCategory !== 'All' || state.filterIngredientGroup !== 'all' ? '•' : ''}
-        </summary>
-        <div class="mt-2 p-3 rounded-lg" style="background:${CONFIG.surface_color};">
-          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-            <input id="recipeListSearchInput" placeholder="${state.searchByIngredient ? 'Search by ingredient...' : 'Search recipes...'}"
-              class="flex-1 px-3 py-2 rounded-lg"
-              style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:13px;"
-              value="${esc(state.searchTerm || '')}"
-              oninput="state.searchTerm = this.value; _debouncedRender(this, 'recipeSearch');"/>
-            <button onclick="state.searchByIngredient = !state.searchByIngredient; state.searchTerm = ''; render();"
-              style="padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; background: ${state.searchByIngredient ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.searchByIngredient ? 'white' : CONFIG.text_color};">
-              ${state.searchByIngredient ? 'Ingredient' : 'Name'}
-            </button>
-          </div>
-          <div class="flex gap-2 mb-3 flex-wrap">
-            <select onchange="state.selectedCategory=this.value; render();"
-              style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:12px; padding:8px; border-radius:8px; flex:1;">
-              <option value="All" ${state.selectedCategory === 'All' ? 'selected' : ''}>All Categories</option>
-              ${MEAL_CATEGORIES.map(c => `<option value="${c}" ${state.selectedCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-      </details>
-
       <!-- Results -->
       ${list.length === 0 ? `
-        <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
-          <div style="font-size: 2rem; margin-bottom: 8px;">No results</div>
+        <div style="padding: 48px 12px; text-align: center;">
           <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">
             ${state.searchTerm ? 'No matches found' : 'No recipes yet'}
           </div>
@@ -1731,36 +1708,31 @@ function renderRecipes() {
           ` : ''}
         </div>
       ` : `
-        <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 0 2px;">
           ${list.map(r => {
             const id = r.__backendId || r.id;
             const img = recipeThumb(r);
             const saved = isRecipeSaved(id);
             return `
-            <div class="rounded-lg overflow-hidden cursor-pointer"
-              style="background:${CONFIG.surface_color}; position: relative;">
+            <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 4px;">
               <div onclick="openRecipeView('${id}')">
                 ${img ? `
                   <div style="aspect-ratio:1; width:100%; overflow:hidden;">
                     <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
                   </div>
                 ` : `
-                  <div style="aspect-ratio:1; width:100%; background:${CONFIG.background_color}; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
-                    plate
+                  <div style="aspect-ratio:1; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
+                    <span style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
                   </div>
                 `}
               </div>
-              <!-- Bookmark icon -->
               <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}')"
                 style="position: absolute; top: 4px; right: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
                 <svg width="12" height="12" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
               </button>
-              <div style="padding: 4px 6px;" onclick="openRecipeView('${id}')">
-                <div style="color:${CONFIG.text_color}; font-size:12px; font-weight:600; -webkit-line-clamp: 2; -webkit-box-orient: vertical; display: -webkit-box; overflow: hidden;">
+              <div style="position:absolute;bottom:0;left:0;right:0;padding:4px 6px;background:linear-gradient(transparent,rgba(0,0,0,0.7));" onclick="openRecipeView('${id}')">
+                <div style="color:white; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">
                   ${esc(r.title)}
-                </div>
-                <div style="color:${CONFIG.text_muted}; font-size:10px;">
-                  ${r.category || 'Recipe'}
                 </div>
               </div>
             </div>`;
