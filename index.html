@@ -17113,6 +17113,11 @@ function renderGroceryList() {
     function saveKitchenCustomTips(ingredientName, tips) {
       localStorage.setItem('kitchenCustomTips_' + ingredientName, JSON.stringify(tips));
     }
+    function _toTipArray(val) {
+      if (Array.isArray(val)) return val;
+      if (typeof val === 'string' && val.trim()) return [val.trim()];
+      return [];
+    }
     function getMergedTips(ingredientName, baseTips) {
       const custom = getKitchenCustomTips(ingredientName);
       if (!custom && !baseTips) return null;
@@ -17120,9 +17125,9 @@ function renderGroceryList() {
       const c = custom || {};
       return {
         methods: c.methods || (base.methods ? [...base.methods] : []),
-        storage: c.storage !== undefined ? c.storage : (base.storage || ''),
-        prep: c.prep !== undefined ? c.prep : (base.prep || ''),
-        pairings: c.pairings !== undefined ? c.pairings : (base.pairings || ''),
+        storage: _toTipArray(c.storage !== undefined ? c.storage : base.storage),
+        prep: _toTipArray(c.prep !== undefined ? c.prep : base.prep),
+        pairings: _toTipArray(c.pairings !== undefined ? c.pairings : base.pairings),
         customNotes: c.customNotes || []
       };
     }
@@ -17137,6 +17142,8 @@ function renderGroceryList() {
         merged.methods[idx] = newValue;
       } else if (field === 'customNotes') {
         merged.customNotes[idx] = newValue;
+      } else if (Array.isArray(merged[field])) {
+        merged[field][idx] = newValue;
       } else {
         merged[field] = newValue;
       }
@@ -17204,23 +17211,88 @@ function renderGroceryList() {
       if (!merged) return;
       if (field === 'methods') {
         merged.methods.splice(idx, 1);
+      } else if (Array.isArray(merged[field])) {
+        merged[field].splice(idx, 1);
       } else {
         merged[field] = '';
       }
       saveKitchenCustomTips(ingredientName, merged);
       render();
     }
+    function _getBaseTips(ingredientName) {
+      let d = null;
+      Object.values(KITCHEN_INGREDIENTS).forEach(cat => { cat.items.forEach(item => { if (item.name === ingredientName) d = item.tips; }); });
+      return d;
+    }
     function openQuickTipModal(ingredientName, field, idx, isNew) {
       state._quickTipModal = { ingredient: ingredientName, field, idx: idx || 0, isNew: !!isNew };
       render();
-      setTimeout(() => { const el = document.getElementById('quickTipModalText'); if (el) el.focus(); }, 50);
+    }
+    function openQuickTipCategoryModal(ingredientName, field) {
+      state._quickTipCategoryModal = { ingredient: ingredientName, field, editingIdx: -1, addingNew: false };
+      render();
+    }
+    function quickTipCategorySetPrimary(ingredientName, field, idx) {
+      const merged = getMergedTips(ingredientName, _getBaseTips(ingredientName)) || { methods: [], storage: [], prep: [], pairings: [], customNotes: [] };
+      const arr = merged[field] || [];
+      if (idx <= 0 || idx >= arr.length) return;
+      const item = arr.splice(idx, 1)[0];
+      arr.unshift(item);
+      merged[field] = arr;
+      saveKitchenCustomTips(ingredientName, merged);
+      render();
+    }
+    function quickTipCategoryStartEdit(idx) {
+      if (state._quickTipCategoryModal) state._quickTipCategoryModal.editingIdx = idx;
+      render();
+      setTimeout(() => { const el = document.getElementById('qtc-edit-input'); if (el) el.focus(); }, 50);
+    }
+    function quickTipCategorySaveEdit(ingredientName, field, idx) {
+      const el = document.getElementById('qtc-edit-input');
+      if (!el) return;
+      const value = el.value.trim();
+      const merged = getMergedTips(ingredientName, _getBaseTips(ingredientName)) || { methods: [], storage: [], prep: [], pairings: [], customNotes: [] };
+      if (!value) {
+        merged[field].splice(idx, 1);
+      } else {
+        merged[field][idx] = value;
+      }
+      saveKitchenCustomTips(ingredientName, merged);
+      if (state._quickTipCategoryModal) state._quickTipCategoryModal.editingIdx = -1;
+      render();
+    }
+    function quickTipCategoryDelete(ingredientName, field, idx) {
+      const merged = getMergedTips(ingredientName, _getBaseTips(ingredientName)) || { methods: [], storage: [], prep: [], pairings: [], customNotes: [] };
+      merged[field].splice(idx, 1);
+      saveKitchenCustomTips(ingredientName, merged);
+      render();
+    }
+    function quickTipCategoryStartAdd() {
+      if (state._quickTipCategoryModal) state._quickTipCategoryModal.addingNew = true;
+      render();
+      setTimeout(() => { const el = document.getElementById('qtc-add-input'); if (el) el.focus(); }, 50);
+    }
+    function quickTipCategorySaveNew(ingredientName, field) {
+      const el = document.getElementById('qtc-add-input');
+      if (!el) return;
+      const value = el.value.trim();
+      if (!value) { if (state._quickTipCategoryModal) state._quickTipCategoryModal.addingNew = false; render(); return; }
+      const merged = getMergedTips(ingredientName, _getBaseTips(ingredientName)) || { methods: [], storage: [], prep: [], pairings: [], customNotes: [] };
+      if (!Array.isArray(merged[field])) merged[field] = [];
+      merged[field].push(value);
+      saveKitchenCustomTips(ingredientName, merged);
+      if (state._quickTipCategoryModal) state._quickTipCategoryModal.addingNew = false;
+      render();
+    }
+    function closeQuickTipCategoryModal() {
+      state._quickTipCategoryModal = null;
+      render();
     }
     function saveQuickTipFromModal(ingredientName, field, idx, isNew) {
       const el = document.getElementById('quickTipModalText');
       if (!el) return;
       const value = el.value.trim();
-      const baseTips = (() => { let d = null; Object.values(KITCHEN_INGREDIENTS).forEach(cat => { cat.items.forEach(item => { if (item.name === ingredientName) d = item.tips; }); }); return d; })();
-      const merged = getMergedTips(ingredientName, baseTips) || { methods: [], storage: '', prep: '', pairings: '', customNotes: [] };
+      const merged = getMergedTips(ingredientName, _getBaseTips(ingredientName)) || { methods: [], storage: [], prep: [], pairings: [], customNotes: [] };
       if (isNew) {
         if (!value) { state._quickTipModal = null; render(); return; }
         merged.customNotes = merged.customNotes || [];
@@ -17229,20 +17301,27 @@ function renderGroceryList() {
         if (!value) { merged.customNotes.splice(idx, 1); }
         else { merged.customNotes[idx] = value; }
       } else {
-        merged[field] = value;
+        // For array fields (storage/prep/pairings), update at index
+        if (Array.isArray(merged[field])) {
+          if (!value) { merged[field].splice(idx, 1); }
+          else { merged[field][idx] = value; }
+        } else {
+          merged[field] = value ? [value] : [];
+        }
       }
       saveKitchenCustomTips(ingredientName, merged);
       state._quickTipModal = null;
       render();
     }
     function deleteQuickTipFromModal(ingredientName, field, idx) {
-      const baseTips = (() => { let d = null; Object.values(KITCHEN_INGREDIENTS).forEach(cat => { cat.items.forEach(item => { if (item.name === ingredientName) d = item.tips; }); }); return d; })();
-      const merged = getMergedTips(ingredientName, baseTips);
+      const merged = getMergedTips(ingredientName, _getBaseTips(ingredientName));
       if (!merged) { state._quickTipModal = null; render(); return; }
       if (field === 'customNotes') {
         merged.customNotes.splice(idx, 1);
+      } else if (Array.isArray(merged[field])) {
+        merged[field].splice(idx, 1);
       } else {
-        merged[field] = '';
+        merged[field] = [];
       }
       saveKitchenCustomTips(ingredientName, merged);
       state._quickTipModal = null;
@@ -17420,45 +17499,77 @@ function renderGroceryList() {
       }
 
       // Quick Tips: horizontal scroll of all tips (Storage, Prep, Seasoning + custom notes) with tap-to-expand modal
-      function renderQuickTipCard(text, field, idx, label, iconSvg) {
-        const hasContent = !!text;
-        const displayText = hasContent ? text : 'No tip yet';
+      function renderQuickTipCard(tipsArray, field, label, iconSvg) {
+        const arr = Array.isArray(tipsArray) ? tipsArray : [];
+        const hasContent = arr.length > 0 && arr[0];
+        const displayText = hasContent ? arr[0] : 'No tip yet';
+        const extraCount = arr.length > 1 ? arr.length - 1 : 0;
         return `
-          <div onclick="openQuickTipModal('${esc(name)}','${field}',${idx})" style="min-width:140px;max-width:180px;flex-shrink:0;background:rgba(255,255,255,0.05);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
+          <div onclick="openQuickTipCategoryModal('${esc(name)}','${field}')" style="min-width:140px;max-width:180px;flex-shrink:0;background:rgba(255,255,255,0.05);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
             <div style="display:flex;align-items:center;justify-content:space-between;">
               <div style="opacity:0.6;">${iconSvg}</div>
             </div>
             <div style="font-size:12px;font-weight:700;color:${CONFIG.text_muted};text-transform:uppercase;letter-spacing:0.5px;">${esc(label)}</div>
             <div style="font-size:13px;color:${hasContent ? CONFIG.text_color : CONFIG.text_muted};line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">${esc(displayText)}</div>
+            ${extraCount > 0 ? `<div style="font-size:11px;color:${CONFIG.text_muted};margin-top:2px;">+${extraCount} more</div>` : ''}
           </div>
         `;
       }
 
-      function renderQuickTipModal(tipsData) {
-        const modal = state._quickTipModal;
+      function renderQuickTipCategoryModal(tipsData) {
+        const modal = state._quickTipCategoryModal;
         if (!modal || modal.ingredient !== name) return '';
-        const isNew = modal.isNew;
-        let currentVal = '';
-        let modalTitle = 'New Tip';
-        if (!isNew) {
-          if (modal.field === 'customNotes') {
-            currentVal = (tipsData.customNotes && tipsData.customNotes[modal.idx]) || '';
-            modalTitle = 'Custom Tip';
-          } else {
-            currentVal = tipsData[modal.field] || '';
-            modalTitle = modal.field === 'storage' ? 'Storage' : modal.field === 'prep' ? 'Prep' : 'Seasoning';
+        const field = modal.field;
+        const fieldLabels = { storage: 'Storage Tips', prep: 'Prep Tips', pairings: 'Seasoning Tips' };
+        const modalTitle = fieldLabels[field] || 'Tips';
+        const arr = Array.isArray(tipsData[field]) ? tipsData[field] : [];
+        const editingIdx = modal.editingIdx;
+        const addingNew = modal.addingNew;
+        const starSvg = `<svg width="12" height="12" fill="${CONFIG.primary_action_color}" stroke="none" viewBox="0 0 24 24"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg>`;
+        const pencilSvg = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>`;
+        const trashSvg = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>`;
+
+        const tipRows = arr.map((tip, i) => {
+          if (editingIdx === i) {
+            return `
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid ${CONFIG.divider_color};">
+                <input id="qtc-edit-input" type="text" value="${esc(tip)}" style="flex:1;background:${CONFIG.background_color};border:1px solid ${CONFIG.primary_action_color};border-radius:8px;padding:8px 10px;color:${CONFIG.text_color};font-size:14px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter'){quickTipCategorySaveEdit('${esc(name)}','${field}',${i})}" />
+                <button onclick="quickTipCategorySaveEdit('${esc(name)}','${field}',${i})" style="background:none;border:none;color:${CONFIG.success_color};cursor:pointer;padding:4px;font-size:16px;">✓</button>
+              </div>`;
           }
-        }
+          return `
+            <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid ${CONFIG.divider_color};">
+              <div onclick="quickTipCategorySetPrimary('${esc(name)}','${field}',${i})" style="cursor:pointer;flex:1;display:flex;align-items:flex-start;gap:8px;">
+                ${i === 0 ? `<span style="flex-shrink:0;margin-top:2px;" title="Primary">${starSvg}</span>` : `<span style="flex-shrink:0;width:12px;margin-top:2px;"></span>`}
+                <span style="font-size:14px;color:${CONFIG.text_color};line-height:1.4;">${esc(tip)}</span>
+              </div>
+              ${i === 0 ? `<span style="font-size:10px;color:${CONFIG.primary_action_color};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;">Primary</span>` : ''}
+              <button onclick="event.stopPropagation();quickTipCategoryStartEdit(${i})" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:2px;flex-shrink:0;">${pencilSvg}</button>
+              <button onclick="event.stopPropagation();quickTipCategoryDelete('${esc(name)}','${field}',${i})" style="background:none;border:none;color:${CONFIG.danger_color};cursor:pointer;padding:2px;flex-shrink:0;">${trashSvg}</button>
+            </div>`;
+        }).join('');
+
+        const addRow = addingNew ? `
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 0;">
+            <input id="qtc-add-input" type="text" placeholder="Enter a new tip..." style="flex:1;background:${CONFIG.background_color};border:1px solid ${CONFIG.primary_action_color};border-radius:8px;padding:8px 10px;color:${CONFIG.text_color};font-size:14px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter'){quickTipCategorySaveNew('${esc(name)}','${field}')}" />
+            <button onclick="quickTipCategorySaveNew('${esc(name)}','${field}')" style="background:none;border:none;color:${CONFIG.success_color};cursor:pointer;padding:4px;font-size:16px;">✓</button>
+          </div>` : `
+          <button onclick="quickTipCategoryStartAdd()" style="width:100%;padding:10px;background:none;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;color:${CONFIG.text_muted};cursor:pointer;font-size:13px;margin-top:8px;font-family:${CONFIG.font_family};">+ Add tip</button>`;
+
         return `
-          <div onclick="if(event.target===this){state._quickTipModal=null;render();}" style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:24px;">
-            <div style="background:${CONFIG.surface_elevated};border-radius:16px;width:100%;max-width:380px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">
-              <h3 style="font-size:18px;font-weight:700;color:${CONFIG.text_color};margin:0 0 16px 0;">${modalTitle}</h3>
-              <textarea id="quickTipModalText" style="width:100%;min-height:100px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:${CONFIG.text_color};font-size:15px;line-height:1.5;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;" placeholder="Enter your tip...">${esc(currentVal)}</textarea>
-              <div style="display:flex;gap:10px;margin-top:16px;">
-                ${!isNew ? `<button onclick="deleteQuickTipFromModal('${esc(name)}','${modal.field}',${modal.idx})" style="padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:none;color:${CONFIG.danger_color};font-size:14px;cursor:pointer;font-family:${CONFIG.font_family};">Delete</button>` : ''}
-                <div style="flex:1;"></div>
-                <button onclick="state._quickTipModal=null;render();" style="padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:none;color:${CONFIG.text_color};font-size:14px;cursor:pointer;font-family:${CONFIG.font_family};">Cancel</button>
-                <button onclick="saveQuickTipFromModal('${esc(name)}','${modal.field}',${modal.idx},${isNew})" style="padding:10px 16px;border-radius:10px;border:none;background:${CONFIG.primary_action_color};color:white;font-size:14px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};">Save</button>
+          <div onclick="if(event.target===this){closeQuickTipCategoryModal();}" style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center;padding:0;">
+            <div style="background:${CONFIG.surface_elevated};border-radius:16px 16px 0 0;width:100%;max-width:500px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 -4px 32px rgba(0,0,0,0.5);">
+              <div style="padding:20px 20px 0 20px;flex-shrink:0;">
+                <div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 16px auto;"></div>
+                <h3 style="font-size:18px;font-weight:700;color:${CONFIG.text_color};margin:0 0 4px 0;">${modalTitle}</h3>
+                <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:12px;">Tap a tip to set it as primary (shown on card)</div>
+              </div>
+              <div style="padding:0 20px;overflow-y:auto;flex:1;">
+                ${arr.length === 0 ? `<div style="color:${CONFIG.text_muted};font-size:14px;padding:16px 0;text-align:center;">No tips yet. Add one below.</div>` : tipRows}
+                ${addRow}
+              </div>
+              <div style="padding:16px 20px;flex-shrink:0;border-top:1px solid ${CONFIG.divider_color};">
+                <button onclick="closeQuickTipCategoryModal()" style="width:100%;padding:12px;border-radius:10px;border:none;background:${CONFIG.primary_action_color};color:white;font-size:15px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};">Done</button>
               </div>
             </div>
           </div>
@@ -17471,18 +17582,27 @@ function renderGroceryList() {
         const seasoningIcon = '<svg width="16" height="16" fill="none" stroke="' + CONFIG.text_color + '" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.455 2.456L21.75 6l-1.036.259a3.375 3.375 0 00-2.455 2.456z"/></svg>';
         const noteIcon = '<svg width="16" height="16" fill="none" stroke="' + CONFIG.text_color + '" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"/></svg>';
 
-        // Build custom note cards
-        const customNoteCards = (tipsData.customNotes || []).map((note, i) =>
-          renderQuickTipCard(note, 'customNotes', i, 'Tip ' + (i + 1), noteIcon)
-        ).join('');
+        // Build custom note cards (single-tip each, uses old modal)
+        const customNoteCards = (tipsData.customNotes || []).map((note, i) => {
+          const hasContent = !!note;
+          const displayText = hasContent ? note : 'No tip yet';
+          return `
+            <div onclick="openQuickTipModal('${esc(name)}','customNotes',${i})" style="min-width:140px;max-width:180px;flex-shrink:0;background:rgba(255,255,255,0.05);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;gap:6px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div style="opacity:0.6;">${noteIcon}</div>
+              </div>
+              <div style="font-size:12px;font-weight:700;color:${CONFIG.text_muted};text-transform:uppercase;letter-spacing:0.5px;">Tip ${i + 1}</div>
+              <div style="font-size:13px;color:${hasContent ? CONFIG.text_color : CONFIG.text_muted};line-height:1.3;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">${esc(displayText)}</div>
+            </div>`;
+        }).join('');
 
         return `
           <div style="margin-bottom: 10px;">
             <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-left: 4px;">Quick Tips</div>
             <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;" onscroll="this.style.scrollbarWidth='none'">
-              ${renderQuickTipCard(tipsData.storage, 'storage', 0, 'Storage', storageIcon)}
-              ${renderQuickTipCard(tipsData.prep, 'prep', 0, 'Prep', prepIcon)}
-              ${renderQuickTipCard(tipsData.pairings, 'pairings', 0, 'Seasoning', seasoningIcon)}
+              ${renderQuickTipCard(tipsData.storage, 'storage', 'Storage', storageIcon)}
+              ${renderQuickTipCard(tipsData.prep, 'prep', 'Prep', prepIcon)}
+              ${renderQuickTipCard(tipsData.pairings, 'pairings', 'Seasoning', seasoningIcon)}
               ${customNoteCards}
               <div onclick="openQuickTipModal('${esc(name)}','customNotes',-1,true)" style="min-width:140px;flex-shrink:0;background:none;border:1px dashed rgba(255,255,255,0.1);border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;">
                 <svg width="24" height="24" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
@@ -17490,11 +17610,32 @@ function renderGroceryList() {
               </div>
             </div>
           </div>
-          ${renderQuickTipModal(tipsData)}
+          ${renderQuickTipCategoryModal(tipsData)}
+          ${(() => {
+            const modal = state._quickTipModal;
+            if (!modal || modal.ingredient !== name) return '';
+            const isNew = modal.isNew;
+            let currentVal = '';
+            let modalTitle = 'New Tip';
+            if (!isNew) {
+              currentVal = (tipsData.customNotes && tipsData.customNotes[modal.idx]) || '';
+              modalTitle = 'Custom Tip';
+            }
+            return '<div onclick="if(event.target===this){state._quickTipModal=null;render();}" style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;padding:24px;">' +
+              '<div style="background:' + CONFIG.surface_elevated + ';border-radius:16px;width:100%;max-width:380px;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">' +
+              '<h3 style="font-size:18px;font-weight:700;color:' + CONFIG.text_color + ';margin:0 0 16px 0;">' + modalTitle + '</h3>' +
+              '<textarea id="quickTipModalText" style="width:100%;min-height:100px;background:' + CONFIG.background_color + ';border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:12px;color:' + CONFIG.text_color + ';font-size:15px;line-height:1.5;outline:none;resize:vertical;font-family:inherit;box-sizing:border-box;" placeholder="Enter your tip...">' + esc(currentVal) + '</textarea>' +
+              '<div style="display:flex;gap:10px;margin-top:16px;">' +
+              (!isNew ? '<button onclick="deleteQuickTipFromModal(\'' + esc(name) + '\',\'' + modal.field + '\',' + modal.idx + ')" style="padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:none;color:' + CONFIG.danger_color + ';font-size:14px;cursor:pointer;font-family:' + CONFIG.font_family + ';">Delete</button>' : '') +
+              '<div style="flex:1;"></div>' +
+              '<button onclick="state._quickTipModal=null;render();" style="padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:none;color:' + CONFIG.text_color + ';font-size:14px;cursor:pointer;font-family:' + CONFIG.font_family + ';">Cancel</button>' +
+              '<button onclick="saveQuickTipFromModal(\'' + esc(name) + '\',\'' + modal.field + '\',' + modal.idx + ',' + isNew + ')" style="padding:10px 16px;border-radius:10px;border:none;background:' + CONFIG.primary_action_color + ';color:white;font-size:14px;font-weight:600;cursor:pointer;font-family:' + CONFIG.font_family + ';">Save</button>' +
+              '</div></div></div>';
+          })()}
         `;
       }
 
-      const tipsData = tips || { methods: [], storage: '', prep: '', pairings: '', customNotes: [] };
+      const tipsData = tips || { methods: [], storage: [], prep: [], pairings: [], customNotes: [] };
       const gradient = getIngredientGradient(name);
       const heroPhoto = getIngredientPhoto(name);
 
