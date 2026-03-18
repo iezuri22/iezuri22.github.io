@@ -5,6 +5,46 @@
 // ============================================================
 
 // ============================================================
+// SUPABASE INITIALIZATION
+// ============================================================
+const SUPABASE_URL = 'https://blqbxduxgimarrhgyfgn.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJscWJ4ZHV4Z2ltYXJyaGd5ZmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1NjgyNDcsImV4cCI6MjA4MzE0NDI0N30.iNrBLJLSQEUEV24VCnhrMPTTJ6A_0rIuSAOinuFd-vM';
+
+// Load Supabase library dynamically
+(function loadSupabase() {
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js';
+  script.onload = () => {
+    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    console.log('✅ Supabase loaded', window.supabaseClient);
+    // Once Supabase is loaded, check auth
+    checkAuthAndInit();
+  };
+  document.head.appendChild(script);
+})();
+
+// Auth check with exponential backoff (called after Supabase loads)
+async function checkAuthAndInit() {
+  if (!window.supabaseClient) return;
+  try {
+    const { data: { user } } = await window.supabaseClient.auth.getUser();
+    if (!user) {
+      showLoginModal();
+    } else {
+      // User is logged in — load data from Supabase
+      await loadDataFromSupabase();
+      subscribeToChanges(user.id);
+      updateUserIndicator(user.email);
+      // Re-render the current page
+      if (typeof render === 'function') render();
+    }
+  } catch (e) {
+    console.error('Auth check failed:', e);
+    showLoginModal();
+  }
+}
+
+// ============================================================
 // SECTION 1: CONFIGURATION
 // ============================================================
 const CONFIG = {
@@ -621,10 +661,13 @@ function loadAllState() {
   state.dataLoaded = true;
 }
 
-// Storage object mimicking original Supabase interface
+// Storage object - uses Supabase for CRUD, falls back to localStorage
 const storage = {
   _data: [],
+  _handler: null,
   async init(handler) {
+    this._handler = handler;
+    // Load from localStorage first for immediate display
     loadAllState();
     handler?.onDataChanged?.([]);
     return { isOk: true };
@@ -655,6 +698,8 @@ const storage = {
       default: break;
     }
     persistState();
+    // Sync to Supabase
+    await this._syncCreate(item);
     return { isOk: true };
   },
   async update(item) {
@@ -687,6 +732,8 @@ const storage = {
       default: break;
     }
     persistState();
+    // Sync to Supabase
+    await this._syncUpdate(item);
     return { isOk: true };
   },
   async delete(item) {
@@ -713,9 +760,55 @@ const storage = {
       default: break;
     }
     persistState();
+    // Sync to Supabase
+    await this._syncDelete(item);
     return { isOk: true };
   },
-  async loadData() { loadAllState(); },
+  async loadData() {
+    if (window.supabaseClient) {
+      await loadDataFromSupabase();
+    } else {
+      loadAllState();
+    }
+  },
+  // Supabase sync helpers
+  async _syncCreate(item) {
+    if (!window.supabaseClient) return;
+    try {
+      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      if (!user) return;
+      const { error } = await window.supabaseClient
+        .from('meal_planner_data')
+        .insert({ id: item.id, user_id: user.id, data: item });
+      if (error) console.error('Supabase create error:', error);
+    } catch (e) { console.error('Sync create failed:', e); }
+  },
+  async _syncUpdate(item) {
+    if (!window.supabaseClient) return;
+    try {
+      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      if (!user) return;
+      const { error } = await window.supabaseClient
+        .from('meal_planner_data')
+        .update({ data: item })
+        .eq('id', item.id)
+        .eq('user_id', user.id);
+      if (error) console.error('Supabase update error:', error);
+    } catch (e) { console.error('Sync update failed:', e); }
+  },
+  async _syncDelete(item) {
+    if (!window.supabaseClient) return;
+    try {
+      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      if (!user) return;
+      const { error } = await window.supabaseClient
+        .from('meal_planner_data')
+        .delete()
+        .eq('id', item.id)
+        .eq('user_id', user.id);
+      if (error) console.error('Supabase delete error:', error);
+    } catch (e) { console.error('Sync delete failed:', e); }
+  },
   async query(filterFn) {
     // Helper to query across all data
     const allData = [
@@ -906,15 +999,39 @@ async function uploadPhoto(file) {
     showError('Image must be less than 10MB');
     return null;
   }
+
+  // Try Supabase storage upload if available
+  if (window.supabaseClient) {
+    try {
+      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      if (user) {
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
+        showToast('Uploading photo...', 'info');
+        const { data, error } = await window.supabaseClient.storage
+          .from('meal-photos')
+          .upload(fileName, file, { cacheControl: '3600', upsert: false });
+        if (error) {
+          console.error('Upload error:', error);
+          showError('Failed to upload photo: ' + error.message);
+          return null;
+        }
+        const { data: urlData } = window.supabaseClient.storage
+          .from('meal-photos')
+          .getPublicUrl(fileName);
+        showToast('Photo uploaded!', 'success');
+        return urlData.publicUrl;
+      }
+    } catch (e) {
+      console.error('Supabase upload failed, falling back to local:', e);
+    }
+  }
+
+  // Fallback: local data URL
   return new Promise((resolve) => {
     const reader = new FileReader();
-    reader.onload = (e) => {
-      resolve(e.target.result);
-    };
-    reader.onerror = () => {
-      showError('Failed to read image');
-      resolve(null);
-    };
+    reader.onload = (e) => { resolve(e.target.result); };
+    reader.onerror = () => { showError('Failed to read image'); resolve(null); };
     reader.readAsDataURL(file);
   });
 }
@@ -2207,15 +2324,150 @@ function importData() {
   reader.readAsText(file);
 }
 
-// Auth functions (no-op for localStorage version)
-function showLoginModal() { loadAllState(); showToast('Using local storage', 'info'); }
-function handleLogin() { /* no-op */ }
-function handleLogout() { if (confirm('Clear all local data and log out?')) { localStorage.clear(); location.reload(); } }
-function migrateLocalStorageToSupabase() { /* no-op */ }
-function handleSignup() { /* no-op */ }
+// ============================================================
+// AUTH FUNCTIONS (Supabase)
+// ============================================================
+
+function showLoginModal() {
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 class="text-2xl font-bold mb-4">Welcome to Yummy</h2>
+      <p class="mb-4">Sign in to sync your recipes across all your devices</p>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Email:</label>
+        <input type="email" id="loginEmail" class="w-full px-3 py-2 border rounded" style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border-color: ${CONFIG.divider_color};" placeholder="your@email.com" />
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Password:</label>
+        <input type="password" id="loginPassword" class="w-full px-3 py-2 border rounded" style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border-color: ${CONFIG.divider_color};" placeholder="••••••••" />
+      </div>
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="handleLogin()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
+          Sign In
+        </button>
+        <button onclick="handleSignup()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.success_color}; color: white;">
+          Sign Up
+        </button>
+      </div>
+
+      <div class="mt-4 text-sm text-center" style="color: ${CONFIG.text_muted};">
+        Your data will be synced to the cloud
+      </div>
+    </div>
+  `);
+}
+
+async function handleLogin() {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+
+  if (!email || !password) {
+    showError('Please enter email and password');
+    return;
+  }
+
+  const { data, error } = await window.supabaseClient.auth.signInWithPassword({
+    email: email,
+    password: password
+  });
+
+  if (error) {
+    showError('Login failed: ' + error.message);
+    return;
+  }
+
+  closeModal();
+  showToast('Logged in successfully!', 'success');
+
+  // Migrate localStorage data to Supabase if any
+  await migrateLocalStorageToSupabase();
+
+  // Load data and render
+  await loadDataFromSupabase();
+  const { data: { user } } = await window.supabaseClient.auth.getUser();
+  if (user) {
+    subscribeToChanges(user.id);
+    updateUserIndicator(user.email);
+  }
+  if (typeof render === 'function') render();
+}
+
+async function handleSignup() {
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+
+  if (!email || !password) {
+    showError('Please enter email and password');
+    return;
+  }
+
+  if (password.length < 6) {
+    showError('Password must be at least 6 characters');
+    return;
+  }
+
+  const { data, error } = await window.supabaseClient.auth.signUp({
+    email: email,
+    password: password
+  });
+
+  if (error) {
+    showError('Signup failed: ' + error.message);
+    return;
+  }
+
+  closeModal();
+  showToast('Account created! Check your email to verify.', 'success');
+  showLoginModal();
+}
+
+async function handleLogout() {
+  await window.supabaseClient.auth.signOut();
+  showToast('Logged out', 'success');
+  location.reload();
+}
+
+async function migrateLocalStorageToSupabase() {
+  const STORAGE_KEY = 'meal_planner_data_v1';
+  const localData = localStorage.getItem(STORAGE_KEY);
+
+  if (!localData) {
+    console.log('No local data to migrate');
+    return;
+  }
+
+  try {
+    const items = JSON.parse(localData);
+    const { data: { user } } = await window.supabaseClient.auth.getUser();
+
+    if (!user || items.length === 0) return;
+
+    showToast('Migrating your data to cloud...', 'info');
+
+    for (const item of items) {
+      await window.supabaseClient
+        .from('meal_planner_data')
+        .insert({
+          id: item.id,
+          user_id: user.id,
+          data: item
+        });
+    }
+
+    showToast(`Migrated ${items.length} items to cloud!`, 'success');
+    localStorage.removeItem(STORAGE_KEY);
+    console.log('Migration complete, localStorage cleared');
+  } catch (e) {
+    console.error('Migration error:', e);
+    showError('Failed to migrate data. Please try again.');
+  }
+}
 
 function updateUserIndicator(email) {
-  const displayText = 'Local Storage';
+  const displayText = email || 'Not logged in';
   const indicator = document.getElementById('userIndicator');
   const emailSpan = document.getElementById('userEmail');
   if (indicator && emailSpan) { emailSpan.textContent = displayText; indicator.style.display = 'block'; }
@@ -2224,16 +2476,147 @@ function updateUserIndicator(email) {
   if (indicatorMobile && emailSpanMobile) { emailSpanMobile.textContent = displayText; indicatorMobile.style.display = 'block'; }
 }
 
+// ============================================================
+// SUPABASE DATA LOADING
+// ============================================================
+
+async function loadDataFromSupabase() {
+  if (!window.supabaseClient) return;
+  const { data: { user } } = await window.supabaseClient.auth.getUser();
+  if (!user) return;
+
+  const { data, error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .select('*')
+    .eq('user_id', user.id);
+
+  if (error) {
+    console.error('Load error:', error);
+    return;
+  }
+
+  const items = data.map(row => ({ id: row.id, ...row.data }));
+  applySupabaseData(items);
+}
+
+function applySupabaseData(data) {
+  // Skip if we're in the middle of an optimistic update
+  if (state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil) {
+    console.log('Skipping realtime update during optimistic period');
+    return;
+  }
+
+  state.recipes = data.filter(d => d.id && d.id.startsWith('recipe_'));
+  state.inventory = data.filter(d => d.id && (d.id.startsWith('inventory_') || d.id.startsWith('inv_')));
+
+  // Expiration defaults
+  const expDefaults = data.filter(d => d.id && d.id.startsWith('expdefault_'));
+  state.expirationDefaults = {};
+  expDefaults.forEach(d => { state.expirationDefaults[d.itemName] = d.days; });
+
+  // Receipt mappings
+  const mappings = data.filter(d => d.id && d.id.startsWith('mapping_'));
+  state.receiptMappings = {};
+  mappings.forEach(d => {
+    state.receiptMappings[d.rawText] = { name: d.correctedName, category: d.category || 'Other', ingredientId: d.ingredientId || null };
+  });
+
+  state.purchaseHistory = data.filter(d => d.id && d.id.startsWith('history_'));
+  state.receipts = data.filter(d => d.id && d.id.startsWith('receipt_'));
+
+  // Chef chat
+  const chatHistory = data.find(d => d.id === 'chef_chat_history');
+  state.chefChatMessages = chatHistory?.messages || [];
+
+  state.frequentItems = data.filter(d => d.id?.startsWith('frequent_'));
+  state.ingredientKnowledge = data.filter(d => d.id?.startsWith('ingredient_') && d.type === 'ingredient_knowledge');
+
+  let planData = data.filter(d => d.date && d.id && d.id.startsWith('plan_'));
+  planData = planData.map(plan => {
+    const needsMigration = typeof plan.breakfast === 'string' || typeof plan.lunch === 'string' || typeof plan.dinner === 'string';
+    if (needsMigration) {
+      return { ...plan, breakfast: plan.breakfast ? [plan.breakfast] : [], lunch: plan.lunch ? [plan.lunch] : [], dinner: plan.dinner ? [plan.dinner] : [] };
+    }
+    return { ...plan, breakfast: plan.breakfast || [], lunch: plan.lunch || [], dinner: plan.dinner || [] };
+  });
+  state.planData = planData;
+
+  state.mealSelections = data.filter(d => d.id && d.id.startsWith('mealSel_'));
+  state.groceryItems = data.filter(d => d.ingredientKey);
+  state.mealOptions = data.filter(d => d.id && d.id.startsWith('mealOption_'));
+  state.budgetExpenses = data.filter(d => d.id && d.id.startsWith('expense_'));
+  state.weekBudgets = data.filter(d => d.id && d.id.startsWith('weekBudget_'));
+  loadWeeklyBudgets(data);
+  state.freestyleMeals = data.filter(d => d.id && d.id.startsWith('freestyle_'));
+  state.recordingNeeds = data.filter(d => d.id && d.id.startsWith('recording_'));
+  state.seasoningBlends = data.filter(d => d.id && d.id.startsWith('blend_'));
+  state.cookingTasks = data.filter(d => d.id && d.id.startsWith('task_'));
+  state.mealLogs = data.filter(d => d.id && d.id.startsWith('meallog_'));
+
+  // Load mealDays (last 90 days)
+  const todayDate = new Date().toISOString().split('T')[0];
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - 90);
+  const cutoff = cutoffDate.toISOString().split('T')[0];
+  const mealSlotDefault = () => ({ status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null });
+  const mealDayRecords = data.filter(d => d.id && d.id.startsWith('todayMeals_') && d.date >= cutoff);
+  state.mealDays = {};
+  mealDayRecords.forEach(record => {
+    if (record.meals) {
+      const day = { date: record.date, meals: record.meals };
+      ['breakfast', 'lunch', 'dinner'].forEach(m => {
+        if (!day.meals[m]) day.meals[m] = mealSlotDefault();
+      });
+      if (!Array.isArray(day.meals.snacks)) day.meals.snacks = [];
+      state.mealDays[record.date] = day;
+    }
+  });
+  if (!state.mealDays[todayDate]) {
+    state.mealDays[todayDate] = { date: todayDate, meals: { breakfast: mealSlotDefault(), lunch: mealSlotDefault(), dinner: mealSlotDefault(), snacks: [] } };
+  }
+
+  state.dataLoaded = true;
+  // Also persist to localStorage as cache
+  persistState();
+}
+
+function subscribeToChanges(userId) {
+  const channel = window.supabaseClient
+    .channel('meal_planner_changes')
+    .on('postgres_changes',
+      { event: '*', schema: 'public', table: 'meal_planner_data', filter: `user_id=eq.${userId}` },
+      (payload) => {
+        console.log('Real-time change detected:', payload);
+        loadDataFromSupabase().then(() => {
+          if (typeof render === 'function') render();
+        });
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') console.log('✅ Real-time subscribed');
+      if (status === 'CHANNEL_ERROR') console.log('⚠️ Real-time error - continuing without live sync');
+    });
+}
+
 function showClearDataModal() {
   openModal(`<div style="color: ${CONFIG.text_color};"><h2 class="text-2xl font-bold mb-4">Clear All Data</h2><p class="mb-4 font-semibold" style="color: ${CONFIG.danger_color};">Warning: This will permanently delete all your data!</p><p class="mb-4">Consider exporting your data first.</p><div class="flex gap-2 justify-end"><button onclick="closeModal()" class="px-4 py-2 rounded" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="clearAllData()" class="px-4 py-2 rounded" style="background: ${CONFIG.danger_color}; color: white;">Clear All Data</button></div></div>`);
 }
 
-function clearAllData() {
+async function clearAllData() {
   // Clear all yummy_ prefixed localStorage keys
   const keysToRemove = [];
   for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith('yummy_')) keysToRemove.push(key); }
   keysToRemove.forEach(key => localStorage.removeItem(key));
   localStorage.removeItem(FOOD_LOG_KEY); localStorage.removeItem(GROCERY_KEY); localStorage.removeItem(SAVED_RECIPES_KEY);
+  // Also clear Supabase data
+  if (window.supabaseClient) {
+    try {
+      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      if (user) {
+        await window.supabaseClient.from('meal_planner_data').delete().eq('user_id', user.id);
+      }
+    } catch (e) { console.error('Failed to clear Supabase data:', e); }
+  }
   loadAllState(); closeModal(); showToast('All data cleared', 'success'); navigateTo('home');
 }
 
@@ -2260,8 +2643,13 @@ function getExternalMealType(name) {
 // ============================================================
 
 async function showSettingsMenu() {
-  const { data: { user } } = await window.supabaseClient.auth.getUser();
-  const userEmail = user ? user.email : 'Not logged in';
+  let userEmail = 'Not logged in';
+  if (window.supabaseClient) {
+    try {
+      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      userEmail = user ? user.email : 'Not logged in';
+    } catch (e) { console.error('Auth check failed:', e); }
+  }
 
   openModal(`
     <div style="color: ${CONFIG.text_color};">
@@ -3491,6 +3879,7 @@ function showSuggestionsModal(filterTerm = '') {
 
 // On page load, check for target view from navigation
 (function initShared() {
+  // Load from localStorage first for immediate display (Supabase data will override when loaded)
   loadAllState();
   loadCustomIngredientImages();
 
@@ -3500,9 +3889,6 @@ function showSuggestionsModal(filterTerm = '') {
     state.currentView = targetView;
     sessionStorage.removeItem('yummy_target_view');
   }
-
-  // Update user indicator
-  updateUserIndicator('Local Storage');
 
   // Setup keyboard shortcuts
   setupKeyboardShortcuts();
