@@ -495,7 +495,7 @@ function renderKitchen() {
     `;
   }
   return `
-    <div style="padding: 0; padding-bottom: 72px;">
+    <div style="padding: 0; flex: 1;">
       <div class="kitchen-sticky-search" style="position: sticky; top: 48px; z-index: 10; padding: 8px 12px; background: ${CONFIG.background_color};">
         <div style="display: flex; gap: 8px; align-items: center;">
           <div style="position: relative; flex: 1;">
@@ -1099,7 +1099,7 @@ function renderKitchenDetail() {
   `;
 
   return `
-    <div style="padding-bottom: 72px;">
+    <div style="flex: 1;">
       <div style="position: relative; width: 100%; height: 200px; overflow: hidden; background: ${gradient};">
         ${heroPhoto ? `<img src="${esc(heroPhoto)}" style="width:100%;height:100%;object-fit:cover;" />` : `
           <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;">
@@ -5039,7 +5039,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">

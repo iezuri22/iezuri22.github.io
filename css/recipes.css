@@ -1,1 +1,20 @@
 /* Recipes page specific styles */
+
+/* Batch recipe (Build a Plate) card swipe */
+#batchCardContainer {
+  transition: transform 0.2s ease;
+}
+
+/* Batch recipe dot indicators */
+.batch-dot-indicator {
+  transition: all 0.2s ease;
+}
+
+/* Batch component card drag handle area */
+.batch-comp-handle {
+  cursor: grab;
+  touch-action: none;
+}
+.batch-comp-handle:active {
+  cursor: grabbing;
+}

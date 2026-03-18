@@ -56,7 +56,7 @@ function renderMyMeals() {
   ` : '';
 
   return `
-    <div id="my-meals-swipe-zone" style="padding: 0 12px; padding-bottom: 72px;">
+    <div id="my-meals-swipe-zone" style="padding: 0 12px; flex: 1;">
       <div class="desktop-mymeals-layout">
         <div class="desktop-mymeals-main">
           <!-- Date Navigation Header -->
@@ -197,10 +197,14 @@ function renderFilledMealSlot(entry, dateStr, extraCount, allSlotEntries) {
   const escapedName = esc(entry.recipeName).replace(/'/g, "\\'");
   const escapedDateLabel = esc(getFoodLogDateLabel(dateStr)).replace(/'/g, "\\'");
   const stackedIds = allSlotEntries ? allSlotEntries.map(e => e.id).join(',') : '';
-  const onclickTarget = extraCount > 0 ? `openStackedMealDetail('${entry.mealType}', '${dateStr}', '${stackedIds}')` : `openFoodLogDetail('${entry.id}')`;
+  const isBatch = !!entry.batchId;
+  const onclickTarget = isBatch ? `state.batchViewId='${entry.batchId}';state.batchComponentIndex=0;navigateTo('batch-view')` : (extraCount > 0 ? `openStackedMealDetail('${entry.mealType}', '${dateStr}', '${stackedIds}')` : `openFoodLogDetail('${entry.id}')`);
 
   return `
     <div style="position: relative; border-radius: 10px; border: ${borderStyle}; background: ${bgColor}; overflow: hidden;">
+      ${isBatch ? `<div style="position:absolute; top:6px; left:6px; z-index:2; width:22px; height:22px; border-radius:5px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
+        <svg width="13" height="13" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>
+      </div>` : ''}
       <!-- Action buttons (top right) -->
       <div style="position: absolute; top: 6px; right: 6px; z-index: 2; display: flex; gap: 4px;">
         <button onclick="event.stopPropagation(); openSwapMeal('${entry.id}', '${entry.mealType}', '${dateStr}')" title="Swap meal"
@@ -1338,7 +1342,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">

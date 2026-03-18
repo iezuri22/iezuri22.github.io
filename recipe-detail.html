@@ -87,7 +87,7 @@
       }
 
       return `
-        <div style="padding-bottom: 72px; overflow-x: hidden; max-width: 100vw; box-sizing: border-box;">
+        <div style="flex: 1; overflow-x: hidden; max-width: 100vw; box-sizing: border-box;">
           <!-- Hero image -->
           <div style="position: relative; width: 100%; ${img ? 'height: 280px;' : 'height: 160px;'} overflow: hidden; background: linear-gradient(135deg, #1a1a24, #242432);">
             ${img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `
@@ -206,7 +206,7 @@
 
       const content = renderRecipeDetail();
       app.innerHTML = `
-        <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+        <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
           ${renderDesktopSidebar()}
           <div class="desktop-content-area" style="padding: 0;">
             ${content}

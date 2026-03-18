@@ -160,11 +160,11 @@ function renderHome() {
   const cookAgainHtml = renderCookAgainRow();
 
   return `
-    <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+    <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
       ${renderHomeHeader(viewDate)}
-      <div class="mobile-only-sections">${cookAgainHtml}</div>
-      <div class="desktop-home-layout">
-        <div class="desktop-home-main">
+      <div class="mobile-only-sections" style="flex-shrink: 0;">${cookAgainHtml}</div>
+      <div class="desktop-home-layout" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+        <div class="desktop-home-main" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
           ${renderHomeTabs()}
           ${tabContent}
         </div>
@@ -205,7 +205,7 @@ function renderHomeHeader(dateStr) {
   const isTodayDay = isToday(dateStr);
 
   return `
-    <div style="height: 48px; display: flex; align-items: center; padding: 0 12px;">
+    <div style="height: 48px; display: flex; align-items: center; padding: 0 12px; flex-shrink: 0;">
       <button onclick="goToPreviousDay()" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; padding: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
       </button>
@@ -235,7 +235,7 @@ function renderHomeTabs() {
   const selectedActive = state.homeTab === 'selected';
 
   return `
-    <div style="padding: 0 12px 4px;">
+    <div style="padding: 0 12px 4px; flex-shrink: 0;">
       <div class="home-tab-toggle">
         <button class="home-tab-btn ${swipeActive ? 'active' : ''}" onclick="setHomeTab('swipe')">Swipe</button>
         <button class="home-tab-btn ${selectedActive ? 'active' : ''}" onclick="setHomeTab('selected')">Selected</button>
@@ -285,13 +285,13 @@ function renderSwipeTab() {
   const mealLabel = capitalize(mealType);
 
   return `
-    <div style="padding: 0 12px;">
-      <div style="text-align: center; margin-bottom: 6px;">
+    <div style="padding: 0 12px; flex: 1; min-height: 0; display: flex; flex-direction: column;">
+      <div style="text-align: center; margin-bottom: 4px; flex-shrink: 0;">
         <div style="font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.6);">What's for</div>
         <div style="font-size: 15px; font-weight: 600; color: #ffffff;">${mealLabel}</div>
       </div>
 
-      <div style="display: flex; gap: 6px; justify-content: center; margin-bottom: 8px;">
+      <div style="display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; flex-shrink: 0;">
         ${['breakfast', 'lunch', 'dinner'].map(mt => {
           const active = mt === state.swipeMealType;
           const alreadySelected = dayData.meals[mt].status !== 'none';
@@ -305,7 +305,7 @@ function renderSwipeTab() {
         }).join('')}
       </div>
 
-      <div style="display:flex; gap:6px; justify-content:center; margin-bottom:8px;">
+      <div style="display:flex; gap:6px; justify-content:center; margin-bottom:8px; flex-shrink: 0;">
         ${renderSwipeEffortPills()}
       </div>
 
@@ -332,7 +332,7 @@ function renderSwipeTab() {
         </div>
       </div>
 
-      <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 0;">
+      <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 0; flex-shrink: 0;">
         <button id="swipe-btn-nope" onclick="handleHomeSwipeLeft()" class="card-press" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255, 69, 58, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #ff453a; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent;">
           ✕
         </button>
@@ -344,7 +344,7 @@ function renderSwipeTab() {
         </button>
       </div>
 
-      <div class="swipe-hint-arrows">
+      <div class="swipe-hint-arrows" style="flex-shrink: 0; padding-bottom: 4px;">
         <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Pass</span>
         <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
         <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Smash →</span>
@@ -487,7 +487,7 @@ function renderDayView(dateStr) {
   const progressBar = renderDayProgressBar(dayData, mealOrder);
 
   return `
-    <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+    <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; flex: 1;">
       <div class="max-w-4xl mx-auto" style="padding: ${CONFIG.space_lg} ${CONFIG.space_md} ${CONFIG.space_sm};">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${CONFIG.space_sm};">
           <button onclick="goToPreviousDay()" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; padding: 8px;">
@@ -957,11 +957,14 @@ function renderHomeSwipeCards(meal) {
         <div class="swipe-overlay like">Cook!</div>
         <div class="swipe-overlay nope">Skip</div>
         ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
+        ${recipe._isBatchRecipe ? `<div style="position:absolute; top:12px; right:12px; width:28px; height:28px; border-radius:7px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:5;">
+          <svg width="16" height="16" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>
+        </div>` : ''}
         <div class="card-body">
           <div class="card-title">${esc(recipe.title)}</div>
           <div class="card-meta">
             <span>${esc(category)}</span>
-            ${ings.length > 0 ? `<span>${ings.length} ingredients</span>` : ''}
+            ${recipe._isBatchRecipe ? `<span>Plate</span>` : (ings.length > 0 ? `<span>${ings.length} ingredients</span>` : '')}
           </div>
         </div>
       </div>
@@ -1464,8 +1467,9 @@ function handleHomeSwipeRight() {
   const doLog = () => {
     const dateStr = state.viewingDate || getToday();
     const mealType = state.swipeMealType || detectMealType();
-    const ings = recipeIngList(recipe);
+    const ings = recipe._isBatchRecipe ? [] : recipeIngList(recipe);
     const newName = recipe.title || recipe.name || 'Recipe';
+    const batchId = recipe._isBatchRecipe ? recipe._batchId : null;
 
     if (state._swapTargetLogId) {
       const oldLog = getFoodLog().find(e => e.id === state._swapTargetLogId);
@@ -1479,7 +1483,8 @@ function handleHomeSwipeRight() {
         category: recipe.category || 'Other',
         mealType: state._swapMealType || mealType,
         dateStr: state._swapDateStr || dateStr,
-        status: 'planned'
+        status: 'planned',
+        batchId: batchId
       });
       showToast(`Swapped! ${oldName} → ${newName}`, 'success');
       state._swapTargetLogId = null;
@@ -1496,7 +1501,8 @@ function handleHomeSwipeRight() {
         category: recipe.category || 'Other',
         mealType: mealType,
         dateStr: dateStr,
-        status: 'planned'
+        status: 'planned',
+        batchId: batchId
       });
       const dateLabel = getFoodLogDateLabel(dateStr);
       const mealLabel = capitalize(mealType);
@@ -1573,6 +1579,27 @@ function detectMealType() {
   return 'breakfast';
 }
 
+function _injectBatchRecipesIntoDeck(result, mealType) {
+  const batchRecipes = (state.batchRecipes || []).filter(b => {
+    const bt = (b.mealType || '').toLowerCase();
+    return bt === mealType;
+  }).map(b => ({
+    id: b.id,
+    __backendId: b.id,
+    title: b.name,
+    category: capitalize(b.mealType),
+    image_url: getBatchCoverPhoto(b),
+    _isBatchRecipe: true,
+    _batchId: b.id,
+    ingredientsRows: []
+  }));
+  batchRecipes.forEach(br => {
+    const insertAt = Math.floor(Math.random() * (result.length + 1));
+    result.splice(insertAt, 0, br);
+  });
+  return result;
+}
+
 function buildSwipeDeck(mealType) {
   const recipes = state.recipes.filter(r => !r.isDraft && !r.isTip);
   if (recipes.length === 0) return [];
@@ -1620,7 +1647,7 @@ function buildSwipeDeck(mealType) {
   if (state.swipeEffortFilter && state.swipeEffortFilter !== 'all') {
     result = result.filter(r => getRecipeEffort(r.__backendId || r.id) === state.swipeEffortFilter);
   }
-  return result;
+  return _injectBatchRecipesIntoDeck(result, mealType);
 }
 
 function startSwipe(mealType) {
@@ -1901,7 +1928,7 @@ function renderSwipe() {
 
   if (!deck || deck.length === 0) {
     return `
-      <div style="background: ${CONFIG.background_color}; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;">
+      <div style="background: ${CONFIG.background_color}; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;">
         <div style="font-size: 64px; margin-bottom: 16px;">🍽️</div>
         <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: 8px;">No Recipes Yet</div>
         <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: 24px; text-align: center;">Add some recipes first, then come back to swipe!</div>
@@ -1921,7 +1948,7 @@ function renderSwipe() {
   const nextImg = nextRecipe ? recipeThumb(nextRecipe) : '';
 
   return `
-    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 80px;">
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding-bottom: 56px;">
       <div style="padding: 16px 20px 8px; display: flex; align-items: center; justify-content: space-between;">
         <div style="width: 36px;"></div>
         <div style="text-align: center;">
@@ -2011,7 +2038,7 @@ function renderSwipeConfirm() {
   const ings = recipeIngList(recipe);
 
   return `
-    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding: 20px; padding-bottom: 80px;">
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding: 20px; padding-bottom: 56px;">
       <div class="max-w-md mx-auto confirm-pop">
         <div style="text-align: center; margin-bottom: 20px;">
           <div style="font-size: 48px; margin-bottom: 8px;">🎉</div>
@@ -2228,7 +2255,7 @@ function renderSwipeSetup() {
 
   if (recipes.length === 0) {
     return `
-      <div style="background: ${CONFIG.background_color}; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
+      <div style="background: ${CONFIG.background_color}; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
         <div style="width: 80px; height: 80px; background: ${CONFIG.surface_color}; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
           <svg width="40" height="40" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
         </div>
@@ -2260,7 +2287,7 @@ function renderSwipeSetup() {
   ];
 
   return `
-    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 100px;">
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding-bottom: 56px;">
       <div style="padding: ${CONFIG.space_md} 8px 8px;">
         ${state.swipeSettings.setupCompleted ? `
           <button onclick="navigateTo('swipe')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 20px; cursor: pointer; margin-bottom: 4px;">←</button>
@@ -2417,7 +2444,7 @@ function buildSwipeDeckFiltered(mealType) {
   if (state.swipeEffortFilter && state.swipeEffortFilter !== 'all') {
     result = result.filter(r => getRecipeEffort(r.__backendId || r.id) === state.swipeEffortFilter);
   }
-  return result;
+  return _injectBatchRecipesIntoDeck(result, mealType);
 }
 
 function renderSwipeEffortPills() {
@@ -2488,7 +2515,7 @@ function renderAlreadySelected() {
   const mealLabel = capitalize(sel.mealType);
 
   return `
-    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding: 20px; padding-bottom: 100px;">
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding: 20px; padding-bottom: 56px;">
       <div style="max-width: 400px; margin: 0 auto;">
         <div style="text-align: center; padding-top: ${CONFIG.space_2xl}; margin-bottom: ${CONFIG.space_lg};">
           <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; margin-bottom: ${CONFIG.space_xs};">You picked for ${mealLabel}</div>
@@ -2599,7 +2626,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'swipe-setup' ? '56px' : '0'};">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: ${state.currentView !== 'swipe-setup' ? '56px' : '0'};">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">

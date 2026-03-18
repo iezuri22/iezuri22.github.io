@@ -629,7 +629,14 @@ const state = {
   swipeSetupExpandedSection: null,
   swipeSetupSearchTerm: '',
   swipeSetupFilter: 'all',
-  dataLoaded: false
+  dataLoaded: false,
+  // Batch recipes (Build a Plate)
+  batchRecipes: [],
+  batchForm: null,
+  batchViewId: null,
+  batchComponentIndex: 0,
+  batchRecipePickerOpen: false,
+  batchRecipePickerSearch: ''
 };
 
 // Bridge: state.today reads/writes state.mealDays[todayDate] for backward compatibility
@@ -697,6 +704,7 @@ function persistState() {
   saveToLS('recordingNeeds', state.recordingNeeds);
   saveToLS('weeklyBudgets', state.weeklyBudgets);
   saveToLS('mealOptions', state.mealOptions);
+  saveToLS('batchRecipes', state.batchRecipes);
 }
 
 function loadAllState() {
@@ -724,6 +732,7 @@ function loadAllState() {
   state.recordingNeeds = loadFromLS('recordingNeeds', []);
   state.weeklyBudgets = loadFromLS('weeklyBudgets', {});
   state.mealOptions = loadFromLS('mealOptions', []);
+  state.batchRecipes = loadFromLS('batchRecipes', []);
   // Ensure today exists in mealDays
   const todayDate = new Date().toISOString().split('T')[0];
   if (!state.mealDays[todayDate]) {
@@ -1288,7 +1297,8 @@ function addFoodLogEntry(entry) {
     image: entry.image || null, ingredients: entry.ingredients || [],
     category: entry.category || 'Other', mealType: entry.mealType || detectMealType(),
     dateCooked: dateCooked, photo: entry.photo || null, myPhoto: entry.myPhoto || null,
-    notes: entry.notes || null, wouldMakeAgain: null, status: entry.status || 'planned'
+    notes: entry.notes || null, wouldMakeAgain: null, status: entry.status || 'planned',
+    batchId: entry.batchId || null
   };
   // Allow multiple meals per slot (stacking) - no longer replace existing entries
   log.unshift(logEntry);
@@ -1791,6 +1801,110 @@ function submitPickerIngredients() {
   if (typeof render === 'function') render();
 }
 
+function showBatchIngredientPicker(batchId) {
+  const batch = getBatchRecipeById(batchId);
+  if (!batch) { showToast('Plate not found', 'error'); return; }
+  const allIngs = getBatchRecipeIngredients(batch);
+  if (allIngs.length === 0) { showToast('No ingredients found', 'info'); return; }
+
+  const listKeys = new Set(getSmartGroceryList().map(i => normalizeIngredient(i.name)));
+  const ingData = allIngs.map((ing, idx) => {
+    const key = normalizeIngredient(ing.name);
+    const onList = listKeys.has(key);
+    const staple = isStaple(ing.name);
+    return { idx, name: ing.name, group: ing.group || 'Other', qty: ing.qty || '', unit: ing.unit || '', key, onList, staple, checked: !staple, componentName: ing.componentName, componentId: ing.componentId };
+  });
+
+  // Group by component
+  const compGroups = {};
+  ingData.forEach(ing => {
+    if (!compGroups[ing.componentId]) compGroups[ing.componentId] = { name: ing.componentName, items: [] };
+    compGroups[ing.componentId].items.push(ing);
+  });
+
+  let rowsHtml = '';
+  Object.values(compGroups).forEach(group => {
+    rowsHtml += `<div style="margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;" onclick="var s=this.nextElementSibling;s.style.display=s.style.display==='none'?'block':'none';this.querySelector('.batch-chev').style.transform=s.style.display==='none'?'':'rotate(90deg)';">
+        <span class="batch-chev" style="color:${CONFIG.text_muted};font-size:12px;transition:transform 150ms;display:inline-block;transform:rotate(90deg);">&#9656;</span>
+        <span style="font-size:13px;font-weight:600;color:${CONFIG.primary_action_color};">${esc(group.name)}</span>
+        <span style="font-size:11px;color:${CONFIG.text_muted};">${group.items.length} items</span>
+      </div>
+      <div>`;
+    group.items.forEach(ing => {
+      const qtyLabel = ing.qty ? `${ing.qty}${ing.unit ? ' ' + ing.unit : ''}` : '';
+      rowsHtml += `<div data-picker-idx="${ing.idx}" onclick="togglePickerIngredient(${ing.idx})"
+        style="display:flex;align-items:center;gap:10px;padding:10px;min-height:44px;cursor:pointer;border-radius:8px;margin-bottom:2px;background:${CONFIG.surface_color};" class="card-press">
+        <div class="picker-cb" data-picker-cb="${ing.idx}"
+          style="width:20px;height:20px;border:1.5px solid ${ing.checked ? CONFIG.primary_action_color : CONFIG.text_muted};border-radius:5px;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:${ing.checked ? CONFIG.primary_action_color : 'transparent'};transition:all 150ms ease;">
+          ${ing.checked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:baseline;gap:6px;">
+            <span style="color:${CONFIG.text_color};font-size:13px;">${esc(capitalize(ing.name))}</span>
+            ${qtyLabel ? `<span style="color:${CONFIG.text_muted};font-size:11px;">${esc(qtyLabel)}</span>` : ''}
+          </div>
+          ${ing.onList ? `<div style="font-size:10px;color:${CONFIG.primary_action_color};margin-top:1px;">Already on list</div>` : ''}
+          ${ing.staple ? `<div style="font-size:10px;color:${CONFIG.text_muted};margin-top:1px;">Pantry staple</div>` : ''}
+        </div>
+      </div>`;
+    });
+    rowsHtml += '</div></div>';
+  });
+
+  window._pickerIngredients = ingData;
+  window._pickerBatchId = batchId;
+
+  const modalHtml = `<div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;">
+      <div style="width:56px;height:56px;border-radius:12px;background:${CONFIG.surface_elevated};display:flex;align-items:center;justify-content:center;flex-shrink:0;overflow:hidden;">
+        ${getBatchCoverPhoto(batch) ? `<img src="${esc(getBatchCoverPhoto(batch))}" style="width:100%;height:100%;object-fit:cover;">` : `<svg width="28" height="28" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>`}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(batch.name)}</div>
+        <div style="font-size:12px;color:${CONFIG.text_muted};margin-top:2px;">${allIngs.length} ingredient${allIngs.length !== 1 ? 's' : ''} across ${batch.components.length} components</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <button onclick="pickerSelectAll(true)" style="flex:1;padding:8px;min-height:36px;background:${CONFIG.surface_color};border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:${CONFIG.text_color};font-size:12px;cursor:pointer;">Select all</button>
+      <button onclick="pickerSelectAll(false)" style="flex:1;padding:8px;min-height:36px;background:${CONFIG.surface_color};border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:${CONFIG.text_color};font-size:12px;cursor:pointer;">Deselect all</button>
+    </div>
+    <div style="overflow-y:auto;flex:1;margin:0 -16px;padding:0 16px;max-height:50vh;">
+      ${rowsHtml}
+    </div>
+    <button onclick="submitBatchPickerIngredients()" style="margin-top:12px;padding:12px;min-height:44px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;width:100%;">Add selected to grocery list</button>
+  </div>`;
+
+  openModal(modalHtml);
+}
+
+function submitBatchPickerIngredients() {
+  const ingData = window._pickerIngredients;
+  const batchId = window._pickerBatchId;
+  if (!ingData || !batchId) return;
+  const batch = getBatchRecipeById(batchId);
+  if (!batch) return;
+
+  const selected = ingData.filter(i => i.checked);
+  if (selected.length === 0) { showToast('No ingredients selected', 'info'); return; }
+
+  const list = getSmartGroceryList();
+  selected.forEach(ing => {
+    const key = normalizeIngredient(ing.name);
+    if (!key) return;
+    const existing = list.find(i => normalizeIngredient(i.name) === key);
+    if (existing) {
+      if (!existing.sourceMeals.includes(batch.name)) existing.sourceMeals.push(batch.name);
+    } else {
+      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], addedAt: Date.now() });
+    }
+  });
+  saveSmartGroceryList(list);
+  closeModal();
+  showToast(`Added ${selected.length} ingredient${selected.length !== 1 ? 's' : ''} to grocery list`, 'success');
+  if (typeof render === 'function') render();
+}
+
 function addManualGroceryItemSmart() {
   const input = document.getElementById('groceryManualInput'); if (!input) return;
   const name = input.value.trim(); if (!name) return;
@@ -1837,83 +1951,144 @@ function _updateGroceryBadge() {
 let _cachedSuggestions = [];
 function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; const added = addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); showToast(added ? `${capitalize(s.name)} added` : `${capitalize(s.name)} removed`, added ? 'success' : 'info'); if (typeof render === 'function') render(); }
 
+// --- Add from a meal: filter state ---
+window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
+
 function showAddFromMealModal() {
-  const today = getToday();
+  window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
+
+  // Build full recipe list once (all recipes with ingredients)
+  const savedIds = new Set(getSavedRecipes());
+  const allItems = [];
   const seen = new Set();
 
-  // 1. Planned meals (today + future)
-  const plannedMeals = [];
-  const plannedIds = new Set();
-  const dates = Object.keys(state.mealDays).filter(d => d >= today).sort();
-  dates.forEach(dateStr => {
-    const dayData = state.mealDays[dateStr];
-    if (!dayData || !dayData.meals) return;
-    ['breakfast', 'lunch', 'dinner'].forEach(mt => {
-      const meal = dayData.meals[mt];
-      if (!meal) return;
-      if (meal.status === 'selected' || meal.status === 'pending' || meal.status === 'logged') {
-        const rid = meal.plannedRecipeId || meal.actualRecipeId;
-        if (!rid || seen.has(rid)) return;
-        const recipe = getRecipeById(rid);
-        if (!recipe || recipeIngList(recipe).length === 0) return;
-        seen.add(rid);
-        plannedIds.add(rid);
-        plannedMeals.push({ recipeId: rid, name: recipe.title, image: recipe.image_url, count: 0, label: 'Planned for ' + getDateLabel(dateStr) });
-      }
+  state.recipes.filter(r => !r.isDraft && !r.isTip && recipeIngList(r).length > 0).forEach(r => {
+    const id = r.id || r.__backendId;
+    if (!id || seen.has(id)) return;
+    seen.add(id);
+    const effort = getRecipeEffort(id);
+    const cat = (r.category || '').toLowerCase();
+    allItems.push({
+      recipeId: id,
+      name: r.title || '',
+      image: r.image_url || '',
+      category: r.category || '',
+      catLower: cat,
+      effort: effort,
+      isSaved: savedIds.has(id),
+      ingredients: recipeIngList(r).map(i => (i.name || '').toLowerCase())
     });
   });
 
-  // 2. Saved/bookmarked recipes not in plan
-  const savedMeals = [];
-  const savedIds = getSavedRecipes();
-  savedIds.forEach(id => {
-    if (seen.has(id)) return;
-    const recipe = getRecipeById(id);
-    if (!recipe || recipeIngList(recipe).length === 0) return;
-    seen.add(id);
-    savedMeals.push({ recipeId: id, name: recipe.title, image: recipe.image_url, count: 0, label: 'Saved' });
+  window._mealPickerAllItems = allItems;
+
+  const modalHtml = `<div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
+    <h2 style="font-size:17px;font-weight:600;margin-bottom:12px;">Add from a meal</h2>
+    <input id="mealPickerSearch" type="text" placeholder="Search meals or ingredients..."
+      oninput="window._mealPickerFilters.search=this.value;_renderMealPickerResults();"
+      style="width:100%;padding:10px 12px;margin-bottom:10px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;box-sizing:border-box;outline:none;">
+    <div id="mealPickerPills" style="display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:8px;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0;"></div>
+    <div id="mealPickerResults" style="overflow-y:auto;flex:1;margin:0 -16px;padding:0 16px;min-height:0;"></div>
+    <button onclick="closeModal()" style="margin-top:12px;padding:10px;min-height:44px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;width:100%;font-size:14px;flex-shrink:0;">Done</button>
+  </div>`;
+
+  openModal(modalHtml);
+  _renderMealPickerPills();
+  _renderMealPickerResults();
+}
+
+function _mealPickerToggleFilter(type, value) {
+  const f = window._mealPickerFilters;
+  if (type === 'saved') {
+    f.saved = !f.saved;
+  } else if (type === 'mealType') {
+    f.mealType = f.mealType === value ? null : value;
+  } else if (type === 'effort') {
+    f.effort = f.effort === value ? null : value;
+  }
+  _renderMealPickerPills();
+  _renderMealPickerResults();
+}
+
+function _renderMealPickerPills() {
+  const container = document.getElementById('mealPickerPills');
+  if (!container) return;
+  const f = window._mealPickerFilters;
+  const noFilters = !f.saved && !f.mealType && !f.effort;
+
+  const pills = [
+    { label: 'All', active: noFilters, onclick: "window._mealPickerFilters={search:window._mealPickerFilters.search,saved:false,mealType:null,effort:null};_renderMealPickerPills();_renderMealPickerResults();" },
+    { label: 'Saved', active: f.saved, onclick: "_mealPickerToggleFilter('saved')" },
+    { label: 'Breakfast', active: f.mealType === 'breakfast', onclick: "_mealPickerToggleFilter('mealType','breakfast')" },
+    { label: 'Lunch', active: f.mealType === 'lunch', onclick: "_mealPickerToggleFilter('mealType','lunch')" },
+    { label: 'Dinner', active: f.mealType === 'dinner', onclick: "_mealPickerToggleFilter('mealType','dinner')" },
+    { label: 'Snack', active: f.mealType === 'snack', onclick: "_mealPickerToggleFilter('mealType','snack')" },
+    { label: 'Lazy', active: f.effort === 'lazy', onclick: "_mealPickerToggleFilter('effort','lazy')", effortKey: 'lazy' },
+    { label: 'Moderate', active: f.effort === 'moderate', onclick: "_mealPickerToggleFilter('effort','moderate')", effortKey: 'moderate' },
+    { label: 'Timely', active: f.effort === 'timely', onclick: "_mealPickerToggleFilter('effort','timely')", effortKey: 'timely' }
+  ];
+
+  container.innerHTML = pills.map(p => {
+    let bg, border, txt;
+    if (p.effortKey && p.active) {
+      const e = EFFORT_LEVELS[p.effortKey];
+      bg = e.bg; border = e.border; txt = e.color;
+    } else if (p.active) {
+      bg = 'rgba(232,93,93,0.15)'; border = 'rgba(232,93,93,0.4)'; txt = '#e85d5d';
+    } else {
+      bg = 'transparent'; border = 'rgba(255,255,255,0.1)'; txt = CONFIG.text_muted;
+    }
+    return `<button onclick="${p.onclick}" style="padding:5px 12px;border-radius:14px;border:1px solid ${border};background:${bg};color:${txt};font-size:12px;font-weight:${p.active ? '600' : '400'};cursor:pointer;white-space:nowrap;flex-shrink:0;-webkit-tap-highlight-color:transparent;">${p.label}</button>`;
+  }).join('');
+}
+
+function _renderMealPickerResults() {
+  const container = document.getElementById('mealPickerResults');
+  if (!container) return;
+  const f = window._mealPickerFilters;
+  const items = window._mealPickerAllItems || [];
+  const searchLower = (f.search || '').toLowerCase().trim();
+
+  const filtered = items.filter(item => {
+    // Search filter: match name or ingredients
+    if (searchLower) {
+      const nameMatch = item.name.toLowerCase().includes(searchLower);
+      const ingMatch = item.ingredients.some(ing => ing.includes(searchLower));
+      if (!nameMatch && !ingMatch) return false;
+    }
+    // Saved filter
+    if (f.saved && !item.isSaved) return false;
+    // Meal type filter
+    if (f.mealType && item.catLower !== f.mealType) return false;
+    // Effort filter
+    if (f.effort && item.effort !== f.effort) return false;
+    return true;
   });
 
-  // 3. Frequently cooked meals
-  const historyMeals = [];
-  const frequentMeals = getFrequentMeals();
-  frequentMeals.forEach(m => {
-    const key = m.recipeId || m.name;
-    if (seen.has(key)) return;
-    seen.add(key);
-    historyMeals.push({ recipeId: m.recipeId, name: m.name, image: m.image, count: m.count, label: 'Cooked ' + m.count + 'x' });
-  });
-
-  // 4. Remaining recipes from food log + library
-  const otherMeals = [];
-  const log = getFoodLog();
-  log.forEach(entry => {
-    const key = entry.recipeId || entry.recipeName;
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    otherMeals.push({ recipeId: entry.recipeId, name: entry.recipeName, image: entry.image, count: 1, label: '' });
-  });
-  state.recipes.filter(r => !r.isDraft && !r.isTip && recipeIngList(r).length > 0).forEach(r => {
-    if (seen.has(r.id)) return;
-    seen.add(r.id);
-    otherMeals.push({ recipeId: r.id, name: r.title, image: r.image_url, count: 0, label: '' });
-  });
-
-  function _mealCardHtml(m) {
-    const recipe = m.recipeId ? getRecipeById(m.recipeId) : null;
-    const ingCount = recipe ? recipeIngList(recipe).length : 0;
-    const uniqueCount = recipe ? recipeIngList(recipe).filter(i => !isStaple(i.name)).length : 0;
-    return `<div onclick="showMealIngredientPicker('${esc(m.recipeId || '')}')" style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};" class="card-press">${m.image ? `<img src="${esc(m.image)}" style="width: 44px; height: 44px; border-radius: 10px; object-fit: cover;">` : `<div style="width: 44px; height: 44px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px;">&#127869;</div>`}<div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(m.name)}</div><div style="font-size: 11px; color: ${CONFIG.text_muted};">${uniqueCount > 0 ? uniqueCount + ' ingredients' : ''}${m.label ? ` · ${esc(m.label)}` : ''}</div></div></div>`;
+  if (filtered.length === 0) {
+    container.innerHTML = `<div style="text-align:center;padding:32px 16px;color:${CONFIG.text_muted};font-size:14px;">No matching meals found.</div>`;
+    return;
   }
 
-  function _sectionHtml(title, meals) {
-    if (meals.length === 0) return '';
-    return `<div style="margin-bottom: 12px;"><div style="font-size: 12px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">${title}</div>${meals.map(m => _mealCardHtml(m)).join('')}</div>`;
-  }
+  container.innerHTML = filtered.map(item => {
+    const imgHtml = item.image
+      ? `<img src="${esc(item.image)}" style="width:48px;height:48px;border-radius:10px;object-fit:cover;flex-shrink:0;" loading="lazy">`
+      : `<div style="width:48px;height:48px;border-radius:10px;background:${CONFIG.surface_elevated};display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">&#127869;</div>`;
 
-  const hasAny = plannedMeals.length + savedMeals.length + historyMeals.length + otherMeals.length > 0;
+    const catPill = item.category
+      ? `<span style="font-size:10px;padding:2px 7px;background:rgba(255,255,255,0.06);color:${CONFIG.text_muted};border-radius:8px;white-space:nowrap;">${esc(item.category)}</span>`
+      : '';
+    const effortPill = renderEffortPill(item.effort, 'sm');
 
-  openModal(`<div style="color: ${CONFIG.text_color}; max-height: 70vh; display: flex; flex-direction: column;"><h2 style="font-size: 17px; font-weight: 600; margin-bottom: 12px;">Add from a meal</h2><div style="overflow-y: auto; flex: 1; margin: 0 -16px; padding: 0 16px;">${!hasAny ? `<div style="text-align: center; padding: 24px; color: ${CONFIG.text_muted};">No meals with ingredients found.</div>` : _sectionHtml('For your upcoming meals', plannedMeals) + _sectionHtml('From your saved recipes', savedMeals) + _sectionHtml('Things you make often', historyMeals) + _sectionHtml('All recipes', otherMeals)}</div><button onclick="closeModal()" style="margin-top: 12px; padding: 10px; background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color}; border: none; border-radius: 10px; cursor: pointer; width: 100%; font-size: 14px;">Done</button></div>`);
+    return `<div onclick="showMealIngredientPicker('${esc(item.recipeId)}')"
+      style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;cursor:pointer;margin-bottom:4px;background:${CONFIG.surface_color};-webkit-tap-highlight-color:transparent;" class="card-press">
+      ${imgHtml}
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;">${esc(item.name)}</div>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${catPill}${effortPill}</div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ============================================================
@@ -1965,6 +2140,127 @@ function recipeIngList(r) {
     return r.ingredientsRows.map(x => ({ qty: (x.qty || '').trim(), unit: (x.unit || '').trim(), name: (x.name || '').trim(), group: x.group || 'Other' })).filter(x => x.name);
   }
   return [];
+}
+
+// ============================================================
+// SECTION 10b: BATCH RECIPE (Build a Plate) HELPERS
+// ============================================================
+function getBatchRecipeById(id) {
+  if (!id) return null;
+  return (state.batchRecipes || []).find(b => b.id === id);
+}
+
+function newBatchRecipeDraft() {
+  return {
+    id: null,
+    name: '',
+    coverPhoto: null,
+    mealType: 'dinner',
+    effort: null,
+    components: [],
+    createdAt: null
+  };
+}
+
+function newBatchComponent(type) {
+  return {
+    id: 'comp_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+    type: type, // 'recipe' or 'freeform'
+    recipeId: null,
+    name: '',
+    photo: null,
+    ingredients: [],
+    instructions: '',
+    order: 0,
+    notes: '',
+    videoLink: '',
+    timing: ''
+  };
+}
+
+function saveBatchRecipe(batch) {
+  if (!batch.id) {
+    batch.id = 'batch_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+    batch.createdAt = new Date().toISOString();
+    state.batchRecipes.push(batch);
+  } else {
+    const idx = state.batchRecipes.findIndex(b => b.id === batch.id);
+    if (idx >= 0) state.batchRecipes[idx] = batch;
+    else state.batchRecipes.push(batch);
+  }
+  persistState();
+}
+
+function deleteBatchRecipe(batchId) {
+  state.batchRecipes = state.batchRecipes.filter(b => b.id !== batchId);
+  persistState();
+}
+
+function getBatchRecipeIngredients(batch) {
+  const allIngs = [];
+  (batch.components || []).forEach(comp => {
+    if (comp.type === 'recipe' && comp.recipeId) {
+      const r = getRecipeById(comp.recipeId);
+      if (r) {
+        recipeIngList(r).forEach(ing => {
+          allIngs.push({ ...ing, componentName: r.title, componentId: comp.id });
+        });
+      }
+    } else if (comp.type === 'freeform' && comp.ingredients) {
+      comp.ingredients.forEach(ingName => {
+        if (ingName.trim()) {
+          allIngs.push({ qty: '', unit: '', name: ingName.trim(), group: 'Other', componentName: comp.name, componentId: comp.id });
+        }
+      });
+    }
+  });
+  return allIngs;
+}
+
+function getBatchCombinedIngredients(batch) {
+  const allIngs = getBatchRecipeIngredients(batch);
+  const combined = {};
+  allIngs.forEach(ing => {
+    const key = normalizeIngredient(ing.name);
+    if (!combined[key]) {
+      combined[key] = { name: ing.name, qty: ing.qty, unit: ing.unit, group: ing.group, components: [ing.componentName] };
+    } else {
+      if (!combined[key].components.includes(ing.componentName)) {
+        combined[key].components.push(ing.componentName);
+      }
+      if (ing.qty && combined[key].qty) {
+        const a = parseFloat(combined[key].qty) || 0;
+        const b = parseFloat(ing.qty) || 0;
+        if (a && b && combined[key].unit === ing.unit) {
+          combined[key].qty = String(a + b);
+        }
+      }
+    }
+  });
+  return Object.values(combined);
+}
+
+function getBatchTotalTime(batch) {
+  let total = 0;
+  (batch.components || []).forEach(comp => {
+    if (comp.timing) {
+      const m = comp.timing.match(/(\d+)\s*min/i);
+      if (m) total += parseInt(m[1]);
+    }
+  });
+  return total;
+}
+
+function getBatchCoverPhoto(batch) {
+  if (batch.coverPhoto) return batch.coverPhoto;
+  for (const comp of (batch.components || [])) {
+    if (comp.type === 'recipe' && comp.recipeId) {
+      const r = getRecipeById(comp.recipeId);
+      if (r) { const t = recipeThumb(r); if (t) return t; }
+    }
+    if (comp.photo) return comp.photo;
+  }
+  return '';
 }
 
 function newRecipeDraft() {
@@ -2758,7 +3054,7 @@ function navigateTo(view) {
 
   const pageMap = {
     'home': '/index.html', 'swipe-setup': '/index.html', 'swipe-confirm': '/index.html', 'external-meal-picker': '/index.html',
-    'recipes': '/recipes.html', 'recipe-view': '/recipes.html', 'recipe-edit': '/recipes.html', 'freestyle-edit': '/recipes.html',
+    'recipes': '/recipes.html', 'recipe-view': '/recipes.html', 'recipe-edit': '/recipes.html', 'freestyle-edit': '/recipes.html', 'batch-edit': '/recipes.html', 'batch-view': '/recipes.html',
     'my-meals': '/my-meals.html', 'food-log-detail': '/my-meals.html', 'my-plates': '/my-meals.html',
     'kitchen': '/kitchen.html', 'inventory': '/kitchen.html', 'ingredients': '/kitchen.html', 'ingredient-detail': '/kitchen.html', 'budget-dashboard': '/kitchen.html',
     'kitchen-detail': '/kitchen-detail.html', 'kitchen-ingredient-meals': '/kitchen-detail.html',
@@ -2790,20 +3086,20 @@ function navigateTo(view) {
 // SECTION 19: NAV RENDERING
 // ============================================================
 function renderDesktopPageTitle() {
-  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home' };
+  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home' };
   const title = pageTitles[state.currentView] || 'Yummy';
   return `<div class="desktop-page-title-bar" style="display: none; padding-bottom: 24px;"><h1 style="font-size: 28px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">${title}</h1></div>`;
 }
 
 function renderNav() {
   if (state.currentView === 'home' || state.currentView === 'swipe' || state.currentView === 'swipe-setup' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals') return '';
-  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient' };
+  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient' };
   const pageTitle = pageTitles[state.currentView] || 'Yummy';
   const expiringItems = getExpiringItems(); const expiringCount = expiringItems.length;
   // Main nav pages don't get a back arrow (they're reachable from bottom nav)
   const mainNavPages = ['recipes', 'my-meals', 'kitchen', 'grocery-list'];
   const isMainNavPage = mainNavPages.includes(state.currentView);
-  const backTarget = state.currentView === 'food-log-detail' || state.currentView === 'my-plates' ? 'my-meals' : state.currentView === 'kitchen-detail' ? 'kitchen' : 'home';
+  const backTarget = state.currentView === 'food-log-detail' || state.currentView === 'my-plates' ? 'my-meals' : state.currentView === 'kitchen-detail' ? 'kitchen' : state.currentView === 'batch-edit' || state.currentView === 'batch-view' ? 'recipes' : 'home';
   const backButton = isMainNavPage ? '' : `<button onclick="navigateTo('${backTarget}')" style="color: ${CONFIG.text_color}; background: none; border: none; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; padding: 0;"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg></button>`;
   return `<nav style="background: ${CONFIG.background_color}; height: 48px; display: flex; align-items: center; padding: 0 12px; position: sticky; top: 0; z-index: 50;"><div style="display: flex; align-items: center; justify-content: space-between; width: 100%;"><div style="display: flex; align-items: center; gap: 8px;">${backButton}<span style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">${pageTitle}</span></div><div style="display: flex; align-items: center; gap: 2px;">${state.currentView === 'my-meals' ? `<button onclick="navigateTo('my-plates')" style="color: ${CONFIG.text_color}; background: transparent; border: none; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px;" title="My Plates"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg></button>` : ''}<button onclick="showTimerModal()" style="position: relative; color: ${CONFIG.text_color}; background: ${state.activeTimers.length > 0 ? 'rgba(232,93,93,0.15)' : 'transparent'}; border: none; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px;"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${state.activeTimers.length > 0 ? `<span style="position:absolute; top:2px; right:2px; background:${CONFIG.danger_color}; color:white; font-size:10px; padding:2px 5px; border-radius:10px;">${state.activeTimers.length}</span>` : ''}</button>${expiringCount > 0 ? `<button onclick="navigateTo('inventory')" style="position: relative; color: ${CONFIG.text_color}; background: rgba(232,93,93,0.15); border: none; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px;"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg><span style="position:absolute; top:2px; right:2px; background:${CONFIG.danger_color}; color:white; font-size:10px; padding:2px 5px; border-radius:10px;">${expiringCount}</span></button>` : ''}</div></div></nav>`;
 }

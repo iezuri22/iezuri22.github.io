@@ -376,7 +376,7 @@ function renderGroceryList() {
       ` : '';
 
       return `
-        <div style="padding: 0 12px; padding-bottom: 72px;">
+        <div style="padding: 0 12px; flex: 1;">
 
           <!-- Manual Add Input -->
           <div style="display: flex; gap: 8px; margin-bottom: 6px;">
@@ -1082,7 +1082,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">
