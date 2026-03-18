@@ -646,7 +646,6 @@ async function saveFreestyle() {
 
     state.freestyleForm = null;
     state.currentView = 'recipes';
-    state.recipeTab = 'freestyle';
     render();
     showToast('Freestyle meal saved!', 'success');
   } catch (e) {
@@ -1556,34 +1555,94 @@ function renderIngredientGrid() {
 }
 
 function renderRecipeFilterPills() {
-  const pills = [
+  // Primary filter row: All | Saved | Breakfast | Lunch | Dinner | Snack
+  const primaryPill = state.recipePrimaryFilter || 'all';
+  const primaryFilters = [
     { id: 'all', label: 'All' },
     { id: 'saved', label: 'Saved' },
-    { id: 'effort-lazy', label: 'Lazy' },
-    { id: 'effort-moderate', label: 'Moderate' },
-    { id: 'effort-timely', label: 'Timely' },
-    { id: 'effort-uncategorized', label: 'Uncategorized' },
-    { id: 'have-ingredients', label: 'Have Ingredients' }
+    { id: 'Breakfast', label: 'Breakfast' },
+    { id: 'Lunch', label: 'Lunch' },
+    { id: 'Dinner', label: 'Dinner' },
+    { id: 'Snack', label: 'Snack' }
   ];
-  // Source type pills
-  const sourcePills = [
-    { id: 'src-user', label: 'My Recipes', tab: 'user' },
-    { id: 'src-freestyle', label: 'Journal', tab: 'freestyle' },
-    { id: 'src-chefiq', label: 'ChefIQ', tab: 'chefiq' },
-    { id: 'src-imported', label: 'Imported', tab: 'imported' },
-    { id: 'src-claude', label: 'Claude', tab: 'claude' }
+
+  const primaryRow = primaryFilters.map(f => {
+    const active = primaryPill === f.id;
+    return `<button onclick="state.recipePrimaryFilter = '${f.id}'; render();"
+      style="flex-shrink:0; padding:8px 16px; border-radius:20px; border:none;
+      background:${active ? CONFIG.primary_action_color : 'transparent'};
+      color:${active ? 'white' : CONFIG.text_muted};
+      font-size:13px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">
+      ${f.label}</button>`;
+  }).join('');
+
+  // Secondary filters (collapsible)
+  const showSecondary = state.recipeShowSecondaryFilters || false;
+  const sourcesToggles = state.recipeSourceToggles || {};
+  const effortToggles = state.recipeEffortToggles || {};
+
+  const sourceOptions = [
+    { id: 'user', label: 'My Recipes' },
+    { id: 'chefiq', label: 'ChefIQ' },
+    { id: 'claude', label: 'Claude' },
+    { id: 'imported', label: 'Imported' }
   ];
-  const allPills = pills.map(pill => {
-    const active = (state.recipeFilterPill || 'all') === pill.id && (!state.recipeTab || state.recipeTab === 'user');
-    const effortKey = pill.id.startsWith('effort-') ? pill.id.replace('effort-', '') : null;
-    const effortDef = effortKey && EFFORT_LEVELS[effortKey];
-    const colors = effortDef && active ? { border: effortDef.border, bg: effortDef.bg, text: effortDef.color } : null;
-    return _renderPillBtn(pill.label, active, `state.recipeFilterPill = '${pill.id}'; if(state.recipeTab === 'freestyle') { state.recipeTab = 'user'; } render();`, colors);
-  }).join('') + '<span style="width:1px;height:20px;background:rgba(255,255,255,0.1);flex-shrink:0;margin:0 4px;"></span>' + sourcePills.map(sp => {
-    const active = state.recipeTab === sp.tab;
-    return _renderPillBtn(sp.label, active, `state.recipeTab = '${sp.tab}'; state.recipeFilterPill = 'all'; render();`);
-  }).join('') + `<button onclick="showRecipeMoreFilters()" style="flex-shrink:0;padding:6px 10px;border-radius:16px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:${CONFIG.text_muted};font-size:12px;cursor:pointer;white-space:nowrap;display:flex;align-items:center;gap:4px;"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.5 6h9.75M10.5 6a1.5 1.5 0 11-3 0m3 0a1.5 1.5 0 10-3 0M3.75 6H7.5m3 12h9.75m-9.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-3.75 0H7.5m9-6h3.75m-3.75 0a1.5 1.5 0 01-3 0m3 0a1.5 1.5 0 00-3 0m-9.75 0h9.75"/></svg>More</button>`;
-  return allPills;
+  const effortOptions = [
+    { id: 'lazy', label: 'Lazy' },
+    { id: 'moderate', label: 'Moderate' },
+    { id: 'timely', label: 'Timely' },
+    { id: 'uncategorized', label: 'Uncategorized' }
+  ];
+
+  const activeSecondaryCount = Object.values(sourcesToggles).filter(Boolean).length + Object.values(effortToggles).filter(Boolean).length;
+
+  const secondaryRow = showSecondary ? `
+    <div style="display:flex; gap:4px; flex-wrap:wrap; padding:0 12px 8px;">
+      <span style="font-size:10px; color:${CONFIG.text_tertiary}; align-self:center; margin-right:2px;">Source:</span>
+      ${sourceOptions.map(s => {
+        const active = !!sourcesToggles[s.id];
+        return `<button onclick="if(!state.recipeSourceToggles) state.recipeSourceToggles = {}; state.recipeSourceToggles['${s.id}'] = !state.recipeSourceToggles['${s.id}']; render();"
+          style="flex-shrink:0; padding:4px 10px; border-radius:12px;
+          border:1px solid ${active ? 'rgba(232,93,93,0.3)' : 'rgba(255,255,255,0.08)'};
+          background:${active ? 'rgba(232,93,93,0.1)' : 'transparent'};
+          color:${active ? CONFIG.primary_action_color : CONFIG.text_tertiary};
+          font-size:11px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
+          ${s.label}</button>`;
+      }).join('')}
+      <span style="width:1px; height:16px; background:rgba(255,255,255,0.06); flex-shrink:0; margin:0 4px; align-self:center;"></span>
+      <span style="font-size:10px; color:${CONFIG.text_tertiary}; align-self:center; margin-right:2px;">Effort:</span>
+      ${effortOptions.map(e => {
+        const active = !!effortToggles[e.id];
+        const effortDef = EFFORT_LEVELS[e.id];
+        const clr = effortDef ? effortDef.color : CONFIG.text_tertiary;
+        return `<button onclick="if(!state.recipeEffortToggles) state.recipeEffortToggles = {}; state.recipeEffortToggles['${e.id}'] = !state.recipeEffortToggles['${e.id}']; render();"
+          style="flex-shrink:0; padding:4px 10px; border-radius:12px;
+          border:1px solid ${active ? (effortDef ? effortDef.border : 'rgba(255,255,255,0.15)') : 'rgba(255,255,255,0.08)'};
+          background:${active ? (effortDef ? effortDef.bg : 'rgba(255,255,255,0.05)') : 'transparent'};
+          color:${active ? clr : CONFIG.text_tertiary};
+          font-size:11px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
+          ${e.label}</button>`;
+      }).join('')}
+    </div>
+  ` : '';
+
+  return `
+    <!-- Primary filter row -->
+    <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 12px 6px; -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+      ${primaryRow}
+    </div>
+    <!-- Filters toggle + secondary row -->
+    <div style="padding:0 12px 4px;">
+      <button onclick="state.recipeShowSecondaryFilters = !state.recipeShowSecondaryFilters; render();"
+        style="background:none; border:none; color:${CONFIG.text_tertiary}; font-size:11px; cursor:pointer; padding:2px 0; display:flex; align-items:center; gap:4px;">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="transform:rotate(${showSecondary ? '180' : '0'}deg); transition:transform 0.2s;">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+        </svg>
+        Filters${activeSecondaryCount > 0 ? ` (${activeSecondaryCount})` : ''}
+      </button>
+    </div>
+    ${secondaryRow}
+  `;
 }
 
 function _renderPillBtn(label, active, onclick, colors) {
@@ -1615,6 +1674,13 @@ function showEffortContextMenu(event, recipeId, recipeName) {
           ${e.label}
         </div>
       `).join('')}
+      <div style="border-top:1px solid rgba(255,255,255,0.06);"></div>
+      <div onclick="event.stopPropagation(); document.getElementById('effort-context-menu').remove(); showAddToMealsModal('${recipeId}');"
+        style="padding:10px 14px; cursor:pointer; display:flex; align-items:center; gap:8px; font-size:13px; color:${CONFIG.primary_action_color};"
+        onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+        Add to My Meals
+      </div>
     </div>
   `;
   document.body.appendChild(menu);
@@ -1655,78 +1721,76 @@ function showRecipeMoreFilters() {
 function renderRecipes() {
   if (!state.recipes || !Array.isArray(state.recipes)) return '<div class="p-3">Loading...</div>';
 
-  if (!state.recipeTab) state.recipeTab = 'user';
+  // Build the full recipe list (all sources, no tabs)
+  let list = state.recipes.filter(r => !r.isDraft && !r.isTip);
 
-  const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
-  const freestyleCount = (state.freestyleMeals || []).length;
-  const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
-  const importedCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length;
-  const claudeCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'claude').length;
+  // Apply primary filter
+  const primaryFilter = state.recipePrimaryFilter || 'all';
+  if (primaryFilter === 'saved') {
+    list = list.filter(r => isRecipeSaved(r.__backendId || r.id));
+  } else if (['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(primaryFilter)) {
+    list = list.filter(r => (r.category || '') === primaryFilter);
+  }
+  // 'all' shows everything
 
-  if (state.recipeTab === 'freestyle') {
-    return renderFreestyleMeals();
+  // Apply secondary source toggles (if any active, filter to those sources)
+  const sourcesToggles = state.recipeSourceToggles || {};
+  const activeSources = Object.entries(sourcesToggles).filter(([, v]) => v).map(([k]) => k);
+  if (activeSources.length > 0) {
+    list = list.filter(r => activeSources.includes(r.sourceType || 'user'));
   }
 
-  let list;
-  if (state.recipeTab === 'tips') {
-    list = state.recipes.filter(r => r.isTip);
-  } else if (state.recipeTab === 'chefiq') {
-    list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq');
-  } else if (state.recipeTab === 'imported') {
-    list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported');
-  } else if (state.recipeTab === 'claude') {
-    list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'claude');
-  } else {
-    list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user');
+  // Apply secondary effort toggles (if any active, filter to those efforts)
+  const effortToggles = state.recipeEffortToggles || {};
+  const activeEfforts = Object.entries(effortToggles).filter(([, v]) => v).map(([k]) => k);
+  if (activeEfforts.length > 0) {
+    list = list.filter(r => {
+      const effort = getRecipeEffort(r.__backendId || r.id);
+      if (activeEfforts.includes('uncategorized') && effort === null) return true;
+      return effort && activeEfforts.includes(effort);
+    });
   }
 
-  list = list.filter(r => {
-    // Filter pill logic
-    const pill = state.recipeFilterPill || 'all';
-    if (pill === 'saved') {
-      if (!isRecipeSaved(r.__backendId || r.id)) return false;
-    } else if (pill === 'effort-lazy') {
-      if (getRecipeEffort(r.__backendId || r.id) !== 'lazy') return false;
-    } else if (pill === 'effort-moderate') {
-      if (getRecipeEffort(r.__backendId || r.id) !== 'moderate') return false;
-    } else if (pill === 'effort-timely') {
-      if (getRecipeEffort(r.__backendId || r.id) !== 'timely') return false;
-    } else if (pill === 'effort-uncategorized') {
-      if (getRecipeEffort(r.__backendId || r.id) !== null) return false;
-    } else if (pill === 'have-ingredients') {
+  // Apply search (name + ingredients)
+  if (state.searchTerm) {
+    const searchLower = state.searchTerm.toLowerCase();
+    list = list.filter(r => {
+      if ((r.title || '').toLowerCase().includes(searchLower)) return true;
       const ingredients = recipeIngList(r);
-      if (ingredients.length === 0) return false;
-      const inventoryNames = (state.inventory || []).map(i => i.name.toLowerCase());
-      const matchCount = ingredients.filter(ing =>
-        inventoryNames.some(inv => inv.includes((ing.name || '').toLowerCase()) || (ing.name || '').toLowerCase().includes(inv))
-      ).length;
-      if (matchCount / ingredients.length < 0.5) return false;
-    }
-    if (state.recipeTab !== 'tips' && state.selectedCategory !== 'All' && r.category !== state.selectedCategory) return false;
-    if (state.searchTerm) {
-      const searchLower = state.searchTerm.toLowerCase();
-      if (state.searchByIngredient) {
-        const ingredients = recipeIngList(r);
-        const hasIngredient = ingredients.some(ing => (ing.name || '').toLowerCase().includes(searchLower));
-        if (!hasIngredient) return false;
-      } else {
-        if (!(r.title || '').toLowerCase().includes(searchLower)) return false;
-      }
-    }
-    if (state.filterIngredientGroup !== 'all') {
-      const recipeIngredients = recipeIngList(r);
-      const hasIngredientInGroup = recipeIngredients.some(ing => ing.group === state.filterIngredientGroup);
-      if (!hasIngredientInGroup) return false;
-    }
-    return true;
-  });
+      return ingredients.some(ing => (ing.name || '').toLowerCase().includes(searchLower));
+    });
+  }
 
   return `
-    <div style="padding: 0;">
-      <!-- Filter Pills - single scrollable row -->
-      <div style="display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
-        ${renderRecipeFilterPills()}
+    <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
+      <!-- Search bar -->
+      <div style="padding: 8px 12px 0;">
+        <div style="position:relative;">
+          <input id="recipesPageSearchInput" type="text" placeholder="Search recipes or ingredients..."
+            value="${esc(state.searchTerm || '')}"
+            oninput="handleRecipesPageSearch(this.value)"
+            style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
+            background:${CONFIG.surface_color}; color:${CONFIG.text_color};
+            border:1px solid rgba(255,255,255,0.08); border-radius:10px;
+            font-size:14px; font-family:${CONFIG.font_family};" />
+          ${state.searchTerm ? `
+            <button onclick="state.searchTerm=''; render(); setTimeout(() => { const i = document.getElementById('recipesPageSearchInput'); if(i) i.focus(); }, 0);"
+              style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+              background:rgba(255,255,255,0.1); border:none; border-radius:50%;
+              width:20px; height:20px; display:flex; align-items:center; justify-content:center;
+              color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          ` : `
+            <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            </div>
+          `}
+        </div>
       </div>
+
+      <!-- Filter pills -->
+      ${renderRecipeFilterPills()}
 
       <!-- Results -->
       ${list.length === 0 ? `
@@ -1744,13 +1808,14 @@ function renderRecipes() {
           ` : ''}
         </div>
       ` : `
-        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 0 2px;">
+        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
           ${list.map(r => {
             const id = r.__backendId || r.id;
             const img = recipeThumb(r);
             const saved = isRecipeSaved(id);
+            const effort = getRecipeEffort(id);
             return `
-            <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 4px;" oncontextmenu="event.preventDefault(); showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}');" ontouchstart="this._longPressTimer = setTimeout(() => { this._didLongPress = true; showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}'); }, 500);" ontouchend="clearTimeout(this._longPressTimer); if(this._didLongPress) { event.preventDefault(); this._didLongPress = false; }" ontouchmove="clearTimeout(this._longPressTimer);">
+            <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 8px;" oncontextmenu="event.preventDefault(); showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}');" ontouchstart="this._longPressTimer = setTimeout(() => { this._didLongPress = true; showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}'); }, 500);" ontouchend="clearTimeout(this._longPressTimer); if(this._didLongPress) { event.preventDefault(); this._didLongPress = false; }" ontouchmove="clearTimeout(this._longPressTimer);">
               <div onclick="if(this.parentElement._didLongPress) return; openRecipeView('${id}')">
                 ${img ? `
                   <div style="aspect-ratio:1; width:100%; overflow:hidden;">
@@ -1758,17 +1823,17 @@ function renderRecipes() {
                   </div>
                 ` : `
                   <div style="aspect-ratio:1; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
-                    <span style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
+                    <span style="color:${CONFIG.text_color}; font-size:12px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
                   </div>
                 `}
               </div>
-              ${getRecipeEffort(id) ? `<div style="position:absolute; top:4px; left:4px; z-index:2;">${renderEffortPill(getRecipeEffort(id), 'sm')}</div>` : ''}
+              ${effort ? `<div style="position:absolute; top:4px; left:4px; z-index:2;">${renderEffortPill(effort, 'sm')}</div>` : ''}
               <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}')"
                 style="position: absolute; top: 4px; right: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
                 <svg width="12" height="12" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
               </button>
-              <div style="position:absolute;bottom:0;left:0;right:0;padding:4px 6px;background:linear-gradient(transparent,rgba(0,0,0,0.7));" onclick="openRecipeView('${id}')">
-                <div style="color:white; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">
+              <div style="padding:6px; background:${CONFIG.background_color};" onclick="openRecipeView('${id}')">
+                <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
                   ${esc(r.title)}
                 </div>
               </div>
@@ -2093,13 +2158,6 @@ ${(r.timesCooked || 0) > 0 ? `
                 ${rows.length > 0 ? `<span>· ${rows.length} ingredients</span>` : ''}
               </div>
             ` : ''}
-            ${r.sourceUrl ? `
-              <div style="margin-top:4px;">
-                <a href="${esc(r.sourceUrl)}" target="_blank" style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.85}px;">
-                  View Original Recipe
-                </a>
-              </div>
-            ` : ''}
             <div style="margin-top:10px;">
               <div style="color:${CONFIG.text_muted}; font-size:12px; margin-bottom:6px;">Effort</div>
               <div style="display:flex; gap:6px;">
@@ -2132,12 +2190,6 @@ ${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; 
           </div>
         ` : ''}
 
-       ${recipeUrl(r) ? `<div class="mt-4">
-          <a href="${esc(recipeUrl(r))}" target="_blank" rel="noopener noreferrer"
-            style="color:${CONFIG.text_color}; text-decoration:underline; opacity:.9;">
-            Open recipe link
-          </a>
-        </div>` : ''}
 
         ${tags ? `<div class="mt-4" style="color:${CONFIG.text_color}; opacity:.85;">
           <span class="font-semibold">Tags:</span> ${esc(tags)}
@@ -2198,6 +2250,18 @@ ${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; 
               ${esc(notes)}
             </div>
           </div>` : ''}
+
+        ${(url || recipeUrl(r)) ? `
+          <div class="mt-6">
+            <a href="${esc(url || recipeUrl(r))}" target="_blank" rel="noopener noreferrer"
+              style="display:block; width:100%; padding:14px; text-align:center;
+              background:${CONFIG.surface_elevated}; border:1px solid rgba(255,255,255,0.1);
+              border-radius:12px; color:${CONFIG.primary_action_color};
+              font-size:15px; font-weight:600; text-decoration:none; cursor:pointer;">
+              View full recipe &rarr;
+            </a>
+          </div>
+        ` : ''}
       </div>
     </div>`;
 }
@@ -2285,6 +2349,7 @@ function handleRecipesPageSearch(value) {
   if (recipesPageSearchTimeout) clearTimeout(recipesPageSearchTimeout);
 
   recipesPageSearchTimeout = setTimeout(() => {
+    // Real-time search as user types
     const input = document.getElementById('recipesPageSearchInput');
     const cursorPos = input ? input.selectionStart : 0;
 
@@ -2297,7 +2362,7 @@ function handleRecipesPageSearch(value) {
         newInput.setSelectionRange(cursorPos, cursorPos);
       }
     }, 0);
-  }, 600);
+  }, 300);
 }
 
 init();

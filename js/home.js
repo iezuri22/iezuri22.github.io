@@ -234,7 +234,7 @@ function renderHome() {
     </div>
     ${calendarOverlay}
     <!-- Floating Quick Log Button -->
-    <button onclick="showQuickLogModal()" style="position: fixed; bottom: 68px; right: 16px; width: 48px; height: 48px; border-radius: 50%; background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 24px; cursor: pointer; z-index: 45; box-shadow: 0 2px 8px rgba(232,93,93,0.3); display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease;" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'">
+    <button onclick="showQuickLogModal()" class="card-press" style="position: fixed; bottom: 68px; right: 16px; width: 48px; height: 48px; border-radius: 50%; background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 24px; cursor: pointer; z-index: 45; box-shadow: 0 2px 8px rgba(232,93,93,0.3); display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease; -webkit-tap-highlight-color: transparent;">
       <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
     </button>
   `;
@@ -393,13 +393,13 @@ function renderSwipeTab() {
       </div>
 
       <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 0;">
-        <button id="swipe-btn-nope" onclick="handleHomeSwipeLeft()" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255, 69, 58, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #ff453a; transition: all 0.2s ease;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">
+        <button id="swipe-btn-nope" onclick="handleHomeSwipeLeft()" class="card-press" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255, 69, 58, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #ff453a; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent;">
           ✕
         </button>
-        <button onclick="openRecipeView('${recipe.__backendId || recipe.id}'); state.viewingFromSwipe = true;" style="width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; color: rgba(255,255,255,0.6); transition: all 0.2s ease;">
+        <button onclick="openRecipeView('${recipe.__backendId || recipe.id}'); state.viewingFromSwipe = true;" class="card-press" style="width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; color: rgba(255,255,255,0.6); transition: all 0.2s ease; -webkit-tap-highlight-color: transparent;">
           👁️
         </button>
-        <button id="swipe-btn-like" onclick="handleHomeSwipeRight()" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(50, 215, 75, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #32d74b; transition: all 0.2s ease;" onmousedown="this.style.transform='scale(0.95)'" onmouseup="this.style.transform='scale(1)'">
+        <button id="swipe-btn-like" onclick="handleHomeSwipeRight()" class="card-press" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(50, 215, 75, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #32d74b; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent;">
           ♥
         </button>
       </div>

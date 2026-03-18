@@ -2,7 +2,11 @@
 <html lang="en" class="h-full">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="EZ Chef">
+  <link rel="manifest" href="manifest.json">
   <title>Yummy - Recipe Detail</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -121,6 +125,11 @@
                 I made this
               </button>
             </div>
+            <!-- Add to My Meals button -->
+            <button onclick="showAddToMealsModal('${r.__backendId || r.id}')" style="width: 100%; height: 48px; margin-top: 10px; border-radius: 12px; border: none; background: ${CONFIG.primary_action_color}; color: white; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; display: flex; align-items: center; justify-content: center; gap: 8px;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+              Add to My Meals
+            </button>
 
             <!-- Ingredients -->
             ${groupOrder.length ? `

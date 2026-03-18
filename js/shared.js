@@ -5,6 +5,21 @@
 // ============================================================
 
 // ============================================================
+// STANDALONE WEB APP NAVIGATION INTERCEPTOR
+// Keeps all internal links within the standalone (Add to Home Screen) shell
+// instead of opening Safari with browser chrome.
+// ============================================================
+if (window.navigator.standalone === true) {
+  document.addEventListener('click', function(e) {
+    var link = e.target.closest('a');
+    if (link && link.href && link.origin === window.location.origin) {
+      e.preventDefault();
+      window.location.href = link.href;
+    }
+  });
+}
+
+// ============================================================
 // SUPABASE INITIALIZATION
 // ============================================================
 const SUPABASE_URL = 'https://blqbxduxgimarrhgyfgn.supabase.co';
@@ -570,6 +585,10 @@ const state = {
   filterUserCreated: false,
   filterSourceType: 'all',
   filterIngredientGroup: 'all',
+  recipePrimaryFilter: 'all',
+  recipeShowSecondaryFilters: false,
+  recipeSourceToggles: {},
+  recipeEffortToggles: {},
   showTips: false,
   showRecipesOrTips: 'recipes',
   selectedGroceryDate: null,
@@ -1272,6 +1291,213 @@ function getFoodLogDateLabel(dateStr) {
   return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`;
 }
 
+// ===== ADD TO MY MEALS MODAL =====
+function showAddToMealsModal(recipeId) {
+  const r = getRecipeById(recipeId);
+  if (!r) return;
+
+  // Auto-detect meal type from recipe category
+  const catLower = (r.category || '').toLowerCase();
+  let defaultMeal = 'dinner';
+  if (catLower === 'breakfast') defaultMeal = 'breakfast';
+  else if (catLower === 'lunch') defaultMeal = 'lunch';
+  else if (catLower === 'snack') defaultMeal = 'snack';
+
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+
+  // Store modal state on window for callbacks
+  window._addToMealsState = {
+    recipeId: recipeId,
+    selectedMeal: defaultMeal,
+    selectedDate: todayStr,
+    weekOffset: 0
+  };
+
+  _renderAddToMealsModalContent();
+}
+
+function _renderAddToMealsModalContent() {
+  const ms = window._addToMealsState;
+  if (!ms) return;
+  const r = getRecipeById(ms.recipeId);
+  if (!r) return;
+
+  const mealTypes = [
+    { key: 'breakfast', label: 'Breakfast' },
+    { key: 'lunch', label: 'Lunch' },
+    { key: 'dinner', label: 'Dinner' },
+    { key: 'snack', label: 'Snack' }
+  ];
+
+  // Build week days
+  const today = new Date();
+  const todayStr = today.toISOString().split('T')[0];
+  // Get Monday of current week + offset
+  const refDate = new Date(today);
+  refDate.setDate(refDate.getDate() - ((refDate.getDay() + 6) % 7) + (ms.weekOffset * 7));
+  const weekDays = [];
+  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(refDate);
+    d.setDate(refDate.getDate() + i);
+    weekDays.push({
+      dateStr: d.toISOString().split('T')[0],
+      dayNum: d.getDate(),
+      label: dayLabels[i],
+      isToday: d.toISOString().split('T')[0] === todayStr
+    });
+  }
+
+  // Format selected date
+  const selDate = new Date(ms.selectedDate + 'T12:00:00');
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const formattedDate = `${dayNames[selDate.getDay()]}, ${monthNames[selDate.getMonth()]} ${selDate.getDate()}`;
+
+  // Check for existing meal in slot
+  let conflictNotice = '';
+  const existingEntries = getFoodLog().filter(e => e.dateCooked.split('T')[0] === ms.selectedDate && e.mealType.toLowerCase() === ms.selectedMeal);
+  if (existingEntries.length > 0) {
+    const existingName = existingEntries[0].recipeName || 'a meal';
+    const mealLabel = ms.selectedMeal.charAt(0).toUpperCase() + ms.selectedMeal.slice(1);
+    const dayLabel = ms.selectedDate === todayStr ? 'Today' : dayNames[selDate.getDay()];
+    conflictNotice = `
+      <div style="margin-top:12px; padding:10px 12px; background:rgba(255,214,10,0.1); border:1px solid rgba(255,214,10,0.2); border-radius:10px; font-size:13px; color:${CONFIG.warning_color}; display:flex; align-items:center; gap:8px;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/></svg>
+        <span>${mealLabel} on ${dayLabel} already has ${esc(existingName)}. Adding this will stack it.</span>
+      </div>
+    `;
+  }
+
+  const content = `
+    <div style="color:${CONFIG.text_color};">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:20px;">
+        <h3 style="font-size:17px; font-weight:700; margin:0;">Add to My Meals</h3>
+        <button onclick="closeModal()" style="background:none; border:none; color:${CONFIG.text_muted}; cursor:pointer; padding:4px;">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <!-- Recipe preview -->
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px; padding:12px; background:${CONFIG.surface_color}; border-radius:12px;">
+        ${recipeThumb(r) ? `<img src="${esc(recipeThumb(r))}" style="width:48px; height:48px; border-radius:8px; object-fit:cover;" />` : `<div style="width:48px; height:48px; border-radius:8px; background:${CONFIG.background_color}; display:flex; align-items:center; justify-content:center; font-size:20px;">🍽️</div>`}
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:15px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(r.title)}</div>
+          ${r.category ? `<div style="font-size:12px; color:${CONFIG.text_muted};">${esc(r.category)}</div>` : ''}
+        </div>
+      </div>
+
+      <!-- Meal type pills -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:13px; font-weight:600; color:${CONFIG.text_muted}; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Meal Type</div>
+        <div style="display:flex; gap:8px;">
+          ${mealTypes.map(m => {
+            const active = ms.selectedMeal === m.key;
+            return `<button onclick="window._addToMealsState.selectedMeal='${m.key}'; _renderAddToMealsModalContent();"
+              style="flex:1; padding:10px 0; border-radius:12px; border:1px solid ${active ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; background:${active ? 'rgba(232,93,93,0.15)' : 'transparent'}; color:${active ? CONFIG.primary_action_color : CONFIG.text_color}; font-size:13px; font-weight:${active ? '600' : '400'}; cursor:pointer; font-family:inherit;">
+              ${m.label}
+            </button>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- Date picker -->
+      <div style="margin-bottom:8px;">
+        <div style="font-size:13px; font-weight:600; color:${CONFIG.text_muted}; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">Date</div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button onclick="window._addToMealsState.weekOffset--; _renderAddToMealsModalContent();"
+            style="width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,0.1); background:transparent; color:${CONFIG.text_color}; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+          </button>
+          <div style="display:flex; gap:6px; flex:1; justify-content:space-between;">
+            ${weekDays.map(d => {
+              const selected = ms.selectedDate === d.dateStr;
+              const isToday = d.isToday;
+              return `<button onclick="window._addToMealsState.selectedDate='${d.dateStr}'; _renderAddToMealsModalContent();"
+                style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 0; flex:1; border-radius:10px; border:${selected ? '2px solid ' + CONFIG.primary_action_color : '1px solid transparent'}; background:${selected ? 'rgba(232,93,93,0.15)' : 'transparent'}; cursor:pointer; color:${selected ? CONFIG.primary_action_color : CONFIG.text_color};">
+                <span style="font-size:10px; color:${selected ? CONFIG.primary_action_color : CONFIG.text_muted}; font-weight:500;">${d.label}</span>
+                <span style="width:28px; height:28px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:${selected || isToday ? '700' : '400'}; ${isToday && !selected ? 'border:1px solid rgba(255,255,255,0.2);' : ''}">${d.dayNum}</span>
+              </button>`;
+            }).join('')}
+          </div>
+          <button onclick="window._addToMealsState.weekOffset++; _renderAddToMealsModalContent();"
+            style="width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,0.1); background:transparent; color:${CONFIG.text_color}; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+          </button>
+        </div>
+        <div style="text-align:center; margin-top:8px; font-size:14px; color:${CONFIG.text_color}; font-weight:500;">${formattedDate}</div>
+      </div>
+
+      ${conflictNotice}
+
+      <!-- Action buttons -->
+      <div style="display:flex; gap:10px; margin-top:20px;">
+        <button onclick="closeModal()"
+          style="flex:1; padding:14px; border-radius:12px; border:1px solid rgba(255,255,255,0.1); background:transparent; color:${CONFIG.text_color}; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;">
+          Cancel
+        </button>
+        <button onclick="confirmAddToMeals()"
+          style="flex:1; padding:14px; border-radius:12px; border:none; background:${CONFIG.primary_action_color}; color:white; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;">
+          Add to plan
+        </button>
+      </div>
+    </div>
+  `;
+
+  openModal(content);
+}
+
+function confirmAddToMeals() {
+  const ms = window._addToMealsState;
+  if (!ms) return;
+  const r = getRecipeById(ms.recipeId);
+  if (!r) return;
+
+  const ingredients = recipeIngList(r).map(i => i.name);
+
+  addFoodLogEntry({
+    recipeId: r.__backendId || r.id,
+    recipeName: r.title,
+    image: recipeThumb(r),
+    ingredients: ingredients,
+    category: r.category || '',
+    mealType: ms.selectedMeal,
+    dateStr: ms.selectedDate,
+    photo: recipeThumb(r),
+    myPhoto: null,
+    notes: null,
+    status: 'planned'
+  });
+
+  // Also set the meal slot in mealDays for home screen integration
+  const day = getDayData(ms.selectedDate);
+  if (ms.selectedMeal === 'snack') {
+    day.meals.snacks = day.meals.snacks || [];
+    day.meals.snacks.push({ recipeId: r.__backendId || r.id, recipeName: r.title, image: recipeThumb(r), addedAt: new Date().toISOString() });
+  } else {
+    const slot = day.meals[ms.selectedMeal];
+    if (slot && slot.status === 'none') {
+      slot.status = 'planned';
+      slot.plannedRecipeId = r.__backendId || r.id;
+      slot.selectedAt = new Date().toISOString();
+    }
+  }
+  persistState();
+
+  // Format toast message
+  const mealLabel = ms.selectedMeal.charAt(0).toUpperCase() + ms.selectedMeal.slice(1);
+  const selDate = new Date(ms.selectedDate + 'T12:00:00');
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  const dateLabel = `${dayNames[selDate.getDay()]} ${monthNames[selDate.getMonth()]} ${selDate.getDate()}`;
+
+  closeModal();
+  showToast(`Added ${r.title} to ${mealLabel} on ${dateLabel}`, 'success');
+
+  window._addToMealsState = null;
+}
+
 function getTopFoodPatterns(days = 14) {
   const log = getFoodLog();
   const cutoff = new Date(Date.now() - days * 86400000).toISOString();
@@ -1442,8 +1668,12 @@ function addManualGroceryItemSmart() {
   const name = input.value.trim(); if (!name) return;
   const list = getSmartGroceryList();
   if (list.find(i => normalizeIngredient(i.name) === normalizeIngredient(name))) { showToast('Already on your list', 'info'); input.value = ''; return; }
-  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category: 'Other', qty: '', unit: '', checked: false, manual: true, sourceMeals: [], addedAt: Date.now() });
-  saveSmartGroceryList(list); input.value = ''; showToast(`${capitalize(name)} added`, 'success');
+  const catInput = document.getElementById('groceryManualCategory');
+  const category = (catInput && catInput.value) ? catInput.value : 'Other';
+  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category, qty: '', unit: '', checked: false, manual: true, sourceMeals: [], addedAt: Date.now() });
+  saveSmartGroceryList(list); input.value = '';
+  if (catInput) catInput.value = 'Other';
+  showToast(`${capitalize(name)} added to ${category}`, 'success');
   if (typeof render === 'function') render();
   setTimeout(() => { const newInput = document.getElementById('groceryManualInput'); if (newInput) newInput.focus(); }, 50);
 }
@@ -1477,7 +1707,7 @@ function _updateGroceryBadge() {
 }
 
 let _cachedSuggestions = [];
-function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); if (typeof render === 'function') render(); }
+function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; const added = addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); showToast(added ? `${capitalize(s.name)} added` : `${capitalize(s.name)} removed`, added ? 'success' : 'info'); if (typeof render === 'function') render(); }
 
 function showAddFromMealModal() {
   const today = getToday();
@@ -2910,6 +3140,40 @@ async function clearAllData() {
     } catch (e) { console.error('Failed to clear Supabase data:', e); }
   }
   loadAllState(); closeModal(); showToast('All data cleared', 'success'); navigateTo('home');
+}
+
+// ============================================================
+// CROSS-PAGE NAVIGATION FALLBACKS
+// When a function is called from a page where it isn't defined
+// (e.g. openRecipeView from home.js), these stubs redirect to
+// the correct page via navigateTo().
+// ============================================================
+if (typeof openRecipeView === 'undefined') {
+  window.openRecipeView = function(id) {
+    state.selectedRecipeViewId = id;
+    navigateTo('recipe-view');
+  };
+}
+
+if (typeof openFoodLogDetail === 'undefined') {
+  window.openFoodLogDetail = function(logId) {
+    state.selectedFoodLogId = logId;
+    navigateTo('food-log-detail');
+  };
+}
+
+if (typeof showIngredientDetail === 'undefined') {
+  window.showIngredientDetail = function(ingredientId) {
+    state.selectedIngredientId = ingredientId;
+    navigateTo('ingredient-detail');
+  };
+}
+
+if (typeof showInventoryItemDetail === 'undefined') {
+  window.showInventoryItemDetail = function(itemId) {
+    state.selectedInventoryItemId = itemId;
+    navigateTo('inventory');
+  };
 }
 
 function setupKeyboardShortcuts() {
