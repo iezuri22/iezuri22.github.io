@@ -303,18 +303,7 @@ function startSwipeForSlot(mealType, dateStr, swapLogId) {
     swapLogId: swapLogId || null,
     returnToFoodLog: true
   }));
-  state.viewingDate = dateStr;
-  if (swapLogId) {
-    state._swapTargetLogId = swapLogId;
-    state._swapMealType = mealType;
-    state._swapDateStr = dateStr;
-    state._returnToFoodLog = true;
-  }
-  state.homeTab = 'swipe';
-  state.swipeMealType = mealType;
-  state.todaySwipeMealSlot = mealType;
-  state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(mealType) : buildSwipeDeck(mealType);
-  state.swipeIndex = 0;
+  // Navigate to home page — the swipe deck will be built on home init from sessionStorage
   navigateTo('home');
 }
 
@@ -323,28 +312,106 @@ function openAddMealForSlot(mealType, dateStr) {
 }
 
 function showRecipePickerForSlot(mealType, dateStr) {
-  const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+  const allRecipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
   state._pickerMealType = mealType;
   state._pickerDateStr = dateStr;
   state._pickerSearch = '';
+  state._pickerFilter = mealType; // Default to current meal type filter
 
-  const renderPickerGrid = (searchTerm) => {
-    let filtered = recipes;
+  // Map meal types to recipe categories
+  const mealCategoryMap = {
+    breakfast: ['breakfast'],
+    lunch: ['lunch', 'dinner'],
+    dinner: ['lunch', 'dinner'],
+    snack: ['snack', 'dessert']
+  };
+  const matchCategories = mealCategoryMap[mealType] || [];
+
+  // Build cooking history from food log
+  const foodLog = getFoodLog();
+  const cookCounts = {};
+  const lastCooked = {};
+  foodLog.forEach(entry => {
+    const rid = entry.recipeId;
+    if (!rid) return;
+    cookCounts[rid] = (cookCounts[rid] || 0) + 1;
+    const d = entry.dateCooked || '';
+    if (!lastCooked[rid] || d > lastCooked[rid]) lastCooked[rid] = d;
+  });
+
+  const savedSet = new Set(getSavedRecipes());
+
+  function sortRecipes(list) {
+    return list.sort((a, b) => {
+      const aId = a.__backendId || a.id;
+      const bId = b.__backendId || b.id;
+      const aSaved = savedSet.has(aId) ? 1 : 0;
+      const bSaved = savedSet.has(bId) ? 1 : 0;
+      if (aSaved !== bSaved) return bSaved - aSaved;
+      const aCooked = cookCounts[aId] || 0;
+      const bCooked = cookCounts[bId] || 0;
+      if (aCooked !== bCooked) {
+        // Both cooked: sort by most recently cooked
+        if (aCooked > 0 && bCooked > 0) {
+          return (lastCooked[bId] || '').localeCompare(lastCooked[aId] || '');
+        }
+        return bCooked - aCooked;
+      }
+      return (a.title || '').localeCompare(b.title || '');
+    });
+  }
+
+  const renderPickerGrid = (searchTerm, filter) => {
+    if (filter === undefined) filter = state._pickerFilter;
+    let filtered = allRecipes;
+    // Apply category filter
+    if (filter === 'saved') {
+      filtered = filtered.filter(r => savedSet.has(r.__backendId || r.id));
+    } else if (filter && filter !== 'all') {
+      const cats = mealCategoryMap[filter] || [];
+      if (cats.length > 0) {
+        filtered = filtered.filter(r => cats.includes((r.category || '').toLowerCase()));
+      }
+    }
+    // Apply search
     if (searchTerm) {
       const s = searchTerm.toLowerCase();
-      filtered = recipes.filter(r => (r.title || '').toLowerCase().includes(s));
+      filtered = filtered.filter(r => (r.title || '').toLowerCase().includes(s));
+    }
+    filtered = sortRecipes([...filtered]);
+    if (filtered.length === 0) {
+      return `<div style="grid-column: 1 / -1; text-align: center; padding: 32px 16px; color: ${CONFIG.text_muted}; font-size: 14px;">No recipes found</div>`;
     }
     return filtered.map(r => {
       const id = r.__backendId || r.id;
       const img = recipeThumb(r);
+      const isSaved = savedSet.has(id);
+      const cooked = cookCounts[id] || 0;
       return `
         <div onclick="selectRecipeForSlot('${id}', '${esc(mealType)}', '${esc(dateStr)}')" class="card-press"
-          style="cursor: pointer; border-radius: 8px; overflow: hidden; background: ${CONFIG.surface_color};">
-          <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
+          style="cursor: pointer; border-radius: 8px; overflow: hidden; background: ${CONFIG.surface_color}; position: relative;">
+          <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated}; position: relative;">
             ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:8px;"><span style="color:${CONFIG.text_color};font-size:11px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(r.title)}</span></div>`}
+            ${isSaved ? `<div style="position:absolute;top:4px;right:4px;width:20px;height:20px;background:rgba(0,0,0,0.5);border-radius:50%;display:flex;align-items:center;justify-content:center;"><svg width="12" height="12" fill="${CONFIG.primary_action_color}" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg></div>` : ''}
+            ${cooked > 0 ? `<div style="position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,0.6);color:${CONFIG.text_color};font-size:9px;font-weight:600;padding:2px 6px;border-radius:8px;">Cooked ${cooked}x</div>` : ''}
           </div>
           <div style="padding: 6px; font-size: 11px; font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
         </div>`;
+    }).join('');
+  };
+
+  const mealLabel = capitalize(mealType);
+  const filterPills = [
+    { key: 'all', label: 'All' },
+    { key: mealType, label: mealLabel },
+    { key: 'saved', label: 'Saved' }
+  ];
+
+  const renderPills = (activeFilter) => {
+    return filterPills.map(p => {
+      const isActive = p.key === activeFilter;
+      return `<button onclick="window._setPickerFilter('${p.key}')"
+        style="padding: 6px 14px; border-radius: 16px; border: 1px solid ${isActive ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; background: ${isActive ? 'rgba(232,93,93,0.15)' : 'transparent'}; color: ${isActive ? CONFIG.primary_action_color : CONFIG.text_muted}; font-size: 13px; font-weight: 500; cursor: pointer; white-space: nowrap;">${p.label}</button>`;
     }).join('');
   };
 
@@ -352,16 +419,29 @@ function showRecipePickerForSlot(mealType, dateStr) {
     <div style="color: ${CONFIG.text_color}; max-height: 80vh; display: flex; flex-direction: column;">
       <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_sm};">Pick from Recipes</h3>
       <input type="text" id="recipePickerSearch" placeholder="Search recipes..."
-        oninput="document.getElementById('recipePickerGrid').innerHTML = window._renderPickerGrid(this.value);"
+        oninput="window._updatePickerGrid();"
         style="width: 100%; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; margin-bottom: ${CONFIG.space_sm};" />
-      <div id="recipePickerGrid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; overflow-y: auto; max-height: 55vh; padding-bottom: 8px;">
-        ${renderPickerGrid('')}
+      <div id="recipePickerPills" style="display: flex; gap: 8px; margin-bottom: ${CONFIG.space_sm}; overflow-x: auto;">
+        ${renderPills(mealType)}
+      </div>
+      <div id="recipePickerGrid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; overflow-y: auto; max-height: 50vh; padding-bottom: 8px;">
+        ${renderPickerGrid('', mealType)}
       </div>
       <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
     </div>
   `);
-  // Expose render function for search filtering
+
   window._renderPickerGrid = renderPickerGrid;
+  window._setPickerFilter = function(filter) {
+    state._pickerFilter = filter;
+    const pillsEl = document.getElementById('recipePickerPills');
+    if (pillsEl) pillsEl.innerHTML = renderPills(filter);
+    window._updatePickerGrid();
+  };
+  window._updatePickerGrid = function() {
+    const searchVal = document.getElementById('recipePickerSearch')?.value || '';
+    document.getElementById('recipePickerGrid').innerHTML = renderPickerGrid(searchVal, state._pickerFilter);
+  };
 }
 
 function selectRecipeForSlot(recipeId, mealType, dateStr) {
@@ -755,35 +835,13 @@ function saveFoodLogNotes(logId) {
 
 function renderMyPlates() {
   const log = getFoodLog();
-  // Only entries with a personal photo (myPhoto field, or photo that's a base64 data URL — not a recipe stock URL)
   const photosEntries = log.filter(e => {
     if (e.myPhoto) return true;
     if (e.photo && e.photo.startsWith('data:')) return true;
     return false;
   });
 
-  // Group by recipe name
-  const groups = {};
-  photosEntries.forEach(e => {
-    const key = (e.recipeName || 'Unknown').toLowerCase().trim();
-    if (!groups[key]) groups[key] = { name: e.recipeName, entries: [] };
-    groups[key].entries.push(e);
-  });
-
-  // Get cover photo preferences from localStorage
-  const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
-
-  // Flatten for grid display
-  const allPhotos = photosEntries.map(e => ({
-    id: e.id,
-    photo: e.myPhoto || e.photo,
-    recipeName: e.recipeName,
-    mealType: e.mealType,
-    date: e.dateCooked?.split('T')[0] || '',
-    dateLabel: getFoodLogDateLabel(e.dateCooked?.split('T')[0] || getToday())
-  }));
-
-  if (allPhotos.length === 0) {
+  if (photosEntries.length === 0) {
     return `
       <div style="padding: ${CONFIG.space_md}; padding-bottom: 80px; max-width: 600px; margin: 0 auto; text-align: center;">
         <div style="padding: ${CONFIG.space_2xl} ${CONFIG.space_md};">
@@ -797,17 +855,72 @@ function renderMyPlates() {
     `;
   }
 
+  // Group by meal type in order
+  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
+  const grouped = {};
+  photosEntries.forEach(e => {
+    const mt = (e.mealType || 'dinner').toLowerCase();
+    if (!grouped[mt]) grouped[mt] = [];
+    grouped[mt].push({
+      id: e.id,
+      photo: e.myPhoto || e.photo,
+      recipeName: e.recipeName || 'Unknown',
+      mealType: mt,
+      date: e.dateCooked?.split('T')[0] || '',
+      dateLabel: getFoodLogDateLabel(e.dateCooked?.split('T')[0] || getToday())
+    });
+  });
+
+  // Collapsed state from localStorage
+  const collapsedState = JSON.parse(localStorage.getItem('myPlatesCollapsed') || '{}');
+
+  const sections = mealOrder
+    .filter(mt => grouped[mt] && grouped[mt].length > 0)
+    .map(mt => {
+      const photos = grouped[mt];
+      const count = photos.length;
+      const label = capitalize(mt);
+      const isCollapsed = collapsedState[mt] === true;
+
+      return `
+        <div style="margin-bottom: ${CONFIG.space_md};">
+          <div onclick="togglePlatesSection('${mt}')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px ${CONFIG.space_md}; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 16px; font-weight: 700; color: ${CONFIG.text_color};">${label}</span>
+              <span style="font-size: 13px; color: ${CONFIG.text_muted};">&middot; ${count} photo${count !== 1 ? 's' : ''}</span>
+            </div>
+            <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="2" viewBox="0 0 24 24" style="transition: transform 0.2s; transform: rotate(${isCollapsed ? '-90deg' : '0deg'});">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+            </svg>
+          </div>
+          ${isCollapsed ? '' : `
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 0 1px;">
+              ${photos.map(p => `
+                <div onclick="showPlateFullscreen('${p.id}')" style="cursor: pointer;">
+                  <div style="aspect-ratio: 1; overflow: hidden; position: relative;">
+                    <img src="${esc(p.photo)}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" />
+                  </div>
+                  <div style="padding: 4px 4px 8px; font-size: 12px; font-weight: 600; color: ${CONFIG.text_color}; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">${esc(p.recipeName)}</div>
+                </div>
+              `).join('')}
+            </div>
+          `}
+        </div>
+      `;
+    }).join('');
+
   return `
     <div style="padding: 0; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
-      <div class="my-plates-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: ${CONFIG.background_color};">
-        ${allPhotos.map(p => `
-          <div onclick="showPlateFullscreen('${p.id}')" style="aspect-ratio: 1; overflow: hidden; cursor: pointer; position: relative;">
-            <img src="${esc(p.photo)}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" />
-          </div>
-        `).join('')}
-      </div>
+      ${sections}
     </div>
   `;
+}
+
+function togglePlatesSection(mealType) {
+  const collapsedState = JSON.parse(localStorage.getItem('myPlatesCollapsed') || '{}');
+  collapsedState[mealType] = !collapsedState[mealType];
+  localStorage.setItem('myPlatesCollapsed', JSON.stringify(collapsedState));
+  render();
 }
 
 function showPlateFullscreen(logId) {
@@ -827,6 +940,13 @@ function showPlateFullscreen(logId) {
   const coverKey = (entry.recipeName || '').toLowerCase().trim();
   const isCover = coverPrefs[coverKey] === logId;
 
+  // Per-photo notes
+  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
+  const existingNote = photoNotes[logId] || '';
+
+  // Recipe link button
+  const hasRecipeLink = !!entry.recipeId;
+
   openModal(`
     <div style="color: ${CONFIG.text_color}; text-align: center;">
       <div style="width: 100%; aspect-ratio: 1; border-radius: 12px; overflow: hidden; margin-bottom: ${CONFIG.space_md}; background: ${CONFIG.surface_elevated};">
@@ -835,6 +955,27 @@ function showPlateFullscreen(logId) {
       <div style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${esc(entry.recipeName)}</div>
       <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: 4px;">${dateLabel}</div>
       <div style="font-size: 12px; color: ${CONFIG.text_tertiary}; margin-bottom: ${CONFIG.space_md};">${capitalize(entry.mealType || 'meal')}</div>
+
+      <!-- Notes section -->
+      <div id="plateNoteSection" style="text-align: left; margin-bottom: ${CONFIG.space_md}; padding: ${CONFIG.space_sm} 0;">
+        ${existingNote ? `
+          <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 8px;">
+            <div id="plateNoteDisplay" style="font-size: 14px; color: ${CONFIG.text_muted}; line-height: 1.4; flex: 1;">${esc(existingNote)}</div>
+            <button onclick="editPlateNote('${logId}')" style="background: none; border: none; cursor: pointer; padding: 4px; flex-shrink: 0;">
+              <svg width="14" height="14" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
+            </button>
+          </div>
+        ` : `
+          <div onclick="editPlateNote('${logId}')" style="font-size: 14px; color: ${CONFIG.text_muted}; cursor: pointer; padding: 8px 0;">+ Add a note</div>
+        `}
+      </div>
+
+      ${hasRecipeLink ? `
+        <button onclick="closeModal(); openRecipeView('${entry.recipeId}')"
+          style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color}; font-size: 14px; cursor: pointer; margin-bottom: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+          View recipe <span style="font-size: 16px;">&rarr;</span>
+        </button>
+      ` : ''}
       ${hasMultiple ? `
         <button onclick="setAsCoverPhoto('${logId}', '${esc(coverKey)}')"
           style="width: 100%; padding: 12px; border-radius: 12px; border: 1px solid ${isCover ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; background: ${isCover ? 'rgba(232,93,93,0.15)' : CONFIG.surface_elevated}; color: ${isCover ? CONFIG.primary_action_color : CONFIG.text_color}; font-size: 14px; cursor: pointer; margin-bottom: 8px;">
@@ -844,6 +985,41 @@ function showPlateFullscreen(logId) {
       <button onclick="closeModal()" style="width: 100%; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Close</button>
     </div>
   `);
+}
+
+function editPlateNote(logId) {
+  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
+  const existingNote = photoNotes[logId] || '';
+  const section = document.getElementById('plateNoteSection');
+  if (!section) return;
+
+  section.innerHTML = `
+    <textarea id="plateNoteInput" rows="3" placeholder="Add a note about this meal..."
+      style="width: 100%; padding: 10px; border: 1px solid rgba(255,255,255,0.15); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family}; line-height: 1.4;">${esc(existingNote)}</textarea>
+    <div style="display: flex; gap: 8px; margin-top: 8px;">
+      <button onclick="savePlateNote('${logId}')"
+        style="flex: 1; padding: 10px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">Save</button>
+      <button onclick="showPlateFullscreen('${logId}')"
+        style="padding: 10px 16px; background: transparent; color: ${CONFIG.text_muted}; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 14px; cursor: pointer;">Cancel</button>
+    </div>
+  `;
+  const input = document.getElementById('plateNoteInput');
+  if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+}
+
+function savePlateNote(logId) {
+  const input = document.getElementById('plateNoteInput');
+  if (!input) return;
+  const note = input.value.trim();
+  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
+  if (note) {
+    photoNotes[logId] = note;
+  } else {
+    delete photoNotes[logId];
+  }
+  localStorage.setItem('myPlatesNotes', JSON.stringify(photoNotes));
+  showToast('Note saved!', 'success');
+  showPlateFullscreen(logId);
 }
 
 function setAsCoverPhoto(logId, coverKey) {
@@ -1148,7 +1324,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">

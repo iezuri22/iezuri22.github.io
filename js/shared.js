@@ -477,9 +477,31 @@ const GROCERY_CATEGORIES = [
   'Spices & Seasonings', 'Frozen', 'Household', 'Other'
 ];
 
+const PANTRY_STAPLES = ['salt', 'pepper', 'black pepper', 'kosher salt', 'sea salt', 'olive oil', 'extra virgin olive oil', 'vegetable oil', 'cooking spray', 'canola oil', 'water', 'butter', 'unsalted butter', 'sugar', 'brown sugar', 'granulated sugar', 'flour', 'all-purpose flour', 'all purpose flour', 'garlic powder', 'onion powder', 'paprika', 'cumin', 'oregano', 'baking soda', 'baking powder', 'soy sauce', 'vinegar', 'white vinegar', 'apple cider vinegar'];
+function isStaple(name) { return PANTRY_STAPLES.some(s => normalizeIngredient(s) === normalizeIngredient(name)); }
+
 const SAVED_RECIPES_KEY = 'savedRecipes';
 const FOOD_LOG_KEY = 'foodLog';
 const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';
+const EFFORT_LEVELS_KEY = 'recipeEffortLevels';
+const EFFORT_LEVELS = {
+  lazy: { label: 'Lazy', desc: 'under 15 min', color: '#e85d5d', bg: 'rgba(232,93,93,0.15)', border: 'rgba(232,93,93,0.4)' },
+  moderate: { label: 'Moderate', desc: '15-45 min', color: '#ffb340', bg: 'rgba(255,179,64,0.15)', border: 'rgba(255,179,64,0.4)' },
+  timely: { label: 'Timely', desc: '45+ min', color: '#6e8cbe', bg: 'rgba(110,140,190,0.15)', border: 'rgba(110,140,190,0.4)' }
+};
+function getRecipeEffortLevels() { try { return JSON.parse(localStorage.getItem(EFFORT_LEVELS_KEY) || '{}'); } catch { return {}; } }
+function getRecipeEffort(recipeId) { return getRecipeEffortLevels()[recipeId] || null; }
+function setRecipeEffort(recipeId, level) {
+  const levels = getRecipeEffortLevels();
+  if (level && EFFORT_LEVELS[level]) { levels[recipeId] = level; } else { delete levels[recipeId]; }
+  localStorage.setItem(EFFORT_LEVELS_KEY, JSON.stringify(levels));
+}
+function renderEffortPill(level, size) {
+  if (!level || !EFFORT_LEVELS[level]) return '';
+  const e = EFFORT_LEVELS[level];
+  const s = size === 'sm' ? 'font-size:9px;padding:2px 6px;' : 'font-size:11px;padding:3px 8px;';
+  return `<span style="${s}background:${e.bg};color:${e.color};border-radius:10px;font-weight:600;white-space:nowrap;">${e.label}</span>`;
+}
 
 // ============================================================
 // SECTION 3: STATE
@@ -1323,6 +1345,76 @@ function getSuggestedIngredients() {
   return Object.values(ingredientMap).sort((a, b) => b.mealCount - a.mealCount);
 }
 
+function getCategorizedSuggestions() {
+  const today = getToday();
+  const listKeys = new Set(getSmartGroceryList().map(i => normalizeIngredient(i.name)));
+  const seenKeys = new Set();
+
+  // 1. Planned meals (today + future from mealDays)
+  const planned = [];
+  const plannedRecipeIds = new Set();
+  const dates = Object.keys(state.mealDays).filter(d => d >= today).sort();
+  dates.forEach(dateStr => {
+    const dayData = state.mealDays[dateStr];
+    if (!dayData || !dayData.meals) return;
+    ['breakfast', 'lunch', 'dinner'].forEach(mealType => {
+      const meal = dayData.meals[mealType];
+      if (!meal) return;
+      if (meal.status === 'selected' || meal.status === 'pending' || meal.status === 'logged') {
+        const rid = meal.plannedRecipeId || meal.actualRecipeId;
+        if (!rid || plannedRecipeIds.has(rid)) return;
+        const recipe = getRecipeById(rid);
+        if (!recipe) return;
+        const ings = recipeIngList(recipe);
+        if (ings.length === 0) return;
+        plannedRecipeIds.add(rid);
+        ings.forEach(ing => {
+          const key = normalizeIngredient(ing.name);
+          if (!key || listKeys.has(key) || isStaple(ing.name) || seenKeys.has(key)) return;
+          seenKeys.add(key);
+          planned.push({ name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', mealNames: [recipe.title], recipeName: recipe.title, dateLabel: getDateLabel(dateStr) });
+        });
+      }
+    });
+  });
+
+  // 2. Saved/bookmarked recipes not in plan
+  const saved = [];
+  const savedIds = getSavedRecipes();
+  savedIds.forEach(id => {
+    if (plannedRecipeIds.has(id)) return;
+    const recipe = getRecipeById(id);
+    if (!recipe) return;
+    const ings = recipeIngList(recipe);
+    if (ings.length === 0) return;
+    ings.forEach(ing => {
+      const key = normalizeIngredient(ing.name);
+      if (!key || listKeys.has(key) || isStaple(ing.name) || seenKeys.has(key)) return;
+      seenKeys.add(key);
+      saved.push({ name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', mealNames: [recipe.title], recipeName: recipe.title });
+    });
+  });
+
+  // 3. Frequently cooked meals
+  const frequent = [];
+  const frequentMeals = getFrequentMeals();
+  frequentMeals.forEach(meal => {
+    if (plannedRecipeIds.has(meal.recipeId)) return;
+    const recipe = meal.recipeId ? getRecipeById(meal.recipeId) : null;
+    const ingredients = recipe ? recipeIngList(recipe) : [];
+    if (ingredients.length > 0) {
+      ingredients.forEach(ing => {
+        const key = normalizeIngredient(ing.name);
+        if (!key || listKeys.has(key) || isStaple(ing.name) || seenKeys.has(key)) return;
+        seenKeys.add(key);
+        frequent.push({ name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', mealCount: meal.count, mealNames: [meal.name] });
+      });
+    }
+  });
+
+  return { planned, saved, frequent };
+}
+
 function addSuggestedToGrocery(name, category, qty, unit, mealNames) {
   const list = getSmartGroceryList(); const key = normalizeIngredient(name);
   const existing = list.find(i => normalizeIngredient(i.name) === key);
@@ -1388,13 +1480,82 @@ let _cachedSuggestions = [];
 function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); if (typeof render === 'function') render(); }
 
 function showAddFromMealModal() {
+  const today = getToday();
+  const seen = new Set();
+
+  // 1. Planned meals (today + future)
+  const plannedMeals = [];
+  const plannedIds = new Set();
+  const dates = Object.keys(state.mealDays).filter(d => d >= today).sort();
+  dates.forEach(dateStr => {
+    const dayData = state.mealDays[dateStr];
+    if (!dayData || !dayData.meals) return;
+    ['breakfast', 'lunch', 'dinner'].forEach(mt => {
+      const meal = dayData.meals[mt];
+      if (!meal) return;
+      if (meal.status === 'selected' || meal.status === 'pending' || meal.status === 'logged') {
+        const rid = meal.plannedRecipeId || meal.actualRecipeId;
+        if (!rid || seen.has(rid)) return;
+        const recipe = getRecipeById(rid);
+        if (!recipe || recipeIngList(recipe).length === 0) return;
+        seen.add(rid);
+        plannedIds.add(rid);
+        plannedMeals.push({ recipeId: rid, name: recipe.title, image: recipe.image_url, count: 0, label: 'Planned for ' + getDateLabel(dateStr) });
+      }
+    });
+  });
+
+  // 2. Saved/bookmarked recipes not in plan
+  const savedMeals = [];
+  const savedIds = getSavedRecipes();
+  savedIds.forEach(id => {
+    if (seen.has(id)) return;
+    const recipe = getRecipeById(id);
+    if (!recipe || recipeIngList(recipe).length === 0) return;
+    seen.add(id);
+    savedMeals.push({ recipeId: id, name: recipe.title, image: recipe.image_url, count: 0, label: 'Saved' });
+  });
+
+  // 3. Frequently cooked meals
+  const historyMeals = [];
   const frequentMeals = getFrequentMeals();
-  const allMeals = []; const seen = new Set();
-  frequentMeals.forEach(m => { const key = m.recipeId || m.name; if (seen.has(key)) return; seen.add(key); allMeals.push(m); });
+  frequentMeals.forEach(m => {
+    const key = m.recipeId || m.name;
+    if (seen.has(key)) return;
+    seen.add(key);
+    historyMeals.push({ recipeId: m.recipeId, name: m.name, image: m.image, count: m.count, label: 'Cooked ' + m.count + 'x' });
+  });
+
+  // 4. Remaining recipes from food log + library
+  const otherMeals = [];
   const log = getFoodLog();
-  log.forEach(entry => { const key = entry.recipeId || entry.recipeName; if (!key || seen.has(key)) return; seen.add(key); allMeals.push({ recipeId: entry.recipeId, name: entry.recipeName, image: entry.image, count: 1, wouldMakeAgain: entry.wouldMakeAgain === true }); });
-  state.recipes.filter(r => !r.isDraft && !r.isTip && recipeIngList(r).length > 0).forEach(r => { if (seen.has(r.id)) return; seen.add(r.id); allMeals.push({ recipeId: r.id, name: r.title, image: r.image_url, count: 0, wouldMakeAgain: false }); });
-  openModal(`<div style="color: ${CONFIG.text_color}; max-height: 70vh; display: flex; flex-direction: column;"><h2 style="font-size: 17px; font-weight: 600; margin-bottom: 12px;">Add from a meal</h2><div style="overflow-y: auto; flex: 1; margin: 0 -16px; padding: 0 16px;">${allMeals.length === 0 ? `<div style="text-align: center; padding: 24px; color: ${CONFIG.text_muted};">No meals with ingredients found.</div>` : allMeals.map(m => { const recipe = m.recipeId ? getRecipeById(m.recipeId) : null; const ingCount = recipe ? recipeIngList(recipe).length : 0; return `<div onclick="addMealToGrocery('${esc(m.recipeId || '')}'); closeModal();" style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};" class="card-press">${m.image ? `<img src="${esc(m.image)}" style="width: 44px; height: 44px; border-radius: 10px; object-fit: cover;">` : `<div style="width: 44px; height: 44px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px;">&#127869;</div>`}<div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(m.name)}</div><div style="font-size: 11px; color: ${CONFIG.text_muted};">${ingCount > 0 ? `${ingCount} ingredients` : ''}${m.count >= 2 ? ` · Logged ${m.count}x` : ''}</div></div></div>`; }).join('')}</div><button onclick="closeModal()" style="margin-top: 12px; padding: 10px; background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color}; border: none; border-radius: 10px; cursor: pointer; width: 100%; font-size: 14px;">Done</button></div>`);
+  log.forEach(entry => {
+    const key = entry.recipeId || entry.recipeName;
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    otherMeals.push({ recipeId: entry.recipeId, name: entry.recipeName, image: entry.image, count: 1, label: '' });
+  });
+  state.recipes.filter(r => !r.isDraft && !r.isTip && recipeIngList(r).length > 0).forEach(r => {
+    if (seen.has(r.id)) return;
+    seen.add(r.id);
+    otherMeals.push({ recipeId: r.id, name: r.title, image: r.image_url, count: 0, label: '' });
+  });
+
+  function _mealCardHtml(m) {
+    const recipe = m.recipeId ? getRecipeById(m.recipeId) : null;
+    const ingCount = recipe ? recipeIngList(recipe).length : 0;
+    const uniqueCount = recipe ? recipeIngList(recipe).filter(i => !isStaple(i.name)).length : 0;
+    return `<div onclick="addMealToGrocery('${esc(m.recipeId || '')}'); closeModal();" style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};" class="card-press">${m.image ? `<img src="${esc(m.image)}" style="width: 44px; height: 44px; border-radius: 10px; object-fit: cover;">` : `<div style="width: 44px; height: 44px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px;">&#127869;</div>`}<div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(m.name)}</div><div style="font-size: 11px; color: ${CONFIG.text_muted};">${uniqueCount > 0 ? uniqueCount + ' ingredients' : ''}${m.label ? ` · ${esc(m.label)}` : ''}</div></div></div>`;
+  }
+
+  function _sectionHtml(title, meals) {
+    if (meals.length === 0) return '';
+    return `<div style="margin-bottom: 12px;"><div style="font-size: 12px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">${title}</div>${meals.map(m => _mealCardHtml(m)).join('')}</div>`;
+  }
+
+  const hasAny = plannedMeals.length + savedMeals.length + historyMeals.length + otherMeals.length > 0;
+
+  openModal(`<div style="color: ${CONFIG.text_color}; max-height: 70vh; display: flex; flex-direction: column;"><h2 style="font-size: 17px; font-weight: 600; margin-bottom: 12px;">Add from a meal</h2><div style="overflow-y: auto; flex: 1; margin: 0 -16px; padding: 0 16px;">${!hasAny ? `<div style="text-align: center; padding: 24px; color: ${CONFIG.text_muted};">No meals with ingredients found.</div>` : _sectionHtml('For your upcoming meals', plannedMeals) + _sectionHtml('From your saved recipes', savedMeals) + _sectionHtml('Things you make often', historyMeals) + _sectionHtml('All recipes', otherMeals)}</div><button onclick="closeModal()" style="margin-top: 12px; padding: 10px; background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color}; border: none; border-radius: 10px; cursor: pointer; width: 100%; font-size: 14px;">Done</button></div>`);
 }
 
 // ============================================================
@@ -2243,6 +2404,7 @@ function navigateTo(view) {
     'my-meals': '/my-meals.html', 'food-log-detail': '/my-meals.html', 'my-plates': '/my-meals.html',
     'kitchen': '/kitchen.html', 'inventory': '/kitchen.html', 'ingredients': '/kitchen.html', 'ingredient-detail': '/kitchen.html', 'budget-dashboard': '/kitchen.html',
     'kitchen-detail': '/kitchen-detail.html', 'kitchen-ingredient-meals': '/kitchen-detail.html',
+    'recipe-detail': '/recipe-detail.html',
     'grocery-list': '/grocery.html', 'grocery-select-meals': '/grocery.html', 'grocery-ingredients': '/grocery.html'
   };
 
@@ -2292,8 +2454,8 @@ function renderBottomNav() {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   const navItems = [
     { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html'] },
-    { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'] },
     { id: 'my-meals', label: 'My Meals', href: '/my-meals.html', pages: ['my-meals.html'] },
+    { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'] },
     { id: 'kitchen', label: 'Kitchen', href: '/kitchen.html', pages: ['kitchen.html', 'kitchen-detail.html'] },
     { id: 'grocery', label: 'Grocery', href: '/grocery.html', pages: ['grocery.html'] }
   ];
@@ -2320,28 +2482,30 @@ function renderBottomNav() {
 // ============================================================
 function renderDesktopSidebar() {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+  const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
   const sidebarItems = [
     { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>' },
-    { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>' },
     { id: 'my-meals', label: 'My Meals', href: '/my-meals.html', pages: ['my-meals.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>' },
+    { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>' },
     { id: 'kitchen', label: 'Kitchen', href: '/kitchen.html', pages: ['kitchen.html', 'kitchen-detail.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>' },
     { id: 'grocery', label: 'Grocery', href: '/grocery.html', pages: ['grocery.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>' },
-    { id: 'more', label: 'More', href: '#', pages: [], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>', isMore: true }
+    { id: 'budget', label: 'Budget', href: '#', pages: [], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>', action: 'navigateTo("budget-dashboard")' },
+    { id: 'settings', label: 'Settings', href: '#', pages: [], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>', action: 'showSettingsMenu && showSettingsMenu()' }
   ];
 
   const groceryCount = typeof getGroceryBadgeCount === 'function' ? getGroceryBadgeCount() : 0;
 
-  return `<aside class="desktop-sidebar">
+  return `<aside class="desktop-sidebar ${collapsed ? 'collapsed' : ''}">
     <div class="sidebar-logo">
-      <span style="font-size: 24px; margin-right: 10px;">🍽️</span>
+      <span style="font-size: 24px; ${collapsed ? '' : 'margin-right: 10px;'}">🍽️</span>
       <span style="font-size: 18px; font-weight: 700; color: ${CONFIG.text_color}; letter-spacing: -0.5px;">Yummy</span>
     </div>
     <nav class="sidebar-nav">
       ${sidebarItems.map(item => {
         const isActive = item.pages.includes(currentPage);
         const badge = item.id === 'grocery' && groceryCount > 0 ? `<span class="sidebar-badge">${groceryCount}</span>` : '';
-        const onclick = item.isMore ? `onclick="showMoreMenu(); return false;"` : '';
-        return `<a href="${item.isMore ? '#' : item.href}" ${onclick} class="sidebar-link ${isActive ? 'active' : ''}">
+        const onclick = item.action ? `onclick="${item.action}; return false;"` : '';
+        return `<a href="${item.action ? '#' : item.href}" ${onclick} class="sidebar-link ${isActive ? 'active' : ''}" ${collapsed ? `title="${item.label}"` : ''}>
           <span class="sidebar-icon">${item.icon}</span>
           <span class="sidebar-label">${item.label}</span>
           ${badge}
@@ -2349,12 +2513,28 @@ function renderDesktopSidebar() {
       }).join('')}
     </nav>
     <div class="sidebar-footer">
-      <button onclick="showSettingsMenu && showSettingsMenu()" class="sidebar-link" style="width: 100%; border: none; background: none; cursor: pointer; text-align: left;">
-        <span class="sidebar-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></span>
-        <span class="sidebar-label">Settings</span>
+      <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn" title="${collapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
       </button>
     </div>
   </aside>`;
+}
+
+function getAppShellClass() {
+  return 'app-shell' + (localStorage.getItem('sidebarCollapsed') === 'true' ? ' sidebar-collapsed' : '');
+}
+
+function toggleSidebarCollapse() {
+  const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+  const newState = !collapsed;
+  localStorage.setItem('sidebarCollapsed', String(newState));
+  const sidebar = document.querySelector('.desktop-sidebar');
+  const appShell = document.querySelector('.app-shell');
+  if (sidebar) sidebar.classList.toggle('collapsed', newState);
+  if (appShell) appShell.classList.toggle('sidebar-collapsed', newState);
+  // Update collapse button arrow and title
+  const btn = document.querySelector('.sidebar-collapse-btn');
+  if (btn) btn.title = newState ? 'Expand sidebar' : 'Collapse sidebar';
 }
 
 // ============================================================

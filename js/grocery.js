@@ -61,21 +61,33 @@ function renderGroceryIngredients() {
             </span>
           </div>
 
-          <div style="background:${CONFIG.surface_color}; border-radius:8px; padding:8px;">
-            ${list.length ? list.map(ing => {
+          ${(() => {
+            if (!list.length) return `<div style="background:${CONFIG.surface_color}; border-radius:8px; padding:12px; text-align:center; color:${CONFIG.text_muted};">No ingredients on this recipe yet.</div>`;
+            const uniqueIngs = list.filter(ing => !isStaple(ing.name));
+            const stapleIngs = list.filter(ing => isStaple(ing.name));
+            function _ingRow(ing) {
               const k = normalizeIngredient(ing.name);
-              const checked = keys.includes(k);
-              return `
-                <div data-ingredient-key="${k}"
-                     onclick="handleIngredientClick('${k}', this)"
-                     style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:${checked ? 'rgba(232,93,93,0.1)' : CONFIG.background_color}; border-radius:6px; cursor:pointer; border:1px solid ${checked ? CONFIG.primary_action_color : 'transparent'};">
-                  <div style="width:20px; height:20px; border-radius:4px; border:2px solid ${checked ? CONFIG.primary_action_color : CONFIG.text_muted}; background:${checked ? CONFIG.primary_action_color : 'transparent'}; display:flex; align-items:center; justify-content:center; color:white; font-size:12px; flex-shrink:0;">
-                    ${checked ? '✓' : ''}
-                  </div>
-                  <span style="color:${CONFIG.text_color}; font-size:13px;">${esc(ing.qty)}${ing.unit ? ' ' + esc(ing.unit) : ''} ${esc(ing.name)}</span>
-                </div>`;
-            }).join('') : `<div style="color:${CONFIG.text_muted}; padding:12px; text-align:center;">No ingredients on this recipe yet.</div>`}
-          </div>
+              const chk = keys.includes(k);
+              return '<div data-ingredient-key="' + k + '" onclick="handleIngredientClick(\'' + k + '\', this)" style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:' + (chk ? 'rgba(232,93,93,0.1)' : CONFIG.background_color) + '; border-radius:6px; cursor:pointer; border:1px solid ' + (chk ? CONFIG.primary_action_color : 'transparent') + ';"><div style="width:20px; height:20px; border-radius:4px; border:2px solid ' + (chk ? CONFIG.primary_action_color : CONFIG.text_muted) + '; background:' + (chk ? CONFIG.primary_action_color : 'transparent') + '; display:flex; align-items:center; justify-content:center; color:white; font-size:12px; flex-shrink:0;">' + (chk ? '✓' : '') + '</div><span style="color:' + CONFIG.text_color + '; font-size:13px;">' + esc(ing.qty) + (ing.unit ? ' ' + esc(ing.unit) : '') + ' ' + esc(ing.name) + '</span></div>';
+            }
+            let html = '';
+            if (uniqueIngs.length > 0) {
+              html += '<div style="font-size:12px; font-weight:600; color:' + CONFIG.text_color + '; margin-bottom:6px;">What you\'ll need</div>';
+              html += '<div style="background:' + CONFIG.surface_color + '; border-radius:8px; padding:8px; margin-bottom:8px;">';
+              html += uniqueIngs.map(ing => _ingRow(ing)).join('');
+              html += '</div>';
+            }
+            if (stapleIngs.length > 0) {
+              html += '<div onclick="var c=this.nextElementSibling; var ch=this.querySelector(\'.staple-chev\'); if(c.style.display===\'none\'){c.style.display=\'block\';ch.style.transform=\'rotate(90deg)\';}else{c.style.display=\'none\';ch.style.transform=\'\';}" style="display:flex; align-items:center; gap:8px; padding:8px; cursor:pointer; margin-bottom:4px;">';
+              html += '<span class="staple-chev" style="color:' + CONFIG.text_muted + '; font-size:12px; transition:transform 150ms; display:inline-block;">&#9656;</span>';
+              html += '<span style="font-size:12px; font-weight:600; color:' + CONFIG.text_muted + ';">Staples (you might have these) · ' + stapleIngs.length + ' item' + (stapleIngs.length !== 1 ? 's' : '') + '</span>';
+              html += '</div>';
+              html += '<div style="display:none; background:' + CONFIG.surface_color + '; border-radius:8px; padding:8px;">';
+              html += stapleIngs.map(ing => _ingRow(ing)).join('');
+              html += '</div>';
+            }
+            return html;
+          })()}
         </div>`;
     }
 
@@ -260,16 +272,22 @@ function renderGroceryList() {
       const groceryList = getSmartGroceryList();
       const unchecked = groceryList.filter(item => !item.checked);
       const checked = groceryList.filter(item => item.checked);
-      const suggestions = getSuggestedIngredients();
 
-      // Filter suggestions to exclude items already on the list
-      const listKeys = new Set(groceryList.map(i => normalizeIngredient(i.name)));
-      const filteredSuggestions = suggestions.filter(s => !listKeys.has(normalizeIngredient(s.name)));
-      _cachedSuggestions = filteredSuggestions;
+      // Categorized suggestions (planned > saved > frequent), staples filtered out
+      const catSugg = getCategorizedSuggestions();
+      const allSuggestions = [...catSugg.planned, ...catSugg.saved, ...catSugg.frequent];
+      _cachedSuggestions = allSuggestions;
 
-      // Group unchecked items by category
+      // Split items into unique vs staples
+      const uniqueUnchecked = unchecked.filter(item => !isStaple(item.name));
+      const stapleUnchecked = unchecked.filter(item => isStaple(item.name));
+      const uniqueChecked = checked.filter(item => !isStaple(item.name));
+      const stapleChecked = checked.filter(item => isStaple(item.name));
+      const totalStaples = stapleUnchecked.length + stapleChecked.length;
+
+      // Group unique unchecked items by category
       const groupedUnchecked = {};
-      unchecked.forEach(item => {
+      uniqueUnchecked.forEach(item => {
         const cat = item.category || 'Other';
         if (!groupedUnchecked[cat]) groupedUnchecked[cat] = [];
         groupedUnchecked[cat].push(item);
@@ -279,16 +297,16 @@ function renderGroceryList() {
         if (!GROCERY_CATEGORIES.includes(c)) sortedCats.push(c);
       });
 
-      // Group checked items by category
+      // Group unique checked items by category
       const groupedChecked = {};
-      checked.forEach(item => {
+      uniqueChecked.forEach(item => {
         const cat = item.category || 'Other';
         if (!groupedChecked[cat]) groupedChecked[cat] = [];
         groupedChecked[cat].push(item);
       });
 
       // Empty state
-      if (groceryList.length === 0 && filteredSuggestions.length === 0) {
+      if (groceryList.length === 0 && allSuggestions.length === 0) {
         return `
           <div style="padding: 12px;">
             ${emptyState('🛒', "Your grocery list is empty. Log some meals first and we'll help you build your list.", 'Log a Meal', "navigateTo('home')")}
@@ -296,21 +314,31 @@ function renderGroceryList() {
         `;
       }
 
-      // Desktop sidebar content for suggestions and add-from-meal
-      const suggestionsHtml = filteredSuggestions.length > 0 ? `
+      // Build suggestion pills HTML with categorized sections
+      function _buildSuggestionPills(items, startIdx, label, sublabelFn) {
+        if (items.length === 0) return '';
+        return `
+          <div style="margin-bottom: 10px;">
+            <div style="font-size: 11px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">${label}</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              ${items.slice(0, 8).map((s, i) => `
+                <button data-sug-idx="${startIdx + i}" onclick="handleSuggestClick(${startIdx + i})"
+                  style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer; white-space: nowrap;"
+                  class="card-press">
+                  <svg width="14" height="14" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                  ${esc(capitalize(s.name))}
+                  <span style="color: ${CONFIG.text_muted}; font-size: 10px;">${sublabelFn(s)}</span>
+                </button>
+              `).join('')}
+            </div>
+          </div>`;
+      }
+
+      const suggestionsHtml = allSuggestions.length > 0 ? `
         <div style="margin-bottom: 12px;">
-          <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 6px;">Based on what you eat</div>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            ${filteredSuggestions.slice(0, 12).map((s, idx) => `
-              <button data-sug-idx="${idx}" onclick="handleSuggestClick(${idx})"
-                style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer; white-space: nowrap;"
-                class="card-press">
-                <svg width="14" height="14" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                ${esc(capitalize(s.name))}
-                <span style="color: ${CONFIG.text_muted}; font-size: 10px;">${s.mealCount}x</span>
-              </button>
-            `).join('')}
-          </div>
+          ${_buildSuggestionPills(catSugg.planned, 0, 'For your upcoming meals', s => s.recipeName || '')}
+          ${_buildSuggestionPills(catSugg.saved, catSugg.planned.length, 'From your saved recipes', s => s.recipeName || '')}
+          ${_buildSuggestionPills(catSugg.frequent, catSugg.planned.length + catSugg.saved.length, 'Things you make often', s => (s.mealCount || 0) + 'x')}
         </div>
       ` : '';
 
@@ -321,6 +349,22 @@ function renderGroceryList() {
           <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
           Add from a meal
         </button>`;
+
+      // Staples collapsible section
+      const staplesHtml = totalStaples > 0 ? `
+        <div style="margin-top: 8px;">
+          <div onclick="var c=this.nextElementSibling; var ch=this.querySelector('.staple-chev'); if(c.style.display==='none'){c.style.display='block';ch.style.transform='rotate(90deg)';}else{c.style.display='none';ch.style.transform='';}"
+               style="display: flex; align-items: center; gap: 8px; padding: 10px; background: ${CONFIG.surface_color}; border-radius: 8px; cursor: pointer; margin-bottom: 4px;">
+            <span class="staple-chev" style="color: ${CONFIG.text_muted}; font-size: 12px; transition: transform 150ms; display: inline-block;">&#9656;</span>
+            <span style="color: ${CONFIG.text_muted}; font-size: 13px; font-weight: 600;">Staples (you might have these)</span>
+            <span style="color: ${CONFIG.text_tertiary}; font-size: 11px;">${totalStaples} item${totalStaples !== 1 ? 's' : ''}</span>
+          </div>
+          <div style="display: none;">
+            ${stapleUnchecked.map(item => _renderGroceryRow(item, false)).join('')}
+            ${stapleChecked.map(item => _renderGroceryRow(item, true)).join('')}
+          </div>
+        </div>
+      ` : '';
 
       return `
         <div style="padding: 0 12px; padding-bottom: 72px;">
@@ -362,7 +406,11 @@ function renderGroceryList() {
             </div>
           ` : ''}
 
-          <!-- Grocery Items by Category -->
+          <!-- What you'll need (unique ingredients by category) -->
+          ${(uniqueUnchecked.length > 0 || uniqueChecked.length > 0) ? `
+            <div style="color: ${CONFIG.text_color}; font-size: 13px; font-weight: 600; margin-bottom: 8px;">What you'll need</div>
+          ` : ''}
+
           ${sortedCats.map(cat => `
             <div style="margin-bottom: 12px;">
               <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.06);">
@@ -387,6 +435,9 @@ function renderGroceryList() {
               </div>
             `).join('');
           })()}
+
+          <!-- Staples section (collapsed) -->
+          ${staplesHtml}
 
             </div><!-- end desktop-grocery-main -->
             <div class="desktop-grocery-side">
@@ -994,7 +1045,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">

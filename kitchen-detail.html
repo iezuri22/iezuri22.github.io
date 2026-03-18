@@ -46,7 +46,7 @@
       const content = renderer();
 
       app.innerHTML = `
-        <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+        <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
           ${renderDesktopSidebar()}
           <div class="desktop-content-area">
             ${renderDesktopPageTitle()}

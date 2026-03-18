@@ -44,6 +44,40 @@
         z-index: 60;
         padding: 0;
         border-right: 1px solid rgba(255,255,255,0.06);
+        transition: width 200ms ease;
+      }
+      .desktop-sidebar.collapsed {
+        width: 60px;
+      }
+      .desktop-sidebar.collapsed .sidebar-label,
+      .desktop-sidebar.collapsed .sidebar-badge {
+        display: none;
+      }
+      .desktop-sidebar.collapsed .sidebar-logo span:last-child {
+        display: none;
+      }
+      .desktop-sidebar.collapsed .sidebar-logo {
+        justify-content: center;
+        padding: 24px 0 32px;
+      }
+      .desktop-sidebar.collapsed .sidebar-link {
+        justify-content: center;
+        padding: 10px;
+        gap: 0;
+      }
+      .desktop-sidebar.collapsed .sidebar-nav {
+        padding: 0 6px;
+      }
+      .desktop-sidebar.collapsed .sidebar-footer {
+        padding: 6px;
+      }
+      .desktop-sidebar.collapsed .sidebar-footer .sidebar-link {
+        justify-content: center;
+        padding: 10px;
+        gap: 0;
+      }
+      .desktop-sidebar.collapsed .sidebar-collapse-btn svg {
+        transform: rotate(180deg);
       }
       .bottom-nav { display: none !important; }
 
@@ -53,6 +87,11 @@
         width: calc(100% - 220px);
         max-width: none;
         padding-bottom: 0 !important;
+        transition: margin-left 200ms ease, width 200ms ease;
+      }
+      .app-shell.sidebar-collapsed {
+        margin-left: 60px;
+        width: calc(100% - 60px);
       }
 
       /* Desktop content wrapper padding */
@@ -133,6 +172,26 @@
     .sidebar-footer {
       padding: 10px;
       border-top: 1px solid rgba(255,255,255,0.06);
+    }
+    .sidebar-collapse-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      padding: 8px;
+      border: none;
+      background: none;
+      color: #8e8e93;
+      cursor: pointer;
+      border-radius: 8px;
+      transition: background 200ms ease, color 200ms ease;
+    }
+    .sidebar-collapse-btn:hover {
+      background: rgba(255,255,255,0.05);
+      color: #f5f5f7;
+    }
+    .sidebar-collapse-btn svg {
+      transition: transform 200ms ease;
     }
 
     /* ===== GLOBAL TRANSITIONS ===== */
@@ -1186,13 +1245,23 @@
       .desktop-home-main {
         display: flex;
         flex-direction: column;
+        align-items: center;
+        min-height: 0;
+      }
+      .desktop-home-main > * {
+        width: 100%;
+        max-width: 400px;
       }
       .desktop-home-main .swipe-container {
-        max-width: 360px;
+        max-width: 400px;
         width: 100%;
-        aspect-ratio: 3/4;
-        height: auto;
-        max-height: none;
+        height: calc(100vh - 340px);
+        min-height: 220px;
+        max-height: 400px;
+      }
+      .desktop-home-main .swipe-card .card-image {
+        bottom: 64px;
+        height: calc(100% - 64px);
       }
       .desktop-home-sidebar {
         display: flex;
@@ -1341,6 +1410,21 @@
         margin: 0 auto;
       }
 
+      /* Home page: no scroll on desktop swipe view */
+      #home-date-swipe-zone {
+        min-height: auto !important;
+        padding-bottom: 0 !important;
+        height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      #home-date-swipe-zone .desktop-home-layout {
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
+      }
+
       /* FAB position adjustment */
       .app-shell button[style*="position: fixed"][style*="bottom: 68px"] {
         right: 32px;
@@ -1367,5 +1451,8 @@
         bottom: auto !important;
         top: auto !important;
         transform: none !important;
+      }
+      .sidebar-collapsed #moreMenuOverlay > div {
+        left: 70px !important;
       }
     }

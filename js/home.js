@@ -364,6 +364,10 @@ function renderSwipeTab() {
         }).join('')}
       </div>
 
+      <div style="display:flex; gap:6px; justify-content:center; margin-bottom:8px;">
+        ${renderSwipeEffortPills()}
+      </div>
+
       <div class="swipe-container">
         ${nextRecipe ? `
           <div style="position: absolute; top: 4px; left: 28px; right: 28px; bottom: 4px; background: ${CONFIG.surface_color}; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.2); overflow: hidden; transform: scale(0.97); opacity: 0.6;">
@@ -1120,16 +1124,41 @@ function showRemixForm(meal) {
 }
 
 function showDifferentRecipePicker(meal) {
-  const recipes = state.recipes.filter(r => !r.isDraft && !r.isTip).slice(0, 30);
+  state.pickerEffortFilter = state.pickerEffortFilter || 'all';
+  _renderDifferentRecipePicker(meal);
+}
+
+function _renderDifferentRecipePicker(meal) {
+  let recipes = state.recipes.filter(r => !r.isDraft && !r.isTip);
+  if (state.pickerEffortFilter && state.pickerEffortFilter !== 'all') {
+    recipes = recipes.filter(r => getRecipeEffort(r.__backendId || r.id) === state.pickerEffortFilter);
+  }
+  recipes = recipes.slice(0, 30);
+  const effortPills = ['all', 'lazy', 'moderate', 'timely'].map(key => {
+    const active = (state.pickerEffortFilter || 'all') === key;
+    const e = EFFORT_LEVELS[key];
+    const border = active ? (e ? e.border : 'rgba(232,93,93,0.4)') : 'rgba(255,255,255,0.1)';
+    const bg = active ? (e ? e.bg : 'rgba(232,93,93,0.15)') : 'transparent';
+    const txt = active ? (e ? e.color : '#e85d5d') : CONFIG.text_muted;
+    const label = key === 'all' ? 'All' : (e ? e.label : key);
+    return `<button onclick="state.pickerEffortFilter='${key}'; _renderDifferentRecipePicker('${meal}');"
+      style="padding:4px 10px; border-radius:14px; border:1px solid ${border}; background:${bg}; color:${txt}; font-size:11px; font-weight:${active ? '600' : '400'}; cursor:pointer;">${label}</button>`;
+  }).join('');
   openModal(`
     <div style="color: ${CONFIG.text_color};">
       <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_md};">Pick Recipe</h3>
+      <div style="display:flex; gap:6px; margin-bottom:${CONFIG.space_md}; overflow-x:auto;">
+        ${effortPills}
+      </div>
       <div style="max-height: 400px; overflow-y: auto;">
-        ${recipes.map(r => `
+        ${recipes.length === 0 ? `<div style="text-align:center; padding:24px; color:${CONFIG.text_muted};">No recipes match this filter</div>` : recipes.map(r => `
           <div onclick="closeModal(); logMealAsDifferent('${meal}', '${r.__backendId || r.id}')" class="card-press"
             style="display: flex; align-items: center; gap: 12px; padding: 10px; margin-bottom: 6px; background: ${CONFIG.background_color}; border-radius: 12px; cursor: pointer;">
             ${recipeThumb(r) ? `<img loading="lazy" src="${esc(recipeThumb(r))}" style="width:48px; height:48px; object-fit:cover; border-radius:8px;" />` : `<div style="width:48px; height:48px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:4px;"><span style="font-size:9px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.2;-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(r.title)}</span></div>`}
-            <span style="font-size: 14px; font-weight: 500;">${esc(r.title)}</span>
+            <div style="display:flex; flex-direction:column; gap:2px;">
+              <span style="font-size: 14px; font-weight: 500;">${esc(r.title)}</span>
+              ${getRecipeEffort(r.__backendId || r.id) ? `<div>${renderEffortPill(getRecipeEffort(r.__backendId || r.id), 'sm')}</div>` : ''}
+            </div>
           </div>
         `).join('')}
       </div>
@@ -1649,7 +1678,12 @@ function buildSwipeDeck(mealType) {
   });
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.map(s => s.recipe);
+  let result = scored.map(s => s.recipe);
+  // Apply effort filter if set
+  if (state.swipeEffortFilter && state.swipeEffortFilter !== 'all') {
+    result = result.filter(r => getRecipeEffort(r.__backendId || r.id) === state.swipeEffortFilter);
+  }
+  return result;
 }
 
 function startSwipe(mealType) {
@@ -1972,6 +2006,10 @@ function renderSwipe() {
             </button>
           `;
         }).join('')}
+      </div>
+
+      <div style="display:flex; gap:8px; justify-content:center; margin-bottom:12px;">
+        ${renderSwipeEffortPills()}
       </div>
 
       <div class="swipe-container">
@@ -2438,7 +2476,30 @@ function buildSwipeDeckFiltered(mealType) {
   });
 
   scored.sort((a, b) => b.score - a.score);
-  return scored.map(s => s.recipe);
+  let result = scored.map(s => s.recipe);
+  // Apply effort filter if set
+  if (state.swipeEffortFilter && state.swipeEffortFilter !== 'all') {
+    result = result.filter(r => getRecipeEffort(r.__backendId || r.id) === state.swipeEffortFilter);
+  }
+  return result;
+}
+
+function renderSwipeEffortPills() {
+  const effortFilter = state.swipeEffortFilter || 'all';
+  const pills = [
+    { id: 'all', label: 'All', color: null },
+    { id: 'lazy', label: 'Lazy', color: EFFORT_LEVELS.lazy },
+    { id: 'moderate', label: 'Moderate', color: EFFORT_LEVELS.moderate },
+    { id: 'timely', label: 'Timely', color: EFFORT_LEVELS.timely }
+  ];
+  return pills.map(p => {
+    const active = effortFilter === p.id;
+    const border = active ? (p.color ? p.color.border : 'rgba(232,93,93,0.4)') : 'rgba(255,255,255,0.1)';
+    const bg = active ? (p.color ? p.color.bg : 'rgba(232,93,93,0.15)') : 'transparent';
+    const txt = active ? (p.color ? p.color.color : '#e85d5d') : 'rgba(255,255,255,0.5)';
+    return `<button onclick="state.swipeEffortFilter='${p.id}'; state.swipeDeck=state.swipeSettings?.setupCompleted ? buildSwipeDeckFiltered(state.swipeMealType) : buildSwipeDeck(state.swipeMealType); state.swipeIndex=0; render(); setTimeout(initSwipeGestures, 100);"
+      style="padding:4px 10px; border-radius:14px; border:1px solid ${border}; background:${bg}; color:${txt}; font-size:11px; font-weight:${active ? '600' : '400'}; cursor:pointer;">${p.label}</button>`;
+  }).join('');
 }
 
 // ============================================================
@@ -2602,7 +2663,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'swipe-setup' ? '56px' : '0'};">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'swipe-setup' ? '56px' : '0'};">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">
