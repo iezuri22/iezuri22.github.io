@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Yummy - Ingredient Detail</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="css/shared.css">
+  <link rel="stylesheet" href="css/kitchen.css">
+</head>
+<body class="h-full">
+  <div id="app" class="h-full w-full overflow-auto"></div>
+  <div id="modal" style="display: none; background: rgba(0,0,0,0.6);" class="fixed inset-0 flex items-center justify-center z-50">
+    <div id="modal-content" style="background: #242432; border-radius: 16px 16px 0 0; padding: 12px; color: #f5f5f7;" class="max-w-2xl w-full mx-4 max-h-[85dvh] overflow-auto"></div>
+  </div>
+  <script src="js/shared.js"></script>
+  <script src="js/kitchen.js"></script>
+  <script>
+    // Read ingredient from URL param
+    const urlParams = new URLSearchParams(window.location.search);
+    const ingredientParam = urlParams.get('ingredient');
+
+    loadAllState();
+    loadCustomIngredientImages();
+
+    if (ingredientParam) {
+      state.selectedKitchenIngredient = ingredientParam;
+      state.kitchenSelectedIngredient = ingredientParam;
+      state.currentView = 'kitchen-detail';
+    }
+
+    setupKeyboardShortcuts();
+
+    // Override render for kitchen-detail page
+    const kitchenDetailRenderers = {
+      'kitchen-detail': renderKitchenDetail,
+      'kitchen-ingredient-meals': renderKitchenIngredientMeals
+    };
+
+    function render() {
+      const app = document.getElementById('app');
+      if (!app) return;
+
+      const renderer = kitchenDetailRenderers[state.currentView] || renderKitchenDetail;
+      const content = renderer();
+
+      app.innerHTML = `
+        <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+          ${content}
+          ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
+          ${renderBottomNav()}
+        </div>
+      `;
+      if (typeof renderChefChat === 'function') renderChefChat();
+    }
+
+    render();
+  </script>
+</body>
+</html>

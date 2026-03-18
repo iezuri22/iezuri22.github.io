@@ -1,0 +1,2276 @@
+// ============================================================
+// RECIPES PAGE - js/recipes.js
+// All recipe-page-specific functions: list, view, edit,
+// freestyle editing, recipe import, CRUD actions.
+// Depends on js/shared.js for: CONFIG, state, storage, esc,
+// capitalize, navigateTo, render (page-local), renderNav,
+// renderBottomNav, openModal, closeModal, showToast, showError,
+// getRecipeById, recipeThumb, recipeUrl, recipeIngList,
+// newRecipeDraft, ensureRecipeForm, setRecipeField,
+// handleImageUpload, removeImage, addIngRow, showBulkImportModal,
+// ING_GROUPS, MEAL_CATEGORIES, TIP_CATEGORIES, CHEF_API_URL,
+// loadAllState, compressImage, uploadPhoto, _debouncedRender,
+// getSavedRecipes, isRecipeSaved, toggleSaveRecipe,
+// SAVED_RECIPES_KEY, savePlan
+// ============================================================
+
+// ===== INGREDIENT ROW HELPERS =====
+
+function delIngRow(i) {
+  ensureRecipeForm();
+  state.recipeForm.ingredientsRows.splice(i, 1);
+  if (state.recipeForm.ingredientsRows.length === 0) addIngRow();
+  render();
+}
+
+function setIng(i, field, value) {
+  ensureRecipeForm();
+  state.recipeForm.ingredientsRows[i][field] = value;
+}
+
+// ===== RECIPE CRUD ACTIONS =====
+
+function openNewRecipe() {
+  state.recipeForm = newRecipeDraft();
+  state.recipeForm.isDraft = false;
+  state.currentView = 'recipe-edit';
+  render();
+}
+
+function openNewTip() {
+  state.recipeForm = newRecipeDraft();
+  state.recipeForm.isTip = true;
+  state.recipeForm.category = 'Prep Techniques';
+  state.currentView = 'recipe-edit';
+  render();
+}
+
+function openEditRecipe(recipeId) {
+  const r = getRecipeById(recipeId);
+  if (!r) return;
+
+  const rows = Array.isArray(r.ingredientsRows) ? r.ingredientsRows : [];
+  state.recipeForm = {
+    ...newRecipeDraft(),
+    ...r,
+    ingredientsRows: rows.length ? rows : [{ qty: '', unit: '', name: '', group: 'Produce' }]
+  };
+
+  state.currentView = 'recipe-edit';
+  render();
+}
+
+function closeRecipeEditor() {
+  state.recipeForm = null;
+  navigateTo('recipes');
+}
+
+function openRecipeView(id, fromPlan = null, fromStats = false, fromTips = false, fromMealOptions = false) {
+  // Save scroll position before navigating
+  const app = document.getElementById('app');
+  if (app && state.currentView) {
+    state.scrollPositions[state.currentView] = app.scrollTop;
+  }
+
+  state.selectedRecipeViewId = id;
+  state.viewingFromPlan = fromPlan; // {date, meal} or null
+  state.viewingFromStats = fromStats; // true if coming from recipe-stats
+  state.viewingFromTips = fromTips; // true if coming from tips page
+  state.viewingFromMealOptions = fromMealOptions; // true if coming from meal options
+  state.currentView = 'recipe-view';
+  render();
+
+  // Scroll to top for recipe view
+  setTimeout(() => {
+    const app = document.getElementById('app');
+    if (app) app.scrollTop = 0;
+  }, 0);
+}
+
+async function saveRecipeForm() {
+  ensureRecipeForm();
+
+  const title = (state.recipeForm.title || '').trim();
+  const cat = (state.recipeForm.category || '').trim();
+  const url = (state.recipeForm.recipe_url || '').trim();
+
+  if (!title) return showError(state.recipeForm.isTip ? 'Tip Title is required.' : 'Recipe Title is required.');
+  if (!cat) return showError('Category is required.');
+
+  const rows = (state.recipeForm.ingredientsRows || [])
+    .map(r => ({
+      qty: (r.qty || '').trim(),
+      unit: (r.unit || '').trim(),
+      name: (r.name || '').trim(),
+      group: r.group || 'Other'
+    }))
+    .filter(r => r.name); const payload = {
+    ...state.recipeForm,
+    title,
+    category: cat,
+    recipe_url: url,
+    image_url: (state.recipeForm.image_url || '').trim(),
+    tags: (state.recipeForm.tags || '').trim(),
+    notes: (state.recipeForm.notes || '').trim(),
+    instructions: (state.recipeForm.instructions || '').trim(),
+    ingredientsRows: rows,
+    sourceType: state.recipeForm.sourceType || 'user',
+    isDraft: state.recipeForm.isDraft || false
+  };
+
+  try {
+    if (payload.id) {
+      await storage.update(payload);
+    } else {
+      payload.id = `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+      await storage.create(payload);
+    }
+    showToast(payload.isTip ? 'Tip saved!' : 'Recipe saved!', 'success');
+    closeRecipeEditor();
+  } catch (e) {
+    console.error(e);
+    showError('Failed to save recipe.');
+  }
+}
+
+async function publishTip(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+
+  const updatedRecipe = { ...recipe, isTip: false };
+
+  try {
+    await storage.update(updatedRecipe);
+    showToast('Tip converted to recipe!', 'success');
+  } catch (e) {
+    console.error(e);
+    showError('Failed to convert tip.');
+  }
+}
+
+async function deleteRecipe(recipe) {
+  state.isLoading = true;
+  render();
+  try {
+    const result = await storage.delete(recipe);
+    if (!result.isOk) {
+      showError('Failed to delete recipe');
+    }
+  } catch (error) {
+    console.error('deleteRecipe failed:', error);
+    showError('Failed to delete recipe');
+  } finally {
+    state.isLoading = false;
+    render();
+  }
+}
+
+async function toggleFavorite(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+
+  state.isLoading = true;
+  render();
+  try {
+    const updatedRecipe = { ...recipe, favorite: !recipe.favorite };
+    const result = await storage.update(updatedRecipe);
+    if (!result.isOk) {
+      showError('Failed to update favorite status');
+    }
+  } catch (error) {
+    console.error('toggleFavorite failed:', error);
+    showError('Failed to update favorite status');
+  } finally {
+    state.isLoading = false;
+    render();
+  }
+}
+
+function markAsCooked(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+
+  const today = new Date();
+  const localDate = new Date(today.getTime() - (today.getTimezoneOffset() * 60000));
+  const todayStr = localDate.toISOString().split('T')[0];
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 class="text-2xl font-bold mb-4">Mark as Cooked</h2>
+      <p class="mb-4">When did you cook <strong>${esc(recipe.title)}</strong>?</p>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Date:</label>
+        <input type="date" id="cookDate" value="${todayStr}"
+          class="w-full px-3 py-2 border rounded" />
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Meal Type:</label>
+        <select id="cookMealType" class="w-full px-3 py-2 border rounded">
+          <option value="breakfast" ${recipe.category === 'Breakfast' ? 'selected' : ''}>Breakfast</option>
+          <option value="lunch" ${recipe.category === 'Lunch' ? 'selected' : ''}>Lunch</option>
+          <option value="dinner" ${(recipe.category === 'Dinner' || recipe.category === 'Vegetables' || !recipe.category) ? 'selected' : ''}>Dinner</option>
+        </select>
+      </div>
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
+          Cancel
+        </button>
+        <button onclick="saveCookedMeal('${recipeId}')"
+                class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
+          Save to Meal History
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+async function saveCookedMeal(recipeId) {
+  const dateInput = document.getElementById('cookDate');
+  const mealTypeSelect = document.getElementById('cookMealType');
+
+  const date = dateInput.value;
+  const mealType = mealTypeSelect.value;
+
+  if (!date) {
+    showError('Please select a date');
+    return;
+  }
+
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+
+  state.isLoading = true;
+  closeModal();
+  render();
+
+  try {
+    // Update cook count
+    const updatedRecipe = {
+      ...recipe,
+      timesCooked: (recipe.timesCooked || 0) + 1
+    };
+    await storage.update(updatedRecipe);
+
+    // Add to meal history
+    await savePlan(date, capitalize(mealType), recipeId);
+
+    showToast(`Added to ${date} ${mealType}!`, 'success');
+  } catch (e) {
+    console.error(e);
+    showError('Failed to save');
+  } finally {
+    state.isLoading = false;
+    render();
+  }
+}
+
+async function unmarkAsCooked(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+
+  if ((recipe.timesCooked || 0) === 0) {
+    showToast('Recipe has not been cooked yet', 'info');
+    return;
+  }
+
+  state.isLoading = true;
+  render();
+  try {
+    const updatedRecipe = {
+      ...recipe,
+      timesCooked: (recipe.timesCooked || 0) - 1
+    };
+    const result = await storage.update(updatedRecipe);
+    if (result.isOk) {
+      showToast(`Unmarked! Total: ${updatedRecipe.timesCooked}`, 'success');
+    } else {
+      showError('Failed to update cook count');
+    }
+  } catch (error) {
+    console.error('unmarkAsCooked failed:', error);
+    showError('Failed to update cook count');
+  } finally {
+    state.isLoading = false;
+    render();
+  }
+}
+
+// ===== FREESTYLE MEAL FUNCTIONS =====
+
+function getAllFreestyleTags() {
+  const tags = new Set();
+  state.freestyleMeals.forEach(meal => {
+    (meal.tags || []).forEach(tag => tags.add(tag));
+  });
+  return Array.from(tags).sort();
+}
+
+function getPendingRecordingNeeds() {
+  return (state.recordingNeeds || []).filter(r => !r.completed);
+}
+
+function parseNarrative(text) {
+  const mentions = [];
+  const recordingNeeds = [];
+
+  const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+  let match;
+  while ((match = mentionRegex.exec(text)) !== null) {
+    mentions.push({ title: match[1], id: match[2], index: match.index });
+  }
+
+  const recordingRegex = /#\[([^\]]+)\]/g;
+  while ((match = recordingRegex.exec(text)) !== null) {
+    recordingNeeds.push({ text: match[1], index: match.index });
+  }
+
+  return { mentions, recordingNeeds };
+}
+
+function narrativeToHtml(text) {
+  if (!text) return '';
+
+  let html = esc(text);
+
+  html = html.replace(/@\[([^\]]+)\]\(([^)]+)\)/g, (match, title, id) => {
+    return `<span class="mention-tag cursor-pointer" onclick="openRecipeView('${id}')">${title}</span>`;
+  });
+
+  html = html.replace(/#\[([^\]]+)\]/g, (match, text) => {
+    return `<span class="record-tag">${text}</span>`;
+  });
+
+  return html;
+}
+
+function selectMention(item) {
+  const textarea = document.getElementById('narrativeEditor');
+  if (!textarea) return;
+
+  const text = textarea.value;
+  const cursorPos = state.mentionCursorPosition;
+
+  let startPos = cursorPos - 1;
+  while (startPos >= 0 && text[startPos] !== '@' && text[startPos] !== '#') {
+    startPos--;
+  }
+
+  let insertText;
+  if (state.mentionDropdownType === '@') {
+    // Recipe mention: @[Recipe Name](recipe_id)
+    insertText = `@[${item.title}](${item.id})`;
+  } else {
+    // Ingredient/blend mention: #ingredient-name (kebab-case, no brackets)
+    const kebabName = (item.name || item).toLowerCase().replace(/\s+/g, '-');
+    insertText = `#${kebabName}`;
+  }
+
+  const newText = text.slice(0, startPos) + insertText + ' ' + text.slice(cursorPos);
+
+  state.freestyleForm.narrative = newText;
+  state.mentionDropdownVisible = false;
+
+  render();
+
+  setTimeout(() => {
+    const newTextarea = document.getElementById('narrativeEditor');
+    if (newTextarea) {
+      newTextarea.focus();
+      const newPos = startPos + insertText.length + 1;
+      newTextarea.setSelectionRange(newPos, newPos);
+    }
+  }, 0);
+}
+
+function handleNarrativeInput(e) {
+  const textarea = e.target;
+  const text = textarea.value;
+  const cursorPos = textarea.selectionStart;
+
+  state.freestyleForm.narrative = text;
+  state.mentionCursorPosition = cursorPos;
+
+  let startPos = cursorPos - 1;
+  let triggerChar = null;
+
+  while (startPos >= 0) {
+    const char = text[startPos];
+    if (char === '@' || char === '#') {
+      triggerChar = char;
+      break;
+    }
+    // Only break on newline, not space (allows "chicken thighs" search)
+    if (char === '\n') {
+      break;
+    }
+    startPos--;
+  }
+
+  const wasDropdownVisible = state.mentionDropdownVisible;
+
+  if (triggerChar && startPos >= 0) {
+    const searchTerm = text.slice(startPos + 1, cursorPos);
+    // Allow spaces in search term (e.g., "chicken th" matches "Chicken Thighs")
+    state.mentionSearchTerm = searchTerm.toLowerCase();
+    state.mentionDropdownType = triggerChar;
+    state.mentionDropdownVisible = true;
+    state.mentionDropdownIndex = 0;
+  } else {
+    state.mentionDropdownVisible = false;
+  }
+
+  // Only re-render if dropdown state changed (not on every keystroke)
+  if (wasDropdownVisible !== state.mentionDropdownVisible || state.mentionDropdownVisible) {
+    // Update just the dropdown, not the whole page
+    const dropdownContainer = document.getElementById('mentionDropdownContainer');
+    if (dropdownContainer) {
+      dropdownContainer.innerHTML = renderMentionDropdown();
+    } else {
+      // Fallback: full render if container not found
+      render();
+      setTimeout(() => {
+        const newTextarea = document.getElementById('narrativeEditor');
+        if (newTextarea) {
+          newTextarea.focus();
+          newTextarea.setSelectionRange(cursorPos, cursorPos);
+        }
+      }, 0);
+    }
+  }
+}
+
+function renderMentionDropdown() {
+  const dropdownItems = state.mentionDropdownVisible ? getMentionDropdownItems() : [];
+
+  if (!state.mentionDropdownVisible || dropdownItems.length === 0) {
+    return '';
+  }
+
+  return `
+    <div style="background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto;">
+      ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
+        <div style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; ${i === state.mentionDropdownIndex ? 'background: rgba(232,93,93,0.15);' : ''} color: ${CONFIG.text_color};"
+          onmouseover="this.style.background='rgba(232,93,93,0.1)'"
+          onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(232,93,93,0.15)' : 'transparent'}'"
+          onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+          <span>${esc(item.title)}</span>
+          <span style="opacity: 0.4; font-size: ${CONFIG.type_micro};">recipe</span>
+        </div>
+      `).join('') : dropdownItems.map((item, i) => `
+        <div style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; ${i === state.mentionDropdownIndex ? 'background: rgba(232,93,93,0.15);' : ''} color: ${CONFIG.text_color};"
+          onmouseover="this.style.background='rgba(232,93,93,0.1)'"
+          onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(232,93,93,0.15)' : 'transparent'}'"
+          onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+          <span>${esc(item.name)}</span>
+          <span style="opacity: 0.4; font-size: ${CONFIG.type_micro};">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : 'ingredient'}</span>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function handleNarrativeKeydown(e) {
+  if (!state.mentionDropdownVisible) return;
+
+  const items = getMentionDropdownItems();
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    state.mentionDropdownIndex = Math.min(state.mentionDropdownIndex + 1, items.length - 1);
+    render();
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    state.mentionDropdownIndex = Math.max(state.mentionDropdownIndex - 1, 0);
+    render();
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    if (items.length > 0) {
+      e.preventDefault();
+      selectMention(items[state.mentionDropdownIndex]);
+    }
+  } else if (e.key === 'Escape') {
+    state.mentionDropdownVisible = false;
+    render();
+  }
+}
+
+function getMentionDropdownItems() {
+  const search = state.mentionSearchTerm.toLowerCase();
+
+  if (state.mentionDropdownType === '@') {
+    // @ = Recipes
+    return state.recipes
+      .filter(r => !r.isDraft)
+      .filter(r => r.title.toLowerCase().includes(search))
+      .slice(0, 8)
+      .map(r => ({
+        id: r.__backendId || r.id,
+        title: r.title,
+        type: 'recipe'
+      }));
+  } else {
+    // # = Pantry items + Seasoning blends
+    const results = [];
+
+    // Add seasoning blends first
+    (state.seasoningBlends || []).forEach(blend => {
+      if (blend.name.toLowerCase().includes(search)) {
+        results.push({
+          name: capitalize(blend.name),
+          type: 'blend'
+        });
+      }
+    });
+
+    // Add pantry items
+    state.inventory.forEach(item => {
+      if (item.name.toLowerCase().includes(search)) {
+        results.push({
+          name: capitalize(item.name),
+          type: 'pantry'
+        });
+      }
+    });
+
+    // Add ingredient knowledge items not in pantry
+    state.ingredientKnowledge.forEach(ing => {
+      const alreadyAdded = results.some(r => r.name.toLowerCase() === ing.name.toLowerCase());
+      if (!alreadyAdded && ing.name.toLowerCase().includes(search)) {
+        results.push({
+          name: capitalize(ing.name),
+          type: 'ingredient'
+        });
+      }
+    });
+
+    // If search term doesn't match anything, allow custom entry
+    if (search && !results.some(r => r.name.toLowerCase() === search)) {
+      results.unshift({
+        name: capitalize(search),
+        type: 'custom'
+      });
+    }
+
+    return results.slice(0, 10);
+  }
+}
+
+function addFreestyleTag(tag) {
+  if (!state.freestyleForm) return;
+  const cleanTag = tag.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!cleanTag) return;
+
+  if (!state.freestyleForm.tags.includes(cleanTag)) {
+    state.freestyleForm.tags.push(cleanTag);
+    render();
+  }
+}
+
+function removeFreestyleTag(tag) {
+  if (!state.freestyleForm) return;
+  state.freestyleForm.tags = state.freestyleForm.tags.filter(t => t !== tag);
+  render();
+}
+
+async function deleteFreestyle(id) {
+  const meal = (state.freestyleMeals || []).find(m => m.id === id);
+  if (!meal) return;
+
+  state.freestyleMeals = state.freestyleMeals.filter(m => m.id !== id);
+  render();
+
+  try {
+    await storage.delete(meal);
+    showToast('Freestyle meal deleted', 'success');
+  } catch (e) {
+    console.error(e);
+    showError('Failed to delete');
+  }
+}
+
+async function saveFreestyle() {
+  const form = state.freestyleForm;
+  if (!form) return;
+
+  if (!form.image_url && !form.narrative) {
+    showError('Please add a photo or write about your meal');
+    return;
+  }
+
+  // Extract mentions and recording needs from narrative
+  const parsed = parseNarrative(form.narrative || '');
+  const linkedRecipes = parsed.mentions.map(m => m.id);
+  const recordingNeedsFromNarrative = parsed.recordingNeeds.map(r => r.text);
+
+  const meal = {
+    id: form.id || `freestyle_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    type: 'freestyle',
+    date: form.date,
+    image_url: form.image_url || '',
+    narrative: form.narrative || '',
+    notes: form.narrative || '', // Keep for backward compatibility
+    linkedRecipes: linkedRecipes,
+    tags: form.tags || []
+  };
+
+  try {
+    if (form.id) {
+      await storage.update(meal);
+      state.freestyleMeals = state.freestyleMeals.map(m => m.id === meal.id ? meal : m);
+    } else {
+      await storage.create(meal);
+      state.freestyleMeals = [...(state.freestyleMeals || []), meal];
+    }
+
+    // Create recording need items from #[...] tags
+    for (const needText of recordingNeedsFromNarrative) {
+      const existingNeed = state.recordingNeeds.find(r =>
+        r.text.toLowerCase() === needText.toLowerCase() && !r.completed
+      );
+
+      if (!existingNeed) {
+        const recordingNeed = {
+          id: `recording_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          type: 'recording_need',
+          text: needText,
+          sourceFreestyleId: meal.id,
+          createdAt: new Date().toISOString(),
+          completed: false
+        };
+        await storage.create(recordingNeed);
+        state.recordingNeeds.push(recordingNeed);
+      }
+    }
+
+    state.freestyleForm = null;
+    state.currentView = 'recipes';
+    state.recipeTab = 'freestyle';
+    render();
+    showToast('Freestyle meal saved!', 'success');
+  } catch (e) {
+    console.error(e);
+    showError('Failed to save');
+  }
+}
+
+function openNewFreestyle() {
+  const today = new Date();
+  const localDate = new Date(today.getTime() - (today.getTimezoneOffset() * 60000));
+
+  state.freestyleForm = {
+    id: null,
+    date: localDate.toISOString().split('T')[0],
+    image_url: '',
+    narrative: '',
+    notes: '',
+    linkedRecipes: [],
+    tags: []
+  };
+  state.currentView = 'freestyle-edit';
+  render();
+}
+
+function editFreestyle(id) {
+  const meal = (state.freestyleMeals || []).find(m => m.id === id);
+  if (!meal) return;
+  state.freestyleForm = {
+    ...meal,
+    narrative: meal.narrative || meal.notes || ''
+  };
+  state.currentView = 'freestyle-edit';
+  render();
+}
+
+async function cleanupNarrativeWithAI() {
+  const form = state.freestyleForm;
+  if (!form || !form.narrative || form.narrative.trim().length < 10) {
+    showToast('Write a bit more before cleaning up!', 'info');
+    return;
+  }
+
+  showToast('Cleaning up with AI...', 'info');
+
+  try {
+    // Get list of available recipes, pantry items, and blends for context
+    const recipeNames = state.recipes.filter(r => !r.isDraft).map(r => r.title).slice(0, 50);
+    const pantryNames = state.inventory.map(i => i.name).slice(0, 50);
+    const blendNames = (state.seasoningBlends || []).map(b => b.name);
+
+    const prompt = `You are helping organize a cooking journal entry. Clean up the following narrative while keeping it readable and personal.
+
+Rules:
+1. Keep it as a flowing narrative (NOT sections or bullet points)
+2. Fix grammar and spelling
+3. Where appropriate, convert recipe references to @[Recipe Name](id) format - use the recipe names provided
+4. Where appropriate, convert ingredient/seasoning references to #ingredient-name format (kebab-case)
+5. At the end, add a "Used:" line listing all #ingredients mentioned
+6. Keep the writer's voice and personality
+7. Don't add information that wasn't there
+
+Available recipes: ${recipeNames.join(', ')}
+Available pantry items: ${pantryNames.join(', ')}
+Available seasoning blends: ${blendNames.join(', ')}
+
+Original entry:
+${form.narrative}
+
+Return ONLY the cleaned up narrative with the Used: line at the end. No explanations.`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    const data = await response.json();
+    const cleanedText = data.content?.[0]?.text || form.narrative;
+
+    // Extract used ingredients from the cleaned text
+    const usedMatch = cleanedText.match(/Used:\s*(.+)$/i);
+    let usedIngredients = [];
+    if (usedMatch) {
+      usedIngredients = usedMatch[1]
+        .split(/[,•]/)
+        .map(s => s.trim().replace(/^#/, ''))
+        .filter(s => s.length > 0);
+    }
+
+    // Update form
+    state.freestyleForm.narrative = cleanedText.replace(/\n*Used:\s*.+$/i, '').trim();
+    state.freestyleForm.usedIngredients = usedIngredients;
+
+    showToast('Narrative cleaned up!', 'success');
+    render();
+
+  } catch (e) {
+    console.error('AI cleanup failed:', e);
+    showError('Failed to clean up. Try again.');
+  }
+}
+
+async function handleFreestylePhotoUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  showToast('Compressing photo...', 'info');
+  const compressedFile = await compressImage(file);
+
+  const url = await uploadPhoto(compressedFile);
+  if (url) {
+    state.freestyleForm.image_url = url;
+    render();
+  }
+
+  event.target.value = '';
+}
+
+// ===== RECIPE IMPORT FUNCTIONS =====
+
+function showImportRecipeModal() {
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 class="text-2xl font-bold mb-4">Import Recipe from URL</h2>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Recipe URL:</label>
+        <input type="url" id="importRecipeUrl"
+               class="w-full px-3 py-2 border rounded"
+               placeholder="https://www.allrecipes.com/recipe/..."
+               autofocus />
+        <div class="text-sm mt-1" style="color: ${CONFIG.text_muted};">
+          Works with most recipe sites (AllRecipes, Food Network, NYT Cooking, etc.)
+        </div>
+      </div>
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
+          Cancel
+        </button>
+        <button onclick="importRecipeFromUrl()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
+          Import Recipe
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+async function importRecipeFromUrl() {
+  const url = document.getElementById('importRecipeUrl')?.value.trim();
+
+  if (!url) {
+    showError('Please enter a URL');
+    return;
+  }
+
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    showError('Please enter a valid URL starting with http:// or https://');
+    return;
+  }
+
+  closeModal();
+  state.isLoading = true;
+  render();
+  showToast('Importing recipe...', 'info');
+
+  try {
+    const response = await fetch(CHEF_API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fetchUrl: url,
+        messages: [{
+          role: 'user',
+          content: `Extract the recipe from this HTML and return ONLY valid JSON (no markdown, no backticks, no explanation). Use this exact structure:
+{
+  "title": "Recipe Name",
+  "category": "one of: Breakfast, Lunch, Dinner, Dessert, Snack, Beverage, Other",
+  "servings": number,
+  "prepTime": "e.g. 15 mins",
+  "cookTime": "e.g. 30 mins",
+  "ingredients": [
+    {"item": "ingredient name", "amount": "quantity", "unit": "unit of measure", "group": "one of: Proteins, Vegetables, Carbs, Dairy, Fruits, Seasonings, Oils, Sweeteners, Other"}
+  ],
+  "instructions": ["Step 1 text", "Step 2 text", "Step 3 text"],
+  "notes": "any tips or notes from the recipe",
+  "sourceUrl": "${url}"
+}`
+        }]
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      showError(data.error);
+      state.isLoading = false;
+      render();
+      return;
+    }
+
+    if (data.content && data.content[0]?.text) {
+      const text = data.content[0].text;
+
+      let recipeData;
+      try {
+        let cleanText = text.trim();
+        cleanText = cleanText.replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+
+        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          recipeData = JSON.parse(jsonMatch[0]);
+        } else {
+          throw new Error('No JSON found in response');
+        }
+      } catch (e) {
+        console.error('Failed to parse recipe JSON:', e, text);
+        showError('Could not parse recipe data. Please try a different URL.');
+        state.isLoading = false;
+        render();
+        return;
+      }
+
+      showImportPreviewModal(recipeData, url);
+    } else {
+      showError('Could not fetch recipe. Please try a different URL.');
+    }
+  } catch (error) {
+    console.error('Import error:', error);
+    showError('Failed to import recipe. Please check the URL and try again.');
+  } finally {
+    state.isLoading = false;
+    render();
+  }
+}
+
+function showImportPreviewModal(recipeData, sourceUrl) {
+  const ingredientsList = (recipeData.ingredients || [])
+    .map(ing => `${ing.amount || ''} ${ing.unit || ''} ${ing.item}`.trim())
+    .join('\n');
+
+  const instructionsList = (recipeData.instructions || [])
+    .map((step, i) => `${i + 1}. ${step}`)
+    .join('\n');
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;">
+      <h2 class="text-2xl font-bold mb-4">Review Imported Recipe</h2>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Title:</label>
+        <input type="text" id="importTitle" value="${esc(recipeData.title || '')}"
+               class="w-full px-3 py-2 border rounded" />
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block mb-2 font-semibold">Category:</label>
+          <select id="importCategory" class="w-full px-3 py-2 border rounded">
+            ${MEAL_CATEGORIES.map(c => `
+              <option value="${c}" ${recipeData.category === c ? 'selected' : ''}>${c}</option>
+            `).join('')}
+          </select>
+        </div>
+        <div>
+          <label class="block mb-2 font-semibold">Servings:</label>
+          <input type="number" id="importServings" value="${recipeData.servings || 4}"
+                 class="w-full px-3 py-2 border rounded" min="1" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-4 mb-4">
+        <div>
+          <label class="block mb-2 font-semibold">Prep Time:</label>
+          <input type="text" id="importPrepTime" value="${esc(recipeData.prepTime || '')}"
+                 class="w-full px-3 py-2 border rounded" placeholder="15 mins" />
+        </div>
+        <div>
+          <label class="block mb-2 font-semibold">Cook Time:</label>
+          <input type="text" id="importCookTime" value="${esc(recipeData.cookTime || '')}"
+                 class="w-full px-3 py-2 border rounded" placeholder="30 mins" />
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Ingredients:</label>
+        <textarea id="importIngredients" rows="6"
+                  class="w-full px-3 py-2 border rounded font-mono text-sm">${esc(ingredientsList)}</textarea>
+        <div class="text-xs mt-1" style="color: ${CONFIG.text_muted};">One ingredient per line</div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Instructions:</label>
+        <textarea id="importInstructions" rows="6"
+                  class="w-full px-3 py-2 border rounded text-sm">${esc(instructionsList)}</textarea>
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Notes:</label>
+        <textarea id="importNotes" rows="2"
+                  class="w-full px-3 py-2 border rounded">${esc(recipeData.notes || '')}</textarea>
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Image URL (optional):</label>
+        <input type="url" id="importImage" value=""
+               class="w-full px-3 py-2 border rounded"
+               placeholder="https://example.com/image.jpg" />
+      </div>
+
+      <input type="hidden" id="importSourceUrl" value="${esc(sourceUrl)}" />
+      <input type="hidden" id="importIngredientsData" value='${JSON.stringify(recipeData.ingredients || [])}' />
+
+      <div class="flex gap-2 justify-end">
+        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
+          Cancel
+        </button>
+        <button onclick="saveImportedRecipe()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.success_color}; color: white;">
+          Save Recipe
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+async function saveImportedRecipe() {
+  const title = document.getElementById('importTitle')?.value.trim();
+  const category = document.getElementById('importCategory')?.value;
+  const servings = parseInt(document.getElementById('importServings')?.value) || 4;
+  const prepTime = document.getElementById('importPrepTime')?.value.trim();
+  const cookTime = document.getElementById('importCookTime')?.value.trim();
+  const notes = document.getElementById('importNotes')?.value.trim();
+  const image = document.getElementById('importImage')?.value.trim();
+  const sourceUrl = document.getElementById('importSourceUrl')?.value;
+
+  // Parse ingredients from textarea
+  const ingredientsText = document.getElementById('importIngredients')?.value || '';
+  const ingredientsData = JSON.parse(document.getElementById('importIngredientsData')?.value || '[]');
+
+  // Parse instructions from textarea
+  const instructionsText = document.getElementById('importInstructions')?.value || '';
+  const instructions = instructionsText
+    .split('\n')
+    .map(line => line.replace(/^\d+\.\s*/, '').trim())
+    .filter(line => line.length > 0);
+
+  if (!title) {
+    showError('Please enter a recipe title');
+    return;
+  }
+
+  // Create recipe object
+  const recipe = {
+    id: `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    title: title,
+    category: category,
+    servings: servings,
+    prepTime: prepTime,
+    cookTime: cookTime,
+    ingredientsRows: ingredientsData.map(ing => ({
+      qty: ing.amount || '',
+      unit: ing.unit || '',
+      name: ing.item || '',
+      group: ing.group || 'Other'
+    })),
+    instructions: instructions.join('\n'),
+    notes: notes,
+    image: image || null,
+    sourceUrl: sourceUrl,
+    sourceType: 'imported',
+    favorite: false,
+    isDraft: false,
+    createdAt: new Date().toISOString()
+  };
+
+  closeModal();
+  state.isLoading = true;
+  render();
+
+  try {
+    await storage.create(recipe);
+    showToast(`"${title}" imported successfully!`, 'success');
+  } catch (e) {
+    console.error('Save error:', e);
+    showError('Failed to save recipe');
+  } finally {
+    state.isLoading = false;
+    render();
+  }
+}
+
+// ===== RENDER FUNCTIONS =====
+
+function renderFreestyleMeals() {
+  const freestyleMeals = state.freestyleMeals || [];
+  const allTags = getAllFreestyleTags();
+
+  // Get pantry items and seasoning blends for # autocomplete
+  const pantryItems = state.inventory.map(i => ({ name: i.name, type: 'pantry' }));
+  const seasoningBlends = (state.seasoningBlends || []).map(b => ({ name: b.name, type: 'blend' }));
+
+  // Filter meals
+  let filteredMeals = [...freestyleMeals];
+
+  if (state.freestyleFilterTag) {
+    filteredMeals = filteredMeals.filter(m => (m.tags || []).includes(state.freestyleFilterTag));
+  }
+
+  if (state.freestyleSearchTerm) {
+    const search = state.freestyleSearchTerm.toLowerCase();
+    filteredMeals = filteredMeals.filter(m =>
+      (m.narrative || m.notes || '').toLowerCase().includes(search)
+    );
+  }
+
+  // Sort by date descending
+  filteredMeals.sort((a, b) => {
+    const dateDiff = new Date(b.date) - new Date(a.date);
+    if (dateDiff !== 0) return dateDiff;
+    return new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0);
+  });
+
+  const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
+  const freestyleCount = state.freestyleMeals.length;
+  const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
+
+  return `
+    <div class="p-2 max-w-7xl mx-auto">
+      <!-- Tab Navigation -->
+      <div class="flex items-center justify-between mb-2 gap-2">
+        <div class="flex items-center gap-1 flex-wrap">
+        <button onclick="state.recipeTab = 'user'; render();"
+            class="px-2 py-1 rounded"
+            style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+            My Recipes (${userCount})
+          </button>
+          <button onclick="state.recipeTab = 'freestyle'; render();"
+            class="px-2 py-1 rounded"
+            style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+            Meal Journal (${freestyleCount})
+          </button>
+          <button onclick="state.recipeTab = 'chefiq'; render();"
+            class="px-2 py-1 rounded"
+            style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+            Chef IQ (${chefiqCount})
+          </button>
+          <button onclick="state.recipeTab = 'imported'; render();"
+            class="px-2 py-1 rounded"
+            style="background:transparent; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+            Imported (${state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length})
+          </button>
+        </div>
+        <button type="button" onclick="openNewFreestyle()"
+          class="px-3 py-1.5 rounded button-hover"
+          style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+          + New Entry
+        </button>
+      </div>
+
+      <!-- Filters & View Toggle -->
+      <div class="mb-3 p-3 rounded" style="background:${CONFIG.surface_color};">
+        <div class="flex items-center justify-between gap-2 mb-2">
+          <input type="text" id="freestyleSearchInput" placeholder="Search meals..."
+            class="flex-1 px-3 py-2 rounded"
+            style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);"
+            value="${esc(state.freestyleSearchTerm || '')}"
+            oninput="state.freestyleSearchTerm = this.value; _debouncedRender(this, 'freestyleSearch');" />
+
+          <div class="flex gap-1">
+            <button onclick="state.freestyleViewMode = 'list'; render();"
+              class="px-3 py-2 rounded"
+              style="background:${state.freestyleViewMode === 'list' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+              list
+            </button>
+            <button onclick="state.freestyleViewMode = 'grid'; render();"
+              class="px-3 py-2 rounded"
+              style="background:${state.freestyleViewMode === 'grid' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+              grid
+            </button>
+          </div>
+        </div>
+
+        ${allTags.length > 0 ? `
+          <div class="flex gap-1 flex-wrap">
+            <button onclick="state.freestyleFilterTag = null; render();"
+              class="px-2 py-1 rounded text-sm"
+              style="background:${!state.freestyleFilterTag ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+              All
+            </button>
+            ${allTags.map(tag => `
+              <button onclick="state.freestyleFilterTag = '${tag}'; render();"
+                class="px-2 py-1 rounded text-sm"
+                style="background:${state.freestyleFilterTag === tag ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color};">
+                #${esc(tag)}
+              </button>
+            `).join('')}
+          </div>
+        ` : ''}
+      </div>
+
+     ${filteredMeals.length === 0 ? `
+      <div class="p-8 rounded text-center" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color};">
+          <div style="font-size:${CONFIG.font_size * 1.1}px; margin-bottom:0.5rem;">No journal entries yet</div>
+          <div style="opacity:0.7; font-size:${CONFIG.font_size * 0.9}px; margin-bottom:1rem;">
+            Log meals you've cooked — use @recipe to link recipes & #ingredient to tag what you used
+          </div>
+          <button onclick="openNewFreestyle()"
+            class="px-4 py-2 rounded button-hover"
+            style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+            + Add Your First Entry
+          </button>
+        </div>
+      ` : state.freestyleViewMode === 'grid' ? `
+        <!-- Grid View -->
+        <div class="freestyle-grid">
+          ${filteredMeals.map(meal => {
+            const narrativeHtml = narrativeToHtml(meal.narrative || meal.notes || '');
+
+            return `
+              <div class="rounded-lg overflow-hidden cursor-pointer card-hover"
+                onclick="editFreestyle('${meal.id}')"
+                style="background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.08);">
+                ${meal.image_url ? `
+                  <div style="height:180px; overflow:hidden;">
+                    <img loading="lazy" src="${esc(meal.image_url)}" style="width:100%; height:100%; object-fit:cover;" />
+                  </div>
+              ` : `
+                  <div style="height:180px; background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center;">
+                  </div>
+                `}
+                <div class="p-3">
+                  <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px; margin-bottom:8px;">
+                    ${new Date(meal.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                  </div>
+                  <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px; line-height:1.5; max-height:60px; overflow:hidden;">
+                    ${narrativeHtml || '<span style="opacity:0.5;">No description</span>'}
+                  </div>
+                  ${(meal.tags || []).length > 0 ? `
+                    <div class="flex gap-1 flex-wrap mt-2">
+                      ${meal.tags.slice(0, 3).map(tag => `
+                        <span style="color:${CONFIG.primary_action_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking};">#${esc(tag)}</span>
+                      `).join('')}
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      ` : `
+        <!-- List View -->
+        <div class="space-y-3">
+          ${filteredMeals.map(meal => {
+            const narrativeHtml = narrativeToHtml(meal.narrative || meal.notes || '');
+
+            return `
+              <div class="rounded-lg overflow-hidden" style="background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.08);">
+                <div class="flex gap-4">
+                  ${meal.image_url ? `
+                    <div style="width:120px; height:120px; flex-shrink:0; overflow:hidden;">
+                      <img loading="lazy" src="${esc(meal.image_url)}" style="width:100%; height:100%; object-fit:cover;" />
+                    </div>
+                  ` : ''}
+                  <div class="flex-1 p-3">
+                    <div class="flex justify-between items-start mb-2">
+                      <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.8}px;">
+                        ${new Date(meal.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                      </div>
+                      <div class="flex gap-1">
+                        <button onclick="event.stopPropagation(); editFreestyle('${meal.id}')"
+                          class="px-2 py-1 rounded button-hover"
+                          style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                          Edit
+                        </button>
+                        <button onclick="event.stopPropagation(); if(confirm('Delete this freestyle meal?')) deleteFreestyle('${meal.id}')"
+                          class="px-2 py-1 rounded button-hover"
+                          style="background:rgba(220,38,38,0.8); color:white; font-size:${CONFIG.font_size * 0.75}px;">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.95}px; line-height:1.6;">
+                      ${narrativeHtml || '<span style="opacity:0.5;">No description</span>'}
+                    </div>
+
+                    ${(meal.tags || []).length > 0 ? `
+                      <div class="flex gap-1 flex-wrap mt-2">
+                        ${meal.tags.map(tag => `
+                          <span class="px-2 py-0.5 rounded" style="background:rgba(232, 93, 93, 0.2); color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                            #${esc(tag)}
+                          </span>
+                        `).join('')}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function renderFreestyleEditHeader(form) {
+  return `
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.3}px;">
+        ${form.id ? 'Edit' : 'New'} Journal Entry
+      </h2>
+      <div class="flex gap-2">
+        <button onclick="state.freestyleForm = null; state.currentView = 'recipes'; state.recipeTab = 'freestyle'; render();"
+          class="px-3 py-1.5 rounded button-hover"
+          style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color};">
+          Cancel
+        </button>
+        <button onclick="saveFreestyle()"
+          class="px-3 py-1.5 rounded button-hover"
+          style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+          Save
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderFreestyleEditMentionDropdown(dropdownItems) {
+  if (!state.mentionDropdownVisible) return '';
+
+  return `
+    <div style="background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 250px; overflow-y: auto;"> ${dropdownItems.length > 0 ? `
+        ${state.mentionDropdownType === '@' ? dropdownItems.map((item, i) => `
+          <div style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; ${i === state.mentionDropdownIndex ? 'background: rgba(232,93,93,0.15);' : ''} color: ${CONFIG.text_color};"
+            onmouseover="this.style.background='rgba(232,93,93,0.1)'"
+            onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(232,93,93,0.15)' : 'transparent'}'"
+            onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+            <span>${esc(item.title)}</span>
+            <span style="opacity: 0.4; font-size: ${CONFIG.type_micro};">recipe</span>
+          </div>
+        `).join('') : dropdownItems.map((item, i) => `
+          <div style="padding: 10px 14px; cursor: pointer; display: flex; align-items: center; justify-content: space-between; ${i === state.mentionDropdownIndex ? 'background: rgba(232,93,93,0.15);' : ''} color: ${CONFIG.text_color};"
+            onmouseover="this.style.background='rgba(232,93,93,0.1)'"
+            onmouseout="this.style.background='${i === state.mentionDropdownIndex ? 'rgba(232,93,93,0.15)' : 'transparent'}'"
+            onclick="selectMention(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+            <span>${esc(item.name)}</span>
+            <span style="opacity: 0.4; font-size: ${CONFIG.type_micro};">${item.type === 'blend' ? 'blend' : item.type === 'pantry' ? 'pantry' : item.type === 'custom' ? 'new' : 'ingredient'}</span>
+          </div>
+        `).join('')}
+      ` : `
+        <div style="padding: 12px; color: ${CONFIG.text_muted}; text-align: center; font-size: ${CONFIG.type_caption};">
+          ${state.mentionDropdownType === '@' ? 'No recipes found' : 'Type to search or add new'}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function renderFreestyleEditFields(form, allTags, dropdownItems) {
+  return `
+    <!-- Date -->
+    <div class="mb-4">
+      <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Date</label>
+      <input type="date" value="${form.date || ''}"
+        onchange="state.freestyleForm.date = this.value"
+        class="w-full px-3 py-2 rounded"
+        style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+    </div>
+
+    <!-- Photo -->
+    <div class="mb-4">
+      <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Photo</label>
+      ${form.image_url ? `
+        <div class="relative mb-2">
+          <img loading="lazy" src="${esc(form.image_url)}" class="w-full rounded" style="max-height:200px; object-fit:cover;" />
+          <button onclick="state.freestyleForm.image_url = ''; render();"
+            class="absolute top-2 right-2 px-2 py-1 rounded"
+            style="background:rgba(220,38,38,0.9); color:white;">
+            Remove
+          </button>
+        </div>
+      ` : `
+        <div class="mb-3 p-6 rounded border-2 border-dashed text-center cursor-pointer"
+          style="border-color:rgba(255,255,255,0.2); background:rgba(255,255,255,0.05);"
+          onclick="document.getElementById('freestylePhotoInput').click();">
+          <div style="font-size:2rem; margin-bottom:8px; opacity:0.5;">camera</div>
+          <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
+            Tap to take or choose a photo
+          </div>
+          <div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.75}px; margin-top:4px;">
+            or paste a URL below
+          </div>
+        </div>
+        <input type="file"
+          id="freestylePhotoInput"
+          accept="image/*"
+          onchange="handleFreestylePhotoUpload(event)"
+          style="display:none;" />
+      `}
+      <input type="text" placeholder="Or paste image URL..."
+        value="${esc(form.image_url || '')}"
+        onchange="state.freestyleForm.image_url = this.value; render();"
+        class="w-full px-3 py-2 rounded"
+        style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+    </div>
+
+    <!-- Narrative with @mentions -->
+    <div class="mb-4" style="position: relative;">
+      <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">
+        What did you make?
+      </label>
+      <div class="mb-2 p-2 rounded" style="background:rgba(232, 93, 93, 0.1); font-size:${CONFIG.font_size * 0.8}px; color:${CONFIG.text_color};">
+        Type <span class="mention-tag">@</span> to link a recipe • Type <span class="record-tag">#</span> to tag ingredients or seasonings you used
+      </div>
+
+      <div style="position: relative;">
+        <textarea
+          id="narrativeEditor"
+          class="narrative-editor w-full px-3 py-2 rounded"
+          style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); min-height:120px; font-size:${CONFIG.font_size}px; line-height:1.6;"
+          placeholder="Made @jerk-chicken tonight with #chicken-thighs and #my-jerk-seasoning. Came out great, kids loved it!"
+          oninput="handleNarrativeInput(event)"
+          onkeydown="handleNarrativeKeydown(event)"
+        >${esc(form.narrative || '')}</textarea>
+
+        <div id="mentionDropdownContainer" style="position: absolute; left: 0; right: 0; top: 100%; z-index: 1000;">
+          ${renderFreestyleEditMentionDropdown(dropdownItems)}
+        </div>
+      </div>
+
+      <!-- To Record Checkbox -->
+      <div class="mb-4 p-3 rounded" style="background:rgba(255,214,10,0.1); border:1px solid rgba(255,214,10,0.3);">
+        <label class="flex items-center gap-3 cursor-pointer" style="color:${CONFIG.text_color};">
+          <input type="checkbox"
+            ${form.toRecord ? 'checked' : ''}
+            onchange="state.freestyleForm.toRecord = this.checked; render();"
+            style="width: 20px; height: 20px;" />
+          <div>
+            <div style="font-weight: 600;">To Record</div>
+            <div style="font-size: 12px; opacity: 0.7;">Mark this if you want to record/document this recipe later</div>
+          </div>
+        </label>
+      </div>
+
+      <!-- AI Cleanup Button -->
+      <div class="mb-4">
+        <button type="button" onclick="cleanupNarrativeWithAI()"
+          class="w-full px-4 py-3 rounded button-hover flex items-center justify-center gap-2"
+          style="background: ${CONFIG.surface_elevated}; color: white; font-weight: 600;">
+          Clean up with AI
+        </button>
+        <div style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-align: center; margin-top: 4px;">
+          Organize your narrative and extract ingredients used
+        </div>
+      </div>
+
+      <!-- Used Ingredients (auto-extracted) -->
+      ${(form.usedIngredients || []).length > 0 ? `
+        <div class="mb-4 p-3 rounded" style="background:${CONFIG.background_color};">
+          <div style="font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">Used:</div>
+          <div class="flex flex-wrap gap-2">
+            ${form.usedIngredients.map(ing => `
+              <span class="px-2 py-1 rounded" style="background: rgba(34, 197, 94, 0.2); color: ${CONFIG.success_color}; font-size: ${CONFIG.type_caption};">
+                #${esc(ing)}
+              </span>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+
+    <!-- Tags -->
+    <div class="mb-4">
+      <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">Tags</label>
+
+      ${(form.tags || []).length > 0 ? `
+        <div class="flex flex-wrap gap-1 mb-2">
+          ${form.tags.map(tag => `
+            <span class="px-2 py-1 rounded flex items-center gap-1"
+              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px;">
+              #${esc(tag)}
+              <button onclick="removeFreestyleTag('${tag}')" style="color:white; font-weight:bold;">x</button>
+            </span>
+          `).join('')}
+        </div>
+      ` : ''}
+
+      <div class="flex gap-2">
+        <input type="text" id="newTagInput" placeholder="Add tag..."
+          onkeydown="if(event.key === 'Enter') { addFreestyleTag(this.value); this.value = ''; event.preventDefault(); }"
+          class="flex-1 px-3 py-2 rounded"
+          style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
+        <button onclick="addFreestyleTag(document.getElementById('newTagInput').value); document.getElementById('newTagInput').value = '';"
+          class="px-3 py-2 rounded button-hover"
+          style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+          Add
+        </button>
+      </div>
+
+      ${allTags.length > 0 ? `
+        <div class="mt-2">
+          <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.75}px; margin-bottom:4px;">Quick add:</div>
+          <div class="flex flex-wrap gap-1">
+            ${allTags.filter(t => !(form.tags || []).includes(t)).slice(0, 10).map(tag => `
+              <button onclick="addFreestyleTag('${tag}')"
+                class="px-2 py-1 rounded"
+                style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.75}px;">
+                #${esc(tag)}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderFreestyleEdit() {
+  const form = state.freestyleForm || {};
+  const allTags = getAllFreestyleTags();
+  const dropdownItems = state.mentionDropdownVisible ? getMentionDropdownItems() : [];
+
+  return `
+    <div class="p-4 max-w-2xl mx-auto">
+      ${renderFreestyleEditHeader(form)}
+      <div class="rounded p-4" style="background:${CONFIG.surface_color};">
+        ${renderFreestyleEditFields(form, allTags, dropdownItems)}
+      </div>
+    </div>
+  `;
+}
+
+function renderIngredientGrid() {
+  if (!state.recipeForm) return '';
+
+  return `
+    <div class="mt-6">
+      <div class="flex items-center justify-between mb-2">
+        <label class="font-semibold" style="color:${CONFIG.text_color};">Ingredients</label>
+        <div class="flex gap-2">
+          <button type="button" onclick="showBulkImportModal()"
+            class="px-3 py-2 rounded button-hover"
+            style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
+            Bulk Import
+          </button>
+          <button type="button" onclick="addIngRow()"
+            class="px-3 py-2 rounded button-hover"
+            style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">+ Add</button>
+        </div>
+      </div>
+
+      <div class="rounded overflow-hidden" style="border:1px solid rgba(255,255,255,0.08);">
+        <div class="grid" style="grid-template-columns:110px 120px 1fr 160px 56px; background:rgba(255,255,255,0.04);">
+          <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;">Amt</div>
+          <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;">Unit</div>
+          <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;">Ingredient</div>
+          <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;">Group</div>
+          <div class="p-3"></div>
+        </div>
+
+        ${(state.recipeForm.ingredientsRows || []).map((row, i) => `
+          <div class="grid items-center" style="grid-template-columns:110px 120px 1fr 160px 56px; border-top:1px solid rgba(255,255,255,0.06);">
+            <div class="p-2">
+              <input class="w-full px-3 py-2 rounded border"
+                style="background:rgba(0,0,0,0.16); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.10);"
+                value="${esc(row.qty || '')}"
+                oninput="setIng(${i},'qty',this.value)" />
+            </div>
+
+            <div class="p-2">
+              <input class="w-full px-3 py-2 rounded border" placeholder="e.g. lb"
+                style="background:rgba(0,0,0,0.16); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.10);"
+                value="${esc(row.unit || '')}"
+                oninput="setIng(${i},'unit',this.value)" />
+            </div>
+
+            <div class="p-2">
+              <input class="w-full px-3 py-2 rounded border" placeholder="e.g. Chicken breast"
+                style="background:rgba(0,0,0,0.16); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.10);"
+                value="${esc(row.name || '')}"
+                oninput="setIng(${i},'name',this.value)" />
+            </div>
+
+            <div class="p-2">
+              <select class="w-full px-3 py-2 rounded border"
+                style="background:rgba(0,0,0,0.16); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.10);"
+                onchange="setIng(${i},'group',this.value)">
+                ${ING_GROUPS.map(g => `<option value="${g}" ${(row.group || 'Produce') === g ? 'selected' : ''}>${g}</option>`).join('')}
+              </select>
+            </div>
+
+            <div class="p-2 flex justify-center">
+              <button type="button" onclick="delIngRow(${i})"
+                class="w-10 h-10 rounded button-hover"
+                style="background:rgba(220,38,38,0.75); color:white;">x</button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>`;
+}
+
+function renderRecipeFilterPills() {
+  const pills = [
+    { id: 'all', label: 'All' },
+    { id: 'saved', label: 'Saved' },
+    { id: 'quick', label: 'Quick &lt;30min' },
+    { id: 'have-ingredients', label: 'Have Ingredients' }
+  ];
+  return pills.map(pill => {
+    const active = (state.recipeFilterPill || 'all') === pill.id;
+    const borderColor = active ? 'rgba(232,93,93,0.4)' : 'rgba(255,255,255,0.12)';
+    const bgColor = active ? 'rgba(232,93,93,0.15)' : 'transparent';
+    const txtColor = active ? CONFIG.primary_action_color : CONFIG.text_muted;
+    const fw = active ? '600' : '400';
+    return '<button onclick="state.recipeFilterPill = \'' + pill.id + '\'; render();" style="flex-shrink: 0; padding: 6px 10px; border-radius: 16px; border: 1px solid ' + borderColor + '; background: ' + bgColor + '; color: ' + txtColor + '; font-size: 12px; font-weight: ' + fw + '; cursor: pointer; white-space: nowrap;">' + pill.label + '</button>';
+  }).join('');
+}
+
+function renderRecipes() {
+  if (!state.recipes || !Array.isArray(state.recipes)) return '<div class="p-3">Loading...</div>';
+
+  if (!state.recipeTab) state.recipeTab = 'user';
+
+  const userCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user').length;
+  const freestyleCount = (state.freestyleMeals || []).length;
+  const chefiqCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq').length;
+  const importedCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported').length;
+  const claudeCount = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'claude').length;
+
+  if (state.recipeTab === 'freestyle') {
+    return renderFreestyleMeals();
+  }
+
+  let list;
+  if (state.recipeTab === 'tips') {
+    list = state.recipes.filter(r => r.isTip);
+  } else if (state.recipeTab === 'chefiq') {
+    list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'chefiq');
+  } else if (state.recipeTab === 'imported') {
+    list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'imported');
+  } else if (state.recipeTab === 'claude') {
+    list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'claude');
+  } else {
+    list = state.recipes.filter(r => !r.isDraft && !r.isTip && r.sourceType === 'user');
+  }
+
+  list = list.filter(r => {
+    // Filter pill logic
+    const pill = state.recipeFilterPill || 'all';
+    if (pill === 'saved') {
+      if (!isRecipeSaved(r.__backendId || r.id)) return false;
+    } else if (pill === 'quick') {
+      // Estimate: recipes with <=6 ingredients are "quick"
+      const ingCount = recipeIngList(r).length;
+      if (ingCount > 6) return false;
+    } else if (pill === 'have-ingredients') {
+      const ingredients = recipeIngList(r);
+      if (ingredients.length === 0) return false;
+      const inventoryNames = (state.inventory || []).map(i => i.name.toLowerCase());
+      const matchCount = ingredients.filter(ing =>
+        inventoryNames.some(inv => inv.includes((ing.name || '').toLowerCase()) || (ing.name || '').toLowerCase().includes(inv))
+      ).length;
+      if (matchCount / ingredients.length < 0.5) return false;
+    }
+    if (state.recipeTab !== 'tips' && state.selectedCategory !== 'All' && r.category !== state.selectedCategory) return false;
+    if (state.searchTerm) {
+      const searchLower = state.searchTerm.toLowerCase();
+      if (state.searchByIngredient) {
+        const ingredients = recipeIngList(r);
+        const hasIngredient = ingredients.some(ing => (ing.name || '').toLowerCase().includes(searchLower));
+        if (!hasIngredient) return false;
+      } else {
+        if (!(r.title || '').toLowerCase().includes(searchLower)) return false;
+      }
+    }
+    if (state.filterIngredientGroup !== 'all') {
+      const recipeIngredients = recipeIngList(r);
+      const hasIngredientInGroup = recipeIngredients.some(ing => ing.group === state.filterIngredientGroup);
+      if (!hasIngredientInGroup) return false;
+    }
+    return true;
+  });
+
+  return `
+    <div class="p-3 max-w-7xl mx-auto">
+      <!-- Header -->
+      <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div class="flex items-center gap-1 flex-wrap">
+          <button onclick="state.recipeTab = 'user'; render();"
+            class="px-2 py-1 rounded"
+            style="background:${state.recipeTab === 'user' || !state.recipeTab ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'user' || !state.recipeTab ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
+            Recipes (${userCount})
+          </button>
+          <button onclick="state.recipeTab = 'freestyle'; render();"
+            class="px-2 py-1 rounded"
+            style="background:${state.recipeTab === 'freestyle' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'freestyle' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
+            Journal (${freestyleCount})
+          </button>
+          <button onclick="state.recipeTab = 'chefiq'; render();"
+            class="px-2 py-1 rounded"
+            style="background:${state.recipeTab === 'chefiq' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'chefiq' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
+            ChefIQ (${chefiqCount})
+          </button>
+          <button onclick="state.recipeTab = 'imported'; render();"
+            class="px-2 py-1 rounded"
+            style="background:${state.recipeTab === 'imported' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'imported' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
+            Imported (${importedCount})
+          </button>
+          <button onclick="state.recipeTab = 'claude'; render();"
+            class="px-2 py-1 rounded"
+            style="background:${state.recipeTab === 'claude' ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${state.recipeTab === 'claude' ? 'white' : CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
+            Claude (${claudeCount})
+          </button>
+        </div>
+        <div class="flex gap-1">
+          <button type="button" onclick="showImportRecipeModal()"
+            class="px-2 py-1 rounded"
+            style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
+            Import
+          </button>
+          <button type="button" onclick="openNewRecipe()"
+            class="px-2 py-1 rounded"
+            style="background:${CONFIG.primary_action_color}; color:white; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; letter-spacing: ${CONFIG.type_micro_tracking}; border: none;">
+            + New
+          </button>
+        </div>
+      </div>
+
+      <!-- Filter Pills -->
+      <div style="display: flex; gap: 6px; overflow-x: auto; margin-bottom: 12px; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
+        ${renderRecipeFilterPills()}
+      </div>
+
+      <!-- Search & Filters -->
+      <details class="mb-3">
+        <summary class="cursor-pointer px-3 py-2 rounded-lg" style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:12px; list-style:none;">
+          More Filters ${state.selectedCategory !== 'All' || state.filterIngredientGroup !== 'all' ? '•' : ''}
+        </summary>
+        <div class="mt-2 p-3 rounded-lg" style="background:${CONFIG.surface_color};">
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input id="recipeListSearchInput" placeholder="${state.searchByIngredient ? 'Search by ingredient...' : 'Search recipes...'}"
+              class="flex-1 px-3 py-2 rounded-lg"
+              style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:13px;"
+              value="${esc(state.searchTerm || '')}"
+              oninput="state.searchTerm = this.value; _debouncedRender(this, 'recipeSearch');"/>
+            <button onclick="state.searchByIngredient = !state.searchByIngredient; state.searchTerm = ''; render();"
+              style="padding: 8px 12px; border-radius: 8px; border: none; cursor: pointer; font-size: 12px; background: ${state.searchByIngredient ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.searchByIngredient ? 'white' : CONFIG.text_color};">
+              ${state.searchByIngredient ? 'Ingredient' : 'Name'}
+            </button>
+          </div>
+          <div class="flex gap-2 mb-3 flex-wrap">
+            <select onchange="state.selectedCategory=this.value; render();"
+              style="background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size:12px; padding:8px; border-radius:8px; flex:1;">
+              <option value="All" ${state.selectedCategory === 'All' ? 'selected' : ''}>All Categories</option>
+              ${MEAL_CATEGORIES.map(c => `<option value="${c}" ${state.selectedCategory === c ? 'selected' : ''}>${c}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+      </details>
+
+      <!-- Results -->
+      ${list.length === 0 ? `
+        <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
+          <div style="font-size: 2rem; margin-bottom: 8px;">No results</div>
+          <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">
+            ${state.searchTerm ? 'No matches found' : 'No recipes yet'}
+          </div>
+          <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-bottom: 12px;">
+            ${state.searchTerm ? 'Try a different search' : 'Add your first recipe!'}
+          </div>
+          ${!state.searchTerm ? `
+            <button onclick="openNewRecipe()" style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
+              + Add Recipe
+            </button>
+          ` : ''}
+        </div>
+      ` : `
+        <div class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1">
+          ${list.map(r => {
+            const id = r.__backendId || r.id;
+            const img = recipeThumb(r);
+            const saved = isRecipeSaved(id);
+            return `
+            <div class="rounded-lg overflow-hidden cursor-pointer"
+              style="background:${CONFIG.surface_color}; position: relative;">
+              <div onclick="openRecipeView('${id}')">
+                ${img ? `
+                  <div style="aspect-ratio:1; width:100%; overflow:hidden;">
+                    <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
+                  </div>
+                ` : `
+                  <div style="aspect-ratio:1; width:100%; background:${CONFIG.background_color}; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                    plate
+                  </div>
+                `}
+              </div>
+              <!-- Bookmark icon -->
+              <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}')"
+                style="position: absolute; top: 4px; right: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                <svg width="12" height="12" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+              </button>
+              <div style="padding: 4px 6px;" onclick="openRecipeView('${id}')">
+                <div style="color:${CONFIG.text_color}; font-size:12px; font-weight:600; -webkit-line-clamp: 2; -webkit-box-orient: vertical; display: -webkit-box; overflow: hidden;">
+                  ${esc(r.title)}
+                </div>
+                <div style="color:${CONFIG.text_muted}; font-size:10px;">
+                  ${r.category || 'Recipe'}
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function renderRecipeEdit() {
+  if (!state.recipeForm) return '';
+
+  return `
+    <div class="p-6 max-w-5xl mx-auto">
+      <div class="flex items-center justify-between mb-6 mobile-stack gap-3">
+     <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 1.6}px;">
+          ${state.recipeForm.id ? 'Edit ' : 'New '}${state.recipeForm.isTip ? 'Tip' : 'Recipe'}
+        </h2>
+       <div class="flex gap-2">
+          <button type="button" onclick="closeRecipeEditor()"
+            class="px-4 py-2 rounded button-hover"
+            style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color};">Cancel</button>
+          ${state.recipeForm.id ? `
+            <button type="button" onclick="if(confirm('Delete this ${state.recipeForm.isTip ? 'tip' : 'recipe'}?')) { deleteRecipe(state.recipeForm); closeRecipeEditor(); }"
+              class="px-4 py-2 rounded button-hover"
+              style="background:${CONFIG.danger_color}; color:white;">Delete</button>
+          ` : ''}
+          <button type="button" onclick="saveRecipeForm()"
+            class="px-4 py-2 rounded button-hover"
+            style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+            ${state.recipeForm.isTip ? 'Save Tip' : 'Save Recipe'}
+          </button>
+        </div>
+      </div>
+
+    <div class="rounded p-6" style="background:${CONFIG.surface_color};">
+        <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">${state.recipeForm.isTip ? 'Tip Title' : 'Recipe Title'} *</label>
+        <input class="w-full px-4 py-3 rounded border"
+          style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12);"
+          value="${esc(state.recipeForm.title || '')}"
+          oninput="setRecipeField('title', this.value)" />
+
+        <div class="grid md:grid-cols-2 gap-4 mt-5">
+          <div>
+            <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Category *</label>
+            <select class="w-full px-4 py-3 rounded border"
+              style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12);"
+              onchange="setRecipeField('category', this.value)">
+              ${state.recipeForm.isTip ?
+                TIP_CATEGORIES.map(c => `
+                  <option value="${c}" ${state.recipeForm.category === c ? 'selected' : ''}>${c}</option>
+                `).join('') :
+                MEAL_CATEGORIES.map(c => `
+                  <option value="${c}" ${state.recipeForm.category === c ? 'selected' : ''}>${c}</option>
+                `).join('')
+              }
+            </select>
+          </div>
+
+          ${state.recipeForm.isTip ? `
+            <div>
+              <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Reference URL (optional)</label>
+              <input class="w-full px-4 py-3 rounded border" placeholder="https://..."
+                style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12);"
+                value="${esc(state.recipeForm.recipe_url || '')}"
+                oninput="setRecipeField('recipe_url', this.value)" />
+            </div>
+          ` : `
+            <div>
+              <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Source Type</label>
+              <select class="w-full px-4 py-3 rounded border"
+                style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12);"
+                onchange="setRecipeField('sourceType', this.value)">
+               <option value="user" ${(state.recipeForm.sourceType || 'user') === 'user' ? 'selected' : ''}>User-Created</option>
+                <option value="chefiq" ${state.recipeForm.sourceType === 'chefiq' ? 'selected' : ''}>ChefIQ Guided</option>
+                <option value="imported" ${state.recipeForm.sourceType === 'imported' ? 'selected' : ''}>Imported</option>
+                <option value="claude" ${state.recipeForm.sourceType === 'claude' ? 'selected' : ''}>Chef Claude</option>
+              </select>
+            </div>
+          `}
+        </div>
+
+       ${!state.recipeForm.isTip ? `
+          <div class="mt-5">
+            <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Recipe URL (optional)</label>
+            <input class="w-full px-4 py-3 rounded border" placeholder="https://..."
+              style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12);"
+              value="${esc(state.recipeForm.recipe_url || '')}"
+              oninput="setRecipeField('recipe_url', this.value)" />
+          </div>
+        ` : ''}
+
+        <div class="mt-5">
+          <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Image</label>
+
+          <!-- Tab Selection -->
+          <div class="flex gap-2 mb-3">
+            <button type="button"
+              onclick="document.getElementById('imageUrlTab').style.display='block'; document.getElementById('imageUploadTab').style.display='none'; this.style.background='${CONFIG.primary_action_color}'; this.nextElementSibling.style.background='rgba(255,255,255,0.05)';"
+              class="px-3 py-2 rounded button-hover"
+              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
+              Image URL
+            </button>
+            <button type="button"
+              onclick="document.getElementById('imageUrlTab').style.display='none'; document.getElementById('imageUploadTab').style.display='block'; this.style.background='${CONFIG.primary_action_color}'; this.previousElementSibling.style.background='rgba(255,255,255,0.05)';"
+              class="px-3 py-2 rounded button-hover"
+              style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
+              Upload Image
+            </button>
+          </div>
+
+          <!-- Image URL Tab -->
+          <div id="imageUrlTab">
+            <input class="w-full px-4 py-3 rounded border" placeholder="Paste image URL here"
+              style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12);"
+              value="${esc(state.recipeForm.image_url || '')}"
+              oninput="setRecipeField('image_url', this.value)" />
+            <p style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.85}px; margin-top:8px;">
+              Enter a URL to an image hosted online
+            </p>
+          </div>
+
+          <!-- Image Upload Tab -->
+          <div id="imageUploadTab" style="display:none;">
+            <div class="rounded border-2 border-dashed p-6 text-center"
+              style="border-color:rgba(255,255,255,0.2); background:rgba(255,255,255,0.05);">
+              <input type="file" id="imageUploadInput" accept="image/*"
+                onchange="handleImageUpload(event)"
+                class="hidden" />
+              <label for="imageUploadInput" class="cursor-pointer">
+                <div style="font-size:3rem; margin-bottom:0.5rem;">camera</div>
+                <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size}px; margin-bottom:0.5rem;">
+                  Click to upload or drag image here
+                </div>
+                <div style="color:${CONFIG.text_color}; opacity:0.6; font-size:${CONFIG.font_size * 0.85}px;">
+                  Supports JPG, PNG, GIF (max 5MB)
+                </div>
+              </label>
+            </div>
+          </div>
+
+          <!-- Image Preview -->
+          ${state.recipeForm.image_url ? `
+            <div class="mt-4 rounded overflow-hidden relative" style="border:1px solid rgba(255,255,255,0.08);">
+              <img loading="lazy" src="${state.recipeForm.image_url}"
+                   alt="Recipe preview"
+                   onerror="this.parentElement.querySelector('.error-msg').style.display='block'; this.style.display='none';"
+                   style="width:100%; max-height:260px; object-fit:cover;" />
+              <div class="error-msg p-4 text-center" style="display:none; color:${CONFIG.danger_color}; background:rgba(220,38,38,0.1);">
+                Image failed to load. The URL might be invalid or blocked.
+              </div>
+              <button type="button" onclick="removeImage()"
+                class="absolute top-2 right-2 px-3 py-1.5 rounded button-hover"
+                style="background:rgba(220,38,38,0.9); color:white; font-size:${CONFIG.font_size * 0.85}px;">
+                Remove
+              </button>
+            </div>
+            <div class="mt-2 p-2 rounded" style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; word-break:break-all;">
+              <strong>Current URL:</strong> ${state.recipeForm.image_url}
+            </div>` : ''}
+        </div>
+
+${state.recipeForm.isTip ? '' : renderIngredientGrid()}
+
+        <div class="mt-6">
+          <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">
+            Step-by-step Instructions (optional)
+            <span style="opacity:0.7; font-weight:normal; font-size:${CONFIG.font_size * 0.85}px;"> — Enter each step on a new line</span>
+          </label>
+          <textarea class="w-full px-4 py-3 rounded border"
+            style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12); min-height:180px;"
+            placeholder="Step 1: Preheat oven to 350F
+Step 2: Mix dry ingredients
+Step 3: Add wet ingredients..."
+            oninput="setRecipeField('instructions', this.value)">${state.recipeForm.instructions || ''}</textarea>
+        </div>
+
+        <div class="mt-6">
+          <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Notes (optional)</label>
+          <textarea class="w-full px-4 py-3 rounded border"
+            style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12); min-height:120px;"
+            oninput="setRecipeField('notes', this.value)">${state.recipeForm.notes || ''}</textarea>
+        </div>
+
+      <div class="mt-6">
+          <label class="flex items-center gap-2" style="color:${CONFIG.text_color};">
+            <input type="checkbox" ${state.recipeForm.isTip ? 'checked' : ''}
+              onchange="setRecipeField('isTip', this.checked)">
+            Save as Tip/Note (won't appear in meal planning)
+          </label>
+        </div>
+      </div>
+    </div>`;
+}
+
+function renderRecipeView() {
+  const r = getRecipeById(state.selectedRecipeViewId);
+  if (!r) return `<div class="p-6" style="color:${CONFIG.text_color};">Recipe not found.</div>`;
+
+  const img = recipeThumb(r);
+  const url = (r.recipe_url || '').trim();
+  const tags = (r.tags || '').trim();
+  const notes = (r.notes || '').trim();
+  const instructions = Array.isArray(r.instructions)
+    ? r.instructions.join('\n')
+    : (r.instructions || '').trim();
+  const sourceLabel = r.sourceType === 'chefiq' ? 'ChefIQ Guided' :
+                        r.sourceType === 'imported' ? 'Imported' :
+                        r.sourceType === 'claude' ? 'Chef Claude' : 'User-Created';
+  let rows = [];
+  if (Array.isArray(r.ingredientsRows) && r.ingredientsRows.length > 0) {
+    rows = r.ingredientsRows;
+  } else if (Array.isArray(r.ingredients) && r.ingredients.length > 0) {
+    // Handle imported recipes with old format
+    rows = r.ingredients.map(ing => ({
+      qty: ing.amount || '',
+      unit: ing.unit || '',
+      name: ing.item || ing.name || '',
+      group: ing.group || 'Other'
+    }));
+  }
+  const grouped = {};
+  rows.forEach(x => {
+    const g = x.group || 'Other';
+    if (!grouped[g]) grouped[g] = [];
+    grouped[g].push(x);
+  });
+  const groupOrder = Object.keys(grouped);
+
+  // Parse instructions into steps - group numbered steps with their sub-instructions
+  const instructionSteps = [];
+  if (instructions) {
+    const lines = instructions.split('\n');
+    let currentStep = null;
+
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+
+      // Check if line starts with a number (e.g., "1.", "2.", etc.)
+      if (/^\d+[\.\)]\s*/.test(trimmed)) {
+        if (currentStep) instructionSteps.push(currentStep);
+        currentStep = { header: trimmed, details: [] };
+      } else if (currentStep) {
+        currentStep.details.push(trimmed);
+      } else {
+        // Line without a number and no current step - treat as standalone
+        instructionSteps.push({ header: null, details: [trimmed] });
+      }
+    });
+
+    if (currentStep) instructionSteps.push(currentStep);
+  }
+
+  // Debug: Log image URL
+  console.log('Recipe image URL:', img);
+
+  return `
+              <div class="p-6 max-w-5xl mx-auto">
+      <div class="flex items-center justify-between mb-4 mobile-stack gap-3">
+<button type="button" onclick="navigateTo('${state.viewingFromKitchen ? 'kitchen-detail' : state.viewingFromSwipe ? 'swipe' : 'recipes'}')"
+            class="px-4 py-2 rounded button-hover"
+            style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color};">
+            Back
+          </button>
+
+       <div class="flex gap-2 flex-wrap">
+         <button type="button" onclick="markAsCooked('${r.__backendId || r.id}')"
+  class="px-4 py-2 rounded-xl button-hover"
+  style="background:${CONFIG.success_color}; color:white;">
+  Mark as Cooked (${r.timesCooked || 0})
+</button>
+${(r.timesCooked || 0) > 0 ? `
+  <button type="button" onclick="unmarkAsCooked('${r.__backendId || r.id}')"
+    class="px-4 py-2 rounded-xl button-hover"
+    style="background:${CONFIG.danger_color}; color:white;">
+    Undo Last Cook
+  </button>
+` : ''}
+          ${state.viewingFromPlan ? `
+            <button type="button" onclick="openRecipePicker('${state.viewingFromPlan.date}', '${state.viewingFromPlan.meal}')"
+              class="px-4 py-2 rounded-xl button-hover"
+              style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">
+              Change Recipe
+            </button>
+            <button type="button" onclick="if(confirm('Remove this meal from your plan?')) { removeMealFromPlan('${state.viewingFromPlan.date}', '${state.viewingFromPlan.meal}', '${r.__backendId || r.id}'); state.currentView='weekly-plan'; state.viewingFromPlan=null; }"
+              class="px-4 py-2 rounded-xl button-hover"
+              style="background:${CONFIG.danger_color}; color:white;">
+              Remove from Plan
+            </button>
+          ` : ''}
+          ${r.isTip ? `
+            <button type="button" onclick="publishTip('${r.__backendId || r.id}')"
+              class="px-4 py-2 rounded button-hover"
+              style="background:${CONFIG.success_color}; color:white;">Convert to Recipe</button>
+          ` : ''}
+          <button type="button" onclick="openEditRecipe('${r.__backendId || r.id}')"
+            class="px-4 py-2 rounded button-hover"
+            style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color};">Edit</button>
+        </div>
+      </div>
+
+
+
+      <div class="rounded p-5" style="background:${CONFIG.surface_color};">
+        <div class="flex items-start justify-between gap-3">
+          <div>
+            <div class="font-bold" style="color:${CONFIG.text_color}; font-size: ${CONFIG.type_title}; font-weight: ${CONFIG.type_title_weight}; letter-spacing: ${CONFIG.type_title_tracking};">
+              ${esc(r.title)}
+            </div>
+            <div style="color:${CONFIG.text_color}; opacity:.7;">
+              ${esc(r.category)} - ${sourceLabel}
+            </div>
+            ${r.servings || r.prepTime || r.cookTime ? `
+              <div style="color:${CONFIG.text_color}; opacity:.7; margin-top:4px;">
+                ${r.servings ? `${r.servings} servings` : ''}
+                ${r.prepTime ? ` - Prep: ${r.prepTime}` : ''}
+                ${r.cookTime ? ` - Cook: ${r.cookTime}` : ''}
+              </div>
+            ` : ''}
+            ${r.sourceUrl ? `
+              <div style="margin-top:4px;">
+                <a href="${esc(r.sourceUrl)}" target="_blank" style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.85}px;">
+                  View Original Recipe
+                </a>
+              </div>
+            ` : ''}
+${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; margin-top:8px;">TIP/NOTE - Not available for meal planning</div>` : ''}          </div>
+          <button type="button" onclick="toggleFavorite('${r.__backendId || r.id}')" class="text-2xl">
+            ${r.favorite ? 'star-filled' : 'star-empty'}
+          </button>
+        </div>
+
+        ${img ? `
+          <div class="mt-4 rounded overflow-hidden" style="border:1px solid rgba(255,255,255,0.08);">
+            <img loading="lazy" src="${img}"
+                 alt="${esc(r.title)}"
+                 onerror="console.error('Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';"
+                 onload="console.log('Image loaded successfully:', this.src);"
+                 style="width:100%; max-height:260px; object-fit:cover; display:block;" />
+            <div style="display:none; padding:20px; text-align:center; color:${CONFIG.danger_color}; background:rgba(220,38,38,0.1);">
+              Image failed to load<br>
+              <small style="font-size:12px; opacity:0.8;">${img}</small>
+            </div>
+          </div>
+        ` : ''}
+
+       ${recipeUrl(r) ? `<div class="mt-4">
+          <a href="${esc(recipeUrl(r))}" target="_blank" rel="noopener noreferrer"
+            style="color:${CONFIG.text_color}; text-decoration:underline; opacity:.9;">
+            Open recipe link
+          </a>
+        </div>` : ''}
+
+        ${tags ? `<div class="mt-4" style="color:${CONFIG.text_color}; opacity:.85;">
+          <span class="font-semibold">Tags:</span> ${esc(tags)}
+        </div>` : ''}
+
+        ${groupOrder.length ? `
+          <div class="mt-6 p-3 rounded" style="background:rgba(232, 93, 93, 0.1); border: 1px solid rgba(232, 93, 93, 0.2);">
+            <div class="font-semibold mb-3" style="color:${CONFIG.text_color};">Ingredients</div>
+            ${groupOrder.map(g => `
+              <div class="mb-3">
+                <div class="font-semibold mb-1" style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.9}px;">${esc(g)}</div>
+                <div class="grid grid-cols-2 gap-1">
+                  ${grouped[g].map(x => {
+                    const qty = (x.qty || '').trim();
+                    const unit = (x.unit || '').trim();
+                    const name = (x.name || '').trim();
+                    const capName = capitalize(name);
+                    return `
+                      <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; opacity:0.9;">
+                        - ${qty} ${unit} ${capName}
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+
+        <div class="mt-6">
+          <div class="font-semibold mb-2" style="color:${CONFIG.text_color};">Step-by-step Instructions</div>
+          ${instructionSteps.length ? `
+          <ol class="space-y-4" style="color:${CONFIG.text_color}; opacity:.9; list-style: none;">
+              ${instructionSteps.map((step) => `
+                <li style="padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${CONFIG.primary_action_color};">
+                  ${step.header ? `
+                    <div style="font-weight: 600; color: ${CONFIG.primary_action_color}; margin-bottom: 4px;">
+                      ${esc(step.header)}
+                    </div>
+                  ` : ''}
+                  ${step.details.map(d => `
+                    <div style="padding-left: ${step.header ? '12px' : '0'}; color: ${CONFIG.text_color};">
+                      ${esc(d)}
+                    </div>
+                  `).join('')}
+                </li>
+              `).join('')}
+            </ol>` : `
+            <div style="color:${CONFIG.text_color}; opacity:.6;">
+              No instructions saved yet. Add them in Edit.
+            </div>`}
+        </div>
+
+        ${notes ? `
+          <div class="mt-6">
+            <div class="font-semibold mb-2" style="color:${CONFIG.text_color};">Notes</div>
+            <div class="rounded p-4" style="background:rgba(255,255,255,0.03); color:${CONFIG.text_color}; white-space:pre-wrap;">
+              ${esc(notes)}
+            </div>
+          </div>` : ''}
+      </div>
+    </div>`;
+}
+
+// ===== PAGE INIT & RENDER =====
+
+const VIEW_RENDERERS = {
+  'recipes': renderRecipes,
+  'recipe-view': renderRecipeView,
+  'recipe-edit': renderRecipeEdit,
+  'freestyle-edit': renderFreestyleEdit
+};
+
+function render() {
+  const app = document.getElementById('app');
+  if (!app) return;
+
+  const renderer = VIEW_RENDERERS[state.currentView];
+  let content;
+  if (renderer) {
+    content = renderer();
+  } else {
+    content = renderRecipes();
+    state.currentView = 'recipes';
+  }
+
+  app.innerHTML = `
+    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+      ${renderNav()}
+      ${content}
+      ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}
+      ${typeof renderReceiptScannerModal === 'function' ? renderReceiptScannerModal() : ''}
+      ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
+      ${renderBottomNav()}
+    </div>
+  `;
+
+  if (typeof renderChefChat === 'function') renderChefChat();
+}
+
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    // Ignore if typing in input/textarea
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+    // Escape: Close modal or go back
+    if (e.key === 'Escape') {
+      const modal = document.getElementById('modal');
+      if (modal && modal.style.display === 'flex') {
+        closeModal();
+      } else if (state.currentView !== 'recipes') {
+        navigateTo('recipes');
+      }
+    }
+
+    // N: New recipe (when on recipes page)
+    if (e.key === 'n' && state.currentView === 'recipes') {
+      openNewRecipe();
+    }
+  });
+}
+
+function init() {
+  loadAllState();
+  const targetView = sessionStorage.getItem('yummy_target_view');
+  if (targetView && VIEW_RENDERERS[targetView]) {
+    sessionStorage.removeItem('yummy_target_view');
+    state.currentView = targetView;
+  } else {
+    state.currentView = 'recipes';
+  }
+  setupKeyboardShortcuts();
+  render();
+}
+
+let recipesPageSearchTimeout = null;
+
+function handleRecipesPageSearch(value) {
+  state.searchTerm = value;
+
+  if (recipesPageSearchTimeout) clearTimeout(recipesPageSearchTimeout);
+
+  recipesPageSearchTimeout = setTimeout(() => {
+    const input = document.getElementById('recipesPageSearchInput');
+    const cursorPos = input ? input.selectionStart : 0;
+
+    render();
+
+    setTimeout(() => {
+      const newInput = document.getElementById('recipesPageSearchInput');
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(cursorPos, cursorPos);
+      }
+    }, 0);
+  }, 600);
+}
+
+init();

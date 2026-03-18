@@ -1,0 +1,3509 @@
+// ============================================================
+// SHARED.JS - Shared JavaScript for all pages
+// Contains: CONFIG, constants, state, storage layer, utilities,
+// navigation, nav rendering, and all shared functions.
+// ============================================================
+
+// ============================================================
+// SECTION 1: CONFIGURATION
+// ============================================================
+const CONFIG = {
+  background_color: "#0d0d14",
+  surface_color: "#1a1a24",
+  surface_elevated: "#242432",
+  text_color: "#f5f5f7",
+  text_muted: "#8e8e93",
+  text_tertiary: "#5c5c66",
+  primary_action_color: "#e85d5d",
+  primary_subtle: "rgba(232, 93, 93, 0.1)",
+  secondary_action_color: "#242432",
+  accent_color: "#e85d5d",
+  success_color: "#32d74b",
+  warning_color: "#ffd60a",
+  danger_color: "#ff453a",
+  divider_color: "rgba(255, 255, 255, 0.06)",
+  gradient_start: "#e85d5d",
+  gradient_end: "#e85d5d",
+  font_family: "-apple-system, BlinkMacSystemFont, 'SF Pro', sans-serif",
+  font_size: 15,
+  app_title: "Yummy",
+  recipes_label: "My Recipes",
+  weekly_plan_label: "Meal History",
+  grocery_list_label: "Grocery List",
+  border_radius: "16px",
+  shadow: "0 2px 8px rgba(0,0,0,0.3)",
+  type_title: "20px",
+  type_title_weight: "700",
+  type_title_tracking: "-0.5px",
+  type_header: "16px",
+  type_header_weight: "600",
+  type_header_tracking: "-0.2px",
+  type_body: "14px",
+  type_body_weight: "400",
+  type_caption: "13px",
+  type_caption_weight: "400",
+  type_micro: "10px",
+  type_micro_weight: "500",
+  type_micro_tracking: "0.5px",
+  space_xs: "4px",
+  space_sm: "6px",
+  space_md: "12px",
+  space_lg: "16px",
+  space_xl: "20px",
+  space_2xl: "24px"
+};
+
+// ============================================================
+// SECTION 2: CONSTANTS
+// ============================================================
+const ING_GROUPS = ['Produce', 'Beef', 'Poultry', 'Pork', 'Lamb & Goat', 'Seafood', 'Dairy & Eggs', 'Grains & Pasta', 'Pantry', 'Spices & Seasonings', 'Prepared', 'Other'];
+const INGREDIENT_CATEGORIES = ['Vegetables', 'Fruits', 'Proteins', 'Dairy', 'Grains', 'Herbs & Spices', 'Pantry', 'Other'];
+const COOKING_METHODS = ['Air Fry', 'Bake', 'Roast', 'Grill', 'Saut\u00e9', 'Pan Fry', 'Deep Fry', 'Steam', 'Boil', 'Poach', 'Braise', 'Slow Cook', 'Pressure Cook', 'Microwave', 'Raw'];
+const SEASONS = ['Spring', 'Summer', 'Fall', 'Winter', 'Year-round'];
+const STORAGE_LOCATIONS = ['Counter', 'Fridge', 'Freezer', 'Pantry', 'Cool & Dark'];
+const MEAL_CATEGORIES = ['Breakfast', 'Lunch', 'Vegetables', 'Dinner', 'Appetizer'];
+const TIP_CATEGORIES = ['Prep Techniques', 'Cleaning & Washing', 'Cutting & Slicing', 'Defrosting', 'Seasoning', 'Cooking Methods', 'Storage', 'Other'];
+const SOURCE_TYPES = ['user', 'chefiq'];
+const STORAGE_KEY = 'meal_planner_data_v1';
+
+const INGREDIENT_CATEGORY_MAP = {
+  'chicken': 'Proteins', 'beef': 'Proteins', 'pork': 'Proteins', 'lamb': 'Proteins',
+  'steak': 'Proteins', 'bacon': 'Proteins', 'sausage': 'Proteins', 'ham': 'Proteins',
+  'salmon': 'Proteins', 'shrimp': 'Proteins', 'clams': 'Proteins', 'tilapia': 'Proteins',
+  'tuna': 'Proteins', 'eggs': 'Proteins', 'egg': 'Proteins', 'tofu': 'Proteins',
+  'turkey': 'Proteins', 'fish': 'Proteins',
+  'onion': 'Vegetables', 'garlic': 'Vegetables', 'shallot': 'Vegetables',
+  'tomato': 'Vegetables', 'pepper': 'Vegetables', 'carrot': 'Vegetables',
+  'celery': 'Vegetables', 'broccoli': 'Vegetables', 'cauliflower': 'Vegetables',
+  'spinach': 'Vegetables', 'kale': 'Vegetables', 'lettuce': 'Vegetables',
+  'arugula': 'Vegetables', 'zucchini': 'Vegetables', 'squash': 'Vegetables',
+  'eggplant': 'Vegetables', 'mushroom': 'Vegetables', 'potato': 'Vegetables',
+  'corn': 'Vegetables', 'beans': 'Vegetables', 'peas': 'Vegetables',
+  'asparagus': 'Vegetables', 'sprouts': 'Vegetables', 'cucumber': 'Vegetables',
+  'avocado': 'Vegetables', 'cabbage': 'Vegetables',
+  'apple': 'Fruits', 'banana': 'Fruits', 'orange': 'Fruits', 'lemon': 'Fruits',
+  'lime': 'Fruits', 'strawberr': 'Fruits', 'blueberr': 'Fruits', 'raspberr': 'Fruits',
+  'mango': 'Fruits', 'pineapple': 'Fruits', 'grapes': 'Fruits', 'peach': 'Fruits',
+  'milk': 'Dairy', 'cream': 'Dairy', 'butter': 'Dairy', 'cheese': 'Dairy',
+  'cheddar': 'Dairy', 'mozzarella': 'Dairy', 'parmesan': 'Dairy', 'feta': 'Dairy',
+  'jack': 'Dairy', 'yogurt': 'Dairy',
+  'bread': 'Grains', 'tortilla': 'Grains', 'pita': 'Grains', 'pasta': 'Grains',
+  'spaghetti': 'Grains', 'linguine': 'Grains', 'penne': 'Grains', 'fettuccine': 'Grains',
+  'rigatoni': 'Grains', 'farfalle': 'Grains', 'orzo': 'Grains', 'lasagna': 'Grains',
+  'noodles': 'Grains', 'rice': 'Grains', 'quinoa': 'Grains', 'couscous': 'Grains',
+  'flour': 'Grains', 'breadcrumbs': 'Grains', 'oats': 'Grains', 'cereal': 'Grains',
+  'cavatappi': 'Grains',
+  'salt': 'Herbs & Spices', 'cumin': 'Herbs & Spices', 'paprika': 'Herbs & Spices',
+  'chili': 'Herbs & Spices', 'oregano': 'Herbs & Spices', 'basil': 'Herbs & Spices',
+  'thyme': 'Herbs & Spices', 'rosemary': 'Herbs & Spices', 'cinnamon': 'Herbs & Spices',
+  'nutmeg': 'Herbs & Spices', 'bay': 'Herbs & Spices', 'seasoning': 'Herbs & Spices',
+  'powder': 'Herbs & Spices', 'flakes': 'Herbs & Spices',
+  'oil': 'Pantry', 'vinegar': 'Pantry', 'sauce': 'Pantry', 'sugar': 'Pantry',
+  'honey': 'Pantry', 'syrup': 'Pantry', 'vanilla': 'Pantry', 'broth': 'Pantry',
+  'stock': 'Pantry', 'canned': 'Pantry', 'paste': 'Pantry', 'chickpeas': 'Pantry',
+  'coconut': 'Pantry', 'peanut': 'Pantry', 'almonds': 'Pantry', 'walnuts': 'Pantry',
+  'peanuts': 'Pantry', 'wine': 'Pantry', 'brandy': 'Pantry'
+};
+
+// Default images for ingredients
+const INGREDIENT_IMAGES = {
+  'chicken breast': 'https://joyfullymad.com/wp-content/uploads/2023/08/grilled-chicken-salad-5.jpg',
+  'chicken thighs': 'https://thecookful.com/wp-content/uploads/2018/09/chicken-thighs-instant-pot-feature-1392x780.jpg',
+  'chicken wings': 'https://www.instacart.com/assets/domains/product-image/file/large',
+  'whole chicken': 'https://ifoodreal.com/wp-content/uploads/2023/08/how-to-cut-up-a-whole-chicken.jpg',
+  'ground beef': 'https://meat.tamu.edu/wp-content/uploads/2024/07/Ground-Beef-@-Rosenthal-2-1536x1024-2.jpg',
+  'ribeye steak': 'https://www.vicsmeat.com.au/cdn/shop/files/beef-rib-eye-steak-black-onyx-marbling-score-3-rangers-valley-1kg-vics-meat-546607.jpg?v=1765840185',
+  'ribeye': 'https://www.vicsmeat.com.au/cdn/shop/files/beef-rib-eye-steak-black-onyx-marbling-score-3-rangers-valley-1kg-vics-meat-546607.jpg?v=1765840185',
+  'filet mignon': 'https://freezedrywholesalers.com/cdn/shop/products/Filet-Mignon_900x.jpg?v=1599149544',
+  'new york strip': 'https://thomascattlecompany.com/cdn/shop/files/Copy_of_New_York_2.jpg?v=1762458007&width=1920',
+  'sirloin': 'https://eelriverorganicbeef.com/wp-content/uploads/Eel-River-Organic-Top-Sirloin-Raw-3.jpg',
+  't-bone steak': 'https://cdn.woodwardmeats.com/media/product/2_aaa-t-bone-steak.jpg',
+  't-bone': 'https://cdn.woodwardmeats.com/media/product/2_aaa-t-bone-steak.jpg',
+  'flank steak': 'https://rogueproduce.com/wp-content/uploads/2020/11/Flank-Steak.jpg',
+  'skirt steak': 'https://www.grillseeker.com/wp-content/uploads/2020/03/inside-vs-outside-skirt-steak-feature-image-678x1024.jpg',
+  'beef roast': 'https://media.istockphoto.com/id/525616019/photo/raw-grass-fed-prime-rib-meat.jpg?s=612x612&w=0&k=20&c=D5ZzN6jur0JDkxmYpV7dkZ-uGdJ4X7HwWMrQRWjv8oo=',
+  'pork chops': 'https://www.seriouseats.com/thmb/7G55_V8fyOm2Z7JMFAz39W7Gvdc=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/__opt__aboutcom__coeus__resources__content_migration__serious_eats__seriouseats.com__recipes__images__2016__02__20160208-sous-vide-pork-chop-guide-food-lab-02-10d7ecdd7c2e42ca94ff188f814ece48.jpg',
+  'lamb chops': 'https://media.istockphoto.com/id/538918713/photo/lamb-chops.jpg?s=612x612&w=0&k=20&c=qRiDgM6Pp7mKLcIf_hIy6o4jom6J-wGrtkRMaXw5RaM=',
+  'turkey bacon': 'https://d1tjtj7oa1d196.cloudfront.net/filters:strip_exif()/filters:strip_icc()/filters:format(jpeg)/filters:background_color(fff)/filters:quality(60)/fit-in/800x0/2020/01/14/17/07/13/6703d644-133c-41f5-acbb-4bfd8032ba8b/Natural%20Turkey%20Bacon_Front.png',
+  'bacon': 'https://images.medicinenet.com/images/article/main_image/how-long-does-bacon-last.jpg?output-quality=75',
+  'chicken sausage': 'https://storage.googleapis.com/images-prs-prd-c7e7986.prs.prd.v8.commerce.mi9cloud.com/product-images/zoom/00030771026367_1',
+  'sausage': 'https://www.paulinamarket.com/cdn/shop/files/hungarian.jpg?v=1714743894',
+  'ham': 'https://heritagefoods.com/cdn/shop/products/Uncured-ham-bonein3_preview_600x.jpeg?v=1629752527',
+  'salmon': 'https://thefatbutcherph.com/cdn/shop/articles/NEW_COLLECTION.png?v=1682413999&width=1100',
+  'shrimp': 'https://shop.legalseafoods.com/cdn/shop/files/RawShrimpNov24.jpg?v=1731080264&width=1946',
+  'clams': 'https://popmenucloud.com/cdn-cgi/image/width=1920,height=1920,format=auto,fit=scale-down/jtfpqdub/bccd17cb-054b-4a46-8123-927e3ed3e50a.jpeg',
+  'tilapia': 'https://assets.usfoods.com/Product/Image/10133495/23f253cbebee152b35c938e050fba02b.jpg',
+  'tuna': 'https://www.tastingtable.com/img/gallery/14-tips-you-need-when-cooking-with-tuna/l-intro-1671563002.jpg',
+  'eggs': 'https://cdn.shopify.com/s/files/1/0732/3140/1273/files/Untitled_design_2_b5be794c-dd9b-40de-80eb-82c9b9fef755.png?v=1743249046',
+  'egg': 'https://cdn.shopify.com/s/files/1/0732/3140/1273/files/Untitled_design_2_b5be794c-dd9b-40de-80eb-82c9b9fef755.png?v=1743249046',
+  'tofu': 'https://bonpourtoi.ca/app/uploads/2020/04/BPT-Articles-tofu-cru-tinyjpg.jpeg',
+  'red onion': 'https://www.naturesninja.org/wp-content/uploads/2020/02/red-onions-960.jpg',
+  'yellow onion': 'https://www.gurneys.com/cdn/shop/files/14781A.webp?v=1729090544',
+  'white onion': 'https://migardener.com/cdn/shop/products/ONI5_white_sweet_spanish_d4e91e4a-db67-4a6f-b939-845ac8d7fa23_800x.jpg?v=1641493834',
+  'onion': 'https://www.gurneys.com/cdn/shop/files/14781A.webp?v=1729090544',
+  'garlic': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQN_uhM0eWP8vpC5ZYQWJtX7OWWji_2u0-g2Q&s',
+  'shallots': 'https://www.adaptiveseeds.com/wp-content/uploads/2024/12/Onion-Cuisse-de-Poulet-Zebrune-1.jpg',
+  'shallot': 'https://www.adaptiveseeds.com/wp-content/uploads/2024/12/Onion-Cuisse-de-Poulet-Zebrune-1.jpg',
+  'tomato': 'https://img.etimg.com/thumb/width-1200,height-900,imgsize-56196,resizemode-75,msid-95423774/magazines/panache/5-reasons-why-tomatoes-should-be-your-favourite-fruit-this-year.jpg',
+  'tomatoes': 'https://img.etimg.com/thumb/width-1200,height-900,imgsize-56196,resizemode-75,msid-95423774/magazines/panache/5-reasons-why-tomatoes-should-be-your-favourite-fruit-this-year.jpg',
+  'cherry tomatoes': 'https://bacolodpages.com/sites/default/files/styles/480x480/public/products/Cherry%20Tomato1.png.webp?itok=PsUliomj',
+  'bell pepper': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQZVYa_RBlmhm9U4LPivanbeLe4aZ1PHG_JJQ&s',
+  'bell peppers': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQZVYa_RBlmhm9U4LPivanbeLe4aZ1PHG_JJQ&s',
+  'jalape\u00f1o': 'https://www.foodandwine.com/thmb/ig_EnbYuEt-88gXJSDFpyWGxEJY=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Why-Have-Jalapenos-Become-so-Mild-FT-BLOG0525-01-bfb059df7eb745a6b454ec971c7d36b0.jpg',
+  'jalapeno': 'https://www.foodandwine.com/thmb/ig_EnbYuEt-88gXJSDFpyWGxEJY=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/Why-Have-Jalapenos-Become-so-Mild-FT-BLOG0525-01-bfb059df7eb745a6b454ec971c7d36b0.jpg',
+  'carrot': 'https://static.wikia.nocookie.net/my-first-encyclopedia/images/9/9a/Carrot-PNG-Clipart.png/revision/latest/scale-to-width-down/340?cb=20220711193537',
+  'carrots': 'https://static.wikia.nocookie.net/my-first-encyclopedia/images/9/9a/Carrot-PNG-Clipart.png/revision/latest/scale-to-width-down/340?cb=20220711193537',
+  'baby carrot': 'https://i5.walmartimages.com/seo/Fresh-Baby-Cut-Carrots-2lb-Bag_7e8ec89d-158d-41d7-9dd4-aada713d1227.bda0fd4fa50396bc2205c1ca2e38ea75.jpeg',
+  'baby carrots': 'https://i5.walmartimages.com/seo/Fresh-Baby-Cut-Carrots-2lb-Bag_7e8ec89d-158d-41d7-9dd4-aada713d1227.bda0fd4fa50396bc2205c1ca2e38ea75.jpeg',
+  'celery': 'https://images.immediate.co.uk/production/volatile/sites/30/2020/02/Celery-stalks-and-leaves-7860193.jpg?quality=90&resize=700,636',
+  'broccoli': 'https://voca-land.sgp1.cdn.digitaloceanspaces.com/0/1757665833918/02cb4926.jpg',
+  'cauliflower': 'https://lh6.googleusercontent.com/proxy/U92MdIX-umsRwyIJa9MgRyvnW4kUOaGNIKef3C1pJnbExzNFHCLihNceYGESRvEh_p61UB15r8QGcgnXc2oR8gO97q76aTZMljuXz1ZJRjf29rObGo-k0zt8Du251vaCSWgQTaAHee5jf3Q',
+  'spinach': 'https://images.immediate.co.uk/production/volatile/sites/30/2013/06/GettyImages-652986635-3dffa4d.jpg?quality=90&resize=708,643',
+  'kale': 'https://healthyfamilyproject.com/wp-content/uploads/2020/05/Kale-background.jpg',
+  'lettuce': 'https://www.gurneys.com/cdn/shop/files/14627A.webp?v=1729089529',
+  'arugula': 'https://www.taylorfarms.com/wp-content/uploads/2023/10/Arugula.webp',
+  'zucchini': 'https://thrivemeetings.com/wp-content/uploads/2016/06/Zucchini%E2%80%94whole-partially-sliced.jpg',
+  'squash': 'https://www.highmowingseeds.com/media/catalog/product/cache/95cbc1bb565f689da055dd93b41e1c28/2/9/2940_1.jpg',
+  'eggplant': 'https://snaped.fns.usda.gov/sites/default/files/seasonal-produce/2018-05/eggplant.jpg',
+  'mushrooms': 'https://lovefoodhatewaste.com/sites/default/files/styles/16_9_two_column/public/2022-07/Mushroom-sh1679028943.jpg.webp?itok=zsNCU7sW',
+  'mushroom': 'https://lovefoodhatewaste.com/sites/default/files/styles/16_9_two_column/public/2022-07/Mushroom-sh1679028943.jpg.webp?itok=zsNCU7sW',
+  'potato': 'https://www.lovefoodhatewaste.com/sites/default/files/styles/twitter_card_image/public/2022-08/Potatoes-shutterstock-1721688538.jpg.webp?itok=4hLqSjDi',
+  'potatoes': 'https://www.lovefoodhatewaste.com/sites/default/files/styles/twitter_card_image/public/2022-08/Potatoes-shutterstock-1721688538.jpg.webp?itok=4hLqSjDi',
+  'baby potato': 'https://vegetablerecipes.com/wp-content/uploads/2023/03/Boiled-Baby-Potatoes-VR-6-1-of-1-1024x731.jpg',
+  'baby potatoes': 'https://vegetablerecipes.com/wp-content/uploads/2023/03/Boiled-Baby-Potatoes-VR-6-1-of-1-1024x731.jpg',
+  'sweet potato': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSB3tXoUG54W7fKjmfz63nPzvsLC4v1ro9R0g&s',
+  'sweet potatoes': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSB3tXoUG54W7fKjmfz63nPzvsLC4v1ro9R0g&s',
+  'corn': 'https://asian-veggies.com/cdn/shop/products/goldcorn.jpg?v=1614395321',
+  'green beans': 'https://vikalinka.com/wp-content/uploads/2023/12/Lemon-Garlic-Green-Beans-7-Edit-500x500.jpg',
+  'peas': 'https://images.ctfassets.net/ruek9xr8ihvu/6ajA622p1DhEV41r5mBtC6/b150416e7b2e3ad29afea40dfee50739/Pea_Garden-Kate_Lindquist.jpg?w=1096&q=80&fm=webp',
+  'asparagus': 'https://www.madaboutmacarons.com/wp-content/uploads/2023/05/oven-roasted-asparagus-French-500x500.jpg',
+  'brussels sprouts': 'https://nutritionsource.hsph.harvard.edu/wp-content/uploads/2024/11/AdobeStock_59069256-1024x683.jpeg',
+  'cucumber': 'https://www.freshpoint.com/wp-content/uploads/2020/02/freshpoint-english-cucumber-scaled.jpg',
+  'avocado': 'https://domf5oio6qrcr.cloudfront.net/medialibrary/16762/gettyimages-961101662.jpg',
+  'cabbage': 'https://www.kikkoman.com/en/cookbook/assets/img/0023_feature2.jpg',
+  'apple': 'https://assets.clevelandclinic.org/transform/LargeFeatureImage/cd71f4bd-81d4-45d8-a450-74df78e4477a/Apples-184940975-770x533-1_jpg',
+  'apples': 'https://assets.clevelandclinic.org/transform/LargeFeatureImage/cd71f4bd-81d4-45d8-a450-74df78e4477a/Apples-184940975-770x533-1_jpg',
+  'banana': 'https://www.southernliving.com/thmb/EM-f8L_T36WluwBtBkhD4gnCKg8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/How_To_Freeze_Bananas_023-71e81efacb6a4d87a3596b8c2c519884.jpg',
+  'bananas': 'https://www.southernliving.com/thmb/EM-f8L_T36WluwBtBkhD4gnCKg8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/How_To_Freeze_Bananas_023-71e81efacb6a4d87a3596b8c2c519884.jpg',
+  'orange': 'https://cdn.britannica.com/24/174524-050-A851D3F2/Oranges.jpg',
+  'oranges': 'https://cdn.britannica.com/24/174524-050-A851D3F2/Oranges.jpg',
+  'lemon': 'https://assets.vogue.com/photos/6925e7e556850c6852dae0ab/1:1/w_3648,h_3648,c_limit/1395000061',
+  'lemons': 'https://assets.vogue.com/photos/6925e7e556850c6852dae0ab/1:1/w_3648,h_3648,c_limit/1395000061',
+  'lime': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNtbiRCz4WAebwffdxrErABMHo676xRI9a0Q&s',
+  'limes': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSNtbiRCz4WAebwffdxrErABMHo676xRI9a0Q&s',
+  'strawberries': 'https://cdn.mos.cms.futurecdn.net/r5ibnDz656ibgejAdjWHaj.jpg',
+  'strawberry': 'https://cdn.mos.cms.futurecdn.net/r5ibnDz656ibgejAdjWHaj.jpg',
+  'blueberries': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqUBHTFEu_rXLYV39NuVesAA1aB2CiWpr-Ww&s',
+  'blueberry': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQqUBHTFEu_rXLYV39NuVesAA1aB2CiWpr-Ww&s',
+  'raspberries': 'https://cdn.britannica.com/83/156583-050-4A1FABB5/Red-raspberries.jpg',
+  'raspberry': 'https://cdn.britannica.com/83/156583-050-4A1FABB5/Red-raspberries.jpg',
+  'mango': 'https://www.avera.org/app/files/public/75073/mango-fruit-and-slices-on-a-cutting-board.jpg',
+  'pineapple': 'https://articles-1mg.gumlet.io/articles/wp-content/uploads/2016/10/pineapple.jpg?compress=true&quality=80&w=640&dpr=2.6',
+  'grapes': 'https://assets.epicurious.com/photos/55e4c39fcf90d6663f727a74/16:9/w_2560%2Cc_limit/shutterstock_209917372.jpg',
+  'peaches': 'https://draxe.com/wp-content/uploads/2016/08/DrAxePeachHeader.jpg',
+  'peach': 'https://draxe.com/wp-content/uploads/2016/08/DrAxePeachHeader.jpg',
+  'milk': 'https://www.elizabethrider.com/wp-content/uploads/2024/02/homemade-almond-milk-2.jpg',
+  'heavy cream': 'https://i5.walmartimages.com/seo/Land-O-Lakes-Heavy-Whipping-Cream-32-fl-oz_09395890-0f62-4336-9fb1-f4c01622890b.5c23cc54754527ecf67c8716c210265f.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF',
+  'half and half': 'https://i5.walmartimages.com/asr/66471027-4b85-4dcc-915c-101c9e90f4a4.926ae5f515760be92fd8ab0a6422dab6.jpeg',
+  'butter': 'https://www.bhg.com/thmb/Fx7YYldknv8aJvvsO-f5YZxOn5k=/5434x0/filters:no_upscale():strip_icc()/GettyImages-2158134925-23a8af00a9db4ddabbe99cb0c0d67540.jpg',
+  'cheddar cheese': 'https://pearlvalleycheese.com/cdn/shop/files/sharp-cheddar-slices_1.jpg?v=1755888466',
+  'cheddar': 'https://pearlvalleycheese.com/cdn/shop/files/sharp-cheddar-slices_1.jpg?v=1755888466',
+  'mozzarella': 'https://images.immediate.co.uk/production/volatile/sites/30/2021/09/Homemade-mozzarella-054151d.jpg?quality=90&resize=708,643',
+  'parmesan': 'https://www.kroger.com/product/images/xlarge/front/0003114252385',
+  'feta': 'https://upload.wikimedia.org/wikipedia/commons/2/28/Feta_Cheese.jpg',
+  'monterey jack': 'https://californiaranchmarket.com/cdn/shop/products/105147.jpg?v=1622480636',
+  'monterey jack cheese': 'https://californiaranchmarket.com/cdn/shop/products/105147.jpg?v=1622480636',
+  'pepper jack': 'https://www.kroger.com/product/images/large/front/0004610000122',
+  'pepper jack cheese': 'https://www.kroger.com/product/images/large/front/0004610000122',
+  'cream cheese': 'https://i5.walmartimages.com/asr/7160398e-31e3-4097-8280-bf333ea32d49.b53d76dbeeb50dc7857146566ed0dede.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF',
+  'yogurt': 'https://www.liveeatlearn.com/wp-content/uploads/2024/08/how-to-make-homemade-greek-yogurt-28-500x500.jpg',
+  'sour cream': 'https://m.media-amazon.com/images/I/61wzj-GacBL._AC_UF1000,1000_QL80_.jpg',
+  'bread': 'https://assets.bonappetit.com/photos/5c62e4a3e81bbf522a9579ce/1:1/w_2560%2Cc_limit/milk-bread.jpg',
+  'tortillas': 'https://static01.nyt.com/images/2024/08/06/multimedia/11EATrex-flour-tortillas-mvfk/11EATrex-flour-tortillas-mvfk-mediumSquareAt3X.jpg',
+  'tortilla': 'https://static01.nyt.com/images/2024/08/06/multimedia/11EATrex-flour-tortillas-mvfk/11EATrex-flour-tortillas-mvfk-mediumSquareAt3X.jpg',
+  'pita': 'https://www.seriouseats.com/thmb/oV5Eov1pgSkwjpjA5E2ynSdCFv4=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/__opt__aboutcom__coeus__resources__content_migration__serious_eats__seriouseats.com__recipes__images__2015__08__20150626-Stacked-Perfect-Pitas-Yvonne-Ruperti-Edit-Edit-bf72e9e490e148e0b95c56c04a0d18ab.jpg',
+  'spaghetti': 'https://cdn.apartmenttherapy.info/image/upload/f_jpg,q_auto:eco,c_fill,g_auto,w_1500,ar_1:1/k%2Farchive%2Faa5b3bf7120c1f655611b3e4b2e848679823777e',
+  'cavatappi': 'https://images.albertsons-media.com/is/image/ABS/970011886-ECOM?$ng-ecom-pdp-desktop$&defaultImage=Not_Available',
+  'linguine': 'https://chefsmandala.com/wp-content/uploads/2018/02/Linguine-Pasta-shutterstock_377987440.jpg',
+  'penne': 'https://www.the-pasta-project.com/wp-content/uploads/Penne-Pasta.jpg',
+  'fettuccine': 'https://tb-static.uber.com/prod/image-proc/processed_images/5d1066b9afe3876d00ab9de64a62a0f3/b4665c191b34baf3d0e0fa45dfdd3d1d.jpeg',
+  'rigatoni': 'https://www.orchidsandsweettea.com/wp-content/uploads/2024/02/Spicy-Vodka-Rigatoni-Pasta-Bake-2.jpg',
+  'farfalle': 'https://substackcdn.com/image/fetch/$s_!-xnQ!,f_auto,q_auto:good,fl_progressive:steep/https%3A%2F%2Fsubstack-post-media.s3.amazonaws.com%2Fpublic%2Fimages%2F7edd31a4-8561-4264-9881-0333c643138e_1442x2048.jpeg',
+  'orzo': 'https://m.media-amazon.com/images/I/71TZ64uRNxL._SL1500_.jpg',
+  'lasagna noodles': 'https://keepingitsimpleitalian.com/wp-content/uploads/2023/01/dried-lasagna-noodles-360x480.jpg',
+  'lasagna': 'https://keepingitsimpleitalian.com/wp-content/uploads/2023/01/dried-lasagna-noodles-360x480.jpg',
+  'egg noodles': 'https://thewoksoflife.com/wp-content/uploads/2020/04/homemade-chinese-egg-noodles-19-e1609271249794.jpg',
+  'rice': 'https://www.bhf.org.uk/-/media/images/information-support/support/healthy-living/recipes-new/peas-and-corn-pilau-rice_800x600.jpg',
+  'quinoa': 'https://twohealthykitchens.com/wp-content/uploads/2016/01/THK-Quinoa-1-2.jpg',
+  'couscous': 'https://www.fivehearthome.com/wp-content/uploads/2024/07/How-to-Cook-Couscous-by-Five-Heart-Home_1200pxFeatured-1.jpg',
+  'flour': 'https://pics.walgreens.com/prodimg/509296/450.jpg',
+  'breadcrumbs': 'https://www.bowlofdelicious.com/wp-content/uploads/2021/09/homemade-bread-crumbs-square.jpg',
+  'oats': 'https://food.fnr.sndimg.com/content/dam/images/food/fullset/2021/09/23/rolled-oats-linen-wood-surface-white-bowl.jpg.rend.hgtvcom.1280.1280.85.suffix/1632429307666.webp',
+  'cereal': 'https://www.digicomply.com/hubfs/AI-Generated%20Media/Images/Cereal%20Recall.jpeg',
+  'salt': 'https://media.self.com/photos/5cc0781558c4c36a45d91deb/1:1/w_3569,h_3569,c_limit/cooking-salts.jpg',
+  'pepper': 'https://spices.com/cdn/shop/products/a5ba8da4bc526b25463e0607481bc4e39a3d5cd33806617f1f32d76e54c84f9d.jpg?v=1718827884&width=1445',
+  'black pepper': 'https://spices.com/cdn/shop/products/a5ba8da4bc526b25463e0607481bc4e39a3d5cd33806617f1f32d76e54c84f9d.jpg?v=1718827884&width=1445',
+  'cumin': 'https://i5.walmartimages.com/seo/McCormick-Kosher-Ground-Cumin-1-5-oz-Bottle_bce81744-0b14-4e22-8d84-19070ac9a481.7c849d503f3269de460198ce80883008.jpeg',
+  'paprika': 'https://badiaspices.com/wp-content/uploads/2025/02/033844006730.jpg',
+  'crushed red pepper': 'https://badiaspices.com/wp-content/uploads/2025/02/033844005474.jpg',
+  'red pepper flakes': 'https://badiaspices.com/wp-content/uploads/2025/02/033844005474.jpg',
+  'chili powder': 'https://www.mccormick.com/cdn/shop/files/00052100004280_D_A1N1-2025-12-02.jpg?v=1764708478&width=700',
+  'oregano': 'https://m.media-amazon.com/images/I/91qESpubSlL._AC_UF894,1000_QL80_.jpg',
+  'basil': 'https://cdn.shopify.com/s/files/1/0686/4283/2583/files/new_about_basil_hero.webp?v=1757613354',
+  'thyme': 'https://www.highmowingseeds.com/media/catalog/product/cache/95cbc1bb565f689da055dd93b41e1c28/5/1/5140-4.jpg',
+  'rosemary': 'https://m.media-amazon.com/images/I/61giyp23UTL._AC_UF1000,1000_QL80_.jpg',
+  'garlic powder': 'https://m.media-amazon.com/images/I/81mPfw5LQgL._AC_UF894,1000_QL80_.jpg',
+  'onion powder': 'https://badiaspices.com/wp-content/uploads/2025/02/033844000066.jpg',
+  'cinnamon': 'https://www.bluemountainorganics.com/media/catalog/product/cache/207e23213cf636ccdef205098cf3c8a3/c/i/cinnamon_powder_4.webp',
+  'nutmeg': 'https://images.albertsons-media.com/is/image/ABS/114150166-C1N1?$ng-ecom-pdp-mobile$&defaultImage=Not_Available',
+  'bay leaves': 'https://www.redstickspice.com/cdn/shop/products/bay_leaf_600x.jpg?v=1704812105',
+  'bay leaf': 'https://www.redstickspice.com/cdn/shop/products/bay_leaf_600x.jpg?v=1704812105',
+  'italian seasoning': 'https://www.kroger.com/product/images/xlarge/front/0005210000534',
+  'olive oil': 'https://purenutrition.in/cdn/shop/files/Olive-Pomace-Oil-1L-_FOP_1.jpg?v=1723799877&width=1500',
+  'vegetable oil': 'https://storage.googleapis.com/images-lnb-prd-8936dd0.lnb.prd.v8.commerce.mi9cloud.com/product-images/zoom/00070253009587.png',
+  'coconut oil': 'https://www.pureindianfoods.com/cdn/shop/files/CO-1_d864f329-f198-4e44-949f-99a80dfdba07.jpg?v=1701805811',
+  'avocado oil': 'https://shop.daniellewalker.com/cdn/shop/products/31csf_tADRL_560x.jpg?v=1604462155',
+  'sesame oil': 'https://m.media-amazon.com/images/I/71SxFJLbq3L._AC_UF894,1000_QL80_.jpg',
+  'balsamic vinegar': 'https://www.ponti.com/wp-content/uploads/3241.png',
+  'red wine vinegar': 'https://images.cdn.retail.brookshires.com/detail/00070404001002_C1C1.jpeg',
+  'apple cider vinegar': 'https://i5.walmartimages.com/seo/Bragg-Organic-Apple-Cider-Vinegar-with-the-Mother-Raw-and-Unfiltered-32-fl-oz_e85f2790-ddb2-4ee6-a337-114aca7a00e5.ae5d30f07483f7714bf246bd92a29984.jpeg',
+  'soy sauce': 'https://i5.walmartimages.com/asr/bebe857c-3ba0-446a-b019-35aaa727e845.315ccee09c32027b32e06f820788ef3c.jpeg',
+  'fish sauce': 'https://www.markethallfoods.com/cdn/shop/files/red-boat-fish-sauce.jpg?v=1761865254&width=900',
+  'sugar': 'https://i.cbc.ca/ais/1.1912472,1717151470459/full/max/0/default.jpg?im=Crop%2Crect%3D%280%2C0%2C620%2C348%29%3B',
+  'brown sugar': 'https://cdn.jwplayer.com/v2/media/F9e0EImz/thumbnails/VCZN7qMW.jpg?width=1280',
+  'honey': 'https://cdn.mos.cms.futurecdn.net/v2/t:0,l:592,cw:3558,ch:2669,q:80,w:2560/zcz8f72orNC9GKgm3tbqMY.jpg',
+  'maple syrup': 'https://dutchmansgold.com/cdn/shop/files/17657---Dutchmans-Gold-Pure-Maple-Syrup-250mlWeb_600x.jpg?v=1719681510',
+  'vanilla extract': 'https://www.clubhouse.ca/-/media/project/oneweb/clubhouseca/products/club-house/00066200004705_a1c1.png',
+  'vanilla': 'https://www.clubhouse.ca/-/media/project/oneweb/clubhouseca/products/club-house/00066200004705_a1c1.png',
+  'chicken broth': 'https://i5.walmartimages.com/seo/Swanson-100-Natural-Chicken-Broth-32-oz-Carton_d663a2bb-5e23-471b-b3ab-744341f43ab9.2cec2d16e105ee87612f1fab8f00b216.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF',
+  'chicken stock': 'https://i5.walmartimages.com/seo/Swanson-100-Natural-Chicken-Broth-32-oz-Carton_d663a2bb-5e23-471b-b3ab-744341f43ab9.2cec2d16e105ee87612f1fab8f00b216.jpeg?odnHeight=768&odnWidth=768&odnBg=FFFFFF',
+  'beef broth': 'https://healthyheartmarket.com/cdn/shop/products/swanson-unsalted-beef-broth-gluten-free-32-oz-carton-healthy-heart-market.jpg?v=1675886225&width=1445',
+  'beef stock': 'https://healthyheartmarket.com/cdn/shop/products/swanson-unsalted-beef-broth-gluten-free-32-oz-carton-healthy-heart-market.jpg?v=1675886225&width=1445',
+  'canned tomatoes': 'https://www.allrecipes.com/thmb/v7p4-wFK22zmUDJlktNwgslED-8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/ar-canned-tomato-taste-test-cento-whole-4x3-1b3a0d596e0041ffad3c644cb039b53a.jpg',
+  'diced tomatoes': 'https://www.allrecipes.com/thmb/v7p4-wFK22zmUDJlktNwgslED-8=/1500x0/filters:no_upscale():max_bytes(150000):strip_icc()/ar-canned-tomato-taste-test-cento-whole-4x3-1b3a0d596e0041ffad3c644cb039b53a.jpg',
+  'tomato paste': 'https://www.cheeseshopsb.com/cdn/shop/products/502515_doubleconcetrate_tomatopaste.jpg?v=1718486636',
+  'tomato sauce': 'https://www.kierstenhickman.com/wp-content/uploads/2019/09/homemade-tomato-sauce-2-khickman.jpg',
+  'black beans': 'https://i5.walmartimages.com/seo/Bush-s-Black-Beans-Canned-Beans-15-oz_c27b0e60-c3f8-434a-9cfa-f83b05e651a8.2796317ef2848615bad8f99338504cfc.jpeg',
+  'kidney beans': 'https://i5.walmartimages.com/seo/Bush-s-Dark-Red-Kidney-Beans-Canned-Beans-16-oz_c80718d7-1d4d-41a1-a971-c6e9c859aa9f.7c67bd90bc638704e7e01bafb838571c.jpeg',
+  'chickpeas': 'https://www.lapreferida.com/wp-content/uploads/2017/12/Chick-Peas-1.png',
+  'garbanzo beans': 'https://www.lapreferida.com/wp-content/uploads/2017/12/Chick-Peas-1.png',
+  'coconut milk': 'https://images.albertsons-media.com/is/image/ABS/127050033-C1N1?$ng-ecom-pdp-mobile$&defaultImage=Not_Available',
+  'peanut butter': 'https://www.kroger.com/product/images/xlarge/front/0005150024191',
+  'almonds': 'https://www.harighotra.co.uk/images/Shutterstock/almonds_560x560.jpg',
+  'walnuts': 'https://wegotnuts.com/cdn/shop/files/1_6bcf7df5-aa40-4301-87d0-1226f3b40357_1024x1024.png?v=1741332459',
+  'peanuts': 'https://nuts.com/images/ct/images.cdn.us-central1.gcp.commercetools.com/fe6ef66f-361c-4adb-b11f-d4aa8f13c79c/4046_RoastedPeanutsS-g-WeqkNg-zoom.jpg',
+  'white wine': 'https://images.commerce7.com/st--francis-winery/images/medium/chardonnay-1708120943704.png',
+  'red wine': 'https://bravofarms.com/cdn/shop/products/red-wine.jpg?v=1646253890',
+  'brandy': 'https://cdn11.bigcommerce.com/s-0ddlsmhg83/images/stencil/836x836/products/2485/2703/hennessy-very-special-cognac__42099.1752495284.1280.1280__79246.1755241936.jpg?c=1'
+};
+
+// ITEM_MAPPINGS for receipt scanning
+const ITEM_MAPPINGS = [
+  { patterns: [/bnls\s*sknls?\s*(ckn|chkn|chicken)/i, /chicken\s*breast/i, /ckn\s*brst/i], name: 'Chicken Breast (Boneless Skinless)', category: 'Meat & Seafood' },
+  { patterns: [/chicken\s*thigh/i, /ckn\s*thigh/i, /shawarma\s*chicken/i], name: 'Chicken Thighs', category: 'Meat & Seafood' },
+  { patterns: [/chicken\s*sausage/i, /sausage.*chicken/i, /ckn\s*saus/i], name: 'Chicken Sausage', category: 'Meat & Seafood' },
+  { patterns: [/rotisserie/i], name: 'Rotisserie Chicken', category: 'Meat & Seafood' },
+  { patterns: [/chicken\s*wing/i], name: 'Chicken Wings', category: 'Meat & Seafood' },
+  { patterns: [/chicken\s*drum/i], name: 'Chicken Drumsticks', category: 'Meat & Seafood' },
+  { patterns: [/ground\s*chicken/i], name: 'Ground Chicken', category: 'Meat & Seafood' },
+  { patterns: [/ground\s*beef/i, /beef\s*ground/i], name: 'Ground Beef', category: 'Meat & Seafood' },
+  { patterns: [/steak/i, /ribeye/i, /sirloin/i, /filet/i], name: 'Steak', category: 'Meat & Seafood' },
+  { patterns: [/beef\s*stew/i], name: 'Beef Stew Meat', category: 'Meat & Seafood' },
+  { patterns: [/bacon/i], name: 'Bacon', category: 'Meat & Seafood' },
+  { patterns: [/pork\s*chop/i], name: 'Pork Chops', category: 'Meat & Seafood' },
+  { patterns: [/ground\s*pork/i], name: 'Ground Pork', category: 'Meat & Seafood' },
+  { patterns: [/sausage/i], name: 'Sausage', category: 'Meat & Seafood' },
+  { patterns: [/salmon/i], name: 'Salmon', category: 'Meat & Seafood' },
+  { patterns: [/shrimp/i], name: 'Shrimp', category: 'Meat & Seafood' },
+  { patterns: [/tilapia/i], name: 'Tilapia', category: 'Meat & Seafood' },
+  { patterns: [/cod\b/i], name: 'Cod', category: 'Meat & Seafood' },
+  { patterns: [/tuna/i], name: 'Tuna', category: 'Meat & Seafood' },
+  { patterns: [/zucchini/i, /r-squash\s*zucchini/i], name: 'Zucchini', category: 'Produce' },
+  { patterns: [/yellow\s*squash/i, /squash\s*yellow/i], name: 'Yellow Squash', category: 'Produce' },
+  { patterns: [/green\s*bean/i], name: 'Green Beans', category: 'Produce' },
+  { patterns: [/broccoli/i], name: 'Broccoli', category: 'Produce' },
+  { patterns: [/spinach/i], name: 'Spinach', category: 'Produce' },
+  { patterns: [/kale/i], name: 'Kale', category: 'Produce' },
+  { patterns: [/lettuce/i, /romaine/i], name: 'Lettuce', category: 'Produce' },
+  { patterns: [/carrot/i], name: 'Carrots', category: 'Produce' },
+  { patterns: [/onion/i], name: 'Onions', category: 'Produce' },
+  { patterns: [/garlic/i], name: 'Garlic', category: 'Produce' },
+  { patterns: [/tomato/i], name: 'Tomatoes', category: 'Produce' },
+  { patterns: [/potato(?!.*chip)/i, /sweet\s*potato/i], name: 'Potatoes', category: 'Produce' },
+  { patterns: [/cucumber/i, /hothouse/i], name: 'Cucumber', category: 'Produce' },
+  { patterns: [/pepper\s*(bell)?/i, /bell\s*pepper/i], name: 'Bell Peppers', category: 'Produce' },
+  { patterns: [/mushroom/i], name: 'Mushrooms', category: 'Produce' },
+  { patterns: [/asparagus/i], name: 'Asparagus', category: 'Produce' },
+  { patterns: [/brussels/i], name: 'Brussels Sprouts', category: 'Produce' },
+  { patterns: [/cauliflower/i], name: 'Cauliflower', category: 'Produce' },
+  { patterns: [/celery/i], name: 'Celery', category: 'Produce' },
+  { patterns: [/corn\b/i], name: 'Corn', category: 'Produce' },
+  { patterns: [/avocado/i], name: 'Avocados', category: 'Produce' },
+  { patterns: [/cabbage/i], name: 'Cabbage', category: 'Produce' },
+  { patterns: [/greens/i], name: 'Mixed Greens', category: 'Produce' },
+  { patterns: [/banana/i], name: 'Bananas', category: 'Produce' },
+  { patterns: [/apple/i], name: 'Apples', category: 'Produce' },
+  { patterns: [/orange/i], name: 'Oranges', category: 'Produce' },
+  { patterns: [/lemon/i], name: 'Lemons', category: 'Produce' },
+  { patterns: [/lime/i], name: 'Limes', category: 'Produce' },
+  { patterns: [/strawberr/i], name: 'Strawberries', category: 'Produce' },
+  { patterns: [/blueberr/i], name: 'Blueberries', category: 'Produce' },
+  { patterns: [/grape(?!fruit)/i], name: 'Grapes', category: 'Produce' },
+  { patterns: [/mango/i], name: 'Mango', category: 'Produce' },
+  { patterns: [/pineapple/i], name: 'Pineapple', category: 'Produce' },
+  { patterns: [/milk\b/i], name: 'Milk', category: 'Dairy & Eggs' },
+  { patterns: [/egg/i], name: 'Eggs', category: 'Dairy & Eggs' },
+  { patterns: [/butter/i], name: 'Butter', category: 'Dairy & Eggs' },
+  { patterns: [/cheese/i, /cheddar/i, /mozzarella/i, /parmesan/i], name: 'Cheese', category: 'Dairy & Eggs' },
+  { patterns: [/yogurt/i], name: 'Yogurt', category: 'Dairy & Eggs' },
+  { patterns: [/cream\s*cheese/i], name: 'Cream Cheese', category: 'Dairy & Eggs' },
+  { patterns: [/sour\s*cream/i], name: 'Sour Cream', category: 'Dairy & Eggs' },
+  { patterns: [/half.*half/i, /creamer/i], name: 'Half & Half', category: 'Dairy & Eggs' },
+  { patterns: [/bread/i, /loaf/i], name: 'Bread', category: 'Bakery' },
+  { patterns: [/bagel/i], name: 'Bagels', category: 'Bakery' },
+  { patterns: [/tortilla/i], name: 'Tortillas', category: 'Bakery' },
+  { patterns: [/pita/i], name: 'Pita Bread', category: 'Bakery' },
+  { patterns: [/roll\b/i, /bun\b/i], name: 'Rolls/Buns', category: 'Bakery' },
+  { patterns: [/rice\b/i], name: 'Rice', category: 'Pantry' },
+  { patterns: [/pasta/i, /spaghetti/i, /penne/i], name: 'Pasta', category: 'Pantry' },
+  { patterns: [/olive\s*oil/i], name: 'Olive Oil', category: 'Pantry' },
+  { patterns: [/lobster\s*bisque/i], name: 'Lobster Bisque', category: 'Pantry' },
+  { patterns: [/tomato\s*soup/i], name: 'Tomato Soup', category: 'Pantry' },
+  { patterns: [/chicken\s*soup/i, /chicken\s*noodle/i], name: 'Chicken Soup', category: 'Pantry' },
+  { patterns: [/bean.*can/i, /canned.*bean/i], name: 'Canned Beans', category: 'Pantry' },
+  { patterns: [/tomato.*sauce/i, /marinara/i], name: 'Tomato Sauce', category: 'Pantry' },
+  { patterns: [/salsa/i], name: 'Salsa', category: 'Pantry' },
+  { patterns: [/water\b/i], name: 'Water', category: 'Beverages' },
+  { patterns: [/juice/i], name: 'Juice', category: 'Beverages' },
+  { patterns: [/coffee/i], name: 'Coffee', category: 'Beverages' },
+  { patterns: [/tea\b/i], name: 'Tea', category: 'Beverages' },
+  { patterns: [/soda/i, /cola/i], name: 'Soda', category: 'Beverages' },
+];
+
+const DEFAULT_EXPIRATION_DAYS = {
+  'leafy greens': 5, 'lettuce': 5, 'spinach': 5, 'kale': 7,
+  'berries': 5, 'strawberries': 5, 'blueberries': 7,
+  'bananas': 7, 'apples': 21, 'oranges': 21, 'lemons': 21, 'limes': 21,
+  'avocados': 5, 'tomatoes': 7, 'cucumbers': 7, 'carrots': 14, 'baby carrots': 14,
+  'broccoli': 7, 'cauliflower': 7, 'bell peppers': 7, 'onions': 30, 'garlic': 30,
+  'potatoes': 21, 'mushrooms': 7, 'zucchini': 7, 'squash': 14,
+  'asparagus': 5, 'green beans': 7, 'brussels sprouts': 7, 'celery': 14, 'corn': 3,
+  'chicken breast': 3, 'chicken thighs': 3, 'chicken': 3,
+  'ground beef': 3, 'steak': 5, 'pork chops': 5, 'bacon': 7, 'sausage': 5,
+  'salmon': 2, 'shrimp': 2, 'fish': 2,
+  'milk': 10, 'eggs': 28, 'butter': 30, 'cheese': 21, 'yogurt': 14,
+  'cream cheese': 14, 'sour cream': 14,
+  'bread': 7, 'bagels': 7, 'tortillas': 14,
+  'rice': 365, 'pasta': 365, 'canned beans': 730, 'olive oil': 365, 'soup': 365,
+  '_Produce': 7, '_Meat & Seafood': 3, '_Dairy & Eggs': 14, '_Bakery': 7,
+  '_Frozen': 180, '_Pantry': 180, '_Snacks': 60, '_Beverages': 30, '_Other': 30,
+  '_Uncategorized': 7
+};
+
+const GROCERY_KEY = 'smartGroceryList_v1';
+const GROCERY_CATEGORIES = [
+  'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Pantry & Dry Goods',
+  'Spices & Seasonings', 'Frozen', 'Household', 'Other'
+];
+
+const SAVED_RECIPES_KEY = 'savedRecipes';
+const FOOD_LOG_KEY = 'foodLog';
+const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';
+
+// ============================================================
+// SECTION 3: STATE
+// ============================================================
+const state = {
+  currentView: 'home',
+  recipes: [],
+  ingredientKnowledge: [],
+  selectedIngredientId: null,
+  ingredientSearchTerm: '',
+  ingredientCategoryFilter: 'All',
+  mealSelections: [],
+  mealOptions: [],
+  planData: [],
+  groceryItems: [],
+  budgetExpenses: [],
+  weeklyBudget: 200,
+  groceryBudget: 150,
+  takeoutBudget: 50,
+  weeklyBudgets: {},
+  budgetWeekStart: null,
+  selectedCategory: null,
+  freestyleMeals: [],
+  recordingNeeds: [],
+  seasoningBlends: [],
+  cookingTasks: [],
+  deletedIngredients: [],
+  inventory: [],
+  expirationDefaults: {},
+  receiptMappings: {},
+  purchaseHistory: [],
+  receipts: [],
+  draggedMeal: null,
+  mealPlanTab: 'week',
+  chefChatOpen: false,
+  chefChatMessages: [],
+  chefChatLoading: false,
+  chefChatView: 'chat',
+  finishedTimers: [],
+  frequentItems: [],
+  activeTimers: [],
+  notificationsEnabled: false,
+  lastNotificationCheck: null,
+  freestyleViewMode: 'list',
+  freestyleFilterTag: null,
+  freestyleSearchTerm: '',
+  mentionDropdownVisible: false,
+  mentionDropdownType: null,
+  mentionDropdownIndex: 0,
+  mentionSearchTerm: '',
+  mentionCursorPosition: 0,
+  externalMealTypes: [
+    { name: 'Eating Out', emoji: '\ud83c\udf7d\ufe0f' },
+    { name: 'Takeout/Delivery', emoji: '\ud83e\udd61' },
+    { name: 'Leftovers', emoji: '\ud83d\udce6' },
+    { name: 'At Family/Friends', emoji: '\ud83d\udc68\u200d\ud83d\udc69\u200d\ud83d\udc67' },
+    { name: 'Work Lunch', emoji: '\ud83d\udcbc' },
+    { name: 'Meal Prep', emoji: '\ud83e\udd57' }
+  ],
+  selectedDayForRecipe: null,
+  selectedMealForRecipe: null,
+  selectedCategory: 'All',
+  searchTerm: '',
+  recipePickerSearchTerm: '',
+  filterFavorites: false,
+  filterUserCreated: false,
+  filterSourceType: 'all',
+  filterIngredientGroup: 'all',
+  showTips: false,
+  showRecipesOrTips: 'recipes',
+  selectedGroceryDate: null,
+  selectedGroceryMeal: null,
+  selectedGroceryRecipeId: null,
+  groceryViewMode: 'all',
+  currentWeekStartDate: (() => {
+    const today = new Date();
+    const sunday = new Date(today);
+    sunday.setDate(today.getDate() - today.getDay());
+    return sunday.toISOString().split('T')[0];
+  })(),
+  isLoading: false,
+  selectedRecipeViewId: null,
+  viewingFromPlan: null,
+  scrollPositions: {},
+  swipeDeck: [],
+  swipeIndex: 0,
+  swipeMealType: null,
+  swipeDate: null,
+  currentMealSelection: null,
+  mealLogs: [],
+  mealDays: {},
+  viewingDate: new Date().toISOString().split('T')[0],
+  swipeContext: { active: false, mealType: null, forDate: null },
+  homeTab: 'swipe',
+  calendarPickerOpen: false,
+  calendarMonth: null,
+  todaySwipeMealSlot: null,
+  swipeSettings: {
+    breakfast: [],
+    lunch: [],
+    dinner: [],
+    snack: [],
+    setupCompleted: false,
+    lastUpdated: null
+  },
+  swipeSetupExpandedSection: null,
+  swipeSetupSearchTerm: '',
+  swipeSetupFilter: 'all',
+  dataLoaded: false
+};
+
+// Bridge: state.today reads/writes state.mealDays[todayDate] for backward compatibility
+Object.defineProperty(state, 'today', {
+  get() {
+    const todayDate = new Date().toISOString().split('T')[0];
+    if (!state.mealDays[todayDate]) {
+      state.mealDays[todayDate] = {
+        date: todayDate,
+        meals: {
+          breakfast: { status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null },
+          lunch: { status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null },
+          dinner: { status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null },
+          snacks: []
+        }
+      };
+    }
+    return state.mealDays[todayDate];
+  },
+  set(val) {
+    const todayDate = val.date || new Date().toISOString().split('T')[0];
+    state.mealDays[todayDate] = val;
+  },
+  configurable: true
+});
+
+// ============================================================
+// SECTION 4: LOCALSTORAGE STORAGE LAYER
+// ============================================================
+function saveToLS(key, data) {
+  localStorage.setItem('yummy_' + key, JSON.stringify(data));
+}
+
+function loadFromLS(key, defaultVal) {
+  try {
+    const d = localStorage.getItem('yummy_' + key);
+    return d ? JSON.parse(d) : defaultVal;
+  } catch(e) {
+    return defaultVal;
+  }
+}
+
+function persistState() {
+  saveToLS('recipes', state.recipes);
+  saveToLS('inventory', state.inventory);
+  saveToLS('planData', state.planData);
+  saveToLS('mealSelections', state.mealSelections);
+  saveToLS('groceryItems', state.groceryItems);
+  saveToLS('budgetExpenses', state.budgetExpenses);
+  saveToLS('freestyleMeals', state.freestyleMeals);
+  saveToLS('seasoningBlends', state.seasoningBlends);
+  saveToLS('ingredientKnowledge', state.ingredientKnowledge);
+  saveToLS('mealDays', state.mealDays);
+  saveToLS('chefChatMessages', state.chefChatMessages);
+  saveToLS('swipeSettings', state.swipeSettings);
+  saveToLS('expirationDefaults', state.expirationDefaults);
+  saveToLS('receiptMappings', state.receiptMappings);
+  saveToLS('frequentItems', state.frequentItems);
+  saveToLS('deletedIngredients', state.deletedIngredients);
+  saveToLS('externalMealTypes', state.externalMealTypes);
+  saveToLS('mealLogs', state.mealLogs);
+  saveToLS('receipts', state.receipts);
+  saveToLS('purchaseHistory', state.purchaseHistory);
+  saveToLS('cookingTasks', state.cookingTasks);
+  saveToLS('recordingNeeds', state.recordingNeeds);
+  saveToLS('weeklyBudgets', state.weeklyBudgets);
+  saveToLS('mealOptions', state.mealOptions);
+}
+
+function loadAllState() {
+  state.recipes = loadFromLS('recipes', []);
+  state.inventory = loadFromLS('inventory', []);
+  state.planData = loadFromLS('planData', []);
+  state.mealSelections = loadFromLS('mealSelections', []);
+  state.groceryItems = loadFromLS('groceryItems', []);
+  state.budgetExpenses = loadFromLS('budgetExpenses', []);
+  state.freestyleMeals = loadFromLS('freestyleMeals', []);
+  state.seasoningBlends = loadFromLS('seasoningBlends', []);
+  state.ingredientKnowledge = loadFromLS('ingredientKnowledge', []);
+  state.mealDays = loadFromLS('mealDays', {});
+  state.chefChatMessages = loadFromLS('chefChatMessages', []);
+  state.swipeSettings = loadFromLS('swipeSettings', state.swipeSettings);
+  state.expirationDefaults = loadFromLS('expirationDefaults', {});
+  state.receiptMappings = loadFromLS('receiptMappings', {});
+  state.frequentItems = loadFromLS('frequentItems', []);
+  state.deletedIngredients = loadFromLS('deletedIngredients', []);
+  state.externalMealTypes = loadFromLS('externalMealTypes', state.externalMealTypes);
+  state.mealLogs = loadFromLS('mealLogs', []);
+  state.receipts = loadFromLS('receipts', []);
+  state.purchaseHistory = loadFromLS('purchaseHistory', []);
+  state.cookingTasks = loadFromLS('cookingTasks', []);
+  state.recordingNeeds = loadFromLS('recordingNeeds', []);
+  state.weeklyBudgets = loadFromLS('weeklyBudgets', {});
+  state.mealOptions = loadFromLS('mealOptions', []);
+  // Ensure today exists in mealDays
+  const todayDate = new Date().toISOString().split('T')[0];
+  if (!state.mealDays[todayDate]) {
+    const mealSlotDefault = () => ({ status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null });
+    state.mealDays[todayDate] = { date: todayDate, meals: { breakfast: mealSlotDefault(), lunch: mealSlotDefault(), dinner: mealSlotDefault(), snacks: [] } };
+  }
+  state.dataLoaded = true;
+}
+
+// Storage object mimicking original Supabase interface
+const storage = {
+  _data: [],
+  async init(handler) {
+    loadAllState();
+    handler?.onDataChanged?.([]);
+    return { isOk: true };
+  },
+  async create(item) {
+    if (!item || !item.id) return { isOk: false };
+    const prefix = item.id.split('_')[0];
+    switch(prefix) {
+      case 'recipe': state.recipes.push(item); break;
+      case 'inventory': case 'inv': state.inventory.push(item); break;
+      case 'ingredient': if (item.type === 'ingredient_knowledge') state.ingredientKnowledge.push(item); break;
+      case 'plan': { const idx = state.planData.findIndex(p => p.id === item.id); if (idx >= 0) state.planData[idx] = item; else state.planData.push(item); } break;
+      case 'expense': state.budgetExpenses.push(item); break;
+      case 'receipt': state.receipts.push(item); break;
+      case 'freestyle': state.freestyleMeals.push(item); break;
+      case 'blend': state.seasoningBlends.push(item); break;
+      case 'task': state.cookingTasks.push(item); break;
+      case 'recording': state.recordingNeeds.push(item); break;
+      case 'frequent': state.frequentItems.push(item); break;
+      case 'meallog': state.mealLogs.push(item); break;
+      case 'mealSel': state.mealSelections.push(item); break;
+      case 'mealOption': state.mealOptions.push(item); break;
+      case 'history': state.purchaseHistory.push(item); break;
+      case 'mapping': state.receiptMappings[item.rawText] = { name: item.correctedName, category: item.category, ingredientId: item.ingredientId || null }; break;
+      case 'expdefault': state.expirationDefaults[item.itemName] = item.days; break;
+      case 'todayMeals': { const dateStr = item.date || item.id.replace('todayMeals_', ''); if (item.meals) state.mealDays[dateStr] = { date: dateStr, meals: item.meals }; } break;
+      case 'config': break;
+      default: break;
+    }
+    persistState();
+    return { isOk: true };
+  },
+  async update(item) {
+    if (!item || !item.id) return { isOk: false };
+    const prefix = item.id.split('_')[0];
+    const updateInArray = (arr) => {
+      const idx = arr.findIndex(x => x.id === item.id);
+      if (idx >= 0) { arr[idx] = { ...arr[idx], ...item }; return true; }
+      return false;
+    };
+    switch(prefix) {
+      case 'recipe': updateInArray(state.recipes); break;
+      case 'inventory': case 'inv': updateInArray(state.inventory); break;
+      case 'ingredient': if (item.type === 'ingredient_knowledge') updateInArray(state.ingredientKnowledge); break;
+      case 'plan': updateInArray(state.planData); break;
+      case 'expense': updateInArray(state.budgetExpenses); break;
+      case 'receipt': updateInArray(state.receipts); break;
+      case 'freestyle': updateInArray(state.freestyleMeals); break;
+      case 'blend': updateInArray(state.seasoningBlends); break;
+      case 'task': updateInArray(state.cookingTasks); break;
+      case 'recording': updateInArray(state.recordingNeeds); break;
+      case 'frequent': updateInArray(state.frequentItems); break;
+      case 'meallog': updateInArray(state.mealLogs); break;
+      case 'mealSel': updateInArray(state.mealSelections); break;
+      case 'mealOption': updateInArray(state.mealOptions); break;
+      case 'history': updateInArray(state.purchaseHistory); break;
+      case 'mapping': state.receiptMappings[item.rawText] = { name: item.correctedName, category: item.category, ingredientId: item.ingredientId || null }; break;
+      case 'expdefault': state.expirationDefaults[item.itemName] = item.days; break;
+      case 'todayMeals': { const dateStr = item.date || item.id.replace('todayMeals_', ''); if (item.meals) state.mealDays[dateStr] = { date: dateStr, meals: item.meals }; } break;
+      default: break;
+    }
+    persistState();
+    return { isOk: true };
+  },
+  async delete(item) {
+    if (!item || !item.id) return { isOk: false };
+    const prefix = item.id.split('_')[0];
+    const removeFromArray = (arr) => {
+      const idx = arr.findIndex(x => x.id === item.id);
+      if (idx >= 0) { arr.splice(idx, 1); return true; }
+      return false;
+    };
+    switch(prefix) {
+      case 'recipe': removeFromArray(state.recipes); break;
+      case 'inventory': case 'inv': removeFromArray(state.inventory); break;
+      case 'ingredient': removeFromArray(state.ingredientKnowledge); break;
+      case 'plan': removeFromArray(state.planData); break;
+      case 'expense': removeFromArray(state.budgetExpenses); break;
+      case 'receipt': removeFromArray(state.receipts); break;
+      case 'freestyle': removeFromArray(state.freestyleMeals); break;
+      case 'blend': removeFromArray(state.seasoningBlends); break;
+      case 'task': removeFromArray(state.cookingTasks); break;
+      case 'recording': removeFromArray(state.recordingNeeds); break;
+      case 'frequent': removeFromArray(state.frequentItems); break;
+      case 'meallog': removeFromArray(state.mealLogs); break;
+      default: break;
+    }
+    persistState();
+    return { isOk: true };
+  },
+  async loadData() { loadAllState(); },
+  async query(filterFn) {
+    // Helper to query across all data
+    const allData = [
+      ...state.recipes, ...state.inventory, ...state.ingredientKnowledge,
+      ...state.planData, ...state.budgetExpenses, ...state.receipts,
+      ...state.freestyleMeals, ...state.seasoningBlends, ...state.cookingTasks,
+      ...state.frequentItems, ...state.mealLogs
+    ];
+    return allData.filter(filterFn);
+  }
+};
+
+// ============================================================
+// SECTION 5: DATA HANDLER
+// ============================================================
+const dataHandler = {
+  onDataChanged(data) {
+    // For localStorage version, data comes pre-loaded into state
+    // Just ensure today exists and render
+    const todayDate = new Date().toISOString().split('T')[0];
+    const mealSlotDefault = () => ({ status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null });
+    if (!state.mealDays[todayDate]) {
+      state.mealDays[todayDate] = {
+        date: todayDate,
+        meals: { breakfast: mealSlotDefault(), lunch: mealSlotDefault(), dinner: mealSlotDefault(), snacks: [] }
+      };
+    }
+    state.dataLoaded = true;
+    if (typeof render === 'function') render();
+  }
+};
+
+async function saveMealDay(dateStr) {
+  dateStr = dateStr || state.viewingDate;
+  const day = getDayData(dateStr);
+  const record = {
+    id: `todayMeals_${dateStr}`,
+    type: 'todayMeals',
+    date: dateStr,
+    meals: day.meals
+  };
+  state.ignoreRealtimeUntil = Date.now() + 3000;
+  const result = await storage.update(record);
+  if (!result?.isOk) {
+    await storage.create(record);
+  }
+}
+
+async function saveTodayMeals() {
+  return saveMealDay(getToday());
+}
+
+async function loadWeeklyBudgets(data) {
+  // Try localStorage first (faster)
+  try {
+    const backup = localStorage.getItem('weeklyBudgetsBackup');
+    if (backup) {
+      state.weeklyBudgets = JSON.parse(backup);
+      console.log('Loaded budgets from localStorage:', state.weeklyBudgets);
+    }
+  } catch (e) {
+    console.error('localStorage load failed:', e);
+  }
+
+  // Try main storage (overrides localStorage if found)
+  const budgetData = data.find(item => item.type === 'weeklyBudgets' || item.id === 'weeklyBudgets');
+  if (budgetData?.budgets) {
+    state.weeklyBudgets = budgetData.budgets;
+    console.log('Loaded budgets from storage:', state.weeklyBudgets);
+  } else {
+    // Migrate from old weekBudget_ records if they exist
+    const oldBudgets = data.filter(d => d.id && d.id.startsWith('weekBudget_'));
+    if (oldBudgets.length > 0) {
+      state.weeklyBudgets = {};
+      oldBudgets.forEach(b => {
+        if (b.weekStart) {
+          state.weeklyBudgets[b.weekStart] = (b.grocery || 0) + (b.takeout || 0);
+        }
+      });
+      console.log('Migrated budgets from old records:', state.weeklyBudgets);
+    }
+  }
+
+  if (!state.weeklyBudgets) state.weeklyBudgets = {};
+  console.log('Final weeklyBudgets state:', state.weeklyBudgets);
+}
+
+// ============================================================
+// SECTION 6: UTILITY FUNCTIONS
+// ============================================================
+
+function guessIngredientCategory(name) {
+  const lower = name.toLowerCase();
+  for (const [keyword, category] of Object.entries(INGREDIENT_CATEGORY_MAP)) {
+    if (lower.includes(keyword)) return category;
+  }
+  return 'Other';
+}
+
+function guessGroceryCategory(name) {
+  if (typeof ITEM_MAPPINGS !== 'undefined') {
+    for (const mapping of ITEM_MAPPINGS) {
+      for (const pattern of mapping.patterns) {
+        if (pattern.test(name)) return mapping.category;
+      }
+    }
+  }
+  const lower = name.toLowerCase();
+  if (lower.match(/chicken|beef|pork|salmon|fish|shrimp|turkey|sausage|meat|steak|bacon/)) return 'Meat & Seafood';
+  if (lower.match(/milk|cheese|yogurt|butter|cream|egg/)) return 'Dairy & Eggs';
+  if (lower.match(/bread|bagel|tortilla|roll|bun/)) return 'Bakery';
+  if (lower.match(/apple|banana|orange|berry|fruit|grape|melon|mango/)) return 'Produce';
+  if (lower.match(/lettuce|spinach|kale|carrot|broccoli|tomato|onion|potato|vegetable|greens|pepper|cucumber|squash|zucchini/)) return 'Produce';
+  if (lower.match(/frozen|ice cream/)) return 'Frozen';
+  if (lower.match(/soup|sauce|pasta|rice|bean|can|oil/)) return 'Pantry';
+  if (lower.match(/chip|snack|cookie|cracker/)) return 'Snacks';
+  if (lower.match(/water|juice|soda|drink|coffee|tea/)) return 'Beverages';
+  return 'Other';
+}
+
+// Custom ingredient images
+let customIngredientImages = {};
+
+function loadCustomIngredientImages() {
+  const saved = localStorage.getItem('custom_ingredient_images');
+  if (saved) {
+    try { customIngredientImages = JSON.parse(saved); } catch (e) { customIngredientImages = {}; }
+  }
+}
+
+function saveCustomIngredientImages() {
+  localStorage.setItem('custom_ingredient_images', JSON.stringify(customIngredientImages));
+}
+
+// Load on startup
+loadCustomIngredientImages();
+
+function getIngredientImage(ingredientName, category) {
+  if (!ingredientName) return null;
+  const name = ingredientName.toLowerCase().trim();
+  const knowledge = state.ingredientKnowledge.find(k => k.name.toLowerCase() === name);
+  if (knowledge?.image_url) return knowledge.image_url;
+  if (customIngredientImages[name]) return customIngredientImages[name];
+  if (INGREDIENT_IMAGES[name]) return INGREDIENT_IMAGES[name];
+  for (const [key, url] of Object.entries(customIngredientImages)) {
+    if (name.includes(key) || key.includes(name)) return url;
+  }
+  for (const [key, url] of Object.entries(INGREDIENT_IMAGES)) {
+    if (name.includes(key) || key.includes(name)) return url;
+  }
+  return null;
+}
+
+// Image compression
+async function compressImage(file, maxWidth = 800, quality = 0.7) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        if (width > maxWidth) { height = (height * maxWidth) / width; width = maxWidth; }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        canvas.toBlob((blob) => {
+          const compressedFile = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
+          console.log(`Compressed: ${(file.size/1024).toFixed(0)}KB -> ${(compressedFile.size/1024).toFixed(0)}KB`);
+          resolve(compressedFile);
+        }, 'image/jpeg', quality);
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// Upload photo - converts to base64 data URL (no Supabase)
+async function uploadPhoto(file) {
+  if (!file.type.startsWith('image/')) {
+    showError('Please select an image file');
+    return null;
+  }
+  if (file.size > 10 * 1024 * 1024) {
+    showError('Image must be less than 10MB');
+    return null;
+  }
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      resolve(e.target.result);
+    };
+    reader.onerror = () => {
+      showError('Failed to read image');
+      resolve(null);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// String utilities
+function capitalize(str) {
+  if (!str) return '';
+  return str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+function normalizeString(str) {
+  return (str || '').toLowerCase().trim();
+}
+
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function getMonday(date) {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  return new Date(d.setDate(diff));
+}
+
+function getWeekDates(startDate) {
+  const dates = [];
+  const start = new Date(startDate + 'T00:00:00');
+  for (let i = 0; i < 7; i++) {
+    const date = new Date(start);
+    date.setDate(start.getDate() + i);
+    dates.push(date.toISOString().split('T')[0]);
+  }
+  return dates;
+}
+
+function formatDateDisplay(dateStr) {
+  const date = new Date(dateStr + 'T00:00:00');
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+function normalizeIngredient(name) {
+  return name.toLowerCase().trim().replace(/[^a-z0-9]/g, '');
+}
+
+// Debounced render
+const _debouncedRenderTimers = {};
+function _debouncedRender(inputEl, key, delay) {
+  delay = delay || 300;
+  clearTimeout(_debouncedRenderTimers[key]);
+  _debouncedRenderTimers[key] = setTimeout(() => {
+    const id = inputEl && inputEl.id;
+    const cursorPos = inputEl ? inputEl.selectionStart : 0;
+    if (typeof render === 'function') render();
+    if (id) {
+      setTimeout(() => {
+        const el = document.getElementById(id);
+        if (el) { el.focus(); el.setSelectionRange(cursorPos, cursorPos); }
+      }, 0);
+    }
+  }, delay);
+}
+
+function showError(message) { showToast(message, 'error'); }
+
+async function withLoading(fn) {
+  state.isLoading = true;
+  if (typeof render === 'function') render();
+  try { return await fn(); }
+  catch (error) { console.error('Operation failed:', error); showError('Something went wrong. Please try again.'); throw error; }
+  finally { state.isLoading = false; if (typeof render === 'function') render(); }
+}
+
+function emptyState(icon, message, buttonLabel, buttonAction) {
+  return `
+    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: ${CONFIG.space_lg} ${CONFIG.space_md}; text-align: center;">
+      <div style="font-size: 36px; margin-bottom: ${CONFIG.space_sm}; opacity: 0.3;">${icon}</div>
+      <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_body}; margin-bottom: ${CONFIG.space_md}; max-width: 240px;">${message}</div>
+      ${buttonLabel ? `<button onclick="${buttonAction}" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 10px 20px; border-radius: 10px; font-weight: 500; font-size: ${CONFIG.type_caption}; text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer;">${buttonLabel}</button>` : ''}
+    </div>`;
+}
+
+function showToast(message, type = 'info') {
+  const toast = document.createElement('div');
+  toast.className = 'toast fixed top-4 right-4 z-50';
+  toast.style.background = '#242432';
+  toast.style.color = '#f5f5f7';
+  toast.style.borderRadius = '12px';
+  toast.style.boxShadow = '0 8px 24px rgba(0,0,0,0.4)';
+  toast.style.padding = '12px 16px';
+  if (type === 'success') {
+    toast.innerHTML = `<div style="display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0;"><circle cx="10" cy="10" r="9" fill="none" stroke="#32d74b" stroke-width="2"/><path d="M6 10l3 3 5-5" fill="none" stroke="#32d74b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>${message}</span></div>`;
+  } else if (type === 'error' || type === 'danger') {
+    toast.innerHTML = `<div style="display:flex; align-items:center; gap:8px;"><svg width="20" height="20" viewBox="0 0 20 20" style="flex-shrink:0;"><circle cx="10" cy="10" r="9" fill="none" stroke="#ff453a" stroke-width="2"/><path d="M7 7l6 6M13 7l-6 6" fill="none" stroke="#ff453a" stroke-width="2" stroke-linecap="round"/></svg><span>${message}</span></div>`;
+  } else {
+    toast.textContent = message;
+  }
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3000);
+}
+
+// ============================================================
+// SECTION 7: SAVED RECIPES & FOOD LOG
+// ============================================================
+function getSavedRecipes() { try { return JSON.parse(localStorage.getItem(SAVED_RECIPES_KEY) || '[]'); } catch { return []; } }
+function toggleSaveRecipe(recipeId) {
+  let saved = getSavedRecipes();
+  if (saved.includes(recipeId)) { saved = saved.filter(id => id !== recipeId); showToast('Removed from saved', 'success'); }
+  else { saved.push(recipeId); showToast('Saved!', 'success'); }
+  localStorage.setItem(SAVED_RECIPES_KEY, JSON.stringify(saved));
+  if (typeof render === 'function') render();
+}
+function isRecipeSaved(recipeId) { return getSavedRecipes().includes(recipeId); }
+
+function getFoodLog() { try { return JSON.parse(localStorage.getItem(FOOD_LOG_KEY) || '[]'); } catch { return []; } }
+function saveFoodLog(log) { localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(log)); }
+
+function addFoodLogEntry(entry) {
+  const log = getFoodLog();
+  let dateCooked = entry.dateCooked || new Date().toISOString();
+  if (entry.dateStr) { dateCooked = entry.dateStr + 'T12:00:00'; }
+  const logEntry = {
+    id: 'log_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    recipeId: entry.recipeId || null, recipeName: entry.recipeName || 'Unknown',
+    image: entry.image || null, ingredients: entry.ingredients || [],
+    category: entry.category || 'Other', mealType: entry.mealType || detectMealType(),
+    dateCooked: dateCooked, photo: entry.photo || null, myPhoto: entry.myPhoto || null,
+    notes: entry.notes || null, wouldMakeAgain: null, status: entry.status || 'eaten'
+  };
+  const dateKey = logEntry.dateCooked.split('T')[0];
+  const existingIdx = log.findIndex(e => e.dateCooked.split('T')[0] === dateKey && e.mealType === logEntry.mealType && logEntry.mealType !== 'snack');
+  if (existingIdx !== -1 && logEntry.mealType !== 'snack') { log.splice(existingIdx, 1); }
+  log.unshift(logEntry);
+  saveFoodLog(log);
+  return logEntry;
+}
+
+function updateFoodLogEntry(logId, updates) {
+  const log = getFoodLog();
+  const idx = log.findIndex(e => e.id === logId);
+  if (idx === -1) return null;
+  Object.assign(log[idx], updates);
+  saveFoodLog(log);
+  return log[idx];
+}
+
+function deleteFoodLogEntry(logId) { saveFoodLog(getFoodLog().filter(e => e.id !== logId)); }
+function getFoodLogEntryForSlot(dateStr, mealType) { return getFoodLog().find(e => e.dateCooked.split('T')[0] === dateStr && e.mealType === mealType) || null; }
+
+function swapFoodLogEntry(oldLogId, newEntry) {
+  const log = getFoodLog();
+  const oldIdx = log.findIndex(e => e.id === oldLogId);
+  const oldEntry = oldIdx !== -1 ? log[oldIdx] : null;
+  if (oldIdx !== -1) log.splice(oldIdx, 1);
+  saveFoodLog(log);
+  const created = addFoodLogEntry(newEntry);
+  return { oldEntry, newEntry: created };
+}
+
+function markFoodLogEaten(logId) { updateFoodLogEntry(logId, { status: 'eaten' }); }
+
+function getFoodLogGroupedByDate() {
+  const log = getFoodLog();
+  const groups = {};
+  log.forEach(entry => { const date = entry.dateCooked.split('T')[0]; if (!groups[date]) groups[date] = []; groups[date].push(entry); });
+  Object.values(groups).forEach(g => g.sort((a, b) => new Date(b.dateCooked) - new Date(a.dateCooked)));
+  return { groups, sortedDates: Object.keys(groups).sort((a, b) => b.localeCompare(a)) };
+}
+
+function getFoodLogDateLabel(dateStr) {
+  const today = new Date().toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  if (dateStr === today) return 'Today';
+  if (dateStr === yesterday) return 'Yesterday';
+  const d = new Date(dateStr + 'T12:00:00');
+  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return `${days[d.getDay()]} ${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+function getTopFoodPatterns(days = 14) {
+  const log = getFoodLog();
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+  const recent = log.filter(e => e.dateCooked >= cutoff);
+  const counts = {};
+  recent.forEach(e => { const name = (e.recipeName || '').toLowerCase().trim(); if (!name) return; const key = name.split(/\s+/).slice(0, 2).join(' '); if (!counts[key]) counts[key] = { name: e.recipeName, count: 0, category: e.category }; counts[key].count++; });
+  return Object.values(counts).filter(c => c.count >= 2).sort((a, b) => b.count - a.count).slice(0, 3);
+}
+
+function getCookAgainMeals() {
+  const log = getFoodLog(); const seen = new Set();
+  return log.filter(e => { if (e.wouldMakeAgain !== true) return false; const key = e.recipeId || e.recipeName; if (seen.has(key)) return false; seen.add(key); return true; });
+}
+
+function getUnexploredCategories() {
+  const log = getFoodLog();
+  const cutoff = new Date(Date.now() - 14 * 86400000).toISOString();
+  const recent = log.filter(e => e.dateCooked >= cutoff);
+  const eatenCats = new Set(recent.map(e => (e.category || '').toLowerCase()));
+  const allCats = [...new Set(state.recipes.map(r => r.category).filter(Boolean))];
+  return allCats.filter(c => !eatenCats.has(c.toLowerCase()));
+}
+
+function formatLogTime(isoStr) {
+  const d = new Date(isoStr);
+  let h = d.getHours(), m = d.getMinutes();
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return `${h}:${m.toString().padStart(2, '0')} ${ampm}`;
+}
+
+function detectMealType() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 11) return 'breakfast';
+  if (hour >= 11 && hour < 15) return 'lunch';
+  if (hour >= 15 && hour < 21) return 'dinner';
+  if (hour >= 21) return 'dinner';
+  return 'breakfast';
+}
+
+// ============================================================
+// SECTION 8: GROCERY LIST FUNCTIONS
+// ============================================================
+function mapToGroceryCategory(group) {
+  const map = { 'Produce': 'Produce', 'Beef': 'Meat & Seafood', 'Poultry': 'Meat & Seafood', 'Pork': 'Meat & Seafood', 'Lamb & Goat': 'Meat & Seafood', 'Seafood': 'Meat & Seafood', 'Dairy & Eggs': 'Dairy & Eggs', 'Grains & Pasta': 'Pantry & Dry Goods', 'Pantry': 'Pantry & Dry Goods', 'Spices & Seasonings': 'Spices & Seasonings', 'Prepared': 'Frozen', 'Other': 'Other' };
+  return map[group] || 'Other';
+}
+
+function getSmartGroceryList() { try { return JSON.parse(localStorage.getItem(GROCERY_KEY) || '[]'); } catch { return []; } }
+function saveSmartGroceryList(list) { localStorage.setItem(GROCERY_KEY, JSON.stringify(list)); }
+function getGroceryBadgeCount() { return getSmartGroceryList().filter(i => !i.checked).length; }
+
+function getFrequentMeals() {
+  const log = getFoodLog(); const recipeCount = {};
+  log.forEach(entry => { const key = entry.recipeId || entry.recipeName; if (!key) return; if (!recipeCount[key]) recipeCount[key] = { recipeId: entry.recipeId, name: entry.recipeName, image: entry.image, count: 0, wouldMakeAgain: false, ingredients: entry.ingredients || [] }; recipeCount[key].count++; if (entry.wouldMakeAgain === true) recipeCount[key].wouldMakeAgain = true; });
+  Object.values(state.mealDays).forEach(day => { if (!day.meals) return; ['breakfast', 'lunch', 'dinner'].forEach(mt => { const meal = day.meals[mt]; if (!meal || meal.status !== 'logged') return; const rid = meal.actualRecipeId || meal.plannedRecipeId; if (!rid) return; const recipe = getRecipeById(rid); if (!recipe) return; const key = rid; if (!recipeCount[key]) recipeCount[key] = { recipeId: rid, name: recipe.title, image: recipe.image_url, count: 0, wouldMakeAgain: false, ingredients: recipeIngList(recipe).map(i => i.name) }; recipeCount[key].count++; }); });
+  return Object.values(recipeCount).filter(m => m.count >= 2 || m.wouldMakeAgain).sort((a, b) => b.count - a.count);
+}
+
+function getSuggestedIngredients() {
+  const frequentMeals = getFrequentMeals(); const ingredientMap = {};
+  frequentMeals.forEach(meal => {
+    const recipe = meal.recipeId ? getRecipeById(meal.recipeId) : null;
+    const ingredients = recipe ? recipeIngList(recipe) : [];
+    if (ingredients.length > 0) {
+      ingredients.forEach(ing => { const key = normalizeIngredient(ing.name); if (!key) return; if (!ingredientMap[key]) ingredientMap[key] = { name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', mealCount: 0, mealNames: [] }; ingredientMap[key].mealCount += meal.count; if (!ingredientMap[key].mealNames.includes(meal.name)) ingredientMap[key].mealNames.push(meal.name); });
+    } else if (meal.ingredients && meal.ingredients.length > 0) {
+      meal.ingredients.forEach(ingName => { const key = normalizeIngredient(ingName); if (!key) return; if (!ingredientMap[key]) ingredientMap[key] = { name: ingName, category: 'Other', qty: '', unit: '', mealCount: 0, mealNames: [] }; ingredientMap[key].mealCount += meal.count; if (!ingredientMap[key].mealNames.includes(meal.name)) ingredientMap[key].mealNames.push(meal.name); });
+    }
+  });
+  return Object.values(ingredientMap).sort((a, b) => b.mealCount - a.mealCount);
+}
+
+function addSuggestedToGrocery(name, category, qty, unit, mealNames) {
+  const list = getSmartGroceryList(); const key = normalizeIngredient(name);
+  const existing = list.find(i => normalizeIngredient(i.name) === key);
+  if (existing) { saveSmartGroceryList(list.filter(i => normalizeIngredient(i.name) !== key)); return false; }
+  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category: category || 'Other', qty: qty || '', unit: unit || '', checked: false, manual: false, sourceMeals: mealNames || [], addedAt: Date.now() });
+  saveSmartGroceryList(list); return true;
+}
+
+function addMealToGrocery(recipeId) {
+  const recipe = getRecipeById(recipeId); if (!recipe) return;
+  const ingredients = recipeIngList(recipe); if (ingredients.length === 0) return;
+  const list = getSmartGroceryList(); let added = 0;
+  ingredients.forEach(ing => {
+    const key = normalizeIngredient(ing.name); if (!key) return;
+    const existing = list.find(i => normalizeIngredient(i.name) === key);
+    if (existing) { if (!existing.sourceMeals.includes(recipe.title)) existing.sourceMeals.push(recipe.title); }
+    else { list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [recipe.title], addedAt: Date.now() }); added++; }
+  });
+  saveSmartGroceryList(list); showToast(`Added ingredients from ${recipe.title}`, 'success');
+  if (typeof render === 'function') render();
+}
+
+function addManualGroceryItemSmart() {
+  const input = document.getElementById('groceryManualInput'); if (!input) return;
+  const name = input.value.trim(); if (!name) return;
+  const list = getSmartGroceryList();
+  if (list.find(i => normalizeIngredient(i.name) === normalizeIngredient(name))) { showToast('Already on your list', 'info'); input.value = ''; return; }
+  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category: 'Other', qty: '', unit: '', checked: false, manual: true, sourceMeals: [], addedAt: Date.now() });
+  saveSmartGroceryList(list); input.value = ''; showToast(`${capitalize(name)} added`, 'success');
+  if (typeof render === 'function') render();
+  setTimeout(() => { const newInput = document.getElementById('groceryManualInput'); if (newInput) newInput.focus(); }, 50);
+}
+
+function toggleSmartGroceryItem(itemId) {
+  const list = getSmartGroceryList(); const item = list.find(i => i.id === itemId); if (!item) return;
+  item.checked = !item.checked; saveSmartGroceryList(list);
+  const row = document.querySelector(`[data-gro-id="${itemId}"]`);
+  if (row) { const cb = row.querySelector('.gro-checkbox'); const label = row.querySelector('.gro-label'); if (item.checked) { if (cb) { cb.style.background = CONFIG.primary_action_color; cb.style.borderColor = CONFIG.primary_action_color; cb.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; } if (label) { label.style.textDecoration = 'line-through'; label.style.opacity = '0.4'; } } else { if (cb) { cb.style.background = 'transparent'; cb.style.borderColor = CONFIG.text_muted; cb.innerHTML = ''; } if (label) { label.style.textDecoration = 'none'; label.style.opacity = '1'; } } }
+  _updateGroceryBadge();
+  clearTimeout(state._smartGroceryRenderTimeout);
+  state._smartGroceryRenderTimeout = setTimeout(() => { if (['grocery-list'].includes(state.currentView) && typeof render === 'function') render(); }, 1200);
+}
+
+function removeSmartGroceryItem(itemId) {
+  let list = getSmartGroceryList(); list = list.filter(i => i.id !== itemId); saveSmartGroceryList(list);
+  const row = document.querySelector(`[data-gro-id="${itemId}"]`);
+  if (row) { row.style.transition = 'opacity 150ms, transform 150ms'; row.style.opacity = '0'; row.style.transform = 'translateX(-20px)'; setTimeout(() => row.remove(), 150); }
+  _updateGroceryBadge();
+  clearTimeout(state._smartGroceryRenderTimeout);
+  state._smartGroceryRenderTimeout = setTimeout(() => { if (['grocery-list'].includes(state.currentView) && typeof render === 'function') render(); }, 600);
+}
+
+function clearCheckedGrocery() { saveSmartGroceryList(getSmartGroceryList().filter(i => !i.checked)); showToast('Checked items cleared', 'success'); if (typeof render === 'function') render(); }
+function clearAllGrocerySmart() { if (!confirm('Clear your entire grocery list?')) return; saveSmartGroceryList([]); showToast('Grocery list cleared', 'success'); if (typeof render === 'function') render(); }
+
+function _updateGroceryBadge() {
+  const badge = document.getElementById('grocery-badge');
+  const count = getGroceryBadgeCount();
+  if (badge) { badge.textContent = count; badge.style.display = count > 0 ? 'flex' : 'none'; }
+}
+
+let _cachedSuggestions = [];
+function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); if (typeof render === 'function') render(); }
+
+function showAddFromMealModal() {
+  const frequentMeals = getFrequentMeals();
+  const allMeals = []; const seen = new Set();
+  frequentMeals.forEach(m => { const key = m.recipeId || m.name; if (seen.has(key)) return; seen.add(key); allMeals.push(m); });
+  const log = getFoodLog();
+  log.forEach(entry => { const key = entry.recipeId || entry.recipeName; if (!key || seen.has(key)) return; seen.add(key); allMeals.push({ recipeId: entry.recipeId, name: entry.recipeName, image: entry.image, count: 1, wouldMakeAgain: entry.wouldMakeAgain === true }); });
+  state.recipes.filter(r => !r.isDraft && !r.isTip && recipeIngList(r).length > 0).forEach(r => { if (seen.has(r.id)) return; seen.add(r.id); allMeals.push({ recipeId: r.id, name: r.title, image: r.image_url, count: 0, wouldMakeAgain: false }); });
+  openModal(`<div style="color: ${CONFIG.text_color}; max-height: 70vh; display: flex; flex-direction: column;"><h2 style="font-size: 17px; font-weight: 600; margin-bottom: 12px;">Add from a meal</h2><div style="overflow-y: auto; flex: 1; margin: 0 -16px; padding: 0 16px;">${allMeals.length === 0 ? `<div style="text-align: center; padding: 24px; color: ${CONFIG.text_muted};">No meals with ingredients found.</div>` : allMeals.map(m => { const recipe = m.recipeId ? getRecipeById(m.recipeId) : null; const ingCount = recipe ? recipeIngList(recipe).length : 0; return `<div onclick="addMealToGrocery('${esc(m.recipeId || '')}'); closeModal();" style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};" class="card-press">${m.image ? `<img src="${esc(m.image)}" style="width: 44px; height: 44px; border-radius: 10px; object-fit: cover;">` : `<div style="width: 44px; height: 44px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px;">&#127869;</div>`}<div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(m.name)}</div><div style="font-size: 11px; color: ${CONFIG.text_muted};">${ingCount > 0 ? `${ingCount} ingredients` : ''}${m.count >= 2 ? ` · Logged ${m.count}x` : ''}</div></div></div>`; }).join('')}</div><button onclick="closeModal()" style="margin-top: 12px; padding: 10px; background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color}; border: none; border-radius: 10px; cursor: pointer; width: 100%; font-size: 14px;">Done</button></div>`);
+}
+
+// ============================================================
+// SECTION 9: MODAL & UI COMPONENTS
+// ============================================================
+function openModal(content) {
+  const modal = document.getElementById('modal');
+  const modalContent = document.getElementById('modal-content');
+  if (modal && modalContent) { modalContent.innerHTML = content; modal.style.display = 'flex'; }
+}
+
+function closeModal() {
+  const modal = document.getElementById('modal');
+  if (modal) modal.style.display = 'none';
+}
+
+// Click outside to close modal
+document.addEventListener('click', (e) => {
+  const modal = document.getElementById('modal');
+  if (e.target === modal) closeModal();
+});
+
+// ============================================================
+// SECTION 10: RECIPE HELPERS
+// ============================================================
+function getRecipeById(id) {
+  if (!id) return null;
+  if (!state.recipes || !Array.isArray(state.recipes)) return null;
+  return state.recipes.find(r => r.__backendId === id || r.id === id);
+}
+
+function recipeThumb(r) {
+  const u = (r?.image_url || '').trim();
+  if (!u) return '';
+  if (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('data:')) return u;
+  return 'https://' + u;
+}
+
+function recipeUrl(r) {
+  const u = (r?.recipe_url || '').trim();
+  if (!u) return '';
+  if (u.startsWith('http://') || u.startsWith('https://')) return u;
+  return 'https://' + u;
+}
+
+function recipeIngList(r) {
+  if (!r) return [];
+  if (Array.isArray(r.ingredientsRows) && r.ingredientsRows.length) {
+    return r.ingredientsRows.map(x => ({ qty: (x.qty || '').trim(), unit: (x.unit || '').trim(), name: (x.name || '').trim(), group: x.group || 'Other' })).filter(x => x.name);
+  }
+  return [];
+}
+
+function newRecipeDraft() {
+  return { type: 'recipe', title: '', category: 'Breakfast', tipCategory: 'Prep Techniques', recipe_url: '', image_url: '', tags: '', notes: '', instructions: '', ingredientsRows: [{ qty: '', unit: '', name: '', group: 'Produce' }], sourceType: 'user', isDraft: false, isTip: false, timesCooked: 0 };
+}
+
+function ensureRecipeForm() {
+  if (!state.recipeForm) state.recipeForm = newRecipeDraft();
+  if (!Array.isArray(state.recipeForm.ingredientsRows)) state.recipeForm.ingredientsRows = [];
+  if (state.recipeForm.ingredientsRows.length === 0) state.recipeForm.ingredientsRows.push({ qty: '', unit: '', name: '', group: 'Produce' });
+}
+
+function setRecipeField(field, value) { ensureRecipeForm(); state.recipeForm[field] = value; }
+
+function handleImageUpload(event) {
+  const file = event.target.files[0]; if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showError('Image size must be less than 5MB'); event.target.value = ''; return; }
+  if (!file.type.startsWith('image/')) { showError('Please select an image file'); event.target.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => { setRecipeField('image_url', e.target.result); if (typeof render === 'function') render(); showToast('Image uploaded successfully!', 'success'); };
+  reader.onerror = () => { showError('Failed to read image file'); event.target.value = ''; };
+  reader.readAsDataURL(file);
+}
+
+function removeImage() { setRecipeField('image_url', ''); const fi = document.getElementById('imageUploadInput'); if (fi) fi.value = ''; if (typeof render === 'function') render(); }
+
+function addIngRow() { ensureRecipeForm(); state.recipeForm.ingredientsRows.push({ qty: '', unit: '', name: '', group: 'Produce' }); if (typeof render === 'function') render(); }
+
+function showBulkImportModal() {
+  openModal(`<div style="color: ${CONFIG.text_color};"><h2 class="text-2xl font-bold mb-4">Bulk Import Ingredients</h2><p class="mb-4">Paste your ingredient list below.</p><textarea id="bulkIngredientInput" class="w-full p-3 border rounded" rows="12" placeholder="Paste ingredients here..." style="font-family: monospace; font-size: 14px;"></textarea><div class="flex gap-2 justify-end mt-4"><button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="processBulkIngredients()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">Import</button></div></div>`);
+}
+
+function processBulkIngredients() {
+  const textarea = document.getElementById('bulkIngredientInput'); const text = textarea.value.trim();
+  if (!text) { showError('Please paste some ingredients first'); return; }
+  const lines = text.split('\n').filter(line => line.trim()); const parsedIngredients = [];
+  lines.forEach(line => { const parsed = parseIngredientLine(line); if (parsed.name) parsedIngredients.push(parsed); });
+  if (parsedIngredients.length === 0) { showError('No valid ingredients found'); return; }
+  ensureRecipeForm(); state.recipeForm.ingredientsRows = parsedIngredients;
+  closeModal(); if (typeof render === 'function') render(); showToast(`Imported ${parsedIngredients.length} ingredients!`, 'success');
+}
+
+function parseIngredientLine(line) {
+  line = line.trim().replace(/^[\u2022\-\*]\s*/, '');
+  const units = ['lb','lbs','pound','pounds','oz','ounce','ounces','g','gram','grams','kg','kilogram','kilograms','tsp','teaspoon','teaspoons','tbsp','tablespoon','tablespoons','cup','cups','ml','milliliter','milliliters','l','liter','liters','can','cans','piece','pieces','slice','slices','clove','cloves','inch','inches'];
+  const regex = /^([\d\/\.\s]+)?\s*([a-zA-Z\-]+)?\s*(.*)$/;
+  const match = line.match(regex);
+  if (!match) return { qty: '', unit: '', name: capitalize(line), group: 'Other' };
+  let [, quantity, possibleUnit, rest] = match;
+  quantity = (quantity || '').trim(); possibleUnit = (possibleUnit || '').trim(); rest = (rest || '').trim();
+  let unit = '', name = '';
+  if (possibleUnit && units.includes(possibleUnit.toLowerCase())) { unit = possibleUnit.toLowerCase(); name = rest; }
+  else if (possibleUnit) { name = rest ? possibleUnit + ' ' + rest : possibleUnit; }
+  else { name = rest; }
+  const cleanName = name.replace(/\([^)]*\)$/g, '').trim();
+  const finalName = cleanName.replace(/,\s*$/, '').trim();
+  const group = detectIngredientGroup(finalName);
+  return { qty: quantity, unit, name: capitalize(finalName), group };
+}
+
+function detectIngredientGroup(name) {
+  const nameLower = name.toLowerCase();
+  if (nameLower.match(/\b(salt|pepper|spice|cumin|coriander|turmeric|cayenne|paprika|cinnamon|nutmeg|clove|cardamom|bay leaf|bay leaves|thyme|rosemary|oregano|basil|sage|dill|tarragon|chive|mint|parsley|cilantro|masala|garam masala|curry powder|chili powder|red pepper flakes|garlic powder|onion powder|ginger powder|fennel seed|caraway|anise|saffron|vanilla|extract|seasoning)\b/)) return 'Spices & Seasonings';
+  if (nameLower.match(/\b(beef|steak|ground beef|chuck|brisket|ribeye|sirloin|tenderloin|filet mignon|t-bone|flank|skirt)\b/)) return 'Beef';
+  if (nameLower.match(/\b(chicken|turkey|duck|poultry|breast|thigh|wing|drumstick)\b/)) return 'Poultry';
+  if (nameLower.match(/\b(pork|bacon|ham|sausage|prosciutto|pancetta|chorizo)\b/)) return 'Pork';
+  if (nameLower.match(/\b(lamb|goat|mutton)\b/)) return 'Lamb & Goat';
+  if (nameLower.match(/\b(fish|salmon|tuna|shrimp|prawns?|crab|lobster|seafood|cod|tilapia|halibut|scallops?|clams?|mussels?)\b/)) return 'Seafood';
+  if (nameLower.match(/\b(milk|cream|butter|cheese|cheddar|mozzarella|parmesan|feta|yogurt|egg|eggs|sour cream)\b/)) return 'Dairy & Eggs';
+  if (nameLower.match(/\b(rice|pasta|noodles?|spaghetti|bread|tortilla|flour|quinoa|oats?|couscous|cereal)\b/)) return 'Grains & Pasta';
+  if (nameLower.match(/\b(oil|vinegar|sauce|sugar|honey|syrup|broth|stock|canned|paste|beans?|chickpeas?|coconut|peanut|almonds?|walnuts?)\b/)) return 'Pantry';
+  if (nameLower.match(/\b(lettuce|spinach|kale|tomato|onion|garlic|carrot|celery|broccoli|cauliflower|pepper|cucumber|avocado|potato|corn|mushroom|zucchini|squash|eggplant|asparagus|cabbage|apple|banana|orange|lemon|lime|strawberr|blueberr|mango|pineapple|grapes?|peach)\b/)) return 'Produce';
+  return 'Other';
+}
+
+// ============================================================
+// SECTION 11: EXPIRATION & INVENTORY
+// ============================================================
+function getExpirationDays(itemName, category) {
+  const lowerName = itemName.toLowerCase();
+  if (state.expirationDefaults[lowerName]) return state.expirationDefaults[lowerName];
+  for (const [key, days] of Object.entries(DEFAULT_EXPIRATION_DAYS)) { if (!key.startsWith('_') && lowerName.includes(key)) return days; }
+  return DEFAULT_EXPIRATION_DAYS['_' + category] || 7;
+}
+
+function suggestExpirationDate(itemName, category, purchaseDate) {
+  const days = getExpirationDays(itemName, category);
+  const date = new Date(purchaseDate || new Date());
+  date.setDate(date.getDate() + days);
+  return date.toISOString().split('T')[0];
+}
+
+function getExpiringItems() { return getInventoryItems().filter(item => { const status = getExpirationStatus(item); return status === 'expired' || status === 'expiring-soon'; }); }
+
+function checkExpirationNotifications() {
+  const expiringItems = getExpiringItems(); if (expiringItems.length === 0) return;
+  const today = new Date().toISOString().split('T')[0];
+  if (state.lastNotificationCheck === today) return;
+  state.lastNotificationCheck = today;
+  const expired = expiringItems.filter(i => getExpirationStatus(i) === 'expired');
+  const expiringSoon = expiringItems.filter(i => getExpirationStatus(i) === 'expiring-soon');
+  let message = '';
+  if (expired.length > 0) message += `${expired.length} item${expired.length > 1 ? 's' : ''} expired! `;
+  if (expiringSoon.length > 0) message += `${expiringSoon.length} item${expiringSoon.length > 1 ? 's' : ''} expiring soon.`;
+  if (message) showExpirationAlert(message, expiringItems);
+  if (state.notificationsEnabled && Notification.permission === 'granted') { new Notification('Meal Planner', { body: message }); }
+}
+
+function showExpirationAlert(message, items) {
+  document.getElementById('expirationAlert')?.remove();
+  const alertHtml = `<div id="expirationAlert" class="fixed top-16 left-4 right-4 z-50 p-4 rounded-lg shadow-lg" style="background:${CONFIG.danger_color}; max-width:400px; margin:0 auto;"><div class="flex items-start gap-3"><div style="font-size:1.5rem;">&#9888;&#65039;</div><div class="flex-1"><div style="color:white; font-weight:600; margin-bottom:4px;">Items Need Attention</div><div style="color:rgba(255,255,255,0.9); font-size:14px; margin-bottom:8px;">${message}</div><div class="flex gap-2"><button onclick="navigateTo('inventory'); document.getElementById('expirationAlert')?.remove();" class="px-3 py-1 rounded text-sm" style="background:white; color:${CONFIG.danger_color}; font-weight:500;">View Inventory</button><button onclick="document.getElementById('expirationAlert')?.remove();" class="px-3 py-1 rounded text-sm" style="background:rgba(255,255,255,0.2); color:white;">Dismiss</button></div></div></div></div>`;
+  document.body.insertAdjacentHTML('beforeend', alertHtml);
+  setTimeout(() => { document.getElementById('expirationAlert')?.remove(); }, 10000);
+}
+
+async function requestNotificationPermission() {
+  if (!('Notification' in window)) { showToast('Browser notifications not supported', 'error'); return; }
+  const permission = await Notification.requestPermission();
+  if (permission === 'granted') { state.notificationsEnabled = true; showToast('Notifications enabled!', 'success'); }
+  else { showToast('Notification permission denied', 'error'); }
+}
+
+function getExpirationStatus(item) {
+  if (item.isFrozen) return 'frozen';
+  if (!item.expirationDate) return 'unknown';
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const expDate = new Date(item.expirationDate);
+  const daysUntil = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+  if (daysUntil < 0) return 'expired';
+  if (daysUntil <= 2) return 'expiring-soon';
+  if (daysUntil <= 5) return 'expiring';
+  return 'fresh';
+}
+
+function getExpirationColor(status) {
+  switch (status) { case 'expired': return CONFIG.danger_color; case 'expiring-soon': return '#f97316'; case 'expiring': return '#eab308'; case 'fresh': return '#22c55e'; case 'frozen': return '#3b82f6'; default: return '#6b7280'; }
+}
+
+function getInventoryItems() { return state.inventory || []; }
+
+async function addInventoryItem(item) {
+  const purchaseDate = item.purchaseDate || new Date().toISOString().split('T')[0];
+  const category = item.category || 'Uncategorized';
+  const isFromReceipt = item.fromReceipt || false;
+  const inventoryItem = { id: `inventory_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: item.name, quantity: item.quantity || 1, unit: item.unit || '', category, purchaseDate, expirationDate: item.expirationDate || suggestExpirationDate(item.name, category, purchaseDate), price: item.price || null, image_url: item.image_url || null, isFrozen: item.isFrozen || false, fromReceipt: isFromReceipt, expirationVerified: !isFromReceipt };
+  await storage.create(inventoryItem);
+  trackFrequentItem(item.name, item.category);
+  return inventoryItem;
+}
+
+async function saveExpirationDefault(itemName, days) {
+  const lowerName = itemName.toLowerCase();
+  const existingId = `expdefault_${lowerName.replace(/\s+/g, '_')}`;
+  const defaultItem = { id: existingId, itemName: lowerName, days };
+  try { const existing = state.expirationDefaults[lowerName]; if (existing) await storage.update(defaultItem); else await storage.create(defaultItem); state.expirationDefaults[lowerName] = days; }
+  catch (error) { console.error('saveExpirationDefault failed:', error); showError('Failed to save expiration default'); }
+}
+
+async function updateInventoryItem(id, updates) {
+  const item = state.inventory.find(i => i.id === id); if (!item) return;
+  try { const updated = { ...item, ...updates }; await storage.update(updated); } catch (error) { console.error('updateInventoryItem failed:', error); showError('Failed to update item'); }
+}
+
+async function deleteInventoryItem(id) {
+  const item = state.inventory.find(i => i.id === id); if (!item) return;
+  try { await storage.delete(item); showToast('Item removed', 'success'); } catch (error) { console.error('deleteInventoryItem failed:', error); showError('Failed to remove item'); }
+}
+
+async function confirmDeleteInventoryItem(id) {
+  const item = state.inventory.find(i => i.id === id); if (!item) return;
+  if (confirm(`Delete "${item.name}" permanently?`)) await deleteInventoryItem(id);
+}
+
+// Receipt functions
+function extractItemsFromReceipt(text) {
+  const lines = text.split('\n'); const items = []; const seenItems = new Set();
+  const skipPatterns = /^(TOTAL|SUBTOTAL|TAX|BALANCE|CHANGE|CASH|CREDIT|DEBIT|VISA|MASTERCARD|THANK|SALE|TRANSACTION|STORE|OPEN|CLOSE|TEL|PHONE|ADDRESS|DATE|TIME|RECEIPT|CUSTOMER|CARD|PAYMENT|APPROVED|SIGNATURE|PIN|VERIFIED|SAVINGS|DISCOUNT|COUPON|MEMBER|LOYALTY|REWARDS)/i;
+  for (const line of lines) {
+    const trimmed = line.trim(); if (!trimmed || trimmed.length < 5) continue;
+    if (skipPatterns.test(trimmed)) continue;
+    const priceMatch = trimmed.match(/(\d{1,3}\.\d{2})\s*$/);
+    if (priceMatch) {
+      const price = parseFloat(priceMatch[1]); if (price < 0.25 || price > 50) continue;
+      let name = trimmed.slice(0, trimmed.lastIndexOf(priceMatch[1])).trim().replace(/^[\d\s]+/, '').replace(/[|\\\/\[\]{}]+/g, '').replace(/\s+/g, ' ').trim();
+      if (name.length < 3 || !/[a-zA-Z]{2,}/.test(name)) continue;
+      name = formatItemName(name);
+      const key = name.toLowerCase(); if (seenItems.has(key)) continue; seenItems.add(key);
+      items.push({ name, rawText: name, price, quantity: 1, category: guessGroceryCategory(name) });
+    }
+  }
+  items.sort((a, b) => b.price - a.price);
+  return items.slice(0, 20);
+}
+
+function getLearnedMapping(rawText) { return state.receiptMappings[(rawText || '').toLowerCase().trim()] || null; }
+
+function formatItemName(name, rawText = null) {
+  const learned = getLearnedMapping(rawText || name); if (learned) return learned.name || learned;
+  for (const mapping of ITEM_MAPPINGS) { for (const pattern of mapping.patterns) { if (pattern.test(name)) return mapping.name; } }
+  return name.toLowerCase().replace(/\b(bnls|sknls|skns|nat|natl|r-|wt|t\b)\b/gi, '').replace(/\borg\b/gi, 'Organic').replace(/\blb\b/gi, '').replace(/\boz\b/gi, '').replace(/\s+/g, ' ').trim().replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function findMatchingIngredient(itemName) {
+  if (!itemName) return null; const name = itemName.toLowerCase().trim();
+  for (const knowledge of state.ingredientKnowledge) { const ingName = knowledge.name.toLowerCase(); if (name.includes(ingName) || ingName.includes(name)) return knowledge; }
+  for (const key of Object.keys(INGREDIENT_IMAGES)) { if (name.includes(key) || key.includes(name)) { return getIngredientKnowledge(key) || { name: key, category: 'Other' }; } }
+  return null;
+}
+
+async function saveReceiptMapping(rawText, cleanName, category, ingredientId = null) {
+  const normalizedRaw = rawText.toLowerCase().trim();
+  const mapping = { id: `mapping_${normalizedRaw.replace(/[^a-z0-9]/g, '_')}`, type: 'receipt_mapping', rawText: normalizedRaw, correctedName: cleanName, category, ingredientId, updatedAt: new Date().toISOString() };
+  try { state.receiptMappings[normalizedRaw] = { name: cleanName, category, ingredientId }; await storage.create(mapping); } catch (error) { console.error('saveReceiptMapping failed:', error); }
+}
+
+// Receipt scan state
+let receiptScanState = { isScanning: false, imageUrl: null, extractedText: '', extractedItems: [], claudeResult: null, detectedTotal: null, store: null, receiptDate: null, showModal: false };
+
+function closeReceiptModal() { receiptScanState = { isScanning: false, imageUrl: null, extractedText: '', extractedItems: [], claudeResult: null, detectedTotal: null, store: null, receiptDate: null, showModal: false }; if (typeof render === 'function') render(); }
+function showReceiptModal() { receiptScanState = { isScanning: false, imageUrl: null, extractedItems: [], claudeResult: null, detectedTotal: null, store: null, receiptDate: null, showModal: true }; if (typeof render === 'function') render(); }
+
+async function handleReceiptUpload(event) {
+  const file = event.target.files[0]; if (!file) return;
+  receiptScanState.isScanning = true; receiptScanState.showModal = true; receiptScanState.extractedText = ''; receiptScanState.detectedTotal = null;
+  if (typeof render === 'function') render();
+  try {
+    showToast('Compressing photo...', 'info');
+    const compressedFile = await compressImage(file, 1200, 0.8);
+    showToast('Processing receipt...', 'info');
+    const imageUrl = await uploadPhoto(compressedFile);
+    if (!imageUrl) { receiptScanState.isScanning = false; if (typeof render === 'function') render(); return; }
+    receiptScanState.imageUrl = imageUrl; if (typeof render === 'function') render();
+    showToast('Reading receipt...', 'info');
+    const result = await Tesseract.recognize(imageUrl, 'eng', { logger: m => { if (m.status === 'recognizing text') { const pct = Math.round(m.progress * 100); document.getElementById('ocrProgress')?.style.setProperty('width', pct + '%'); } } });
+    receiptScanState.extractedText = result.data.text;
+    receiptScanState.detectedTotal = extractTotalFromReceipt(result.data.text);
+    receiptScanState.isScanning = false;
+    showToast('Receipt scanned!', 'success');
+    if (typeof render === 'function') render();
+  } catch (e) { console.error('Receipt scan error:', e); showError('Failed to scan receipt'); receiptScanState.isScanning = false; if (typeof render === 'function') render(); }
+  event.target.value = '';
+}
+
+function extractTotalFromReceipt(text) {
+  const dollarAmounts = text.match(/\$\s*(\d{1,3}(?:,?\d{3})*\.\d{2})/g) || [];
+  const parsedDollarAmounts = dollarAmounts.map(a => parseFloat(a.replace(/[$,\s]/g, ''))).filter(n => n > 0 && n < 5000);
+  const patterns = [ /total[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i, /grand\s*total[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i, /amount\s*due[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i, /balance\s*due[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i, /you\s*paid[:\s]*\$?\s*(\d{1,3}(?:,?\d{3})*\.?\d{0,2})/i ];
+  for (const pattern of patterns) { const match = text.match(pattern); if (match && match[1]) { const amount = parseFloat(match[1].replace(/,/g, '')); if (amount > 0 && amount < 5000) return amount; } }
+  if (parsedDollarAmounts.length > 0) { const inRange = parsedDollarAmounts.filter(a => a >= 20 && a <= 500); if (inRange.length > 0) return Math.max(...inRange); return Math.max(...parsedDollarAmounts); }
+  return null;
+}
+
+// Claude receipt scanner functions
+async function scanReceiptWithClaude(imageBase64) {
+  const systemPrompt = `You are a receipt scanning assistant. Analyze the receipt image and extract all items. Respond in JSON: { "store": "...", "date": "YYYY-MM-DD", "total": 45.67, "items": [{ "name": "...", "rawText": "...", "price": 3.99, "quantity": 1, "category": "...", "daysUntilExpiration": 3 }] }`;
+  try {
+    const response = await fetch(CHEF_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: imageBase64 } }, { type: 'text', text: 'Please scan this receipt and extract all the information.' }] }] }) });
+    if (!response.ok) throw new Error('Failed to analyze receipt');
+    const data = await response.json(); const content = data.response || data.content?.[0]?.text || '';
+    const jsonMatch = content.match(/\{[\s\S]*\}/); if (jsonMatch) return JSON.parse(jsonMatch[0]);
+    throw new Error('Could not parse receipt data');
+  } catch (error) { console.error('Claude receipt scan error:', error); throw error; }
+}
+
+async function handleClaudeReceiptUpload(event) {
+  const file = event.target.files[0]; if (!file) return;
+  receiptScanState.isScanning = true; receiptScanState.showModal = true; receiptScanState.extractedItems = []; receiptScanState.claudeResult = null;
+  if (typeof render === 'function') render();
+  try {
+    showToast('Processing receipt...', 'info');
+    const compressedFile = await compressImage(file, 1200, 0.8);
+    const base64 = await new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = (e) => resolve(e.target.result.split(',')[1]); reader.onerror = () => reject(new Error('Failed to read file')); reader.readAsDataURL(compressedFile); });
+    uploadPhoto(compressedFile).then(url => { receiptScanState.imageUrl = url; if (typeof render === 'function') render(); }).catch(() => {});
+    showToast('AI is reading your receipt...', 'info');
+    const result = await Promise.race([ scanReceiptWithClaude(base64), new Promise((_, reject) => setTimeout(() => reject(new Error('Timeout')), 60000)) ]);
+    receiptScanState.claudeResult = result;
+    const items = (result.items || []).map(item => { const rawText = (item.rawText || item.name || '').toLowerCase().trim(); const savedMapping = state.receiptMappings[rawText]; if (savedMapping) return { ...item, name: savedMapping.name, category: savedMapping.category, rawText: item.rawText || item.name, isRemembered: true }; const matched = findMatchingIngredient(item.name); if (matched) return { ...item, rawText: item.rawText || item.name, linkedIngredient: matched.name }; return { ...item, rawText: item.rawText || item.name, isNew: true }; });
+    receiptScanState.extractedItems = items; receiptScanState.detectedTotal = result.total; receiptScanState.store = result.store; receiptScanState.receiptDate = result.date; receiptScanState.isScanning = false;
+    showToast(`Found ${result.items?.length || 0} items!`, 'success'); if (typeof render === 'function') render();
+  } catch (e) { console.error('Claude receipt scan error:', e); showError('Failed to scan receipt'); receiptScanState.isScanning = false; if (typeof render === 'function') render(); }
+  event.target.value = '';
+}
+
+function renderClaudeReceiptModal() { if (!receiptScanState.showModal) return ''; return '<!-- Claude receipt modal rendered by page -->'; }
+function renderReceiptModal() { if (!receiptScanState.showModal) return ''; return '<!-- Receipt modal rendered by page -->'; }
+
+async function addReceiptItemsToInventory() {
+  const items = receiptScanState.extractedItems || []; const itemsToAdd = [];
+  const purchaseDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
+  const purchaseDateObj = new Date(purchaseDate + 'T00:00:00');
+  for (let i = 0; i < items.length; i++) {
+    const checkbox = document.getElementById(`receiptItem${i}`); if (!checkbox?.checked) continue;
+    const item = items[i]; const quantity = item.quantity || 1; const pricePerItem = (item.price || 0) / quantity;
+    let expirationDate = null;
+    if (item.daysUntilExpiration) { const expDate = new Date(purchaseDateObj); expDate.setDate(expDate.getDate() + item.daysUntilExpiration); expirationDate = expDate.toISOString().split('T')[0]; }
+    for (let q = 0; q < quantity; q++) { itemsToAdd.push({ id: `inventory_${Date.now()}_${i}_${q}_${Math.random().toString(36).slice(2)}`, type: 'inventory', name: item.name, category: item.category || 'Other', quantity: 1, unit: '', purchasePrice: pricePerItem, purchaseDate, expirationDate, store: receiptScanState.store || '', image_url: getIngredientImage(item.name, item.category) || '', fromReceipt: true, expirationVerified: false }); }
+  }
+  showToast(`Adding ${itemsToAdd.length} items...`, 'info');
+  for (const inventoryItem of itemsToAdd) { try { await storage.create(inventoryItem); state.inventory.push(inventoryItem); } catch (e) { console.error('Failed to add item:', e); } }
+  showToast(`Added ${itemsToAdd.length} items to pantry!`, 'success'); closeReceiptModal(); if (typeof render === 'function') render();
+}
+
+async function saveReceiptToExpenses() {
+  const total = receiptScanState.detectedTotal || 0; if (total <= 0) { showError('No total to save'); return; }
+  const receiptDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
+  const weekStart = new Date(receiptDate + 'T00:00:00'); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+  const expense = { id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`, type: 'grocery', amount: total, note: receiptScanState.store ? `Receipt from ${receiptScanState.store}` : 'Grocery receipt', date: receiptDate, weekOf: weekStart.toISOString().split('T')[0], receiptImage: receiptScanState.imageUrl || '' };
+  await storage.create(expense); state.budgetExpenses.push(expense);
+  showToast(`$${total.toFixed(2)} added to budget!`, 'success'); closeReceiptModal(); if (typeof render === 'function') render();
+}
+
+function editReceiptItem(idx) { /* Complex modal - rendered by page JS */ }
+function closeReceiptItemEdit() { document.getElementById('receiptItemEditOverlay')?.remove(); }
+async function saveReceiptItemEdit(idx) { /* Handled by page JS */ }
+function editReceiptDetails() { /* Rendered by page JS */ }
+function closeReceiptDetailsEdit() { document.getElementById('receiptDetailsEditOverlay')?.remove(); }
+function saveReceiptDetailsEdit() { /* Handled by page JS */ }
+function renderReceiptScannerModal() {
+  if (!state.receiptScannerOpen) return '';
+
+  const hasPhoto = !!state.receiptPhoto;
+  const isLoading = state.receiptLoading;
+  const analysis = state.receiptAnalysis;
+
+  let content = '';
+  if (!hasPhoto) {
+    content = `
+      <div class="receipt-capture">
+        <div class="capture-area" onclick="captureReceipt()">
+          <span class="capture-icon">📷</span>
+          <span class="capture-text">Take photo of receipt</span>
+        </div>
+        <p class="capture-hint">Make sure the total is visible</p>
+      </div>`;
+  } else if (isLoading) {
+    content = `
+      <div class="receipt-loading">
+        <div class="receipt-spinner"></div>
+        <p>Analyzing receipt...</p>
+      </div>`;
+  } else if (analysis) {
+    content = `
+      <div class="receipt-results">
+        <div class="receipt-preview">
+          <img src="${state.receiptPhoto}" alt="Receipt" />
+        </div>
+        <div class="receipt-details">
+          ${analysis.store ? `
+            <div class="receipt-detail-row">
+              <span class="receipt-detail-label">Store</span>
+              <span class="receipt-detail-value">${analysis.store}</span>
+            </div>
+          ` : ''}
+          <div class="receipt-detail-row total">
+            <span class="receipt-detail-label">Total</span>
+            <input type="number" id="receiptTotal" value="${analysis.total || ''}" step="0.01" />
+          </div>
+          ${analysis.items && analysis.items.length > 0 ? `
+            <div class="receipt-items">
+              <span class="items-label">${analysis.items.length} items detected</span>
+              <div class="items-list">
+                ${analysis.items.slice(0, 5).map(item => `
+                  <span class="item-tag">${item}</span>
+                `).join('')}
+                ${analysis.items.length > 5 ? `<span class="item-more">+${analysis.items.length - 5} more</span>` : ''}
+              </div>
+            </div>
+          ` : ''}
+          <div class="receipt-detail-row">
+            <span class="receipt-detail-label">Category</span>
+            <select id="receiptCategory">
+              <option value="grocery" ${analysis.category === 'grocery' ? 'selected' : ''}>🛒 Grocery</option>
+              <option value="takeout" ${analysis.category === 'takeout' ? 'selected' : ''}>🥡 Takeout</option>
+              <option value="coffee" ${analysis.category === 'coffee' ? 'selected' : ''}>☕ Coffee</option>
+              <option value="other" ${analysis.category === 'other' ? 'selected' : ''}>📝 Other</option>
+            </select>
+          </div>
+        </div>
+        <button class="receipt-btn-primary" onclick="saveReceiptExpense()">Add Expense</button>
+        <button class="receipt-btn-secondary" onclick="retakeReceipt()">Retake Photo</button>
+      </div>`;
+  } else {
+    content = `
+      <div class="receipt-preview">
+        <img src="${state.receiptPhoto}" alt="Receipt" />
+        <button class="receipt-btn-primary" onclick="analyzeReceipt()" style="margin-top: 12px;">Analyze Receipt</button>
+      </div>`;
+  }
+
+  return `
+    <div class="receipt-modal-overlay" onclick="closeReceiptScanner()">
+      <div class="receipt-modal" onclick="event.stopPropagation()">
+        <h3>Scan Receipt</h3>
+        ${content}
+        <button class="receipt-btn-cancel" onclick="closeReceiptScanner()">Cancel</button>
+      </div>
+    </div>`;
+}
+
+async function saveReceiptExpense() {
+  const amountInput = document.getElementById('receiptAmount'); const noteInput = document.getElementById('receiptNote');
+  const amount = parseFloat(amountInput?.value); const note = noteInput?.value || '';
+  if (!amount || amount <= 0) { showError('Please enter a valid amount'); return; }
+  state.isLoading = true;
+  const itemCheckboxes = document.querySelectorAll('[id^="receiptItem_"]:checked');
+  const itemsToAdd = Array.from(itemCheckboxes).map(cb => ({ name: cb.dataset.name, price: parseFloat(cb.dataset.price), category: cb.dataset.category, fromReceipt: true }));
+  closeReceiptModal(); if (typeof render === 'function') render();
+  try {
+    const expense = { id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`, type: 'grocery', amount, date: new Date().toISOString().split('T')[0], note, receipt_url: receiptScanState.imageUrl };
+    await storage.create(expense);
+    for (const item of itemsToAdd) { await addInventoryItem(item); }
+    showToast(`Grocery expense logged!${itemsToAdd.length > 0 ? ` + ${itemsToAdd.length} items added` : ''}`, 'success');
+  } catch (e) { console.error(e); showError('Failed to save expense'); } finally { state.isLoading = false; if (typeof render === 'function') render(); }
+}
+
+// ============================================================
+// SECTION 12: DATE HELPERS
+// ============================================================
+function freshMealSlot() { return { status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null }; }
+function getToday() { return new Date().toISOString().split('T')[0]; }
+function isToday(dateStr) { return dateStr === getToday(); }
+function isPastDate(dateStr) { return dateStr < getToday(); }
+function isFutureDate(dateStr) { return dateStr > getToday(); }
+function getYesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; }
+function getTomorrow() { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; }
+
+function getDayData(dateStr) {
+  if (!state.mealDays[dateStr]) { state.mealDays[dateStr] = { date: dateStr, meals: { breakfast: freshMealSlot(), lunch: freshMealSlot(), dinner: freshMealSlot(), snacks: [] } }; }
+  return state.mealDays[dateStr];
+}
+
+function getDateLabel(dateStr) {
+  if (dateStr === getToday()) return 'Today';
+  if (dateStr === getYesterday()) return 'Yesterday';
+  if (dateStr === getTomorrow()) return 'Tomorrow';
+  return formatDateShort(dateStr);
+}
+
+function formatDateShort(dateStr) { const d = new Date(dateStr + 'T12:00:00'); return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
+function formatDateFull(dateStr) { const d = new Date(dateStr + 'T12:00:00'); return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); }
+function formatMonthYear(date) { return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }); }
+
+function hasMealsOnDate(dateStr) {
+  const dayData = state.mealDays[dateStr]; if (!dayData) return false;
+  return Object.values(dayData.meals).some(meal => meal && typeof meal === 'object' && !Array.isArray(meal) && (meal.status === 'selected' || meal.status === 'pending' || meal.status === 'logged'));
+}
+
+function generateCalendarWeeks(date) {
+  const year = date.getFullYear(); const month = date.getMonth();
+  const firstDay = new Date(year, month, 1); const lastDay = new Date(year, month + 1, 0);
+  const weeks = []; let currentWeek = [];
+  for (let i = 0; i < firstDay.getDay(); i++) currentWeek.push(null);
+  for (let day = 1; day <= lastDay.getDate(); day++) { currentWeek.push(new Date(year, month, day)); if (currentWeek.length === 7) { weeks.push(currentWeek); currentWeek = []; } }
+  if (currentWeek.length > 0) { while (currentWeek.length < 7) currentWeek.push(null); weeks.push(currentWeek); }
+  return weeks;
+}
+
+function ensureTodayDateCurrent() { getDayData(getToday()); state.todaySwipeMealSlot = null; }
+
+function checkMealAutoTransitions() {
+  ensureTodayDateCurrent(); const todayDate = getToday(); const todayDay = getDayData(todayDate);
+  const hour = new Date().getHours(); const transitions = { breakfast: 10, lunch: 14, dinner: 21 }; let changed = false;
+  for (const [meal, cutoffHour] of Object.entries(transitions)) { const slot = todayDay.meals[meal]; if (slot.status === 'selected' && hour >= cutoffHour) { slot.status = 'pending'; changed = true; } }
+  if (changed) saveMealDay(todayDate); return changed;
+}
+
+// ============================================================
+// SECTION 13: TIMER FUNCTIONS
+// ============================================================
+let activeAlarms = [];
+
+function playTimerSound(timerId) {
+  const audioCtx = window._timerAudioCtx || new (window.AudioContext || window.webkitAudioContext)(); audioCtx.resume();
+  function playBeeps() { [0, 0.2, 0.4].forEach(delay => { try { const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain(); osc.connect(gain); gain.connect(audioCtx.destination); osc.frequency.value = 880; osc.type = 'sine'; gain.gain.setValueAtTime(0.5, audioCtx.currentTime + delay); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + delay + 0.15); osc.start(audioCtx.currentTime + delay); osc.stop(audioCtx.currentTime + delay + 0.15); } catch(e) {} }); }
+  playBeeps(); const interval = setInterval(playBeeps, 1000);
+  activeAlarms.push({ id: timerId, interval, audioCtx });
+}
+
+function stopTimerSound(timerId) {
+  if (timerId) { const alarm = activeAlarms.find(a => a.id === timerId); if (alarm) { clearInterval(alarm.interval); activeAlarms = activeAlarms.filter(a => a.id !== timerId); } }
+  else { activeAlarms.forEach(alarm => clearInterval(alarm.interval)); activeAlarms = []; }
+}
+
+function startTimer(minutes, label = 'Timer') {
+  const timer = { id: `timer_${Date.now()}`, label, duration: minutes * 60, remaining: minutes * 60, startedAt: Date.now(), interval: null };
+  timer.interval = setInterval(() => { timer.remaining = Math.max(0, timer.duration - Math.floor((Date.now() - timer.startedAt) / 1000)); renderTimerWidget(); if (timer.remaining <= 0) { clearInterval(timer.interval); timerFinished(timer); } }, 1000);
+  state.activeTimers.push(timer); renderTimerWidget(); showToast(`Timer started: ${label} (${minutes} min)`, 'success');
+}
+
+function startTimerSeconds(totalSeconds, label = 'Timer') {
+  try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const osc = ctx.createOscillator(); osc.connect(ctx.destination); osc.start(); osc.stop(); window._timerAudioCtx = ctx; } catch(e) {}
+  const timer = { id: `timer_${Date.now()}`, label, duration: totalSeconds, remaining: totalSeconds, startedAt: Date.now(), interval: null };
+  timer.interval = setInterval(() => { timer.remaining = Math.max(0, timer.duration - Math.floor((Date.now() - timer.startedAt) / 1000)); renderTimerWidget(); if (timer.remaining <= 0) { clearInterval(timer.interval); timerFinished(timer); } }, 1000);
+  state.activeTimers.push(timer); renderTimerWidget();
+  const mins = Math.floor(totalSeconds / 60); const secs = totalSeconds % 60;
+  showToast(`Timer started: ${label} (${mins > 0 ? mins + 'm ' : ''}${secs}s)`, 'success');
+}
+
+function stopTimer(timerId) { const timer = state.activeTimers.find(t => t.id === timerId); if (timer?.interval) clearInterval(timer.interval); state.activeTimers = state.activeTimers.filter(t => t.id !== timerId); renderTimerWidget(); }
+
+function timerFinished(timer) {
+  try { playTimerSound(timer.id); } catch (e) {}
+  if (Notification.permission === 'granted') { new Notification('Timer Done!', { body: timer.label }); }
+  if (!state.finishedTimers) state.finishedTimers = [];
+  state.finishedTimers.push(timer);
+  state.activeTimers = state.activeTimers.filter(t => t.id !== timer.id);
+  renderAlarmWidget();
+}
+
+function renderAlarmWidget() {
+  document.getElementById('alarmWidget')?.remove();
+  if (!state.finishedTimers || state.finishedTimers.length === 0) { renderTimerWidget(); return; }
+  const widgetHtml = `<div id="alarmWidget" class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(0,0,0,0.8);"><div class="rounded-xl p-6 text-center" style="background:${CONFIG.surface_color}; max-width:90%; width:350px;"><div style="font-size:4rem; margin-bottom:1rem;">&#9200;</div><h2 style="color:${CONFIG.text_color}; font-size:1.5rem; font-weight:bold; margin-bottom:1rem;">${state.finishedTimers.length === 1 ? 'Timer Done!' : state.finishedTimers.length + ' Timers Done!'}</h2><div class="space-y-2 mb-4">${state.finishedTimers.map(timer => `<div class="flex items-center justify-between p-2 rounded" style="background:rgba(255,255,255,0.1);"><span style="color:${CONFIG.text_color};">${esc(timer.label)}</span><button onclick="dismissSingleAlarm('${timer.id}')" class="px-3 py-1 rounded" style="background:${CONFIG.danger_color}; color:white; font-size:0.9rem;">Stop</button></div>`).join('')}</div>${state.finishedTimers.length > 1 ? `<button onclick="dismissAllAlarms()" class="w-full px-6 py-3 rounded-lg font-bold" style="background:${CONFIG.danger_color}; color:white; font-size:1.1rem;">Stop All Alarms</button>` : ''}</div></div>`;
+  document.body.insertAdjacentHTML('beforeend', widgetHtml);
+}
+
+function dismissSingleAlarm(timerId) { stopTimerSound(timerId); state.finishedTimers = state.finishedTimers.filter(t => t.id !== timerId); renderAlarmWidget(); if (state.finishedTimers.length === 0) showToast('Alarm dismissed', 'success'); }
+function dismissAllAlarms() { stopTimerSound(); state.finishedTimers = []; renderAlarmWidget(); showToast('All alarms dismissed', 'success'); }
+
+function formatTime(seconds) { const mins = Math.floor(seconds / 60); const secs = seconds % 60; return `${mins}:${secs.toString().padStart(2, '0')}`; }
+
+function renderTimerWidget() {
+  document.getElementById('timerWidget')?.remove();
+  if (state.activeTimers.length === 0) return;
+  const widgetHtml = `<div id="timerWidget" class="fixed top-20 right-4 z-40 rounded-lg shadow-lg p-3" style="background:${CONFIG.surface_color}; min-width:150px;"><div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.8}px; font-weight:600; margin-bottom:8px;">&#9200; Timers</div>${state.activeTimers.map(timer => `<div class="flex items-center justify-between gap-2 mb-2"><div><div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">${esc(timer.label)}</div><div style="color:${timer.remaining < 60 ? CONFIG.danger_color : CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 1.2}px; font-weight:bold;">${formatTime(timer.remaining)}</div></div><button onclick="stopTimer('${timer.id}')" class="px-2 py-1 rounded text-xs" style="background:${CONFIG.danger_color}; color:white;">&#10005;</button></div>`).join('')}</div>`;
+  document.body.insertAdjacentHTML('beforeend', widgetHtml);
+}
+
+function showTimerModal() {
+  openModal(`<div style="color: ${CONFIG.text_color};"><h2 class="text-2xl font-bold mb-4">Set Timer</h2><div class="mb-4"><label class="block mb-2 font-semibold">Timer Label:</label><input type="text" id="timerLabel" value="Cooking Timer" class="w-full px-3 py-2 border rounded" /></div><div class="mb-4 flex gap-4"><div class="flex-1"><label class="block mb-2 font-semibold">Minutes:</label><input type="number" id="timerMinutes" value="0" min="0" max="180" class="w-full px-3 py-2 border rounded" /></div><div class="flex-1"><label class="block mb-2 font-semibold">Seconds:</label><input type="number" id="timerSeconds" value="30" min="0" max="59" class="w-full px-3 py-2 border rounded" /></div></div><div class="mb-4"><label class="block mb-2 font-semibold text-sm" style="color: ${CONFIG.text_muted};">Quick presets:</label><div class="flex flex-wrap gap-2">${[1,5,10,15,20,30,45,60].map(m => `<button type="button" onclick="document.getElementById('timerMinutes').value=${m}" class="px-3 py-1 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">${m} min</button>`).join('')}</div></div><div class="flex gap-2 justify-end"><button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="startTimerFromModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.success_color}; color: white;">Start Timer</button></div></div>`);
+}
+
+function startTimerFromModal() {
+  const label = document.getElementById('timerLabel')?.value || 'Timer';
+  const minutes = parseInt(document.getElementById('timerMinutes')?.value) || 0;
+  const seconds = parseInt(document.getElementById('timerSeconds')?.value) || 0;
+  const totalSeconds = (minutes * 60) + seconds;
+  if (totalSeconds < 1) { showError('Please set at least 1 second'); return; }
+  closeModal(); startTimerSeconds(totalSeconds, label);
+}
+
+// ============================================================
+// SECTION 14: FREQUENT ITEMS
+// ============================================================
+async function trackFrequentItem(itemName, category) {
+  const key = itemName.toLowerCase().trim();
+  const id = `frequent_${key.replace(/[^a-z0-9]/g, '_').slice(0, 50)}`;
+  const existing = state.frequentItems.find(f => f.id === id);
+  if (existing) { existing.count = (existing.count || 1) + 1; existing.lastUsed = new Date().toISOString(); await storage.update(existing); }
+  else { const newItem = { id, name: itemName, category: category || 'Other', count: 1, lastUsed: new Date().toISOString() }; await storage.create(newItem); state.frequentItems.push(newItem); }
+}
+
+function getFrequentItems(limit = 10) { return [...state.frequentItems].sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, limit); }
+
+// ============================================================
+// SECTION 15: CHEF CHAT
+// ============================================================
+function renderChefChatButton() {
+  if (state.chefChatOpen) return '';
+  const bottomPosition = state.currentView === 'home' ? '140px' : '70px';
+  return `<button onclick="toggleChefChat()" class="fixed z-40 rounded-full shadow-lg hover:scale-105 transition-transform" style="bottom: ${bottomPosition}; right: 16px; width: 52px; height: 52px; background: ${CONFIG.surface_elevated}; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(232, 93, 93, 0.4);" title="Ask Chef Claude"><span style="font-size: 24px;">&#128104;&#8205;&#127859;</span></button>`;
+}
+
+function saveChefChatHistory() {
+  const messagesToSave = state.chefChatMessages.slice(-50);
+  saveToLS('chefChatMessages', messagesToSave);
+}
+
+function clearChefChatHistory() {
+  if (confirm('Clear all chat history with Chef Claude?')) { state.chefChatMessages = []; saveChefChatHistory(); renderChefChat(); showToast('Chat history cleared', 'success'); }
+}
+
+function deleteConversation(topic, timestamp) {
+  if (!confirm('Delete this conversation?')) return;
+  const startIdx = state.chefChatMessages.findIndex(m => m.timestamp === timestamp && m.role === 'user');
+  if (startIdx === -1) return;
+  let endIdx = startIdx + 1;
+  while (endIdx < state.chefChatMessages.length) { if (state.chefChatMessages[endIdx].role === 'user') { const prevMsg = state.chefChatMessages[endIdx - 1]; if (prevMsg && prevMsg.role === 'assistant') break; } endIdx++; }
+  state.chefChatMessages.splice(startIdx, endIdx - startIdx);
+  saveChefChatHistory(); renderChefChat(); showToast('Conversation deleted', 'success');
+}
+
+function getChefChatHistory() {
+  const conversations = []; let currentConvo = null;
+  state.chefChatMessages.forEach((msg, idx) => {
+    const msgDate = msg.timestamp ? new Date(msg.timestamp).toLocaleDateString() : 'Unknown';
+    if (msg.role === 'user') { const prevMsg = state.chefChatMessages[idx - 1]; if (!currentConvo || (prevMsg && prevMsg.role === 'assistant')) { currentConvo = { date: msgDate, topic: msg.content.slice(0, 50) + (msg.content.length > 50 ? '...' : ''), messages: [], timestamp: msg.timestamp }; conversations.push(currentConvo); } }
+    if (currentConvo) currentConvo.messages.push(msg);
+  });
+  const grouped = {};
+  conversations.forEach(convo => { if (!grouped[convo.date]) grouped[convo.date] = []; grouped[convo.date].push(convo); });
+  return Object.entries(grouped).sort((a, b) => new Date(b[0]) - new Date(a[0])).map(([date, convos]) => ({ date, conversations: convos }));
+}
+
+function formatChefMessage(text) {
+  return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/__(.+?)__/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/_(.+?)_/g, '<em>$1</em>').replace(/^(\d+)\.\s+(.+)$/gm, '<div style="margin-left:1rem;">$1. $2</div>').replace(/^[-\u2022]\s+(.+)$/gm, '<div style="margin-left:1rem;">\u2022 $1</div>').replace(/\n/g, '<br>');
+}
+
+function toggleChefChat() { state.chefChatOpen = !state.chefChatOpen; renderChefChat(); }
+
+function renderChefChat() {
+  document.getElementById('chefChatModal')?.remove();
+  if (!state.chefChatOpen) return;
+  // Simplified chat rendering - full version in page JS if needed
+  const chatHtml = `<div id="chefChatModal" class="fixed z-50" style="bottom: ${state.currentView !== 'home' ? '70px' : '90px'}; right: 12px; width: 360px; max-width: calc(100vw - 24px);"><div class="rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height: 70vh; border: 1px solid rgba(255,255,255,0.1);"><div class="flex items-center justify-between p-3" style="border-bottom: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_elevated}; border-radius: 12px 12px 0 0;"><div class="flex items-center gap-2"><span style="font-size:1.2rem;">&#128104;&#8205;&#127859;</span><span style="color: white; font-size: 15px; font-weight:600;">Chef Claude</span></div><div class="flex items-center gap-1">${state.chefChatMessages.length > 0 ? `<button onclick="state.chefChatView = state.chefChatView === 'history' ? 'chat' : 'history'; renderChefChat();" class="p-1 px-2 rounded" style="color: white; font-size: 12px; background: rgba(255,255,255,0.2);">${state.chefChatView === 'history' ? '\u2190' : '\ud83d\udcdc'}</button>` : ''}<button onclick="toggleChefChat()" class="p-1 px-2 rounded" style="color: white; font-size: 14px; background: rgba(255,255,255,0.2);">&#10005;</button></div></div><div id="chefChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2" style="min-height: 350px; max-height: 450px;">${state.chefChatView === 'history' ? (() => { const history = getChefChatHistory(); if (history.length === 0) return `<div style="color:${CONFIG.text_color}; opacity:0.6; text-align:center; padding:2rem;">No chat history yet</div>`; let html = ''; history.forEach(group => { html += `<div class="mb-4"><div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.8}px; margin-bottom:8px; font-weight:600;">${group.date}</div>`; group.conversations.forEach(convo => { html += `<div class="mb-2 rounded-lg" style="background:rgba(255,255,255,0.05);"><div class="p-3 cursor-pointer" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'"><span style="font-size:${CONFIG.font_size * 0.9}px; color:${CONFIG.text_color};">&#9654; ${esc(convo.topic)}</span></div><div style="display:none; padding:12px; border-top:1px solid rgba(255,255,255,0.1);">`; convo.messages.forEach(msg => { html += `<div style="display:flex; justify-content:${msg.role === 'user' ? 'flex-end' : 'flex-start'}; margin-bottom:8px;"><div style="max-width:85%; padding:8px 12px; border-radius:8px; background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">${formatChefMessage(msg.content)}</div></div>`; }); html += `</div></div>`; }); html += `</div>`; }); return html; })() : `${state.chefChatMessages.length === 0 ? `<div style="color:${CONFIG.text_color}; opacity:0.6; text-align:center; padding:2rem;"><div style="font-size:2rem; margin-bottom:0.5rem;">&#128104;&#8205;&#127859;</div><div>Ask me anything about cooking!</div></div>` : state.chefChatMessages.map((msg, idx) => `<div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}"><div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${msg.role === 'user' ? 'white' : CONFIG.text_color};">${msg.image ? `<img loading="lazy" src="${msg.image}" style="width: 100%; max-width: 200px; border-radius: 8px; margin-bottom: 8px;" />` : ''}${formatChefMessage(msg.content)}${msg.role === 'assistant' ? `<div class="flex gap-1 mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.1);"><button onclick="saveClaudeAsRecipe(${idx})" class="px-2 py-1 rounded text-xs" style="background:${CONFIG.primary_action_color}; color:white;">Recipe</button><button onclick="saveClaudeAsTip(${idx})" class="px-2 py-1 rounded text-xs" style="background:${CONFIG.warning_color}; color:white;">Tip</button><button onclick="saveClaudeToHistory(${idx})" class="px-2 py-1 rounded text-xs" style="background:#8b5cf6; color:white;">Save</button></div>` : ''}</div></div>`).join('')}${state.chefChatLoading ? `<div class="flex justify-start"><div class="px-3 py-2 rounded-lg" style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};"><span class="animate-pulse">Thinking...</span></div></div>` : ''}`}</div>${state.chefChatImage ? `<div style="padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.background_color};"><div style="display: flex; align-items: center; gap: 8px;"><img loading="lazy" src="${state.chefChatImage}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;" /><div style="flex: 1; color: ${CONFIG.text_muted}; font-size: 12px;">Image attached</div><button onclick="state.chefChatImage = null; renderChefChat();" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; font-size: 16px;">&#10005;</button></div></div>` : ''}<div class="p-3" style="border-top: 1px solid rgba(255,255,255,0.1);"><div class="flex gap-2 items-center"><input type="file" id="chefChatImageInput" accept="image/*" style="display: none;" onchange="handleChefImageUpload(event)" /><button onclick="document.getElementById('chefChatImageInput').click()" class="p-2 rounded-lg" style="background: ${CONFIG.background_color}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-size: 18px;" ${state.chefChatLoading ? 'disabled' : ''}>&#128247;</button><input type="text" id="chefChatInput" placeholder="${state.chefChatImage ? 'Ask about this image...' : 'Ask a cooking question...'}" class="flex-1 px-3 py-2 rounded-lg" style="background: ${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size: 16px;" onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChefMessage(); }" ${state.chefChatLoading ? 'disabled' : ''} /><button onclick="sendChefMessage()" class="px-3 py-2 rounded-lg" style="background:${CONFIG.primary_action_color}; color:white; font-size: 14px;" ${state.chefChatLoading ? 'disabled' : ''}>Send</button></div></div></div></div>`;
+  document.body.insertAdjacentHTML('beforeend', chatHtml);
+  setTimeout(() => { const messagesDiv = document.getElementById('chefChatMessages'); if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 50);
+}
+
+function handleChefImageUpload(event) {
+  const file = event.target.files[0]; if (!file) return;
+  if (file.size > 5 * 1024 * 1024) { showError('Image too large. Please use an image under 5MB.'); return; }
+  const reader = new FileReader(); reader.onload = (e) => { state.chefChatImage = e.target.result; renderChefChat(); }; reader.readAsDataURL(file);
+}
+
+async function sendChefMessage() {
+  const input = document.getElementById('chefChatInput'); const message = input?.value.trim();
+  if (!message || state.chefChatLoading) return;
+  const userMessage = { role: 'user', content: message, timestamp: new Date().toISOString() };
+  if (state.chefChatImage) userMessage.image = state.chefChatImage;
+  state.chefChatMessages.push(userMessage);
+  state.chefChatImage = null; input.value = ''; state.chefChatLoading = true; renderChefChat();
+  try {
+    const recipeContext = state.recipes.filter(r => !r.isDraft && !r.isTip).slice(0, 10).map(r => r.title).join(', ');
+    const systemPrompt = `You are Chef Claude, a friendly cooking assistant. Always include specific times and temperatures. Keep responses concise. Use bullet points for steps.`;
+    const apiMessages = state.chefChatMessages.map(m => {
+      if (m.image) return { role: m.role, content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: m.image.split(',')[1] } }, { type: 'text', text: m.content || 'What is this?' }] };
+      return { role: m.role, content: m.content };
+    });
+    const response = await fetch(CHEF_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt, messages: apiMessages, recipeContext: recipeContext ? `User's saved recipes: ${recipeContext}` : null }) });
+    const data = await response.json();
+    if (data.content && data.content[0]?.text) { state.chefChatMessages.push({ role: 'assistant', content: data.content[0].text, timestamp: new Date().toISOString() }); }
+    else { state.chefChatMessages.push({ role: 'assistant', content: 'Sorry, I encountered an error. Please try again.', timestamp: new Date().toISOString() }); }
+  } catch (error) { state.chefChatMessages.push({ role: 'assistant', content: 'Sorry, I couldn\'t connect. Please check your internet and try again.', timestamp: new Date().toISOString() }); }
+  finally { state.chefChatLoading = false; renderChefChat(); saveChefChatHistory(); }
+}
+
+// ============================================================
+// SECTION 16: INGREDIENT KNOWLEDGE
+// ============================================================
+function getIngredientKnowledge(ingredientName) {
+  const name = ingredientName.toLowerCase().trim();
+  return state.ingredientKnowledge.find(k => k.name.toLowerCase() === name);
+}
+
+function createDefaultIngredientKnowledge(name) {
+  return { id: `ingredient_${name.toLowerCase().replace(/[^a-z0-9]/g, '_')}`, type: 'ingredient_knowledge', name, category: 'Other', season: 'Year-round', storage: { location: 'Fridge', duration: '' }, freezable: null, freezingInfo: { blanch: '', duration: '', instructions: '' }, cookingMethods: [], techniques: [], pairings: [], notes: [], createdAt: new Date().toISOString() };
+}
+
+async function saveIngredientKnowledge(knowledge) {
+  try {
+    const existing = state.ingredientKnowledge.find(k => k.id === knowledge.id);
+    if (existing) { Object.assign(existing, knowledge); await storage.update(knowledge); }
+    else { state.ingredientKnowledge.push(knowledge); await storage.create(knowledge); }
+  } catch (error) { console.error('saveIngredientKnowledge failed:', error); showError('Failed to save ingredient data'); }
+}
+
+// Syncing functions
+async function syncAllIngredientImages() {
+  if (!confirm('Add all preset ingredients to your library?')) return;
+  closeModal(); state.isLoading = true; if (typeof render === 'function') render();
+  showToast('Syncing ingredients...', 'info');
+  try { const count = await syncIngredientImagesToKnowledge(); if (count > 0) showToast(`Added ${count} ingredients!`, 'success'); else showToast('All ingredients already in library', 'info'); }
+  catch (error) { console.error('Sync error:', error); showError('Failed to sync ingredients'); }
+  finally { state.isLoading = false; if (typeof render === 'function') render(); }
+}
+
+async function syncIngredientImagesToKnowledge() {
+  const allImages = { ...INGREDIENT_IMAGES, ...customIngredientImages }; let addedCount = 0;
+  const existingNames = new Set((state.ingredientKnowledge || []).map(k => k.name.toLowerCase()));
+  const deletedNames = new Set(state.deletedIngredients || []);
+  for (const [name, imageUrl] of Object.entries(allImages)) {
+    const normalizedName = name.toLowerCase();
+    if (existingNames.has(normalizedName) || deletedNames.has(normalizedName)) continue;
+    const knowledge = { id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`, type: 'ingredient_knowledge', name: normalizedName, category: guessIngredientCategory(normalizedName), season: 'Year-round', image_url: imageUrl, storage: { location: 'Fridge', duration: '' }, freezable: null, freezingInfo: { blanch: '', duration: '', instructions: '' }, cookingMethods: [], techniques: [], pairings: [], notes: [], createdAt: new Date().toISOString() };
+    state.ingredientKnowledge.push(knowledge); await storage.create(knowledge); addedCount++;
+    if (addedCount % 10 === 0) await new Promise(resolve => setTimeout(resolve, 100));
+  }
+  return addedCount;
+}
+
+function showIngredientImagesManager() { /* Complex modal - rendered by page JS if needed */ openModal(`<div style="color:${CONFIG.text_color};"><h2>Ingredient Images Manager</h2><p>This feature is available from the Kitchen page.</p><button onclick="closeModal()" class="px-4 py-2 rounded" style="background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; margin-top:12px;">Close</button></div>`); }
+function addCustomIngredientImage() { const name = document.getElementById('newIngredientName')?.value.trim().toLowerCase(); const url = document.getElementById('newIngredientUrl')?.value.trim(); if (!name) { showError('Please enter an ingredient name'); return; } if (!url) { showError('Please enter an image URL'); return; } customIngredientImages[name] = url; saveCustomIngredientImages(); showToast(`Image added for "${name}"`, 'success'); }
+function editIngredientImage(name) { /* Rendered by page JS */ }
+function saveEditedIngredientImage(name) { const url = document.getElementById('editIngredientUrl')?.value.trim(); if (!url) { showError('Please enter an image URL'); return; } customIngredientImages[name] = url; saveCustomIngredientImages(); showToast(`Image updated`, 'success'); }
+function deleteIngredientImage(name) { if (customIngredientImages[name]) { delete customIngredientImages[name]; saveCustomIngredientImages(); showToast(`Custom image removed`, 'success'); } }
+
+// ============================================================
+// SECTION 17: CLAUDE RECIPE SAVE FUNCTIONS
+// ============================================================
+async function saveClaudeAsRecipe(messageIndex) {
+  const message = state.chefChatMessages[messageIndex]; if (!message) return;
+  toggleChefChat(); state.isLoading = true; if (typeof render === 'function') render();
+  showToast('Converting to recipe...', 'info');
+  try {
+    const response = await fetch(CHEF_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: `Convert this to a structured recipe. Return ONLY valid JSON: {"title":"...","category":"...","servings":4,"prepTime":"...","cookTime":"...","ingredients":[{"item":"...","amount":"...","unit":"...","group":"..."}],"instructions":["Step 1","Step 2"],"notes":"..."}\n\nContent:\n${message.content}` }] }) });
+    const data = await response.json();
+    if (data.content && data.content[0]?.text) {
+      let cleanText = data.content[0].text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
+      const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) { showClaudeRecipePreviewModal(JSON.parse(jsonMatch[0])); } else { showError('Could not convert to recipe format'); }
+    } else { showError('Could not convert to recipe'); }
+  } catch (error) { console.error('Convert error:', error); showError('Failed to convert recipe'); }
+  finally { state.isLoading = false; if (typeof render === 'function') render(); }
+}
+
+function showClaudeRecipePreviewModal(recipeData) {
+  const ingredientsList = (recipeData.ingredients || []).map(ing => `${ing.amount || ''} ${ing.unit || ''} ${ing.item}`.trim()).join('\n');
+  const instructionsList = (recipeData.instructions || []).map((step, i) => `${i + 1}. ${step}`).join('\n');
+  openModal(`<div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;"><h2 class="text-2xl font-bold mb-4">Save Chef Claude Recipe</h2><div class="mb-4"><label class="block mb-2 font-semibold">Title:</label><input type="text" id="claudeRecipeTitle" value="${esc(recipeData.title || '')}" class="w-full px-3 py-2 border rounded" /></div><div class="grid grid-cols-2 gap-4 mb-4"><div><label class="block mb-2 font-semibold">Category:</label><select id="claudeRecipeCategory" class="w-full px-3 py-2 border rounded">${MEAL_CATEGORIES.map(c => `<option value="${c}" ${recipeData.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div><div><label class="block mb-2 font-semibold">Servings:</label><input type="number" id="claudeRecipeServings" value="${recipeData.servings || 4}" class="w-full px-3 py-2 border rounded" min="1" /></div></div><div class="mb-4"><label class="block mb-2 font-semibold">Ingredients:</label><textarea id="claudeRecipeIngredients" rows="6" class="w-full px-3 py-2 border rounded font-mono text-sm">${esc(ingredientsList)}</textarea></div><div class="mb-4"><label class="block mb-2 font-semibold">Instructions:</label><textarea id="claudeRecipeInstructions" rows="6" class="w-full px-3 py-2 border rounded text-sm">${esc(instructionsList)}</textarea></div><div class="mb-4"><label class="block mb-2 font-semibold">Notes:</label><textarea id="claudeRecipeNotes" rows="2" class="w-full px-3 py-2 border rounded">${esc(recipeData.notes || '')}</textarea></div><input type="hidden" id="claudeRecipeIngredientsData" value='${JSON.stringify(recipeData.ingredients || [])}' /><div class="flex gap-2 justify-end"><button onclick="closeModal()" class="px-4 py-2 rounded" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="saveClaudeRecipe()" class="px-4 py-2 rounded" style="background: ${CONFIG.success_color}; color: white;">Save Recipe</button></div></div>`);
+}
+
+async function saveClaudeRecipe() {
+  const title = document.getElementById('claudeRecipeTitle')?.value.trim();
+  const category = document.getElementById('claudeRecipeCategory')?.value;
+  const ingredientsData = JSON.parse(document.getElementById('claudeRecipeIngredientsData')?.value || '[]');
+  const instructionsText = document.getElementById('claudeRecipeInstructions')?.value || '';
+  const notes = document.getElementById('claudeRecipeNotes')?.value.trim();
+  if (!title) { showError('Please enter a recipe title'); return; }
+  const recipe = { id: `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`, title, category, ingredientsRows: ingredientsData.map(ing => ({ qty: ing.amount || '', unit: ing.unit || '', name: ing.item || '', group: ing.group || 'Other' })), instructions: instructionsText.split('\n').map(line => line.replace(/^\d+\.\s*/, '').trim()).filter(l => l).join('\n'), notes, sourceType: 'claude', favorite: false, isDraft: false, createdAt: new Date().toISOString() };
+  closeModal(); state.isLoading = true; if (typeof render === 'function') render();
+  try { await storage.create(recipe); showToast(`"${title}" saved from Chef Claude!`, 'success'); } catch (e) { console.error('Save error:', e); showError('Failed to save recipe'); }
+  finally { state.isLoading = false; if (typeof render === 'function') render(); }
+}
+
+async function saveClaudeAsTip(messageIndex) {
+  const message = state.chefChatMessages[messageIndex]; if (!message) return;
+  state.chefChatOpen = false; document.getElementById('chefChatModal')?.remove();
+  const contentLower = message.content.toLowerCase();
+  const produceAndProteins = ['chicken breast','chicken thighs','ground beef','salmon','shrimp','eggs','onion','garlic','tomato','bell pepper','carrot','broccoli','spinach','potato','avocado','lemon','lime'];
+  const detectedIngredients = produceAndProteins.filter(ing => contentLower.includes(ing));
+  const allIngredients = [...new Set([...Object.keys(INGREDIENT_IMAGES), ...state.ingredientKnowledge.map(k => k.name.toLowerCase())])].sort();
+  const firstLine = message.content.split('\n')[0] || '';
+  const extractedTitle = firstLine.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim().slice(0, 60);
+  openModal(`<div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;"><h2 class="text-2xl font-bold mb-4">Save Tip to Ingredients</h2><div class="mb-4"><label class="block mb-2 font-semibold">Tip Title:</label><input type="text" id="claudeTipTitle" value="${esc(extractedTitle)}" class="w-full px-3 py-2 border rounded" /></div><div class="mb-4"><label class="block mb-2 font-semibold">Tip Content:</label><textarea id="claudeTipContent" rows="5" class="w-full px-3 py-2 border rounded text-sm">${esc(message.content)}</textarea></div><div class="mb-4"><label class="block mb-2 font-semibold">Add to which ingredients:</label><input type="text" id="ingredientTipSearch" class="w-full px-3 py-2 border rounded mb-2" placeholder="Search..." oninput="filterIngredientCheckboxes(this.value)" /><div id="ingredientCheckboxes" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px;">${detectedIngredients.map(ing => `<label class="flex items-center gap-2 p-1 rounded cursor-pointer ingredient-checkbox-label" data-name="${esc(ing.toLowerCase())}"><input type="checkbox" name="tipIngredients" value="${esc(ing)}" checked /><span style="text-transform:capitalize;">${esc(ing)}</span></label>`).join('')}${allIngredients.filter(ing => !detectedIngredients.includes(ing)).map(ing => `<label class="flex items-center gap-2 p-1 rounded cursor-pointer ingredient-checkbox-label" data-name="${esc(ing.toLowerCase())}"><input type="checkbox" name="tipIngredients" value="${esc(ing)}" /><span style="text-transform:capitalize;">${esc(ing)}</span></label>`).join('')}</div></div><div class="flex gap-2 justify-end"><button onclick="closeModal()" class="px-4 py-2 rounded" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="saveTipToIngredients()" class="px-4 py-2 rounded" style="background: ${CONFIG.warning_color}; color: white;">Save</button></div></div>`);
+}
+
+async function saveClaudeToHistory(messageIndex) {
+  const message = state.chefChatMessages[messageIndex]; if (!message) return;
+  const firstLine = message.content.split('\n')[0] || '';
+  let extractedTitle = firstLine.replace(/\*\*/g, '').replace(/^#+\s*/, '').replace(/:$/, '').trim().slice(0, 50);
+  const contentLower = message.content.toLowerCase();
+  const ingredients = ['chicken breast','chicken thighs','chicken','ground beef','beef','steak','salmon','shrimp','eggs','onion','garlic','tomato','bell pepper','carrot','broccoli','spinach','potato','avocado','lemon','lime'];
+  const sorted = [...ingredients].sort((a, b) => b.length - a.length);
+  const detected = []; for (const ing of sorted) { if (contentLower.includes(ing) && !detected.some(d => d.includes(ing) || ing.includes(d))) detected.push(ing); }
+  if (detected.length === 0) { showToast('No ingredients detected. Use Tip to save manually.', 'info'); return; }
+  state.chefChatOpen = false; document.getElementById('chefChatModal')?.remove(); state.isLoading = true; if (typeof render === 'function') render();
+  try {
+    for (const ingredientName of detected) { let knowledge = getIngredientKnowledge(ingredientName); if (!knowledge) knowledge = createDefaultIngredientKnowledge(ingredientName); knowledge.notes = knowledge.notes || []; knowledge.notes.push(`📌 ${extractedTitle}\n\n${message.content.replace(/^.*?\n/, '').trim()}`); await saveIngredientKnowledge(knowledge); }
+    showToast(`"${extractedTitle}" saved to ${detected.slice(0, 3).map(i => capitalize(i)).join(', ')}`, 'success');
+  } catch (e) { console.error('Save error:', e); showError('Failed to save'); }
+  finally { state.isLoading = false; if (typeof render === 'function') render(); }
+}
+
+function filterIngredientCheckboxes(searchTerm) {
+  const labels = document.querySelectorAll('.ingredient-checkbox-label'); const search = searchTerm.toLowerCase();
+  labels.forEach(label => { label.style.display = label.dataset.name.includes(search) ? 'flex' : 'none'; });
+}
+
+async function saveTipToIngredients() {
+  const title = document.getElementById('claudeTipTitle')?.value.trim();
+  const content = document.getElementById('claudeTipContent')?.value.trim();
+  const checkboxes = document.querySelectorAll('input[name="tipIngredients"]:checked');
+  const selectedIngredients = Array.from(checkboxes).map(cb => cb.value.toLowerCase());
+  if (!title) { showError('Please enter a tip title'); return; }
+  if (selectedIngredients.length === 0) { showError('Please select at least one ingredient'); return; }
+  closeModal(); state.isLoading = true; if (typeof render === 'function') render();
+  try {
+    for (const ingredientName of selectedIngredients) { let knowledge = getIngredientKnowledge(ingredientName); if (!knowledge) knowledge = createDefaultIngredientKnowledge(ingredientName); knowledge.notes = knowledge.notes || []; knowledge.notes.push(`💡 ${title}\n${content}`); await saveIngredientKnowledge(knowledge); }
+    showToast(`Tip saved to ${selectedIngredients.length} ingredient${selectedIngredients.length > 1 ? 's' : ''}!`, 'success');
+  } catch (e) { console.error('Save error:', e); showError('Failed to save tip'); }
+  finally { state.isLoading = false; if (typeof render === 'function') render(); }
+}
+
+// ============================================================
+// SECTION 18: NAVIGATION
+// ============================================================
+function navigateTo(view) {
+  if (view === 'swipe') view = 'home';
+  if (view === 'grocery') view = 'grocery-list';
+  if (view === 'pantry') view = 'inventory';
+  if (view === 'budget') view = 'budget-dashboard';
+
+  const pageMap = {
+    'home': '/index.html', 'swipe-setup': '/index.html', 'swipe-confirm': '/index.html', 'external-meal-picker': '/index.html',
+    'recipes': '/recipes.html', 'recipe-view': '/recipes.html', 'recipe-edit': '/recipes.html', 'freestyle-edit': '/recipes.html',
+    'my-meals': '/my-meals.html', 'food-log-detail': '/my-meals.html', 'my-plates': '/my-meals.html',
+    'kitchen': '/kitchen.html', 'inventory': '/kitchen.html', 'ingredients': '/kitchen.html', 'ingredient-detail': '/kitchen.html', 'budget-dashboard': '/kitchen.html',
+    'kitchen-detail': '/kitchen-detail.html', 'kitchen-ingredient-meals': '/kitchen-detail.html',
+    'grocery-list': '/grocery.html', 'grocery-select-meals': '/grocery.html', 'grocery-ingredients': '/grocery.html'
+  };
+
+  const targetPage = pageMap[view] || '/index.html';
+  const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+  const targetFile = targetPage.split('/').pop();
+
+  if (targetFile !== currentPage) {
+    sessionStorage.setItem('yummy_target_view', view);
+    window.location.href = targetPage;
+  } else {
+    // Save scroll position
+    const app = document.getElementById('app');
+    if (app && state.currentView) state.scrollPositions[state.currentView] = app.scrollTop;
+    // Clear viewing flags
+    if (view !== 'recipe-view') { state.viewingFromPlan = null; state.viewingFromStats = false; state.viewingFromTips = false; state.viewingFromMealOptions = false; state.viewingFromSwipe = false; state.viewingFromKitchen = false; }
+    state.currentView = view;
+    if (typeof render === 'function') render();
+    // Restore scroll
+    setTimeout(() => { const app = document.getElementById('app'); if (app && state.scrollPositions[view] !== undefined) app.scrollTop = state.scrollPositions[view]; else if (app) app.scrollTop = 0; }, 0);
+  }
+}
+
+// ============================================================
+// SECTION 19: NAV RENDERING
+// ============================================================
+function renderNav() {
+  if (state.currentView === 'home' || state.currentView === 'swipe' || state.currentView === 'swipe-setup' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals') return '';
+  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient' };
+  const pageTitle = pageTitles[state.currentView] || 'Yummy';
+  const expiringItems = getExpiringItems(); const expiringCount = expiringItems.length;
+  return `<nav style="background: ${CONFIG.surface_color}; box-shadow: 0 1px 4px rgba(0,0,0,0.3);" class="px-3 py-2 sticky top-0 z-50"><div class="max-w-4xl mx-auto flex items-center justify-between"><div class="flex items-center gap-2"><button onclick="navigateTo('${state.currentView === 'food-log-detail' || state.currentView === 'my-plates' ? 'my-meals' : state.currentView === 'kitchen-detail' ? 'kitchen' : 'home'}')" style="color: ${CONFIG.text_muted}; font-size: 18px;" title="Back">&larr;</button><span style="color: ${CONFIG.text_color}; font-weight: ${CONFIG.type_header_weight}; font-size: ${CONFIG.type_header};">${pageTitle}</span></div><div class="flex items-center gap-1">${state.currentView === 'my-meals' ? `<button onclick="navigateTo('my-plates')" class="p-2 rounded-lg" style="color: ${CONFIG.text_color}; background: transparent;" title="My Plates"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg></button>` : ''}<button onclick="showTimerModal()" class="relative p-2 rounded-lg" style="color: ${CONFIG.text_color}; background: ${state.activeTimers.length > 0 ? 'rgba(232,93,93,0.15)' : 'transparent'};"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${state.activeTimers.length > 0 ? `<span style="position:absolute; top:2px; right:2px; background:${CONFIG.danger_color}; color:white; font-size:10px; padding:2px 5px; border-radius:10px;">${state.activeTimers.length}</span>` : ''}</button>${expiringCount > 0 ? `<button onclick="navigateTo('inventory')" class="relative p-2 rounded-lg" style="color: ${CONFIG.text_color}; background: rgba(232,93,93,0.15);"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg><span style="position:absolute; top:2px; right:2px; background:${CONFIG.danger_color}; color:white; font-size:10px; padding:2px 5px; border-radius:10px;">${expiringCount}</span></button>` : ''}</div></div></nav>`;
+}
+
+function renderBottomNav() {
+  const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+  const navItems = [
+    { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html'] },
+    { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'] },
+    { id: 'my-meals', label: 'My Meals', href: '/my-meals.html', pages: ['my-meals.html'] },
+    { id: 'kitchen', label: 'Kitchen', href: '/kitchen.html', pages: ['kitchen.html', 'kitchen-detail.html'] },
+    { id: 'grocery', label: 'Grocery', href: '/grocery.html', pages: ['grocery.html'] }
+  ];
+
+  const navIcons = {
+    home: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>' },
+    recipes: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>' },
+    'my-meals': { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>' },
+    kitchen: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>' },
+    grocery: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>' }
+  };
+
+  return `<nav style="position: fixed; bottom: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; box-shadow: 0 -1px 8px rgba(0,0,0,0.3); z-index: 40; padding-bottom: env(safe-area-inset-bottom);"><div style="display: flex; justify-content: space-around; align-items: center; padding: 6px 0 4px;">${navItems.map(item => {
+    const isActive = item.pages.includes(currentPage);
+    const iconSvg = isActive ? navIcons[item.id].active.replace('width="24" height="24"', 'width="20" height="20"') : navIcons[item.id].inactive.replace('width="24" height="24"', 'width="20" height="20"');
+    const iconStyle = isActive ? `color: ${CONFIG.primary_action_color}; filter: drop-shadow(0 0 4px rgba(232,93,93,0.3));` : `color: ${CONFIG.text_muted};`;
+    const groceryBadge = item.id === 'grocery' ? (() => { const count = getGroceryBadgeCount(); return count > 0 ? `<span id="grocery-badge" style="position: absolute; top: -2px; right: -4px; background: ${CONFIG.danger_color}; color: white; font-size: 8px; font-weight: 700; min-width: 14px; height: 14px; border-radius: 7px; display: flex; align-items: center; justify-content: center; padding: 0 3px;">${count}</span>` : '<span id="grocery-badge" style="display:none;"></span>'; })() : '';
+    return `<a href="${item.href}" style="display: flex; flex-direction: column; align-items: center; padding: 2px 6px; text-decoration: none; gap: 1px;"><span style="position: relative; ${iconStyle}">${iconSvg}${groceryBadge}</span><span style="font-size: 10px; font-weight: 500; letter-spacing: 0.3px; color: ${isActive ? CONFIG.primary_action_color : CONFIG.text_muted};">${item.label}</span></a>`;
+  }).join('')}<button onclick="showMoreMenu()" style="display: flex; flex-direction: column; align-items: center; padding: 2px 6px; border: none; background: transparent; cursor: pointer; gap: 1px;"><span style="color: ${CONFIG.text_muted};"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg></span><span style="font-size: 10px; font-weight: 500; letter-spacing: 0.3px; color: ${CONFIG.text_muted};">More</span></button></div></nav>`;
+}
+
+// ============================================================
+// SECTION 20: MORE MENU & MISC
+// ============================================================
+function showMoreMenu() {
+  const menuItems = [
+    { id: 'inventory', icon: '\ud83d\udce6', label: 'Pantry' },
+    { id: 'budget-dashboard', icon: '\ud83d\udcb0', label: 'Budget' },
+    { id: 'swipe-setup', icon: '\ud83c\udccf', label: 'Swipe Options' },
+    { id: 'settings', icon: '\u2699\ufe0f', label: 'Settings', action: 'showSettingsMenu && showSettingsMenu()' },
+  ];
+  document.getElementById('moreMenuOverlay')?.remove();
+  const menuHtml = `<div id="moreMenuOverlay" onclick="closeMoreMenu()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 50;"><div onclick="event.stopPropagation()" style="position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); min-width: 180px;">${menuItems.map(item => `<button onclick="${item.action ? item.action : `navigateTo('${item.id}')`}; closeMoreMenu();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: none; background: transparent; cursor: pointer; border-radius: 10px; text-align: left;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'"><span style="font-size: 18px;">${item.icon}</span><span style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 500;">${item.label}</span></button>`).join('')}</div></div>`;
+  document.body.insertAdjacentHTML('beforeend', menuHtml);
+}
+
+function closeMoreMenu() { document.getElementById('moreMenuOverlay')?.remove(); }
+
+function showWhatCanICook() {
+  const inventoryNames = state.inventory.map(i => i.name.toLowerCase());
+  const recipesWithMatches = state.recipes.filter(r => !r.isDraft && !r.isTip).map(recipe => { const ingredients = recipeIngList(recipe); const matchedIngredients = ingredients.filter(ing => inventoryNames.some(inv => inv.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(inv))); const matchPercent = ingredients.length > 0 ? Math.round((matchedIngredients.length / ingredients.length) * 100) : 0; return { ...recipe, matchedIngredients, matchPercent, totalIngredients: ingredients.length }; }).filter(r => r.matchPercent > 0).sort((a, b) => b.matchPercent - a.matchPercent).slice(0, 10);
+  if (recipesWithMatches.length === 0) { openModal(`<div style="color: ${CONFIG.text_color}; text-align: center; padding: 20px;"><div style="font-size: 48px; margin-bottom: 16px;">&#129300;</div><h2 style="font-size: 20px; font-weight: 700; margin-bottom: 8px;">No Matches Found</h2><p style="color: ${CONFIG.text_muted}; margin-bottom: 16px;">Add items to your inventory or more recipes!</p><button onclick="closeModal();" style="padding: 10px 20px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">Close</button></div>`); return; }
+  openModal(`<div style="color: ${CONFIG.text_color};"><h2 style="font-size: 20px; font-weight: 700; margin-bottom: 4px;">What Can I Cook?</h2><p style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: 16px;">Based on your ${state.inventory.length} inventory items</p><div style="max-height: 400px; overflow-y: auto;">${recipesWithMatches.map(recipe => `<div onclick="closeModal(); navigateTo('recipe-view'); state.selectedRecipeViewId = '${recipe.id}';" style="display: flex; align-items: center; gap: 12px; padding: 12px; margin-bottom: 8px; background: ${CONFIG.background_color}; border-radius: 12px; cursor: pointer;"><div style="flex: 1; min-width: 0;"><div style="font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(recipe.title)}</div><div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">${recipe.matchedIngredients.length} of ${recipe.totalIngredients} ingredients</div></div><div style="background: ${recipe.matchPercent >= 80 ? CONFIG.success_color : recipe.matchPercent >= 50 ? CONFIG.warning_color : CONFIG.text_muted}; color: white; padding: 4px 10px; border-radius: 20px; font-size: ${CONFIG.type_caption}; font-weight: 600;">${recipe.matchPercent}%</div></div>`).join('')}</div><button onclick="closeModal()" style="width: 100%; margin-top: 12px; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">Close</button></div>`);
+}
+
+// Export/Import
+function exportData() {
+  const data = { recipes: state.recipes, inventory: state.inventory, mealDays: state.mealDays, ingredientKnowledge: state.ingredientKnowledge, budgetExpenses: state.budgetExpenses, swipeSettings: state.swipeSettings, weeklyBudgets: state.weeklyBudgets, frequentItems: state.frequentItems, seasoningBlends: state.seasoningBlends, freestyleMeals: state.freestyleMeals };
+  const dataStr = JSON.stringify(data, null, 2);
+  const dataBlob = new Blob([dataStr], { type: 'application/json' });
+  const url = URL.createObjectURL(dataBlob);
+  const link = document.createElement('a'); link.href = url; link.download = `meal-planner-backup-${new Date().toISOString().split('T')[0]}.json`; link.click();
+  URL.revokeObjectURL(url); showToast('Data exported successfully!', 'success');
+}
+
+function showImportModal() {
+  openModal(`<div style="color: ${CONFIG.text_color};"><h2 class="text-2xl font-bold mb-4">Import Data</h2><p class="mb-4">Upload a previously exported JSON file.</p><p class="mb-4 font-semibold" style="color: ${CONFIG.danger_color};">Warning: This will replace all current data!</p><input type="file" id="importFile" accept=".json" class="mb-4 w-full p-2 border rounded"><div class="flex gap-2 justify-end"><button onclick="closeModal()" class="px-4 py-2 rounded" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="importData()" class="px-4 py-2 rounded" style="background: ${CONFIG.primary_action_color}; color: white;">Import</button></div></div>`);
+}
+
+function importData() {
+  const fileInput = document.getElementById('importFile'); const file = fileInput.files[0];
+  if (!file) { showError('Please select a file to import'); return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.recipes) state.recipes = data.recipes;
+      if (data.inventory) state.inventory = data.inventory;
+      if (data.mealDays) state.mealDays = data.mealDays;
+      if (data.ingredientKnowledge) state.ingredientKnowledge = data.ingredientKnowledge;
+      if (data.budgetExpenses) state.budgetExpenses = data.budgetExpenses;
+      if (data.swipeSettings) state.swipeSettings = data.swipeSettings;
+      if (data.weeklyBudgets) state.weeklyBudgets = data.weeklyBudgets;
+      if (data.frequentItems) state.frequentItems = data.frequentItems;
+      if (data.seasoningBlends) state.seasoningBlends = data.seasoningBlends;
+      if (data.freestyleMeals) state.freestyleMeals = data.freestyleMeals;
+      persistState(); closeModal(); showToast('Data imported successfully!', 'success'); navigateTo('home');
+    } catch (err) { showError('Failed to import data: Invalid file'); console.error(err); }
+  };
+  reader.readAsText(file);
+}
+
+// Auth functions (no-op for localStorage version)
+function showLoginModal() { loadAllState(); showToast('Using local storage', 'info'); }
+function handleLogin() { /* no-op */ }
+function handleLogout() { if (confirm('Clear all local data and log out?')) { localStorage.clear(); location.reload(); } }
+function migrateLocalStorageToSupabase() { /* no-op */ }
+function handleSignup() { /* no-op */ }
+
+function updateUserIndicator(email) {
+  const displayText = 'Local Storage';
+  const indicator = document.getElementById('userIndicator');
+  const emailSpan = document.getElementById('userEmail');
+  if (indicator && emailSpan) { emailSpan.textContent = displayText; indicator.style.display = 'block'; }
+  const indicatorMobile = document.getElementById('userIndicatorMobile');
+  const emailSpanMobile = document.getElementById('userEmailMobile');
+  if (indicatorMobile && emailSpanMobile) { emailSpanMobile.textContent = displayText; indicatorMobile.style.display = 'block'; }
+}
+
+function showClearDataModal() {
+  openModal(`<div style="color: ${CONFIG.text_color};"><h2 class="text-2xl font-bold mb-4">Clear All Data</h2><p class="mb-4 font-semibold" style="color: ${CONFIG.danger_color};">Warning: This will permanently delete all your data!</p><p class="mb-4">Consider exporting your data first.</p><div class="flex gap-2 justify-end"><button onclick="closeModal()" class="px-4 py-2 rounded" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="clearAllData()" class="px-4 py-2 rounded" style="background: ${CONFIG.danger_color}; color: white;">Clear All Data</button></div></div>`);
+}
+
+function clearAllData() {
+  // Clear all yummy_ prefixed localStorage keys
+  const keysToRemove = [];
+  for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith('yummy_')) keysToRemove.push(key); }
+  keysToRemove.forEach(key => localStorage.removeItem(key));
+  localStorage.removeItem(FOOD_LOG_KEY); localStorage.removeItem(GROCERY_KEY); localStorage.removeItem(SAVED_RECIPES_KEY);
+  loadAllState(); closeModal(); showToast('All data cleared', 'success'); navigateTo('home');
+}
+
+function setupKeyboardShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); exportData(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'i') { e.preventDefault(); showImportModal(); }
+    if (e.key === 'Escape') { const modal = document.getElementById('modal'); if (modal && modal.style.display === 'flex') closeModal(); else if (state.currentView !== 'home') navigateTo('home'); }
+    if (e.key === 'h' && state.currentView !== 'home') navigateTo('home');
+    if (e.key === 'r' && state.currentView !== 'recipes') navigateTo('recipes');
+    if (e.key === 'g' && state.currentView !== 'grocery-list') navigateTo('grocery-list');
+  });
+}
+
+function getExternalMealType(name) {
+  const type = state.externalMealTypes.find(t => typeof t === 'string' ? t === name : t.name === name);
+  if (!type) return { name: name, emoji: '\ud83c\udf7d\ufe0f' };
+  return typeof type === 'string' ? { name: type, emoji: '\ud83c\udf7d\ufe0f' } : type;
+}
+
+// ============================================================
+// SECTION 21a: SETTINGS & KEYBOARD SHORTCUTS
+// ============================================================
+
+async function showSettingsMenu() {
+  const { data: { user } } = await window.supabaseClient.auth.getUser();
+  const userEmail = user ? user.email : 'Not logged in';
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 class="text-2xl font-bold mb-4">Settings & Data Management</h2>
+
+      <div class="mb-4 p-3 rounded" style="background: ${CONFIG.primary_subtle};">
+        <div class="text-sm font-semibold">Logged in as:</div>
+        <div class="text-lg">${userEmail}</div>
+      </div>
+
+      <div class="space-y-3">
+        <button onclick="exportData(); closeModal();"
+                class="w-full p-4 rounded text-left button-hover" style="background: ${CONFIG.primary_subtle};">
+          <div class="font-semibold text-lg">📥 Export Data</div>
+          <div class="text-sm" style="color: ${CONFIG.text_muted};">Download a backup of all your data</div>
+          <div class="text-xs mt-1" style="color: ${CONFIG.text_muted};">Keyboard: <span class="kbd">Ctrl+E</span></div>
+        </button>
+
+        <button onclick="closeModal(); showImportModal();"
+                class="w-full p-4 rounded text-left button-hover" style="background: rgba(50,215,75,0.1);">
+          <div class="font-semibold text-lg">📤 Import Data</div>
+          <div class="text-sm" style="color: ${CONFIG.text_muted};">Restore from a backup file</div>
+          <div class="text-xs mt-1" style="color: ${CONFIG.text_muted};">Keyboard: <span class="kbd">Ctrl+I</span></div>
+        </button>
+
+        <button onclick="closeModal(); showKeyboardShortcuts();"
+                class="w-full p-4 rounded text-left button-hover" style="background: ${CONFIG.primary_subtle};">
+          <div class="font-semibold text-lg">⌨️ Keyboard Shortcuts</div>
+          <div class="text-sm" style="color: ${CONFIG.text_muted};">View all available shortcuts</div>
+        </button>
+
+        <button onclick="closeModal(); showClearDataModal();"
+                class="w-full p-4 rounded text-left button-hover" style="background: rgba(255,69,58,0.1);">
+          <div class="font-semibold text-lg" style="color: ${CONFIG.danger_color};">🗑️ Clear All Data</div>
+          <div class="text-sm" style="color: ${CONFIG.danger_color};">Permanently delete everything</div>
+        </button>
+      <button onclick="closeModal(); syncAllIngredientImages();"
+                class="w-full p-4 rounded text-left button-hover" style="background: rgba(50,215,75,0.1);">
+          <div class="font-semibold text-lg">🔄 Sync Images to Library</div>
+          <div class="text-sm" style="color: ${CONFIG.text_muted};">Add all preset ingredients (with photos) to your ingredient library</div>
+        </button>
+      </div>
+     <div class="mt-6 p-4 rounded" style="background: ${CONFIG.surface_color};">
+        <div class="text-sm" style="color: ${CONFIG.text_color};">
+          <div class="font-semibold mb-2">📊 Current Data:</div>
+          <div>Recipes: ${state.recipes.length}</div>
+          <div>Meal Plans: ${state.planData.length}</div>
+          <div>Grocery Items: ${state.groceryItems.length}</div>
+        </div>
+      </div>
+
+      <button onclick="closeModal(); handleLogout();"
+              class="w-full p-4 rounded text-left mt-3 button-hover" style="background: rgba(255,69,58,0.1);">
+        <div class="font-semibold text-lg" style="color: ${CONFIG.danger_color};">🚪 Logout</div>
+        <div class="text-sm" style="color: ${CONFIG.danger_color};">Sign out of your account</div>
+      </button>
+
+      <div class="flex gap-2 justify-end mt-6">
+        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
+          Close
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+function showKeyboardShortcuts() {
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 class="text-2xl font-bold mb-4">⌨️ Keyboard Shortcuts</h2>
+
+      <div class="space-y-4">
+        <div>
+          <h3 class="font-semibold text-lg mb-2">Navigation</h3>
+          <div class="space-y-1 text-sm">
+            <div class="flex justify-between"><span>Go Home</span><span class="kbd">H</span></div>
+            <div class="flex justify-between"><span>Go to Recipes</span><span class="kbd">R</span></div>
+            <div class="flex justify-between"><span>Go to Weekly Plan</span><span class="kbd">W</span></div>
+            <div class="flex justify-between"><span>Go to Grocery List</span><span class="kbd">G</span></div>
+            <div class="flex justify-between"><span>Go Back / Close</span><span class="kbd">Esc</span></div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="font-semibold text-lg mb-2">Actions</h3>
+          <div class="space-y-1 text-sm">
+            <div class="flex justify-between"><span>New Recipe (on Recipes page)</span><span class="kbd">N</span></div>
+            <div class="flex justify-between"><span>Export Data</span><span class="kbd">Ctrl+E</span></div>
+            <div class="flex justify-between"><span>Import Data</span><span class="kbd">Ctrl+I</span></div>
+          </div>
+        </div>
+
+        <div>
+          <h3 class="font-semibold text-lg mb-2">Weekly Plan</h3>
+          <div class="space-y-1 text-sm">
+            <div class="flex justify-between"><span>Previous Week</span><span class="kbd">←</span></div>
+            <div class="flex justify-between"><span>Next Week</span><span class="kbd">→</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex gap-2 justify-end mt-6">
+        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
+          Close
+        </button>
+      </div>
+    </div>
+ `);
+}
+
+// ============================================================
+// SECTION 21b: WEEKLY BUDGETS
+// ============================================================
+
+async function saveWeeklyBudgets() {
+  const dataToSave = {
+    id: 'weeklyBudgets',
+    type: 'weeklyBudgets',
+    budgets: state.weeklyBudgets,
+    updatedAt: Date.now()
+  };
+  console.log('Calling saveWeeklyBudgets:', state.weeklyBudgets);
+
+  try {
+    // Try create first — fails if record already exists
+    const createResult = await storage.create(dataToSave);
+    if (!createResult?.isOk) {
+      // Record exists, update it
+      await storage.update(dataToSave);
+    }
+    console.log('Weekly budgets saved successfully');
+  } catch (e) {
+    console.error('Failed to save weekly budgets:', e);
+  }
+
+  // Also save to localStorage as backup
+  try {
+    localStorage.setItem('weeklyBudgetsBackup', JSON.stringify(state.weeklyBudgets));
+  } catch (e) {
+    console.error('localStorage backup failed:', e);
+  }
+}
+
+function changeWeek(direction) {
+  const date = new Date(state.currentWeekStartDate);
+  date.setDate(date.getDate() + (direction * 7));
+  state.currentWeekStartDate = date.toISOString().split('T')[0];
+  render();
+}
+
+// ============================================================
+// SECTION 21c: PHOTO CAPTURE
+// ============================================================
+
+function showPhotoCapture(meal) {
+  openModal(`
+    <div style="color: ${CONFIG.text_color}; text-align: center;">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_md};">Take a Photo</h3>
+      <p style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; margin-bottom: ${CONFIG.space_lg};">Snap a pic of your meal</p>
+      <input type="file" id="mealPhotoInput" accept="image/*" capture="environment" style="display: none;"
+        onchange="handleMealPhotoCapture(event, '${meal}')" />
+      <button onclick="document.getElementById('mealPhotoInput').click()"
+        style="width: 100%; padding: 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: ${CONFIG.space_sm};">
+        Open Camera
+      </button>
+      <button onclick="closeModal(); logMealAsMatched('${meal}', null)"
+        style="width: 100%; padding: 14px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 12px; font-size: 14px; cursor: pointer;">
+        Skip photo
+      </button>
+    </div>
+  `);
+}
+
+async function handleMealPhotoCapture(event, meal) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const compressed = await compressImage(file, 800, 0.7);
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    closeModal();
+    await logMealAsMatched(meal, e.target.result);
+    showToast('Meal logged with photo!', 'success');
+  };
+  reader.readAsDataURL(compressed);
+}
+
+// ============================================================
+// SECTION 21d: EXTERNAL MEAL TYPES MANAGEMENT
+// ============================================================
+
+function showManageExternalMealTypes() {
+  // Convert old string format to new object format if needed
+  const types = state.externalMealTypes.map(t =>
+    typeof t === 'string' ? { name: t, emoji: '🍽️' } : t
+  );
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 class="text-2xl font-bold mb-4">Manage External Meal Types</h2>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Current Types:</label>
+        <div class="space-y-2">
+          ${types.map((type, idx) => `
+            <div class="flex items-center justify-between p-2 rounded" style="background: ${CONFIG.surface_color};">
+              <div class="flex items-center gap-2">
+                <span style="font-size: 1.5rem;">${type.emoji || '🍽️'}</span>
+                <span>${esc(type.name)}</span>
+              </div>
+              <div class="flex gap-2">
+                <button onclick="editExternalMealType(${idx})"
+                        class="px-3 py-1 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
+                  Edit
+                </button>
+                <button onclick="removeExternalMealType(${idx})"
+                        class="px-3 py-1 rounded button-hover" style="background: ${CONFIG.danger_color}; color: white;">
+                  Delete
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Add New Type:</label>
+        <div class="flex gap-2">
+          <input type="text" id="newExternalMealEmoji"
+                 class="w-16 px-3 py-2 border rounded text-center text-xl"
+                 placeholder="🍽️"
+                 maxlength="2"
+                 value="🍽️" />
+          <input type="text" id="newExternalMealType"
+                 class="flex-1 px-3 py-2 border rounded"
+                 placeholder="e.g., Office Cafeteria" />
+          <button onclick="addExternalMealType()"
+                  class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
+            Add
+          </button>
+        </div>
+      </div>
+
+      <div class="flex gap-2 justify-end mt-6">
+        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
+          Done
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+async function addExternalMealType() {
+  const nameInput = document.getElementById('newExternalMealType');
+  const emojiInput = document.getElementById('newExternalMealEmoji');
+  const newName = nameInput.value.trim();
+  const newEmoji = emojiInput.value.trim() || '🍽️';
+
+  if (!newName) {
+    showError('Please enter a meal type name');
+    return;
+  }
+
+  // Convert old format if needed
+  state.externalMealTypes = state.externalMealTypes.map(t =>
+    typeof t === 'string' ? { name: t, emoji: '🍽️' } : t
+  );
+
+  if (state.externalMealTypes.some(t => t.name === newName)) {
+    showError('This type already exists');
+    return;
+  }
+
+  state.externalMealTypes.push({ name: newName, emoji: newEmoji });
+  await saveExternalMealTypesConfig();
+  showManageExternalMealTypes();
+}
+
+function editExternalMealType(idx) {
+  // Convert old format if needed
+  state.externalMealTypes = state.externalMealTypes.map(t =>
+    typeof t === 'string' ? { name: t, emoji: '🍽️' } : t
+  );
+
+  const type = state.externalMealTypes[idx];
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 class="text-2xl font-bold mb-4">Edit External Meal Type</h2>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Emoji:</label>
+        <input type="text" id="editExternalMealEmoji"
+               class="w-20 px-3 py-2 border rounded text-center text-2xl"
+               maxlength="2"
+               value="${type.emoji || '🍽️'}" />
+      </div>
+
+      <div class="mb-4">
+        <label class="block mb-2 font-semibold">Name:</label>
+        <input type="text" id="editExternalMealName"
+               class="w-full px-3 py-2 border rounded"
+               value="${esc(type.name)}" />
+      </div>
+
+      <div class="flex gap-2 justify-end mt-6">
+        <button onclick="showManageExternalMealTypes()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
+          Cancel
+        </button>
+        <button onclick="saveEditedExternalMealType(${idx})"
+                class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
+          Save
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+async function saveEditedExternalMealType(idx) {
+  const nameInput = document.getElementById('editExternalMealName');
+  const emojiInput = document.getElementById('editExternalMealEmoji');
+  const newName = nameInput.value.trim();
+  const newEmoji = emojiInput.value.trim() || '🍽️';
+
+  if (!newName) {
+    showError('Please enter a meal type name');
+    return;
+  }
+
+  state.externalMealTypes[idx] = { name: newName, emoji: newEmoji };
+  await saveExternalMealTypesConfig();
+  showManageExternalMealTypes();
+}
+
+async function removeExternalMealType(index) {
+  if (!confirm('Delete this external meal type?')) return;
+
+  // Convert old format if needed
+  state.externalMealTypes = state.externalMealTypes.map(t =>
+    typeof t === 'string' ? { name: t, emoji: '🍽️' } : t
+  );
+
+  state.externalMealTypes.splice(index, 1);
+  await saveExternalMealTypesConfig();
+  showManageExternalMealTypes();
+}
+
+async function saveExternalMealTypesConfig() {
+  const config = {
+    id: 'config_externalMealTypes',
+    types: state.externalMealTypes
+  };
+
+  const existing = storage._data.find(d => d.id === 'config_externalMealTypes');
+  if (existing) {
+    await storage.update(config);
+  } else {
+    await storage.create(config);
+  }
+}
+
+// ============================================================
+// SECTION 21e: MEAL ACTION SHEET (shared between home.js and my-meals.js)
+// ============================================================
+
+function showMealActionSheet(mealType, dateStr, swapLogId) {
+  if (!dateStr) dateStr = state.myMealsDate || getToday();
+  if (!mealType) mealType = detectMealType ? detectMealType() : 'dinner';
+  const label = capitalize(mealType);
+  const dateLabel = typeof getFoodLogDateLabel === 'function' ? getFoodLogDateLabel(dateStr) : getDateLabel(dateStr);
+  const isSwap = !!swapLogId;
+  const title = isSwap ? `Swap ${label}` : `Add ${label}`;
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${title}</h3>
+      <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${dateLabel}</div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button onclick="closeModal(); startSwipeForSlot('${mealType}', '${dateStr}'${isSwap ? `, '${swapLogId}'` : ''})"
+          style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 14px;">
+          <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(232,93,93,0.12); display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008M6 18h.008M18 6h.008M18 18h.008M3 6a3 3 0 013-3h1.5a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75H6a3 3 0 00-3 3V6zm0 12a3 3 0 003 3h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75H6a3 3 0 01-3-3v3zm18-12a3 3 0 00-3-3h-1.5a.75.75 0 00-.75.75v1.5c0 .414.336.75.75.75H18a3 3 0 013 3V6zm0 12a3 3 0 01-3 3h-1.5a.75.75 0 01-.75-.75v-1.5c0-.414.336-.75.75-.75H18a3 3 0 003-3v3z"/></svg>
+          </div>
+          <div style="text-align: left;">
+            <div style="font-weight: 600;">Swipe for it</div>
+            <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Browse recipes by swiping</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); showRecipePickerForSlot('${mealType}', '${dateStr}'${isSwap ? `; window._swapLogIdForPicker = '${swapLogId}'` : ''})"
+          style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 14px;">
+          <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(232,93,93,0.12); display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+          </div>
+          <div style="text-align: left;">
+            <div style="font-weight: 600;">Pick from recipes</div>
+            <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Choose from your recipe collection</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); showQuickLogModalForSlot('${mealType}', '${dateStr}')"
+          style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 14px;">
+          <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(232,93,93,0.12); display: flex; align-items: center; justify-content: center;">
+            <svg width="22" height="22" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
+          </div>
+          <div style="text-align: left;">
+            <div style="font-weight: 600;">Log manually</div>
+            <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Type what you ate, add a photo</div>
+          </div>
+        </button>
+      </div>
+
+      <button onclick="closeModal()" style="width: 100%; margin-top: 12px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+    </div>
+  `);
+}
+
+function startSwipeForSlot(mealType, dateStr, swapLogId) {
+  state.viewingDate = dateStr;
+  if (swapLogId) {
+    state._swapTargetLogId = swapLogId;
+    state._swapMealType = mealType;
+    state._swapDateStr = dateStr;
+    state._returnToFoodLog = true;
+  }
+  state.homeTab = 'swipe';
+  state.swipeMealType = mealType;
+  state.todaySwipeMealSlot = mealType;
+  state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(mealType) : buildSwipeDeck(mealType);
+  state.swipeIndex = 0;
+  navigateTo('home');
+}
+
+function openAddMealForSlot(mealType, dateStr) {
+  showMealActionSheet(mealType, dateStr);
+}
+
+function showRecipePickerForSlot(mealType, dateStr) {
+  const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+  state._pickerMealType = mealType;
+  state._pickerDateStr = dateStr;
+  state._pickerSearch = '';
+
+  const renderPickerGrid = (searchTerm) => {
+    let filtered = recipes;
+    if (searchTerm) {
+      const s = searchTerm.toLowerCase();
+      filtered = recipes.filter(r => (r.title || '').toLowerCase().includes(s));
+    }
+    return filtered.map(r => {
+      const id = r.__backendId || r.id;
+      const img = recipeThumb(r);
+      return `
+        <div onclick="selectRecipeForSlot('${id}', '${esc(mealType)}', '${esc(dateStr)}')" class="card-press"
+          style="cursor: pointer; border-radius: 8px; overflow: hidden; background: ${CONFIG.surface_color};">
+          <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
+            ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.4;">🍽️</div>`}
+          </div>
+          <div style="padding: 6px; font-size: 11px; font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+        </div>`;
+    }).join('');
+  };
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color}; max-height: 80vh; display: flex; flex-direction: column;">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_sm};">Pick from Recipes</h3>
+      <input type="text" id="recipePickerSearch" placeholder="Search recipes..."
+        oninput="document.getElementById('recipePickerGrid').innerHTML = window._renderPickerGrid(this.value);"
+        style="width: 100%; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; margin-bottom: ${CONFIG.space_sm};" />
+      <div id="recipePickerGrid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; overflow-y: auto; max-height: 55vh; padding-bottom: 8px;">
+        ${renderPickerGrid('')}
+      </div>
+      <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+    </div>
+  `);
+  // Expose render function for search filtering
+  window._renderPickerGrid = renderPickerGrid;
+}
+
+function selectRecipeForSlot(recipeId, mealType, dateStr) {
+  const recipe = state.recipes.find(r => (r.__backendId || r.id) === recipeId);
+  if (!recipe) { closeModal(); return; }
+  closeModal();
+  const isFuture = isFutureDate(dateStr);
+  // Pre-fill with recipe data, then let user add their photo
+  state._quickLogPhoto = null;
+  state._quickLogMealType = mealType;
+  state._quickLogDateStr = dateStr;
+  state._selectedRecipeForLog = recipe;
+  const ingredients = recipeIngList(recipe).map(i => i.name).filter(Boolean);
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">Log ${esc(recipe.title)}</h3>
+      <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_md};">${capitalize(mealType)} — ${getFoodLogDateLabel(dateStr)}</div>
+
+      ${recipeThumb(recipe) ? `<div style="width: 100%; height: 120px; border-radius: 12px; overflow: hidden; margin-bottom: ${CONFIG.space_md}; background: ${CONFIG.surface_elevated};"><img src="${esc(recipeThumb(recipe))}" style="width:100%;height:100%;object-fit:cover;" /></div>` : ''}
+
+      <div style="margin-bottom: ${CONFIG.space_md};">
+        <button onclick="document.getElementById('quickLogPhotoInput').click()" id="quickLogPhotoBtn"
+          style="width: 100%; padding: 14px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; background: transparent; color: ${CONFIG.text_muted}; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+          Add my photo
+        </button>
+        <input type="file" id="quickLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQuickLogPhoto(this)" />
+      </div>
+
+      <div style="margin-bottom: ${CONFIG.space_md};">
+        <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Notes <span style="opacity: 0.5;">(optional)</span></label>
+        <textarea id="quickLogNotes" rows="2" placeholder="How was it?"
+          style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};"></textarea>
+      </div>
+
+      <button onclick="submitRecipeSlotLog()"
+        style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+        ${isFuture ? 'Plan it' : 'Log it'}
+      </button>
+      <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+    </div>
+  `);
+}
+
+function submitRecipeSlotLog() {
+  const recipe = state._selectedRecipeForLog;
+  if (!recipe) return;
+  const notes = document.getElementById('quickLogNotes')?.value.trim() || null;
+  const dateStr = state._quickLogDateStr || getToday();
+  const isFuture = isFutureDate(dateStr);
+  const ingredients = recipeIngList(recipe).map(i => i.name).filter(Boolean);
+  addFoodLogEntry({
+    recipeId: recipe.__backendId || recipe.id,
+    recipeName: recipe.title,
+    image: recipeThumb(recipe) || null,
+    ingredients,
+    category: recipe.category,
+    mealType: state._quickLogMealType || 'dinner',
+    myPhoto: state._quickLogPhoto || null,
+    photo: state._quickLogPhoto || null,
+    notes,
+    dateStr: dateStr,
+    status: isFuture ? 'planned' : 'eaten'
+  });
+  closeModal();
+  showToast(isFuture ? 'Meal planned!' : 'Meal logged!', 'success');
+  state._selectedRecipeForLog = null;
+  render();
+}
+
+function showQuickLogModalForSlot(mealType, dateStr) {
+  state._quickLogPhoto = null;
+  state._quickLogMealType = mealType;
+  state._quickLogDateStr = dateStr;
+  const isFuture = isFutureDate(dateStr);
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">Log ${capitalize(mealType)}</h3>
+      <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${getFoodLogDateLabel(dateStr)}</div>
+
+      <div style="margin-bottom: ${CONFIG.space_sm};">
+        <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">What did you eat?</label>
+        <input type="text" id="quickLogName" placeholder="e.g., Chicken tacos, leftover pizza"
+          style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" autofocus />
+      </div>
+
+      <div style="margin-bottom: ${CONFIG.space_md};">
+        <button onclick="document.getElementById('quickLogPhotoInput').click()" id="quickLogPhotoBtn"
+          style="width: 100%; padding: 14px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; background: transparent; color: ${CONFIG.text_muted}; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+          Add a photo
+        </button>
+        <input type="file" id="quickLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQuickLogPhoto(this)" />
+      </div>
+
+      <div style="margin-bottom: ${CONFIG.space_md};">
+        <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Notes <span style="opacity: 0.5;">(optional)</span></label>
+        <textarea id="quickLogNotes" rows="2" placeholder="How was it?"
+          style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};"></textarea>
+      </div>
+
+      <button onclick="submitQuickLogForSlot()"
+        style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+        ${isFuture ? 'Plan it' : 'Log it'}
+      </button>
+      <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+    </div>
+  `);
+}
+
+function submitQuickLogForSlot() {
+  const name = document.getElementById('quickLogName')?.value.trim();
+  if (!name) {
+    showToast('Please enter what you ate', 'error');
+    return;
+  }
+  const notes = document.getElementById('quickLogNotes')?.value.trim() || null;
+  const dateStr = state._quickLogDateStr || getToday();
+  const isFuture = isFutureDate(dateStr);
+  addFoodLogEntry({
+    recipeName: name,
+    mealType: state._quickLogMealType || 'dinner',
+    photo: state._quickLogPhoto || null,
+    notes,
+    dateStr: dateStr,
+    status: isFuture ? 'planned' : 'eaten'
+  });
+  closeModal();
+  showToast(isFuture ? 'Meal planned!' : 'Meal logged!', 'success');
+  render();
+}
+
+// ============================================================
+// ============================================================
+// SECTION 20b: MISSING FUNCTIONS (extracted from index.original.html)
+// ============================================================
+
+// --- Audio context initialization for timers ---
+// Pre-initialize audio on user interaction (needed for mobile)
+document.addEventListener('click', function initAudio() {
+  try {
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume();
+  } catch (e) { console.warn('Audio context init error:', e); }
+  document.removeEventListener('click', initAudio);
+}, { once: true });
+
+// --- Save swipe settings ---
+async function saveSwipeSettings() {
+  const config = {
+    id: 'config_swipeSettings',
+    type: 'config',
+    breakfast: state.swipeSettings.breakfast,
+    lunch: state.swipeSettings.lunch,
+    dinner: state.swipeSettings.dinner,
+    snack: state.swipeSettings.snack,
+    setupCompleted: state.swipeSettings.setupCompleted,
+    lastUpdated: Date.now()
+  };
+  state.swipeSettings.lastUpdated = config.lastUpdated;
+
+  // Try create first (for first-time save), then update if already exists
+  const result = await storage.create(config);
+  if (!result?.isOk) {
+    await storage.update(config);
+  }
+}
+
+// --- Save plan ---
+async function savePlan(date, meal, recipeId) {
+  const planId = `plan_${date}`;
+  let plan = state.planData.find(p => p.date === date);
+
+  state.isLoading = true;
+  render();
+
+  const mealKey = meal.toLowerCase();
+
+  try {
+    if (plan) {
+      // Add to array (no limit)
+      const currentMeals = plan[mealKey] || [];
+      const updatedMeals = [...currentMeals, recipeId];
+      const updatedPlan = { ...plan, [mealKey]: updatedMeals };
+      await storage.update(updatedPlan);
+    } else {
+      if (state.planData.length >= 999) {
+        showError('Maximum limit of 999 plans reached');
+        return;
+      }
+      const newPlan = {
+        id: planId,
+        date: date,
+        breakfast: mealKey === 'breakfast' ? [recipeId] : [],
+        lunch: mealKey === 'lunch' ? [recipeId] : [],
+        dinner: mealKey === 'dinner' ? [recipeId] : []
+      };
+      await storage.create(newPlan);
+    }
+  } finally {
+    state.isLoading = false;
+    render();
+  }
+}
+
+// --- Claude API key management ---
+function getClaudeApiKey() {
+  return localStorage.getItem('claudeApiKey') || '';
+}
+
+function setClaudeApiKey(key) {
+  localStorage.setItem('claudeApiKey', key);
+}
+
+// --- Recipe picker ---
+function openRecipePicker(date, meal) {
+  // Save scroll position
+  const app = document.getElementById('app');
+  if (app && state.currentView) {
+    state.scrollPositions[state.currentView] = app.scrollTop;
+  }
+
+  state.selectedDayForRecipe = date;
+  state.selectedMealForRecipe = meal;
+  // Auto-select the matching category
+  state.selectedCategory = meal; // meal is "Breakfast", "Lunch", or "Dinner"
+  state.recipePickerSearchTerm = ''; // Clear recipe picker search
+  state.currentView = 'recipe-picker';
+  render();
+
+  // Scroll to top for recipe picker
+  setTimeout(() => {
+    const app = document.getElementById('app');
+    if (app) app.scrollTop = 0;
+  }, 0);
+}
+
+async function handleRecipePickerSelect(recipeId) {
+  await savePlan(state.selectedDayForRecipe, state.selectedMealForRecipe, recipeId);
+  state.selectedDayForRecipe = null;
+  state.selectedMealForRecipe = null;
+  navigateTo('home');
+}
+
+// --- Search handler ---
+let searchTimeout = null;
+function handleSearchInput(value) {
+  state.recipePickerSearchTerm = value;
+
+  // Cancel previous timeout
+  if (searchTimeout) clearTimeout(searchTimeout);
+
+  // Only render after user stops typing for 300ms
+  searchTimeout = setTimeout(() => {
+    const input = document.getElementById('recipeSearchInput');
+    const cursorPos = input ? input.selectionStart : 0;
+
+    render();
+
+    // Restore focus and cursor position after render
+    setTimeout(() => {
+      const newInput = document.getElementById('recipeSearchInput');
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(cursorPos, cursorPos);
+      }
+    }, 0);
+  }, 600);
+}
+
+// --- Recipe suggestions ---
+function getRecipeSuggestions(filterTerm = '') {
+  let recipes = state.recipes.filter(r => !r.isDraft && !r.isTip && r.id?.startsWith('recipe_'));
+  if (recipes.length === 0) return [];
+
+  // Apply user's filter if provided
+  if (filterTerm) {
+    const term = filterTerm.toLowerCase();
+    recipes = recipes.filter(r => {
+      if (r.title?.toLowerCase().includes(term)) return true;
+      if (r.category?.toLowerCase().includes(term)) return true;
+      if (r.ingredients?.some(ing => ing.item?.toLowerCase().includes(term))) return true;
+      if (Array.isArray(r.tags) && r.tags.some(tag => tag.toLowerCase().includes(term))) return true;
+      return false;
+    });
+  }
+
+  const usageMap = {};
+
+  state.planData.forEach(plan => {
+    ['breakfast', 'lunch', 'dinner'].forEach(meal => {
+      (plan[meal] || []).forEach(id => {
+        if (!usageMap[id]) {
+          usageMap[id] = { count: 0, lastUsed: null };
+        }
+        usageMap[id].count++;
+        if (!usageMap[id].lastUsed || plan.date > usageMap[id].lastUsed) {
+          usageMap[id].lastUsed = plan.date;
+        }
+      });
+    });
+  });
+
+  const scored = recipes.map(recipe => {
+    const id = recipe.__backendId || recipe.id;
+    const usage = usageMap[id] || { count: 0, lastUsed: null };
+
+    let score = 0;
+
+    if (usage.count === 0) {
+      score = 1000;
+    } else {
+      if (usage.lastUsed) {
+        const daysSince = Math.floor((new Date() - new Date(usage.lastUsed)) / (1000 * 60 * 60 * 24));
+        score = daysSince;
+      }
+    }
+
+    return { recipe, score, usage };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, 10);
+}
+
+function filterSuggestions() {
+  const filterValue = document.getElementById('suggestionFilter')?.value || '';
+  console.log('Filtering for:', filterValue);
+
+  const suggestions = getRecipeSuggestions(filterValue);
+  console.log('Found suggestions:', suggestions.length);
+
+  const container = document.getElementById('suggestionsContainer');
+  console.log('Container found:', !!container);
+
+  if (container) {
+    container.innerHTML = suggestions.length === 0 ? `
+      <div class="text-center py-8" style="color: ${CONFIG.text_muted};">
+        No recipes found matching "${esc(filterValue)}". Try a different search term.
+      </div>
+    ` : suggestions.map(({ recipe, score, usage }) => {
+      const neverUsed = usage.count === 0;
+      const daysSince = usage.lastUsed ?
+        Math.floor((new Date() - new Date(usage.lastUsed)) / (1000 * 60 * 60 * 24)) : null;
+
+      return `
+        <div class="flex items-center gap-3 p-3 rounded-lg" style="border: 1px solid ${CONFIG.divider_color}; background: ${CONFIG.surface_color};">
+          ${recipeThumb(recipe) ? `
+            <img loading="lazy" src="${esc(recipeThumb(recipe))}"
+                 style="width:60px; height:60px; object-fit:cover; border-radius:8px;" />
+          ` : `
+            <div style="width:60px; height:60px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+              🍽️
+            </div>
+          `}
+          <div class="flex-1">
+            <div class="font-semibold">${esc(recipe.title)}</div>
+            <div class="text-sm" style="color: ${CONFIG.text_muted};">
+              ${neverUsed ? '✨ Never made!' :
+                daysSince !== null ? 'Last made ' + daysSince + ' day' + (daysSince !== 1 ? 's' : '') + ' ago' :
+                'Made ' + usage.count + ' time' + (usage.count !== 1 ? 's' : '')}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Update the description text
+    const descEl = document.getElementById('suggestionsDescription');
+    if (descEl) {
+      descEl.textContent = filterValue ?
+        'Showing recipes matching "' + filterValue + '":' :
+        'Based on what you haven\'t made recently:';
+    }
+  }
+}
+
+// --- External meal handling ---
+async function saveExternalMeal(date, meal, externalType) {
+  const planId = `plan_${date}`;
+  let plan = state.planData.find(p => p.date === date);
+
+  state.isLoading = true;
+  render();
+
+  const mealKey = meal.toLowerCase();
+  const externalMealId = `external_${externalType}_${Date.now()}`;
+
+  try {
+    if (plan) {
+      const currentMeals = plan[mealKey] || [];
+      const updatedMeals = [...currentMeals, externalMealId];
+      const updatedPlan = { ...plan, [mealKey]: updatedMeals };
+      await storage.update(updatedPlan);
+    } else {
+      if (state.planData.length >= 999) {
+        showError('Maximum limit of 999 plans reached');
+        return;
+      }
+      const newPlan = {
+        id: planId,
+        date: date,
+        breakfast: mealKey === 'breakfast' ? [externalMealId] : [],
+        lunch: mealKey === 'lunch' ? [externalMealId] : [],
+        dinner: mealKey === 'dinner' ? [externalMealId] : []
+      };
+      await storage.create(newPlan);
+    }
+
+    // Create external meal record
+    const externalMeal = {
+      id: externalMealId,
+      type: 'external',
+      externalType: externalType,
+      title: externalType
+    };
+    await storage.create(externalMeal);
+
+  } finally {
+    state.isLoading = false;
+    render();
+  }
+}
+
+function openExternalMealPicker(date, meal) {
+  state.selectedDayForRecipe = date;
+  state.selectedMealForRecipe = meal;
+  state.currentView = 'external-meal-picker';
+  render();
+}
+
+async function handleExternalMealSelect(externalType) {
+  await saveExternalMeal(state.selectedDayForRecipe, state.selectedMealForRecipe, externalType);
+  state.selectedDayForRecipe = null;
+  state.selectedMealForRecipe = null;
+  navigateTo('home');
+}
+
+// --- Inventory helpers ---
+function showInventoryItemMenu(itemId) {
+  const item = state.inventory.find(i => i.id === itemId);
+  if (!item) return;
+
+  const hasKnowledge = getIngredientKnowledge(item.name) || INGREDIENT_IMAGES[item.name.toLowerCase()];
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+        ${(() => {
+          const imgUrl = item.image_url || getIngredientImage(item.name, item.category);
+          if (imgUrl) {
+            return `<img loading="lazy" src="${esc(imgUrl)}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 12px;" onerror="this.style.display='none'" />`;
+          }
+          return `<div style="width: 60px; height: 60px; background: ${CONFIG.background_color}; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 28px;">📦</div>`;
+        })()}
+        <div>
+          <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 2px;">${esc(item.name)}</h2>
+          <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">${item.quantity || 1}${item.unit ? ' ' + item.unit : ''}</div>
+        </div>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button onclick="closeModal(); viewIngredientFromInventory('${esc(item.name)}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; background: ${CONFIG.background_color}; border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+          <span style="font-size: 20px;">🥗</span>
+          <div>
+            <div style="color: ${CONFIG.text_color}; font-weight: 600;">Cooking Tips</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px;">How to store, cook & prep</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); askChefAboutIngredient('${esc(item.name)}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; background: ${CONFIG.background_color}; border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+          <span style="font-size: 20px;">👨‍🍳</span>
+          <div>
+            <div style="color: ${CONFIG.text_color}; font-weight: 600;">Ask Chef Claude</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Get cooking advice</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); searchRecipesByIngredient('${esc(item.name)}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; background: ${CONFIG.background_color}; border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+          <span style="font-size: 20px;">🔍</span>
+          <div>
+            <div style="color: ${CONFIG.text_color}; font-weight: 600;">Find Recipes</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Recipes using ${esc(item.name)}</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); showEditInventoryModal('${item.id}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; background: ${CONFIG.background_color}; border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+          <span style="font-size: 20px;">✏️</span>
+          <div>
+            <div style="color: ${CONFIG.text_color}; font-weight: 600;">Edit Item</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Update details or expiration</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); useInventoryItem('${item.id}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; background: rgba(72, 187, 120, 0.1); border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+          <span style="font-size: 20px;">✓</span>
+          <div>
+            <div style="color: ${CONFIG.success_color}; font-weight: 600;">Mark as Used</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Remove from inventory</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); showSplitInventoryItem('${item.id}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; background: rgba(232, 93, 93, 0.1); border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+          <span style="font-size: 20px;">✂️</span>
+          <div>
+            <div style="color: ${CONFIG.primary_action_color}; font-weight: 600;">Split Item</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Separate into fridge & freezer</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); toggleFreezeItem('${item.id}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; background: rgba(59, 130, 246, 0.1); border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+          <span style="font-size: 20px;">${item.isFrozen ? '🔥' : '❄️'}</span>
+          <div>
+            <div style="color: #3b82f6; font-weight: 600;">${item.isFrozen ? 'Thaw Item' : 'Freeze Item'}</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px;">${item.isFrozen ? 'Move back to fridge' : 'Extend shelf life'}</div>
+          </div>
+        </button>
+
+        <button onclick="closeModal(); confirmDeleteInventoryItem('${item.id}')"
+          style="display: flex; align-items: center; gap: 12px; padding: 14px; background: rgba(232, 93, 93, 0.1); border: none; border-radius: 12px; cursor: pointer; text-align: left;">
+          <span style="font-size: 20px;">🗑️</span>
+          <div>
+            <div style="color: ${CONFIG.danger_color}; font-weight: 600;">Delete</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 12px;">Remove without tracking</div>
+          </div>
+        </button>
+      </div>
+
+      <button onclick="closeModal()" style="width: 100%; margin-top: 12px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; cursor: pointer;">
+        Cancel
+      </button>
+    </div>
+  `);
+}
+
+function viewIngredientFromInventory(ingredientName) {
+  state.selectedIngredientId = ingredientName.toLowerCase();
+  navigateTo('ingredient-detail');
+}
+
+function searchRecipesByIngredient(ingredientName) {
+  state.searchByIngredient = true;
+  state.searchTerm = ingredientName;
+  state.recipeTab = 'user';
+  navigateTo('recipes');
+}
+
+async function toggleFreezeItem(itemId) {
+  const item = state.inventory.find(i => i.id === itemId);
+  if (!item) return;
+
+  item.isFrozen = !item.isFrozen;
+
+  if (item.isFrozen) {
+    item.frozenDate = new Date().toISOString().split('T')[0];
+    // Extend expiration by 90 days when freezing
+    const newExpiry = new Date();
+    newExpiry.setDate(newExpiry.getDate() + 90);
+    item.expirationDate = newExpiry.toISOString().split('T')[0];
+    showToast(`${item.name} moved to freezer`, 'success');
+  } else {
+    // When thawing, set expiration to 2-3 days from now
+    const newExpiry = new Date();
+    newExpiry.setDate(newExpiry.getDate() + 3);
+    item.expirationDate = newExpiry.toISOString().split('T')[0];
+    showToast(`${item.name} thawed - use within 3 days`, 'info');
+  }
+
+  await storage.update(item);
+  render();
+}
+
+async function addIngredientToInventory(ingredientName) {
+  const displayName = capitalize(ingredientName);
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 style="font-size: 20px; font-weight: 700; margin-bottom: 16px;">📦 Add ${esc(displayName)} to Inventory</h2>
+
+      <div style="margin-bottom: 12px;">
+        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Quantity</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="number" id="addInvQuantity" value="1" min="1"
+            style="flex: 1; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+          <select id="addInvUnit" style="padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};">
+            <option value="">-</option>
+            <option value="lb">lb</option>
+            <option value="oz">oz</option>
+            <option value="kg">kg</option>
+            <option value="g">g</option>
+            <option value="pieces">pieces</option>
+            <option value="bunch">bunch</option>
+            <option value="bag">bag</option>
+            <option value="can">can</option>
+            <option value="box">box</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; margin-bottom: 4px; font-weight: 500;">Expiration Date (optional)</label>
+        <input type="date" id="addInvExpiration"
+          style="width: 100%; padding: 10px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
+      </div>
+
+      <div style="display: flex; gap: 8px;">
+        <button onclick="closeModal()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
+          Cancel
+        </button>
+        <button onclick="confirmAddIngredientToInventory('${esc(ingredientName)}')" style="flex: 1; padding: 12px; background: ${CONFIG.success_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+          Add to Inventory
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+async function confirmAddIngredientToInventory(ingredientName) {
+  const quantity = parseFloat(document.getElementById('addInvQuantity')?.value) || 1;
+  const unit = document.getElementById('addInvUnit')?.value || '';
+  const expiration = document.getElementById('addInvExpiration')?.value || '';
+
+  const knowledge = getIngredientKnowledge(ingredientName);
+  const category = knowledge?.category === 'Proteins' ? 'Meat & Seafood' :
+                   knowledge?.category === 'Vegetables' || knowledge?.category === 'Fruits' ? 'Produce' :
+                   knowledge?.category === 'Dairy' ? 'Dairy & Eggs' :
+                   knowledge?.category === 'Grains' ? 'Pantry' : 'Other';
+
+  const newItem = {
+    id: `inv_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    type: 'inventory',
+    name: capitalize(ingredientName),
+    category: category,
+    quantity: quantity,
+    unit: unit,
+    expirationDate: expiration || null,
+    purchaseDate: new Date().toISOString().split('T')[0],
+    image_url: getIngredientImage(ingredientName) || ''
+  };
+
+  await storage.create(newItem);
+  state.inventory.push(newItem);
+
+  closeModal();
+  showToast(`${newItem.name} added to inventory!`, 'success');
+  render();
+}
+
+// --- Show "ate something else" option ---
+function showAteSomethingElse(meal) {
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_md};">What did you eat?</h3>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button onclick="closeModal(); showDifferentRecipePicker('${meal}')"
+          style="padding: 14px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; cursor: pointer; text-align: left; font-size: 15px;">
+          A different recipe
+        </button>
+        <button onclick="closeModal(); showTakeoutLogger('${meal}')"
+          style="padding: 14px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; cursor: pointer; text-align: left; font-size: 15px;">
+          Takeout / Eating out
+        </button>
+        <button onclick="closeModal()" style="width: 100%; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
+      </div>
+    </div>
+  `);
+}
+
+// --- Suggestions modal ---
+function showSuggestionsModal(filterTerm = '') {
+  const suggestions = getRecipeSuggestions(filterTerm);
+
+  if (suggestions.length === 0 && !filterTerm) {
+    showToast('No recipes to suggest. Add some recipes first!', 'info');
+    return;
+  }
+
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h2 class="text-2xl font-bold mb-4">💡 Recipe Suggestions</h2>
+
+      <div class="mb-4">
+        <input type="text" id="suggestionFilter"
+               value="${esc(filterTerm)}"
+               placeholder="What are you in the mood for? (e.g., chicken, quick, breakfast)"
+               class="w-full px-3 py-2 border rounded"
+               onkeyup="if(event.key === 'Enter') { filterSuggestions(); }" />
+        <button onclick="filterSuggestions()"
+                class="mt-2 px-4 py-2 rounded button-hover w-full" style="background: ${CONFIG.primary_action_color}; color: white;">
+          Search
+        </button>
+      </div>
+
+      <p id="suggestionsDescription" class="mb-4" style="color: ${CONFIG.text_muted};">
+        ${filterTerm ? 'Showing recipes matching "' + esc(filterTerm) + '":' : 'Based on what you haven\'t made recently:'}
+      </p>
+
+      <div id="suggestionsContainer" class="space-y-3 max-h-96 overflow-y-auto">
+        ${suggestions.length === 0 ? `
+          <div class="text-center py-8" style="color: ${CONFIG.text_muted};">
+            No recipes found matching "${esc(filterTerm)}". Try a different search term.
+          </div>
+        ` : suggestions.map(({ recipe, score, usage }) => {
+          const neverUsed = usage.count === 0;
+          const daysSince = usage.lastUsed ?
+            Math.floor((new Date() - new Date(usage.lastUsed)) / (1000 * 60 * 60 * 24)) : null;
+
+          return `
+            <div class="flex items-center gap-3 p-3 rounded-lg" style="border: 1px solid ${CONFIG.divider_color}; background: ${CONFIG.surface_color};">
+              ${recipeThumb(recipe) ? `
+                <img loading="lazy" src="${esc(recipeThumb(recipe))}"
+                     style="width:60px; height:60px; object-fit:cover; border-radius:8px;" />
+              ` : `
+                <div style="width:60px; height:60px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
+                  🍽️
+                </div>
+              `}
+              <div class="flex-1">
+                <div class="font-semibold">${esc(recipe.title)}</div>
+                <div class="text-sm" style="color: ${CONFIG.text_muted};">
+                  ${neverUsed ? '✨ Never made!' :
+                    daysSince !== null ? 'Last made ' + daysSince + ' day' + (daysSince !== 1 ? 's' : '') + ' ago' :
+                    'Made ' + usage.count + ' time' + (usage.count !== 1 ? 's' : '')}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="flex justify-end mt-4">
+        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
+          Close
+        </button>
+      </div>
+    </div>
+  `);
+}
+
+// SECTION 21: INITIALIZATION
+// ============================================================
+
+// On page load, check for target view from navigation
+(function initShared() {
+  loadAllState();
+  loadCustomIngredientImages();
+
+  // Check if we navigated here from another page
+  const targetView = sessionStorage.getItem('yummy_target_view');
+  if (targetView) {
+    state.currentView = targetView;
+    sessionStorage.removeItem('yummy_target_view');
+  }
+
+  // Update user indicator
+  updateUserIndicator('Local Storage');
+
+  // Setup keyboard shortcuts
+  setupKeyboardShortcuts();
+})();
