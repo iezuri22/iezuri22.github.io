@@ -16924,6 +16924,54 @@ function renderGroceryList() {
         render();
       }
     }
+    function startAddKitchenSectionTip(ingredientName, field) {
+      state._addingKitchenTip = { ingredient: ingredientName, field };
+      render();
+      setTimeout(() => { const el = document.getElementById('tip-add-' + field); if (el) el.focus(); }, 50);
+    }
+    function saveNewKitchenSectionTip(ingredientName, field, value) {
+      if (!value || !value.trim()) { state._addingKitchenTip = null; render(); return; }
+      const baseTips = (() => { let d = null; Object.values(KITCHEN_INGREDIENTS).forEach(cat => { cat.items.forEach(item => { if (item.name === ingredientName) d = item.tips; }); }); return d; })();
+      const merged = getMergedTips(ingredientName, baseTips) || { methods: [], storage: '', prep: '', pairings: '', customNotes: [] };
+      if (field === 'methods') {
+        merged.methods = merged.methods || [];
+        merged.methods.push(value.trim());
+      } else {
+        // For single-value fields, replace/set value
+        merged[field] = value.trim();
+      }
+      saveKitchenCustomTips(ingredientName, merged);
+      state._addingKitchenTip = null;
+      render();
+    }
+    function addKitchenTipToSection(ingredientName, field) {
+      const baseTips = (() => { let d = null; Object.values(KITCHEN_INGREDIENTS).forEach(cat => { cat.items.forEach(item => { if (item.name === ingredientName) d = item.tips; }); }); return d; })();
+      const merged = getMergedTips(ingredientName, baseTips) || { methods: [], storage: '', prep: '', pairings: '', customNotes: [] };
+      if (field === 'methods') {
+        merged.methods = merged.methods || [];
+        merged.methods.push('New method...');
+        saveKitchenCustomTips(ingredientName, merged);
+        state._editingKitchenTip = { ingredient: ingredientName, field: 'methods', idx: merged.methods.length - 1 };
+      } else {
+        // For single-value fields (storage, prep, pairings), set a placeholder and open edit
+        if (!merged[field]) merged[field] = 'New tip...';
+        saveKitchenCustomTips(ingredientName, merged);
+        state._editingKitchenTip = { ingredient: ingredientName, field, idx: 0 };
+      }
+      render();
+    }
+    function deleteKitchenTipFromSection(ingredientName, field, idx) {
+      const baseTips = (() => { let d = null; Object.values(KITCHEN_INGREDIENTS).forEach(cat => { cat.items.forEach(item => { if (item.name === ingredientName) d = item.tips; }); }); return d; })();
+      const merged = getMergedTips(ingredientName, baseTips);
+      if (!merged) return;
+      if (field === 'methods') {
+        merged.methods.splice(idx, 1);
+      } else {
+        merged[field] = '';
+      }
+      saveKitchenCustomTips(ingredientName, merged);
+      render();
+    }
     function showKitchenIngredientMeals(ingredientName) {
       state._kitchenIngredientMealsName = ingredientName;
       state.currentView = 'kitchen-ingredient-meals';
@@ -17013,6 +17061,8 @@ function renderGroceryList() {
       const tips = getMergedTips(name, ingredientData.tips);
       const editing = state._editingKitchenTip || {};
       const isEditing = (field, idx) => editing.ingredient === name && editing.field === field && editing.idx === idx;
+      const _adding = state._addingKitchenTip || {};
+      const isAdding = (field) => _adding.ingredient === name && _adding.field === field;
 
       function renderEditableTipItem(text, field, idx) {
         if (isEditing(field, idx)) {
@@ -17028,6 +17078,9 @@ function renderGroceryList() {
             <span style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4; flex: 1;">${esc(text)}</span>
             <button onclick="startEditKitchenTip('${esc(name)}','${field}',${idx})" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px; flex-shrink: 0;">
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+            </button>
+            <button onclick="deleteKitchenTipFromSection('${esc(name)}','${field}',${idx})" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; padding: 2px; flex-shrink: 0;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
             </button>
           </div>`;
       }
@@ -17047,17 +17100,67 @@ function renderGroceryList() {
           <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
               <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px;">${label}</div>
-              <button onclick="startEditKitchenTip('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px;">
-                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
-              </button>
+              <div style="display: flex; gap: 4px;">
+                <button onclick="startEditKitchenTip('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px;">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                </button>
+                <button onclick="deleteKitchenTipFromSection('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; padding: 2px;">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
+                </button>
+              </div>
             </div>
             <div style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4;">${esc(text)}</div>
           </div>`;
       }
 
+      function renderTipSection(items, field, label) {
+        const hasItems = field === 'methods' ? (items && items.length > 0) : !!items;
+        return `
+          <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
+            <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">${label}</div>
+            ${field === 'methods' ? `
+              ${hasItems ? items.map((m, i) => renderEditableTipItem(m, 'methods', i)).join('') : `<div style="color: ${CONFIG.text_muted}; font-size: 13px; padding: 4px 0;">No tips yet</div>`}
+            ` : `
+              ${hasItems ? renderSingleTipContent(items, field) : `<div style="color: ${CONFIG.text_muted}; font-size: 13px; padding: 4px 0;">No tips yet</div>`}
+            `}
+            ${isAdding(field) ? `
+              <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 0;">
+                <input id="tip-add-${field}" type="text" placeholder="Type your tip..." autofocus style="flex:1; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveNewKitchenSectionTip('${esc(name)}','${field}',this.value)}" />
+                <button onclick="saveNewKitchenSectionTip('${esc(name)}','${field}',document.getElementById('tip-add-${field}').value)" style="background: none; border: none; color: ${CONFIG.success_color}; cursor: pointer; padding: 6px; font-size: 16px;">✓</button>
+              </div>
+            ` : `
+              <button onclick="startAddKitchenSectionTip('${esc(name)}','${field}')" style="width: 100%; padding: 8px; background: none; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 13px; margin-top: 6px;">+ Add</button>
+            `}
+          </div>`;
+      }
+
+      function renderSingleTipContent(text, field) {
+        if (isEditing(field, 0)) {
+          return `
+            <div style="padding: 4px 0;">
+              <textarea id="tip-edit-${field}-0" style="width:100%; min-height: 50px; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 8px; color: ${CONFIG.text_color}; font-size: 14px; line-height: 1.4; outline: none; resize: vertical; font-family: inherit;">${esc(text)}</textarea>
+              <div style="display: flex; justify-content: flex-end; margin-top: 6px;">
+                <button onclick="saveKitchenTipEdit('${esc(name)}','${field}',0,document.getElementById('tip-edit-${field}-0').value)" style="background: ${CONFIG.primary_action_color}; border: none; color: white; cursor: pointer; padding: 4px 12px; border-radius: 6px; font-size: 13px;">✓ Save</button>
+              </div>
+            </div>`;
+        }
+        return `
+          <div style="display: flex; align-items: flex-start; gap: 10px; padding: 4px 0;">
+            <span style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4; flex: 1;">${esc(text)}</span>
+            <button onclick="startEditKitchenTip('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px; flex-shrink: 0;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+            </button>
+            <button onclick="deleteKitchenTipFromSection('${esc(name)}','${field}',0)" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; padding: 2px; flex-shrink: 0;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
+            </button>
+          </div>`;
+      }
+
+      const tipsData = tips || { methods: [], storage: '', prep: '', pairings: '', customNotes: [] };
+
       return `
         <div style="padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
-          <!-- Hero -->
+          <!-- 1. Hero image + ingredient name -->
           <div style="position: relative; width: 100%; height: 220px; overflow: hidden; background: ${CONFIG.surface_elevated};">
             ${ingredientData.image ? `<img src="${esc(ingredientData.image)}&w=600&h=300&fit=crop" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />` : ''}
             <div style="position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(13,13,20,0.9));"></div>
@@ -17066,89 +17169,75 @@ function renderGroceryList() {
             </button>
             <div style="position: absolute; bottom: 16px; left: 16px;">
               <h1 style="font-size: 24px; font-weight: 700; color: white; margin: 0;">${esc(name)}</h1>
-              <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px;">${matchingRecipes.length} recipe${matchingRecipes.length !== 1 ? 's' : ''} in your collection</div>
             </div>
           </div>
 
           <div style="padding: 0 ${CONFIG.space_md};">
-            <!-- How to cook section (moved above recipes) -->
-            ${tips ? `
-              <div style="margin-top: ${CONFIG.space_md};">
-                <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">How to cook ${esc(name.toLowerCase())}</h2>
-
-                ${tips.methods && tips.methods.length > 0 ? `
-                  <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
-                    <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Cooking Methods</div>
-                    ${tips.methods.map((m, i) => renderEditableTipItem(m, 'methods', i)).join('')}
-                  </div>
-                ` : ''}
-
-                ${tips.storage ? renderEditableSingleTip(tips.storage, 'storage', 'Storage') : ''}
-
-                ${tips.prep ? renderEditableSingleTip(tips.prep, 'prep', 'Prep Tip') : ''}
-
-                ${tips.pairings ? renderEditableSingleTip(tips.pairings, 'pairings', 'Goes Well With') : ''}
-
-                <!-- Custom notes -->
-                ${tips.customNotes && tips.customNotes.length > 0 ? `
-                  <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
-                    <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Your Notes</div>
-                    ${tips.customNotes.map((note, i) => {
-                      if (isEditing('customNotes', i)) {
-                        return `
-                          <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid ${CONFIG.divider_color};">
-                            <input id="tip-edit-customNotes-${i}" type="text" value="${esc(note)}" style="flex:1; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveKitchenTipEdit('${esc(name)}','customNotes',${i},this.value)}" />
-                            <button onclick="saveKitchenTipEdit('${esc(name)}','customNotes',${i},document.getElementById('tip-edit-customNotes-${i}').value)" style="background: none; border: none; color: ${CONFIG.success_color}; cursor: pointer; padding: 6px; font-size: 16px;">✓</button>
-                          </div>`;
-                      }
-                      return `
-                        <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid ${CONFIG.divider_color};">
-                          <span style="color: ${CONFIG.primary_action_color}; font-size: 14px; flex-shrink: 0; margin-top: 2px;">•</span>
-                          <span style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4; flex: 1;">${esc(note)}</span>
-                          <button onclick="startEditKitchenTip('${esc(name)}','customNotes',${i})" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px; flex-shrink: 0;">
-                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
-                          </button>
-                          <button onclick="deleteKitchenCustomNote('${esc(name)}',${i})" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; padding: 2px; flex-shrink: 0;">
-                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                          </button>
-                        </div>`;
-                    }).join('')}
-                  </div>
-                ` : ''}
-
-                <button onclick="addKitchenCustomNote('${esc(name)}')" style="width: 100%; padding: 10px; background: ${CONFIG.surface_color}; border: 1px dashed ${CONFIG.text_muted}; border-radius: 10px; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 14px; margin-bottom: 10px;">
-                  + Add tip
-                </button>
+            <!-- 2. Cooking stats banner (always shown, right below hero) -->
+            <div onclick="showKitchenIngredientMeals('${esc(name)}')" class="card-press" style="cursor: pointer; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 14px 16px; margin-top: ${CONFIG.space_md}; display: flex; align-items: center; gap: 12px;">
+              <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(50,215,75,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                <span style="font-size: 22px; font-weight: 700; color: ${CONFIG.success_color};">${monthEntries.length}</span>
               </div>
-            ` : `
-              <div style="margin-top: ${CONFIG.space_md};">
-                <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">How to cook ${esc(name.toLowerCase())}</h2>
-                <div style="text-align: center; padding: ${CONFIG.space_lg}; background: ${CONFIG.surface_color}; border-radius: 12px; margin-bottom: 10px;">
-                  <div style="color: ${CONFIG.text_muted}; font-size: 14px;">No cooking tips yet</div>
-                </div>
-                <button onclick="addKitchenCustomNote('${esc(name)}')" style="width: 100%; padding: 10px; background: ${CONFIG.surface_color}; border: 1px dashed ${CONFIG.text_muted}; border-radius: 10px; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 14px; margin-bottom: 10px;">
-                  + Add tip
-                </button>
+              <div style="flex: 1;">
+                <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color};">meal${monthEntries.length !== 1 ? 's' : ''} with ${esc(name)} this month</div>
+                <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Tap to see cooking history</div>
               </div>
-            `}
+              <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+            </div>
 
-            <!-- Recipes section -->
+            <!-- 3. How to cook section with per-section add/delete -->
+            <div style="margin-top: ${CONFIG.space_lg};">
+              <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">How to cook ${esc(name.toLowerCase())}</h2>
+
+              ${renderTipSection(tipsData.methods, 'methods', 'Cooking Methods')}
+              ${renderTipSection(tipsData.storage, 'storage', 'Storage')}
+              ${renderTipSection(tipsData.prep, 'prep', 'Prep')}
+              ${renderTipSection(tipsData.pairings, 'pairings', 'Seasoning Pairings')}
+
+              <!-- Custom notes -->
+              <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
+                <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Your Notes</div>
+                ${tipsData.customNotes && tipsData.customNotes.length > 0 ? tipsData.customNotes.map((note, i) => {
+                  if (isEditing('customNotes', i)) {
+                    return `
+                      <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid ${CONFIG.divider_color};">
+                        <input id="tip-edit-customNotes-${i}" type="text" value="${esc(note)}" style="flex:1; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveKitchenTipEdit('${esc(name)}','customNotes',${i},this.value)}" />
+                        <button onclick="saveKitchenTipEdit('${esc(name)}','customNotes',${i},document.getElementById('tip-edit-customNotes-${i}').value)" style="background: none; border: none; color: ${CONFIG.success_color}; cursor: pointer; padding: 6px; font-size: 16px;">✓</button>
+                      </div>`;
+                  }
+                  return `
+                    <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid ${CONFIG.divider_color};">
+                      <span style="color: ${CONFIG.primary_action_color}; font-size: 14px; flex-shrink: 0; margin-top: 2px;">•</span>
+                      <span style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4; flex: 1;">${esc(note)}</span>
+                      <button onclick="startEditKitchenTip('${esc(name)}','customNotes',${i})" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px; flex-shrink: 0;">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+                      </button>
+                      <button onclick="deleteKitchenCustomNote('${esc(name)}',${i})" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; padding: 2px; flex-shrink: 0;">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"/></svg>
+                      </button>
+                    </div>`;
+                }).join('') : `<div style="color: ${CONFIG.text_muted}; font-size: 13px; padding: 4px 0;">No notes yet</div>`}
+                <button onclick="addKitchenCustomNote('${esc(name)}')" style="width: 100%; padding: 8px; background: none; border: 1px dashed rgba(255,255,255,0.1); border-radius: 8px; color: ${CONFIG.text_muted}; cursor: pointer; font-size: 13px; margin-top: 6px;">+ Add</button>
+              </div>
+            </div>
+
+            <!-- 4. Recipes section (3 columns) -->
             <div style="margin-top: ${CONFIG.space_lg};">
               <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Recipes with ${esc(name)}</h2>
               ${matchingRecipes.length > 0 ? `
-                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
                   ${matchingRecipes.map(r => {
                     const img = recipeThumb(r);
                     const id = r.__backendId || r.id;
                     return `
                       <div onclick="state.viewingFromKitchen = true; state.selectedRecipeId = '${id}'; navigateTo('recipe-view')" class="card-press"
-                        style="cursor: pointer; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
+                        style="cursor: pointer; border-radius: 10px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
                         <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
-                          ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;opacity:0.3;">🍽</div>`}
+                          ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.3;">🍽</div>`}
                         </div>
-                        <div style="padding: 8px;">
-                          <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${esc(r.title)}</div>
-                          ${r.cookTime ? `<div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 3px;">${esc(r.cookTime)}</div>` : ''}
+                        <div style="padding: 6px;">
+                          <div style="font-size: 12px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">${esc(r.title)}</div>
+                          ${r.cookTime ? `<div style="font-size: 10px; color: ${CONFIG.text_muted}; margin-top: 2px;">${esc(r.cookTime)}</div>` : ''}
                         </div>
                       </div>
                     `;
@@ -17162,20 +17251,6 @@ function renderGroceryList() {
                 </div>
               `}
             </div>
-
-            <!-- Usage stats (clickable, at bottom) -->
-            ${monthEntries.length > 0 ? `
-              <div onclick="showKitchenIngredientMeals('${esc(name)}')" class="card-press" style="cursor: pointer; background: ${CONFIG.surface_color}; border-radius: 12px; padding: 14px 16px; margin-top: ${CONFIG.space_lg}; box-shadow: ${CONFIG.shadow}; display: flex; align-items: center; gap: 12px;">
-                <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(50,215,75,0.12); display: flex; align-items: center; justify-content: center;">
-                  <svg width="20" height="20" fill="none" stroke="${CONFIG.success_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
-                </div>
-                <div style="flex: 1;">
-                  <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color};">You've cooked ${monthEntries.length} meal${monthEntries.length !== 1 ? 's' : ''} with ${esc(name)} this month</div>
-                  <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Tap to see all meals</div>
-                </div>
-                <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
-              </div>
-            ` : ''}
           </div>
         </div>
       `;
