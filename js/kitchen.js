@@ -5243,24 +5243,7 @@ async function confirmSplitInventoryItem(itemId) {
   render();
 }
 
-async function markRecipeCooked(recipeId) {
-  const recipe = state.recipes.find(r => (r.__backendId || r.id) === recipeId);
-  if (!recipe) return;
-
-  const today = new Date().toISOString().split('T')[0];
-
-  // Add to cooked dates
-  recipe.cookedDates = recipe.cookedDates || [];
-  if (!recipe.cookedDates.includes(today)) {
-    recipe.cookedDates.push(today);
-  }
-  recipe.lastCooked = today;
-  recipe.cookCount = (recipe.cookCount || 0) + 1;
-
-  await storage.update(recipe);
-  showToast(`"${recipe.title}" marked as cooked! 🎉`, 'success');
-  render();
-}
+// markRecipeCooked removed — cooking is only tracked via My Meals food log
 
 function init() {
   loadAllState();

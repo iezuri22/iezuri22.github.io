@@ -4,63 +4,6 @@
 // Depends on js/shared.js being loaded first.
 // ============================================================
 
-// ============================================================
-// PATTERN DETECTION & COOK AGAIN (Home screen sections)
-// ============================================================
-function renderPatternSection() {
-  const patterns = getTopFoodPatterns(14);
-  if (patterns.length === 0) return '';
-
-  const unexplored = getUnexploredCategories();
-
-  return `
-    <div style="padding: 0 12px; margin-bottom: 8px;">
-      <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 8px 12px;">
-        <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; margin-bottom: 8px;">You've been eating a lot of:</div>
-        <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: ${unexplored.length > 0 ? '10px' : '0'};">
-          ${patterns.map(p => `
-            <span style="font-size: 11px; padding: 6px 12px; border-radius: 16px; background: rgba(232,93,93,0.1); color: ${CONFIG.primary_action_color}; font-weight: 500;">
-              ${esc(p.name)} (${p.count}x)
-            </span>
-          `).join('')}
-        </div>
-        ${unexplored.length > 0 ? `
-          <button onclick="filterSwipeDeckToUnexplored()" style="background: none; border: none; color: ${CONFIG.primary_action_color}; font-size: ${CONFIG.type_caption}; cursor: pointer; padding: 0; text-decoration: underline; opacity: 0.8;">
-            Try something different?
-          </button>
-        ` : ''}
-      </div>
-    </div>
-  `;
-}
-
-function filterSwipeDeckToUnexplored() {
-  const unexplored = getUnexploredCategories();
-  if (unexplored.length === 0) {
-    showToast('You\'ve explored all categories!', 'success');
-    return;
-  }
-  const unexploredLower = new Set(unexplored.map(c => c.toLowerCase()));
-  const mealType = state.swipeMealType || detectMealType();
-  state.swipeDeck = state.recipes.filter(r => {
-    const cat = (r.category || '').toLowerCase();
-    return unexploredLower.has(cat) && !r.isDraft && !r.isTip;
-  });
-  if (state.swipeDeck.length === 0) {
-    showToast('No recipes found in unexplored categories', 'info');
-    return;
-  }
-  // Shuffle
-  for (let i = state.swipeDeck.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [state.swipeDeck[i], state.swipeDeck[j]] = [state.swipeDeck[j], state.swipeDeck[i]];
-  }
-  state.swipeIndex = 0;
-  state.homeTab = 'swipe';
-  showToast(`Showing ${state.swipeDeck.length} recipes from categories you haven\'t tried`, 'success');
-  render();
-}
-
 function renderCookAgainRow() {
   const favorites = getCookAgainMeals();
   if (favorites.length === 0) return '';
@@ -215,12 +158,11 @@ function renderHome() {
     : renderSelectedTab();
 
   const cookAgainHtml = renderCookAgainRow();
-  const patternHtml = renderPatternSection();
 
   return `
     <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
       ${renderHomeHeader(viewDate)}
-      <div class="mobile-only-sections">${cookAgainHtml}${patternHtml}</div>
+      <div class="mobile-only-sections">${cookAgainHtml}</div>
       <div class="desktop-home-layout">
         <div class="desktop-home-main">
           ${renderHomeTabs()}
@@ -228,7 +170,6 @@ function renderHome() {
         </div>
         <div class="desktop-home-sidebar">
           ${cookAgainHtml}
-          ${patternHtml}
         </div>
       </div>
     </div>
@@ -386,7 +327,6 @@ function renderSwipeTab() {
             <div class="card-meta">
               <span>${esc(category)}</span>
               ${ingCount > 0 ? `<span>${ingCount} ingredients</span>` : ''}
-              ${recipe.timesCooked ? `<span>Cooked ${recipe.timesCooked}x</span>` : ''}
             </div>
           </div>
         </div>
@@ -1022,7 +962,6 @@ function renderHomeSwipeCards(meal) {
           <div class="card-meta">
             <span>${esc(category)}</span>
             ${ings.length > 0 ? `<span>${ings.length} ingredients</span>` : ''}
-            ${recipe.timesCooked ? `<span>Cooked ${recipe.timesCooked}x</span>` : ''}
           </div>
         </div>
       </div>
@@ -1567,7 +1506,6 @@ function handleHomeSwipeRight() {
 
     state.swipeIndex++;
     if (state.swipeIndex >= deck.length) {
-      state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(state.swipeMealType) : buildSwipeDeck(state.swipeMealType);
       state.swipeIndex = 0;
     }
 
@@ -1601,7 +1539,6 @@ function handleHomeSwipeLeft() {
   const advance = () => {
     state.swipeIndex++;
     if (state.swipeIndex >= deck.length) {
-      state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(state.swipeMealType) : buildSwipeDeck(state.swipeMealType);
       state.swipeIndex = 0;
     }
     render();
@@ -2035,7 +1972,6 @@ function renderSwipe() {
             <div class="card-meta">
               <span>${esc(category)}</span>
               ${ingCount > 0 ? `<span>${ingCount} ingredients</span>` : ''}
-              ${recipe.timesCooked ? `<span>Cooked ${recipe.timesCooked}x</span>` : ''}
             </div>
           </div>
         </div>

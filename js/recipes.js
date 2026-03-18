@@ -186,117 +186,7 @@ async function toggleFavorite(recipeId) {
   }
 }
 
-function markAsCooked(recipeId) {
-  const recipe = getRecipeById(recipeId);
-  if (!recipe) return;
-
-  const today = new Date();
-  const localDate = new Date(today.getTime() - (today.getTimezoneOffset() * 60000));
-  const todayStr = localDate.toISOString().split('T')[0];
-
-  openModal(`
-    <div style="color: ${CONFIG.text_color};">
-      <h2 class="text-2xl font-bold mb-4">Mark as Cooked</h2>
-      <p class="mb-4">When did you cook <strong>${esc(recipe.title)}</strong>?</p>
-
-      <div class="mb-4">
-        <label class="block mb-2 font-semibold">Date:</label>
-        <input type="date" id="cookDate" value="${todayStr}"
-          class="w-full px-3 py-2 border rounded" />
-      </div>
-
-      <div class="mb-4">
-        <label class="block mb-2 font-semibold">Meal Type:</label>
-        <select id="cookMealType" class="w-full px-3 py-2 border rounded">
-          <option value="breakfast" ${recipe.category === 'Breakfast' ? 'selected' : ''}>Breakfast</option>
-          <option value="lunch" ${recipe.category === 'Lunch' ? 'selected' : ''}>Lunch</option>
-          <option value="dinner" ${(recipe.category === 'Dinner' || recipe.category === 'Vegetables' || !recipe.category) ? 'selected' : ''}>Dinner</option>
-        </select>
-      </div>
-
-      <div class="flex gap-2 justify-end">
-        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
-          Cancel
-        </button>
-        <button onclick="saveCookedMeal('${recipeId}')"
-                class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
-          Save to Meal History
-        </button>
-      </div>
-    </div>
-  `);
-}
-
-async function saveCookedMeal(recipeId) {
-  const dateInput = document.getElementById('cookDate');
-  const mealTypeSelect = document.getElementById('cookMealType');
-
-  const date = dateInput.value;
-  const mealType = mealTypeSelect.value;
-
-  if (!date) {
-    showError('Please select a date');
-    return;
-  }
-
-  const recipe = getRecipeById(recipeId);
-  if (!recipe) return;
-
-  state.isLoading = true;
-  closeModal();
-  render();
-
-  try {
-    // Update cook count
-    const updatedRecipe = {
-      ...recipe,
-      timesCooked: (recipe.timesCooked || 0) + 1
-    };
-    await storage.update(updatedRecipe);
-
-    // Add to meal history
-    await savePlan(date, capitalize(mealType), recipeId);
-
-    showToast(`Added to ${date} ${mealType}!`, 'success');
-  } catch (e) {
-    console.error(e);
-    showError('Failed to save');
-  } finally {
-    state.isLoading = false;
-    render();
-  }
-}
-
-async function unmarkAsCooked(recipeId) {
-  const recipe = getRecipeById(recipeId);
-  if (!recipe) return;
-
-  if ((recipe.timesCooked || 0) === 0) {
-    showToast('Recipe has not been cooked yet', 'info');
-    return;
-  }
-
-  state.isLoading = true;
-  render();
-  try {
-    const updatedRecipe = {
-      ...recipe,
-      timesCooked: (recipe.timesCooked || 0) - 1
-    };
-    const result = await storage.update(updatedRecipe);
-    if (result.isOk) {
-      showToast(`Unmarked! Total: ${updatedRecipe.timesCooked}`, 'success');
-    } else {
-      showError('Failed to update cook count');
-    }
-  } catch (error) {
-    console.error('unmarkAsCooked failed:', error);
-    showError('Failed to update cook count');
-  } finally {
-    state.isLoading = false;
-    render();
-  }
-}
+// markAsCooked, saveCookedMeal, unmarkAsCooked removed — cooking is only tracked via My Meals food log
 
 // ===== FREESTYLE MEAL FUNCTIONS =====
 
@@ -2094,8 +1984,8 @@ function renderRecipeView() {
   console.log('Recipe image URL:', img);
 
   return `
-              <div class="p-6 max-w-5xl mx-auto">
-      <div class="flex items-center justify-between mb-4 mobile-stack gap-3">
+              <div class="p-6 max-w-5xl mx-auto" style="overflow-x:hidden; max-width:100%; box-sizing:border-box;">
+      <div class="flex items-center justify-between mb-4 mobile-stack gap-3" style="flex-wrap:wrap;">
 <button type="button" onclick="navigateTo('${state.viewingFromKitchen ? 'kitchen-detail' : state.viewingFromSwipe ? 'swipe' : 'recipes'}')"
             class="px-4 py-2 rounded button-hover"
             style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color};">
@@ -2103,18 +1993,6 @@ function renderRecipeView() {
           </button>
 
        <div class="flex gap-2 flex-wrap">
-         <button type="button" onclick="markAsCooked('${r.__backendId || r.id}')"
-  class="px-4 py-2 rounded-xl button-hover"
-  style="background:${CONFIG.success_color}; color:white;">
-  Mark as Cooked (${r.timesCooked || 0})
-</button>
-${(r.timesCooked || 0) > 0 ? `
-  <button type="button" onclick="unmarkAsCooked('${r.__backendId || r.id}')"
-    class="px-4 py-2 rounded-xl button-hover"
-    style="background:${CONFIG.danger_color}; color:white;">
-    Undo Last Cook
-  </button>
-` : ''}
           ${state.viewingFromPlan ? `
             <button type="button" onclick="openRecipePicker('${state.viewingFromPlan.date}', '${state.viewingFromPlan.meal}')"
               class="px-4 py-2 rounded-xl button-hover"
@@ -2160,12 +2038,12 @@ ${(r.timesCooked || 0) > 0 ? `
             ` : ''}
             <div style="margin-top:10px;">
               <div style="color:${CONFIG.text_muted}; font-size:12px; margin-bottom:6px;">Effort</div>
-              <div style="display:flex; gap:6px;">
+              <div style="display:flex; gap:8px; flex-wrap:nowrap; width:100%; max-width:100%; overflow-x:hidden; box-sizing:border-box;">
                 ${Object.entries(EFFORT_LEVELS).map(([key, e]) => {
                   const active = getRecipeEffort(r.__backendId || r.id) === key;
                   return `<button onclick="setRecipeEffort('${r.__backendId || r.id}', ${active ? 'null' : `'${key}'`}); render();"
-                    style="padding:6px 12px; border-radius:16px; border:1px solid ${active ? e.border : 'rgba(255,255,255,0.12)'}; background:${active ? e.bg : 'transparent'}; color:${active ? e.color : CONFIG.text_muted}; font-size:12px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
-                    ${e.label}<span style="opacity:0.6; margin-left:4px; font-weight:400;">${e.desc}</span>
+                    style="padding:6px 16px; border-radius:20px; border:1px solid ${active ? e.border : 'rgba(255,255,255,0.12)'}; background:${active ? e.bg : 'transparent'}; color:${active ? e.color : CONFIG.text_muted}; font-size:13px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
+                    ${e.label}
                   </button>`;
                 }).join('')}
               </div>
@@ -2182,7 +2060,7 @@ ${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; 
                  alt="${esc(r.title)}"
                  onerror="console.error('Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';"
                  onload="console.log('Image loaded successfully:', this.src);"
-                 style="width:100%; max-height:260px; object-fit:cover; display:block;" />
+                 style="width:100%; max-width:100%; max-height:260px; object-fit:cover; display:block;" />
             <div style="display:none; padding:20px; text-align:center; color:${CONFIG.danger_color}; background:rgba(220,38,38,0.1);">
               Image failed to load<br>
               <small style="font-size:12px; opacity:0.8;">${img}</small>

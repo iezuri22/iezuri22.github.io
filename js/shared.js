@@ -731,6 +731,54 @@ function loadAllState() {
     state.mealDays[todayDate] = { date: todayDate, meals: { breakfast: mealSlotDefault(), lunch: mealSlotDefault(), dinner: mealSlotDefault(), snacks: [] } };
   }
   state.dataLoaded = true;
+  cleanupCookingData();
+}
+
+// One-time cleanup: reset fake timesCooked/cookCount data on recipes.
+// The ONLY source of truth for cooking history is the food log (entries with status === 'cooked' or 'logged' or 'eaten').
+function cleanupCookingData() {
+  if (localStorage.getItem('cookingDataCleaned')) return;
+
+  // Build real cook counts from food log
+  const log = getFoodLog();
+  const realCounts = {};
+  log.forEach(entry => {
+    const rid = entry.recipeId;
+    if (!rid) return;
+    realCounts[rid] = (realCounts[rid] || 0) + 1;
+  });
+
+  // Also count from mealDays logged entries
+  Object.values(state.mealDays).forEach(day => {
+    if (!day.meals) return;
+    ['breakfast', 'lunch', 'dinner'].forEach(mt => {
+      const meal = day.meals[mt];
+      if (!meal || meal.status !== 'logged') return;
+      const rid = meal.actualRecipeId || meal.plannedRecipeId;
+      if (!rid) return;
+      realCounts[rid] = (realCounts[rid] || 0) + 1;
+    });
+  });
+
+  // Reset all recipes: remove fake timesCooked/cookCount, set to real count
+  let changed = false;
+  state.recipes.forEach(r => {
+    const id = r.__backendId || r.id;
+    const realCount = realCounts[id] || 0;
+    if (r.timesCooked !== undefined || r.cookCount !== undefined || r.cookedDates !== undefined || r.lastCooked !== undefined) {
+      delete r.timesCooked;
+      delete r.cookCount;
+      delete r.cookedDates;
+      delete r.lastCooked;
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    saveToLS('recipes', state.recipes);
+  }
+
+  localStorage.setItem('cookingDataCleaned', 'true');
 }
 
 // Storage object - uses Supabase for CRUD, falls back to localStorage
@@ -1498,27 +1546,9 @@ function confirmAddToMeals() {
   window._addToMealsState = null;
 }
 
-function getTopFoodPatterns(days = 14) {
-  const log = getFoodLog();
-  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-  const recent = log.filter(e => e.dateCooked >= cutoff);
-  const counts = {};
-  recent.forEach(e => { const name = (e.recipeName || '').toLowerCase().trim(); if (!name) return; const key = name.split(/\s+/).slice(0, 2).join(' '); if (!counts[key]) counts[key] = { name: e.recipeName, count: 0, category: e.category }; counts[key].count++; });
-  return Object.values(counts).filter(c => c.count >= 2).sort((a, b) => b.count - a.count).slice(0, 3);
-}
-
 function getCookAgainMeals() {
   const log = getFoodLog(); const seen = new Set();
   return log.filter(e => { if (e.wouldMakeAgain !== true) return false; const key = e.recipeId || e.recipeName; if (seen.has(key)) return false; seen.add(key); return true; });
-}
-
-function getUnexploredCategories() {
-  const log = getFoodLog();
-  const cutoff = new Date(Date.now() - 14 * 86400000).toISOString();
-  const recent = log.filter(e => e.dateCooked >= cutoff);
-  const eatenCats = new Set(recent.map(e => (e.category || '').toLowerCase()));
-  const allCats = [...new Set(state.recipes.map(r => r.category).filter(Boolean))];
-  return allCats.filter(c => !eatenCats.has(c.toLowerCase()));
 }
 
 function formatLogTime(isoStr) {
@@ -1621,22 +1651,10 @@ function getCategorizedSuggestions() {
     });
   });
 
-  // 3. Frequently cooked meals
+  // 3. Frequent ingredient suggestions removed — "Things you make often"
+  //    now shows meal cards (in grocery.js renderGroceryList) instead of
+  //    individual ingredient pills from cooking history.
   const frequent = [];
-  const frequentMeals = getFrequentMeals();
-  frequentMeals.forEach(meal => {
-    if (plannedRecipeIds.has(meal.recipeId)) return;
-    const recipe = meal.recipeId ? getRecipeById(meal.recipeId) : null;
-    const ingredients = recipe ? recipeIngList(recipe) : [];
-    if (ingredients.length > 0) {
-      ingredients.forEach(ing => {
-        const key = normalizeIngredient(ing.name);
-        if (!key || listKeys.has(key) || isStaple(ing.name) || seenKeys.has(key)) return;
-        seenKeys.add(key);
-        frequent.push({ name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', mealCount: meal.count, mealNames: [meal.name] });
-      });
-    }
-  });
 
   return { planned, saved, frequent };
 }
@@ -1650,16 +1668,126 @@ function addSuggestedToGrocery(name, category, qty, unit, mealNames) {
 }
 
 function addMealToGrocery(recipeId) {
-  const recipe = getRecipeById(recipeId); if (!recipe) return;
-  const ingredients = recipeIngList(recipe); if (ingredients.length === 0) return;
-  const list = getSmartGroceryList(); let added = 0;
-  ingredients.forEach(ing => {
-    const key = normalizeIngredient(ing.name); if (!key) return;
-    const existing = list.find(i => normalizeIngredient(i.name) === key);
-    if (existing) { if (!existing.sourceMeals.includes(recipe.title)) existing.sourceMeals.push(recipe.title); }
-    else { list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [recipe.title], addedAt: Date.now() }); added++; }
+  // Now opens ingredient picker instead of auto-adding all
+  showMealIngredientPicker(recipeId);
+}
+
+function showMealIngredientPicker(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) { showToast('Recipe not found', 'error'); return; }
+  const ingredients = recipeIngList(recipe);
+  if (ingredients.length === 0) { showToast('No ingredients found', 'info'); return; }
+
+  const listKeys = new Set(getSmartGroceryList().map(i => normalizeIngredient(i.name)));
+
+  // Build ingredient list with default checked state
+  // Staples unchecked by default, already-on-list items marked
+  const ingData = ingredients.map((ing, idx) => {
+    const key = normalizeIngredient(ing.name);
+    const onList = listKeys.has(key);
+    const staple = isStaple(ing.name);
+    return { idx, name: ing.name, group: ing.group || 'Other', qty: ing.qty || '', unit: ing.unit || '', key, onList, staple, checked: !staple };
   });
-  saveSmartGroceryList(list); showToast(`Added ingredients from ${recipe.title}`, 'success');
+
+  const imgHtml = recipe.image_url
+    ? `<img src="${esc(recipe.image_url)}" style="width: 56px; height: 56px; border-radius: 12px; object-fit: cover; flex-shrink: 0;">`
+    : `<div style="width: 56px; height: 56px; border-radius: 12px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;">&#127869;</div>`;
+
+  const ingRowsHtml = ingData.map(ing => {
+    const qtyLabel = ing.qty ? `${ing.qty}${ing.unit ? ' ' + ing.unit : ''}` : '';
+    return `<div data-picker-idx="${ing.idx}" onclick="togglePickerIngredient(${ing.idx})"
+      style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; cursor: pointer; border-radius: 8px; margin-bottom: 2px; background: ${CONFIG.surface_color}; -webkit-tap-highlight-color: transparent;" class="card-press">
+      <div class="picker-cb" data-picker-cb="${ing.idx}"
+        style="width: 20px; height: 20px; border: 1.5px solid ${ing.checked ? CONFIG.primary_action_color : CONFIG.text_muted}; border-radius: 5px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: ${ing.checked ? CONFIG.primary_action_color : 'transparent'}; transition: all 150ms ease;">
+        ${ing.checked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+      </div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="display: flex; align-items: baseline; gap: 6px;">
+          <span style="color: ${CONFIG.text_color}; font-size: 13px;">${esc(capitalize(ing.name))}</span>
+          ${qtyLabel ? `<span style="color: ${CONFIG.text_muted}; font-size: 11px;">${esc(qtyLabel)}</span>` : ''}
+        </div>
+        ${ing.onList ? `<div style="font-size: 10px; color: ${CONFIG.primary_action_color}; margin-top: 1px;">Already on list</div>` : ''}
+        ${ing.staple ? `<div style="font-size: 10px; color: ${CONFIG.text_muted}; margin-top: 1px;">Pantry staple</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Store picker state globally for toggle/submit
+  window._pickerIngredients = ingData;
+  window._pickerRecipeId = recipeId;
+
+  const modalHtml = `<div style="color: ${CONFIG.text_color}; max-height: 80vh; display: flex; flex-direction: column;">
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+      ${imgHtml}
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(recipe.title)}</div>
+        <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">${ingredients.length} ingredient${ingredients.length !== 1 ? 's' : ''}</div>
+      </div>
+    </div>
+    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+      <button onclick="pickerSelectAll(true)" style="flex: 1; padding: 8px; min-height: 36px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer;">Select all</button>
+      <button onclick="pickerSelectAll(false)" style="flex: 1; padding: 8px; min-height: 36px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer;">Deselect all</button>
+    </div>
+    <div style="overflow-y: auto; flex: 1; margin: 0 -16px; padding: 0 16px; max-height: 50vh;">
+      ${ingRowsHtml}
+    </div>
+    <button onclick="submitPickerIngredients()" style="margin-top: 12px; padding: 12px; min-height: 44px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;">Add selected to grocery list</button>
+  </div>`;
+
+  openModal(modalHtml);
+}
+
+function togglePickerIngredient(idx) {
+  const ing = window._pickerIngredients && window._pickerIngredients[idx];
+  if (!ing) return;
+  ing.checked = !ing.checked;
+  const cb = document.querySelector('[data-picker-cb="' + idx + '"]');
+  if (cb) {
+    cb.style.background = ing.checked ? CONFIG.primary_action_color : 'transparent';
+    cb.style.borderColor = ing.checked ? CONFIG.primary_action_color : CONFIG.text_muted;
+    cb.innerHTML = ing.checked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '';
+  }
+}
+
+function pickerSelectAll(selectAll) {
+  if (!window._pickerIngredients) return;
+  window._pickerIngredients.forEach(ing => {
+    ing.checked = selectAll;
+    const cb = document.querySelector('[data-picker-cb="' + ing.idx + '"]');
+    if (cb) {
+      cb.style.background = selectAll ? CONFIG.primary_action_color : 'transparent';
+      cb.style.borderColor = selectAll ? CONFIG.primary_action_color : CONFIG.text_muted;
+      cb.innerHTML = selectAll ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '';
+    }
+  });
+}
+
+function submitPickerIngredients() {
+  const ingData = window._pickerIngredients;
+  const recipeId = window._pickerRecipeId;
+  if (!ingData || !recipeId) return;
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+
+  const selected = ingData.filter(i => i.checked);
+  if (selected.length === 0) { showToast('No ingredients selected', 'info'); return; }
+
+  const list = getSmartGroceryList();
+  let added = 0;
+  selected.forEach(ing => {
+    const key = normalizeIngredient(ing.name);
+    if (!key) return;
+    const existing = list.find(i => normalizeIngredient(i.name) === key);
+    if (existing) {
+      if (!existing.sourceMeals.includes(recipe.title)) existing.sourceMeals.push(recipe.title);
+    } else {
+      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [recipe.title], addedAt: Date.now() });
+      added++;
+    }
+  });
+  saveSmartGroceryList(list);
+  closeModal();
+  showToast(`Added ${selected.length} ingredient${selected.length !== 1 ? 's' : ''} to grocery list`, 'success');
   if (typeof render === 'function') render();
 }
 
@@ -1775,7 +1903,7 @@ function showAddFromMealModal() {
     const recipe = m.recipeId ? getRecipeById(m.recipeId) : null;
     const ingCount = recipe ? recipeIngList(recipe).length : 0;
     const uniqueCount = recipe ? recipeIngList(recipe).filter(i => !isStaple(i.name)).length : 0;
-    return `<div onclick="addMealToGrocery('${esc(m.recipeId || '')}'); closeModal();" style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};" class="card-press">${m.image ? `<img src="${esc(m.image)}" style="width: 44px; height: 44px; border-radius: 10px; object-fit: cover;">` : `<div style="width: 44px; height: 44px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px;">&#127869;</div>`}<div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(m.name)}</div><div style="font-size: 11px; color: ${CONFIG.text_muted};">${uniqueCount > 0 ? uniqueCount + ' ingredients' : ''}${m.label ? ` · ${esc(m.label)}` : ''}</div></div></div>`;
+    return `<div onclick="showMealIngredientPicker('${esc(m.recipeId || '')}')" style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};" class="card-press">${m.image ? `<img src="${esc(m.image)}" style="width: 44px; height: 44px; border-radius: 10px; object-fit: cover;">` : `<div style="width: 44px; height: 44px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px;">&#127869;</div>`}<div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(m.name)}</div><div style="font-size: 11px; color: ${CONFIG.text_muted};">${uniqueCount > 0 ? uniqueCount + ' ingredients' : ''}${m.label ? ` · ${esc(m.label)}` : ''}</div></div></div>`;
   }
 
   function _sectionHtml(title, meals) {
@@ -1840,7 +1968,7 @@ function recipeIngList(r) {
 }
 
 function newRecipeDraft() {
-  return { type: 'recipe', title: '', category: 'Breakfast', tipCategory: 'Prep Techniques', recipe_url: '', image_url: '', tags: '', notes: '', instructions: '', ingredientsRows: [{ qty: '', unit: '', name: '', group: 'Produce' }], sourceType: 'user', isDraft: false, isTip: false, timesCooked: 0 };
+  return { type: 'recipe', title: '', category: 'Breakfast', tipCategory: 'Prep Techniques', recipe_url: '', image_url: '', tags: '', notes: '', instructions: '', ingredientsRows: [{ qty: '', unit: '', name: '', group: 'Produce' }], sourceType: 'user', isDraft: false, isTip: false };
 }
 
 function ensureRecipeForm() {
@@ -3650,13 +3778,18 @@ function showRecipePickerForSlot(mealType, dateStr) {
   state._pickerDateStr = dateStr;
   state._pickerSearch = '';
 
+  state._pickerLimit = 30;
+
   const renderPickerGrid = (searchTerm) => {
     let filtered = recipes;
     if (searchTerm) {
       const s = searchTerm.toLowerCase();
       filtered = recipes.filter(r => (r.title || '').toLowerCase().includes(s));
+      state._pickerLimit = 30;
     }
-    return filtered.map(r => {
+    const totalCount = filtered.length;
+    const limited = filtered.slice(0, state._pickerLimit);
+    let html = limited.map(r => {
       const id = r.__backendId || r.id;
       const img = recipeThumb(r);
       return `
@@ -3665,9 +3798,18 @@ function showRecipePickerForSlot(mealType, dateStr) {
           <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
             ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:8px;"><span style="color:${CONFIG.text_color};font-size:11px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(r.title)}</span></div>`}
           </div>
-          <div style="padding: 6px; font-size: 11px; font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+          <div style="padding: 4px 4px 6px; font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">${esc(r.title)}</div>
         </div>`;
     }).join('');
+    if (totalCount > state._pickerLimit) {
+      html += `<div style="grid-column: 1 / -1; text-align: center; padding: 12px;">
+        <button onclick="state._pickerLimit += 30; document.getElementById('recipePickerGrid').innerHTML = window._renderPickerGrid(document.getElementById('recipePickerSearch')?.value || '');"
+          style="padding: 10px 24px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 13px; font-weight: 500; cursor: pointer;">
+          Load more (${totalCount - state._pickerLimit} remaining)
+        </button>
+      </div>`;
+    }
+    return html;
   };
 
   openModal(`

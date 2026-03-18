@@ -273,9 +273,9 @@ function renderGroceryList() {
       const unchecked = groceryList.filter(item => !item.checked);
       const checked = groceryList.filter(item => item.checked);
 
-      // Categorized suggestions (planned > saved > frequent), staples filtered out
+      // Categorized suggestions (planned > saved only — no frequent ingredient pills)
       const catSugg = getCategorizedSuggestions();
-      const allSuggestions = [...catSugg.planned, ...catSugg.saved, ...catSugg.frequent];
+      const allSuggestions = [...catSugg.planned, ...catSugg.saved];
       _cachedSuggestions = allSuggestions;
 
       // Split items into unique vs staples
@@ -334,7 +334,20 @@ function renderGroceryList() {
         <div style="margin-bottom: 12px;">
           ${_buildSuggestionPills(catSugg.planned, 0, 'For your upcoming meals', s => s.recipeName || '')}
           ${_buildSuggestionPills(catSugg.saved, catSugg.planned.length, 'From your saved recipes', s => s.recipeName || '')}
-          ${_buildSuggestionPills(catSugg.frequent, catSugg.planned.length + catSugg.saved.length, 'Things you make often', s => (s.mealCount || 0) + 'x')}
+        </div>
+      ` : '';
+
+      // "Things you make often" as meal cards (not ingredient pills)
+      const frequentMeals = getFrequentMeals();
+      const frequentMealsHtml = frequentMeals.length > 0 ? `
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Things you make often</div>
+          ${frequentMeals.slice(0, 6).map(m => {
+            const imgHtml = m.image
+              ? `<img src="${esc(m.image)}" style="width: 48px; height: 48px; border-radius: 10px; object-fit: cover; flex-shrink: 0;">`
+              : `<div style="width: 48px; height: 48px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">&#127869;</div>`;
+            return `<div onclick="showMealIngredientPicker('${esc(m.recipeId || '')}')" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};" class="card-press">${imgHtml}<div style="flex: 1; min-width: 0;"><div style="font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: ${CONFIG.text_color};">${esc(m.name)}</div><div style="font-size: 11px; color: ${CONFIG.text_muted};">Cooked ${m.count}x</div></div></div>`;
+          }).join('')}
         </div>
       ` : '';
 
@@ -394,6 +407,7 @@ function renderGroceryList() {
           <!-- Suggestions Section (mobile) -->
           <div class="mobile-only-sections">
             ${suggestionsHtml}
+            ${frequentMealsHtml}
             ${addFromMealHtml}
           </div>
 
@@ -451,6 +465,7 @@ function renderGroceryList() {
             </div><!-- end desktop-grocery-main -->
             <div class="desktop-grocery-side">
               ${suggestionsHtml}
+              ${frequentMealsHtml}
               ${addFromMealHtml}
             </div>
           </div><!-- end desktop-grocery-layout -->

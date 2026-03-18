@@ -87,7 +87,7 @@
       }
 
       return `
-        <div style="padding-bottom: 72px;">
+        <div style="padding-bottom: 72px; overflow-x: hidden; max-width: 100vw; box-sizing: border-box;">
           <!-- Hero image -->
           <div style="position: relative; width: 100%; ${img ? 'height: 280px;' : 'height: 160px;'} overflow: hidden; background: linear-gradient(135deg, #1a1a24, #242432);">
             ${img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `
@@ -120,9 +120,6 @@
             <div style="display: flex; gap: 10px; margin-top: 16px;">
               <button onclick="saveRecipeFromDetail('${r.__backendId || r.id}')" style="flex: 1; padding: 12px; border-radius: 12px; border: none; background: ${CONFIG.primary_action_color}; color: white; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;">
                 Save recipe
-              </button>
-              <button onclick="markCookedFromDetail('${r.__backendId || r.id}')" style="flex: 1; padding: 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); background: none; color: ${CONFIG.text_color}; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit;">
-                I made this
               </button>
             </div>
             <!-- Add to My Meals button -->
@@ -199,32 +196,7 @@
       render();
     }
 
-    function markCookedFromDetail(id) {
-      const r = getRecipeById(id);
-      if (!r) return;
-      r.timesCooked = (r.timesCooked || 0) + 1;
-      r.lastCooked = new Date().toISOString();
-      if (typeof storage !== 'undefined' && storage.update) storage.update(r);
-      // Add to food log
-      if (typeof addFoodLogEntry === 'function') {
-        addFoodLogEntry({
-          recipeId: r.__backendId || r.id,
-          recipeName: r.title,
-          image: recipeThumb(r),
-          ingredients: recipeIngList(r).map(i => i.name),
-          category: r.category || '',
-          mealType: 'dinner',
-          dateCooked: new Date().toISOString(),
-          photo: recipeThumb(r),
-          myPhoto: null,
-          notes: null,
-          wouldMakeAgain: null,
-          status: 'eaten'
-        });
-      }
-      showToast('Marked ' + r.title + ' as cooked!', 'success');
-      render();
-    }
+    // markCookedFromDetail removed — cooking is only tracked via My Meals food log
 
     setupKeyboardShortcuts();
 

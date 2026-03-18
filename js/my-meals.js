@@ -361,6 +361,8 @@ function showRecipePickerForSlot(mealType, dateStr) {
     });
   }
 
+  state._pickerLimit = 30;
+
   const renderPickerGrid = (searchTerm, filter) => {
     if (filter === undefined) filter = state._pickerFilter;
     let filtered = allRecipes;
@@ -382,7 +384,9 @@ function showRecipePickerForSlot(mealType, dateStr) {
     if (filtered.length === 0) {
       return `<div style="grid-column: 1 / -1; text-align: center; padding: 32px 16px; color: ${CONFIG.text_muted}; font-size: 14px;">No recipes found</div>`;
     }
-    return filtered.map(r => {
+    const totalCount = filtered.length;
+    const limited = filtered.slice(0, state._pickerLimit);
+    let html = limited.map(r => {
       const id = r.__backendId || r.id;
       const img = recipeThumb(r);
       const isSaved = savedSet.has(id);
@@ -395,9 +399,18 @@ function showRecipePickerForSlot(mealType, dateStr) {
             ${isSaved ? `<div style="position:absolute;top:4px;right:4px;width:20px;height:20px;background:rgba(0,0,0,0.5);border-radius:50%;display:flex;align-items:center;justify-content:center;"><svg width="12" height="12" fill="${CONFIG.primary_action_color}" viewBox="0 0 24 24"><path d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"/></svg></div>` : ''}
             ${cooked > 0 ? `<div style="position:absolute;bottom:4px;left:4px;background:rgba(0,0,0,0.6);color:${CONFIG.text_color};font-size:9px;font-weight:600;padding:2px 6px;border-radius:8px;">Cooked ${cooked}x</div>` : ''}
           </div>
-          <div style="padding: 6px; font-size: 11px; font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
+          <div style="padding: 4px 4px 6px; font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">${esc(r.title)}</div>
         </div>`;
     }).join('');
+    if (totalCount > state._pickerLimit) {
+      html += `<div style="grid-column: 1 / -1; text-align: center; padding: 12px;">
+        <button onclick="state._pickerLimit += 30; window._updatePickerGrid();"
+          style="padding: 10px 24px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 13px; font-weight: 500; cursor: pointer;">
+          Load more (${totalCount - state._pickerLimit} remaining)
+        </button>
+      </div>`;
+    }
+    return html;
   };
 
   const mealLabel = capitalize(mealType);
@@ -419,7 +432,7 @@ function showRecipePickerForSlot(mealType, dateStr) {
     <div style="color: ${CONFIG.text_color}; max-height: 80vh; display: flex; flex-direction: column;">
       <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_sm};">Pick from Recipes</h3>
       <input type="text" id="recipePickerSearch" placeholder="Search recipes..."
-        oninput="window._updatePickerGrid();"
+        oninput="state._pickerLimit = 30; window._updatePickerGrid();"
         style="width: 100%; padding: 10px 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 14px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; margin-bottom: ${CONFIG.space_sm};" />
       <div id="recipePickerPills" style="display: flex; gap: 8px; margin-bottom: ${CONFIG.space_sm}; overflow-x: auto;">
         ${renderPills(mealType)}
@@ -434,6 +447,7 @@ function showRecipePickerForSlot(mealType, dateStr) {
   window._renderPickerGrid = renderPickerGrid;
   window._setPickerFilter = function(filter) {
     state._pickerFilter = filter;
+    state._pickerLimit = 30;
     const pillsEl = document.getElementById('recipePickerPills');
     if (pillsEl) pillsEl.innerHTML = renderPills(filter);
     window._updatePickerGrid();
