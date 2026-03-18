@@ -3,11 +3,10 @@
 // Depends on js/shared.js being loaded first
 // ============================================================
 
-// Local cache for suggestions (used by handleSuggestClick in shared.js)
-// shared.js references _cachedSuggestions so we ensure it's declared here too
-if (typeof _cachedSuggestions === 'undefined') {
-  var _cachedSuggestions = [];
-}
+// _cachedSuggestions is declared with 'let' in shared.js.
+// Do NOT re-declare it here (var inside a separate <script> tag
+// conflicts with a prior let and causes a SyntaxError, which
+// prevents this entire file from executing => black screen).
 
 // ============================================================
 // GROCERY RENDER FUNCTIONS
