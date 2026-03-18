@@ -296,6 +296,32 @@ function renderGroceryList() {
         `;
       }
 
+      // Desktop sidebar content for suggestions and add-from-meal
+      const suggestionsHtml = filteredSuggestions.length > 0 ? `
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 6px;">Based on what you eat</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+            ${filteredSuggestions.slice(0, 12).map((s, idx) => `
+              <button data-sug-idx="${idx}" onclick="handleSuggestClick(${idx})"
+                style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer; white-space: nowrap;"
+                class="card-press">
+                <svg width="14" height="14" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                ${esc(capitalize(s.name))}
+                <span style="color: ${CONFIG.text_muted}; font-size: 10px;">${s.mealCount}x</span>
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      ` : '';
+
+      const addFromMealHtml = `
+        <button onclick="showAddFromMealModal()"
+          style="width: 100%; padding: 10px; margin-bottom: 12px; background: ${CONFIG.surface_color}; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"
+          class="card-press">
+          <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+          Add from a meal
+        </button>`;
+
       return `
         <div style="padding: 0 12px; padding-bottom: 72px;">
 
@@ -311,31 +337,14 @@ function renderGroceryList() {
             </button>
           </div>
 
-          <!-- Suggestions Section -->
-          ${filteredSuggestions.length > 0 ? `
-            <div style="margin-bottom: 12px;">
-              <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 6px;">Based on what you eat</div>
-              <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                ${filteredSuggestions.slice(0, 12).map((s, idx) => `
-                  <button data-sug-idx="${idx}" onclick="handleSuggestClick(${idx})"
-                    style="display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer; white-space: nowrap;"
-                    class="card-press">
-                    <svg width="14" height="14" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                    ${esc(capitalize(s.name))}
-                    <span style="color: ${CONFIG.text_muted}; font-size: 10px;">${s.mealCount}x</span>
-                  </button>
-                `).join('')}
-              </div>
-            </div>
-          ` : ''}
+          <div class="desktop-grocery-layout">
+            <div class="desktop-grocery-main">
 
-          <!-- Add from a meal button -->
-          <button onclick="showAddFromMealModal()"
-            style="width: 100%; padding: 10px; margin-bottom: 12px; background: ${CONFIG.surface_color}; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;"
-            class="card-press">
-            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
-            Add from a meal
-          </button>
+          <!-- Suggestions Section (mobile) -->
+          <div class="mobile-only-sections">
+            ${suggestionsHtml}
+            ${addFromMealHtml}
+          </div>
 
           <!-- Clear buttons -->
           ${groceryList.length > 0 ? `
@@ -378,6 +387,13 @@ function renderGroceryList() {
               </div>
             `).join('');
           })()}
+
+            </div><!-- end desktop-grocery-main -->
+            <div class="desktop-grocery-side">
+              ${suggestionsHtml}
+              ${addFromMealHtml}
+            </div>
+          </div><!-- end desktop-grocery-layout -->
 
         </div>
       `;
@@ -979,8 +995,12 @@ function render() {
 
   app.innerHTML = `
     <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+      ${renderDesktopSidebar()}
       ${renderNav()}
-      ${content}
+      <div class="desktop-content-area">
+        ${renderDesktopPageTitle()}
+        ${content}
+      </div>
       ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
       ${renderBottomNav()}
     </div>

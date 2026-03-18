@@ -34,39 +34,106 @@ function renderMyMeals() {
     return renderFilledMealSlot(latestEntry, dateStr, extraCount, slotEntries) + renderAddAnotherRow(slot, dateStr);
   }).join('');
 
+  // Build mini calendar for desktop sidebar
+  const miniCalendarHtml = renderMyMealsMiniCalendar(dateStr, log);
+
+  // Recent photos for desktop sidebar
+  const recentPhotos = log.filter(e => e.myPhoto || (e.photo && e.photo.startsWith('data:'))).slice(0, 6);
+  const photoPreviewHtml = recentPhotos.length > 0 ? `
+    <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color};">My Plates</div>
+        <button onclick="navigateTo('my-plates')" style="font-size: 12px; color: ${CONFIG.primary_action_color}; background: none; border: none; cursor: pointer;">View all</button>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+        ${recentPhotos.map(e => `
+          <div style="aspect-ratio: 1; border-radius: 8px; overflow: hidden;">
+            <img src="${esc(e.myPhoto || e.photo)}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" />
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  ` : '';
+
   return `
     <div id="my-meals-swipe-zone" style="padding: 0 12px; padding-bottom: 72px;">
-      <!-- Date Navigation Header -->
-      <div style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: ${CONFIG.space_md}; padding: 4px 0;">
-        <button onclick="navigateMyMealsDate(-1)" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; color: ${CONFIG.text_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
-        </button>
-        <div style="text-align: center; min-width: 140px;">
-          <div style="font-size: 16px; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color};">${esc(dateLabel)}</div>
-          ${showTodayBtn ? `<button onclick="state.myMealsDate = getToday(); render();" style="font-size: 12px; color: ${CONFIG.primary_action_color}; background: none; border: none; cursor: pointer; margin-top: 2px; font-weight: 600;">Jump to Today</button>` : ''}
-        </div>
-        <button onclick="navigateMyMealsDate(1)" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; color: ${CONFIG.text_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
-        </button>
-      </div>
+      <div class="desktop-mymeals-layout">
+        <div class="desktop-mymeals-main">
+          <!-- Date Navigation Header -->
+          <div style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-bottom: ${CONFIG.space_md}; padding: 4px 0;">
+            <button onclick="navigateMyMealsDate(-1)" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; color: ${CONFIG.text_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+            </button>
+            <div style="text-align: center; min-width: 140px;">
+              <div style="font-size: 16px; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color};">${esc(dateLabel)}</div>
+              ${showTodayBtn ? `<button onclick="state.myMealsDate = getToday(); render();" style="font-size: 12px; color: ${CONFIG.primary_action_color}; background: none; border: none; cursor: pointer; margin-top: 2px; font-weight: 600;">Jump to Today</button>` : ''}
+            </div>
+            <button onclick="navigateMyMealsDate(1)" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: transparent; color: ${CONFIG.text_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+            </button>
+          </div>
 
-      <!-- Meal Slots for this day -->
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        ${slotHtml}
-      </div>
+          <!-- Meal Slots for this day -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${slotHtml}
+          </div>
 
-      ${dayEntries.length === 0 ? `
-        <div style="text-align: center; padding: ${CONFIG.space_xl} ${CONFIG.space_md}; margin-top: ${CONFIG.space_md};">
-          <div style="font-size: 32px; opacity: 0.3; margin-bottom: ${CONFIG.space_sm};">🍽</div>
-          <div style="color: ${CONFIG.text_muted}; font-size: 14px;">No meals logged for this day</div>
-          <div style="color: ${CONFIG.text_tertiary}; font-size: 12px; margin-top: 4px;">Tap + to log what you ate</div>
+          ${dayEntries.length === 0 ? `
+            <div style="text-align: center; padding: ${CONFIG.space_xl} ${CONFIG.space_md}; margin-top: ${CONFIG.space_md};">
+              <div style="font-size: 32px; opacity: 0.3; margin-bottom: ${CONFIG.space_sm};">🍽</div>
+              <div style="color: ${CONFIG.text_muted}; font-size: 14px;">No meals logged for this day</div>
+              <div style="color: ${CONFIG.text_tertiary}; font-size: 12px; margin-top: 4px;">Tap + to log what you ate</div>
+            </div>
+          ` : ''}
         </div>
-      ` : ''}
+        <div class="desktop-mymeals-side">
+          ${miniCalendarHtml}
+          ${photoPreviewHtml}
+        </div>
+      </div>
     </div>
     <!-- FAB -->
     <button onclick="showQuickLogModal()" style="position: fixed; bottom: 68px; right: 16px; width: 48px; height: 48px; border-radius: 50%; background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 28px; cursor: pointer; z-index: 45; box-shadow: 0 2px 8px rgba(232,93,93,0.3); display: flex; align-items: center; justify-content: center;" title="Log a meal">
       <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
     </button>
+  `;
+}
+
+function renderMyMealsMiniCalendar(selectedDate, log) {
+  const d = new Date(selectedDate + 'T12:00:00');
+  const year = d.getFullYear();
+  const month = d.getMonth();
+  const monthName = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const todayStr = getToday();
+
+  // Dates with logged meals
+  const loggedDates = new Set(log.map(e => e.dateCooked?.split('T')[0]).filter(Boolean));
+
+  let cells = '';
+  for (let i = 0; i < firstDay; i++) cells += '<div></div>';
+  for (let day = 1; day <= daysInMonth; day++) {
+    const ds = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const isSelected = ds === selectedDate;
+    const isToday = ds === todayStr;
+    const hasLog = loggedDates.has(ds);
+    const bg = isSelected ? CONFIG.primary_action_color : isToday ? 'rgba(232,93,93,0.15)' : 'transparent';
+    const color = isSelected ? 'white' : CONFIG.text_color;
+    cells += `<div onclick="state.myMealsDate='${ds}'; render();" style="width:32px; height:32px; display:flex; flex-direction:column; align-items:center; justify-content:center; border-radius:8px; cursor:pointer; background:${bg}; color:${color}; font-size:12px; font-weight:${isSelected || isToday ? '600' : '400'}; transition: background 150ms ease;">
+      ${day}
+      ${hasLog ? `<div style="width:4px;height:4px;border-radius:50%;background:${isSelected ? 'white' : CONFIG.primary_action_color};margin-top:1px;"></div>` : ''}
+    </div>`;
+  }
+
+  return `
+    <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px;">
+      <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 12px; text-align: center;">${monthName}</div>
+      <div style="display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; justify-items: center;">
+        ${['S','M','T','W','T','F','S'].map(d => `<div style="font-size:10px; color:${CONFIG.text_muted}; font-weight:600; padding:4px 0;">${d}</div>`).join('')}
+        ${cells}
+      </div>
+    </div>
   `;
 }
 
@@ -732,7 +799,7 @@ function renderMyPlates() {
 
   return `
     <div style="padding: 0; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
-      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: ${CONFIG.background_color};">
+      <div class="my-plates-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: ${CONFIG.background_color};">
         ${allPhotos.map(p => `
           <div onclick="showPlateFullscreen('${p.id}')" style="aspect-ratio: 1; overflow: hidden; cursor: pointer; position: relative;">
             <img src="${esc(p.photo)}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" />
@@ -1082,8 +1149,12 @@ function render() {
 
   app.innerHTML = `
     <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
+      ${renderDesktopSidebar()}
       ${renderNav()}
-      ${content}
+      <div class="desktop-content-area">
+        ${renderDesktopPageTitle()}
+        ${content}
+      </div>
       ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
       ${renderBottomNav()}
     </div>

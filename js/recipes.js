@@ -1708,7 +1708,7 @@ function renderRecipes() {
           ` : ''}
         </div>
       ` : `
-        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 0 2px;">
+        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 0 2px;">
           ${list.map(r => {
             const id = r.__backendId || r.id;
             const img = recipeThumb(r);
@@ -2175,8 +2175,12 @@ function render() {
 
   app.innerHTML = `
     <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+      ${renderDesktopSidebar()}
       ${renderNav()}
-      ${content}
+      <div class="desktop-content-area">
+        ${renderDesktopPageTitle()}
+        ${content}
+      </div>
       ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}
       ${typeof renderReceiptScannerModal === 'function' ? renderReceiptScannerModal() : ''}
       ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}

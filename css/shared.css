@@ -18,8 +18,8 @@
     }
 
     /* ===== RESPONSIVE APP SHELL ===== */
-    /* Desktop (768px+): centered 480px phone-preview container */
-    /* Mobile (<768px): full width, edge-to-edge, app-like */
+    /* Desktop (768px+): sidebar nav + full-width content */
+    /* Mobile (<768px): full width, edge-to-edge, bottom nav */
 
     .app-shell {
       position: relative;
@@ -27,26 +27,112 @@
       width: 100%;
     }
 
+    /* Desktop sidebar — hidden on mobile */
+    .desktop-sidebar { display: none; }
+
     @media (min-width: 768px) {
-      body {
-        background: #08080c;
+      /* Show sidebar, hide bottom nav */
+      .desktop-sidebar {
+        display: flex;
+        flex-direction: column;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 220px;
+        height: 100vh;
+        background: #111118;
+        z-index: 60;
+        padding: 0;
+        border-right: 1px solid rgba(255,255,255,0.06);
       }
+      .bottom-nav { display: none !important; }
+
+      /* Shift main content right of sidebar */
       .app-shell {
-        max-width: 480px;
-        margin: 0 auto;
-        background: #0d0d14;
-        box-shadow: 0 0 40px rgba(0,0,0,0.5);
-        position: relative;
-        overflow-x: hidden;
+        margin-left: 220px;
+        width: calc(100% - 220px);
+        max-width: none;
+        padding-bottom: 0 !important;
       }
-      /* Bottom nav: constrain to container instead of full viewport */
-      .app-shell .bottom-nav {
-        left: 50% !important;
-        right: auto !important;
-        transform: translateX(-50%);
-        width: 100%;
-        max-width: 480px;
+
+      /* Desktop content wrapper padding */
+      .desktop-content-area {
+        padding: 32px;
+        max-width: 1400px;
       }
+    }
+
+    /* Sidebar internals */
+    .sidebar-logo {
+      display: flex;
+      align-items: center;
+      padding: 24px 20px 32px;
+    }
+    .sidebar-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      padding: 0 10px;
+      flex: 1;
+    }
+    .sidebar-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      text-decoration: none;
+      color: #8e8e93;
+      font-size: 14px;
+      font-weight: 500;
+      transition: background 200ms ease, color 200ms ease;
+      position: relative;
+    }
+    .sidebar-link:hover {
+      background: rgba(255,255,255,0.05);
+      color: #f5f5f7;
+    }
+    .sidebar-link.active {
+      background: rgba(232, 93, 93, 0.1);
+      color: #e85d5d;
+    }
+    .sidebar-link.active::before {
+      content: '';
+      position: absolute;
+      left: -10px;
+      top: 6px;
+      bottom: 6px;
+      width: 3px;
+      border-radius: 0 3px 3px 0;
+      background: #e85d5d;
+    }
+    .sidebar-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    .sidebar-label {
+      flex: 1;
+    }
+    .sidebar-badge {
+      background: #ff453a;
+      color: white;
+      font-size: 10px;
+      font-weight: 700;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 5px;
+    }
+    .sidebar-footer {
+      padding: 10px;
+      border-top: 1px solid rgba(255,255,255,0.06);
     }
 
     /* ===== GLOBAL TRANSITIONS ===== */
@@ -107,13 +193,7 @@
     }
 
     /* ===== RESPONSIVE: Mobile first ===== */
-    /* Desktop overrides: within 480px container, keep mobile grid layouts */
-    .app-shell .kitchen-grid {
-      grid-template-columns: repeat(3, 1fr) !important;
-    }
-
     .mobile-filters { display: block; }
-    .desktop-sidebar { display: none; }
     .recipe-card-desktop { display: none; }
     .recipe-list-mobile { display: block; }
 
@@ -145,45 +225,24 @@
       min-width: 0;
     }
 
-    /* Inside app-shell, always show mobile layout (even on desktop) */
-    .app-shell .mobile-filters { display: block !important; }
-    .app-shell .desktop-sidebar { display: none !important; }
-    .app-shell .recipe-card-desktop { display: none !important; }
-    .app-shell .recipe-list-mobile { display: block !important; }
-    .app-shell .mobile-list-item { display: flex !important; flex-direction: row !important; }
-    .app-shell .mobile-stack { flex-direction: column; }
-    .app-shell .mobile-full { width: 100%; }
-    .app-shell .page-container { padding: 12px !important; }
+    /* Mobile: show mobile sections, hide desktop sidebars */
+    .mobile-only-sections { display: block; }
 
-    @media (max-width: 1024px) {
-      .mobile-stack { flex-direction: column; }
-      .mobile-full { width: 100%; }
-      .desktop-sidebar { display: none !important; }
-      .mobile-filters { display: block !important; }
-      .recipe-card-desktop { display: none !important; }
-      .recipe-list-mobile { display: block !important; }
-
-      .mobile-list-item {
-        display: flex !important;
-        flex-direction: row !important;
-      }
-
-      .page-header h2 { font-size: 1.5rem !important; }
-      .page-header p { font-size: 0.75rem !important; }
-
-      .header-buttons {
-        flex-direction: column;
-        width: 100%;
-        gap: 8px;
-      }
-
-      .header-buttons button {
-        width: 100%;
-        font-size: 13px !important;
-        padding: 10px 16px !important;
-      }
-
+    @media (max-width: 767px) {
       .page-container { padding: 12px !important; }
+      .desktop-content-area { padding: 0 !important; }
+      .desktop-home-layout { display: block; }
+      .desktop-home-sidebar { display: none; }
+      .desktop-mymeals-layout { display: block; }
+      .desktop-mymeals-side { display: none; }
+      .desktop-grocery-layout { display: block; }
+      .desktop-grocery-main { display: block; }
+      .desktop-grocery-side { display: none; }
+      .desktop-kitchen-detail-layout { display: block; }
+    }
+
+    @media (min-width: 768px) {
+      .mobile-only-sections { display: none; }
     }
 
     /* ===== ACCORDION ===== */
@@ -1090,4 +1149,223 @@
       color: rgba(255,255,255,0.4);
       font-size: 14px;
       cursor: pointer;
+    }
+
+    /* ===== DESKTOP PAGE LAYOUTS (768px+) ===== */
+    @media (min-width: 768px) {
+      /* Hide mobile top nav bar on desktop — sidebar replaces it */
+      .app-shell > nav:not(.bottom-nav) {
+        display: none;
+      }
+
+      /* Show desktop page title */
+      .desktop-page-title-bar {
+        display: block !important;
+      }
+
+      /* Desktop typography scale-up */
+      .desktop-content-area h1,
+      .desktop-content-area .desktop-page-title {
+        font-size: 28px !important;
+        font-weight: 700 !important;
+      }
+      .desktop-content-area h2,
+      .desktop-content-area .desktop-section-header {
+        font-size: 18px !important;
+        font-weight: 600 !important;
+      }
+
+      /* ---- Home: two-column ---- */
+      .desktop-home-layout {
+        display: grid;
+        grid-template-columns: 3fr 2fr;
+        gap: 32px;
+        align-items: start;
+        padding: 0 12px;
+      }
+      .desktop-home-main {
+        display: flex;
+        flex-direction: column;
+      }
+      .desktop-home-main .swipe-container {
+        max-width: 360px;
+        width: 100%;
+        aspect-ratio: 3/4;
+        height: auto;
+        max-height: none;
+      }
+      .desktop-home-sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        padding-top: 8px;
+      }
+
+      /* ---- Recipes: multi-column grid ---- */
+      .recipes-photo-grid {
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important;
+        gap: 6px !important;
+        padding: 0 12px !important;
+      }
+      .recipes-photo-grid > div {
+        border-radius: 12px !important;
+        overflow: hidden;
+        transition: transform 200ms ease, box-shadow 200ms ease;
+      }
+      .recipes-photo-grid > div:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      }
+      .desktop-recipe-header {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+      }
+      .desktop-recipe-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 16px;
+      }
+      .desktop-recipe-card {
+        border-radius: 16px;
+        overflow: hidden;
+        background: #1a1a24;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        cursor: pointer;
+        transition: transform 200ms ease, box-shadow 200ms ease;
+      }
+      .desktop-recipe-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+      }
+      .desktop-recipe-card img {
+        width: 100%;
+        aspect-ratio: 1/1;
+        object-fit: cover;
+      }
+      .desktop-recipe-card .card-info {
+        padding: 12px 14px;
+      }
+      .desktop-recipe-card .card-title {
+        font-size: 14px;
+        font-weight: 600;
+        color: #f5f5f7;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .desktop-recipe-card .card-category {
+        font-size: 12px;
+        color: #8e8e93;
+        margin-top: 2px;
+      }
+
+      /* ---- My Meals: two-column ---- */
+      .desktop-mymeals-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+        align-items: start;
+      }
+      .desktop-mymeals-main {
+        max-width: 540px;
+      }
+      .desktop-mymeals-side {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      /* ---- Kitchen: multi-column grid ---- */
+      .kitchen-grid {
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)) !important;
+        gap: 8px !important;
+      }
+      .kitchen-grid > * {
+        transition: transform 200ms ease, box-shadow 200ms ease;
+      }
+      .kitchen-grid > *:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+      }
+
+      /* ---- Kitchen Detail: two-column ---- */
+      .desktop-kitchen-detail-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 32px;
+        align-items: start;
+      }
+
+      /* ---- Grocery: two-column ---- */
+      .desktop-grocery-layout {
+        display: grid;
+        grid-template-columns: 3fr 2fr;
+        gap: 32px;
+        align-items: start;
+      }
+      .desktop-grocery-main {
+        min-width: 0;
+      }
+      .desktop-grocery-side {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      /* Fix sticky positions (no top nav on desktop) */
+      .kitchen-sticky-search {
+        top: 0 !important;
+      }
+
+      /* ---- Global desktop hover states ---- */
+      .desktop-content-area button:not(.sidebar-link):hover,
+      .desktop-content-area a:not(.sidebar-link):hover,
+      .desktop-content-area [onclick]:hover {
+        transition: all 200ms ease;
+      }
+
+      /* ---- Responsive images in grids ---- */
+      .desktop-recipe-grid img,
+      .desktop-kitchen-grid img {
+        aspect-ratio: 1/1;
+        object-fit: cover;
+        width: 100%;
+      }
+
+      /* Swipe container desktop sizing */
+      .swipe-container {
+        max-width: 400px;
+        margin: 0 auto;
+      }
+
+      /* FAB position adjustment */
+      .app-shell button[style*="position: fixed"][style*="bottom: 68px"] {
+        right: 32px;
+      }
+
+      /* My Plates grid on desktop */
+      .my-plates-grid {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
+        gap: 4px !important;
+      }
+      .my-plates-grid > div {
+        border-radius: 8px;
+        transition: transform 200ms ease, box-shadow 200ms ease;
+      }
+      .my-plates-grid > div:hover {
+        transform: scale(1.02);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      }
+
+      /* More menu position adjustment for desktop */
+      #moreMenuOverlay > div {
+        bottom: auto !important;
+        left: 230px !important;
+        bottom: auto !important;
+        top: auto !important;
+        transform: none !important;
+      }
     }

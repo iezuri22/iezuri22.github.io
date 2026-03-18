@@ -2269,6 +2269,12 @@ function navigateTo(view) {
 // ============================================================
 // SECTION 19: NAV RENDERING
 // ============================================================
+function renderDesktopPageTitle() {
+  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home' };
+  const title = pageTitles[state.currentView] || 'Yummy';
+  return `<div class="desktop-page-title-bar" style="display: none; padding-bottom: 24px;"><h1 style="font-size: 28px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">${title}</h1></div>`;
+}
+
 function renderNav() {
   if (state.currentView === 'home' || state.currentView === 'swipe' || state.currentView === 'swipe-setup' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals') return '';
   const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient' };
@@ -2310,6 +2316,48 @@ function renderBottomNav() {
 }
 
 // ============================================================
+// SECTION 19b: DESKTOP SIDEBAR NAV
+// ============================================================
+function renderDesktopSidebar() {
+  const currentPage = window.location.pathname.split('/').pop() || 'index.html';
+  const sidebarItems = [
+    { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>' },
+    { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>' },
+    { id: 'my-meals', label: 'My Meals', href: '/my-meals.html', pages: ['my-meals.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>' },
+    { id: 'kitchen', label: 'Kitchen', href: '/kitchen.html', pages: ['kitchen.html', 'kitchen-detail.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>' },
+    { id: 'grocery', label: 'Grocery', href: '/grocery.html', pages: ['grocery.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>' },
+    { id: 'more', label: 'More', href: '#', pages: [], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM12.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0zM18.75 12a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>', isMore: true }
+  ];
+
+  const groceryCount = typeof getGroceryBadgeCount === 'function' ? getGroceryBadgeCount() : 0;
+
+  return `<aside class="desktop-sidebar">
+    <div class="sidebar-logo">
+      <span style="font-size: 24px; margin-right: 10px;">🍽️</span>
+      <span style="font-size: 18px; font-weight: 700; color: ${CONFIG.text_color}; letter-spacing: -0.5px;">Yummy</span>
+    </div>
+    <nav class="sidebar-nav">
+      ${sidebarItems.map(item => {
+        const isActive = item.pages.includes(currentPage);
+        const badge = item.id === 'grocery' && groceryCount > 0 ? `<span class="sidebar-badge">${groceryCount}</span>` : '';
+        const onclick = item.isMore ? `onclick="showMoreMenu(); return false;"` : '';
+        return `<a href="${item.isMore ? '#' : item.href}" ${onclick} class="sidebar-link ${isActive ? 'active' : ''}">
+          <span class="sidebar-icon">${item.icon}</span>
+          <span class="sidebar-label">${item.label}</span>
+          ${badge}
+        </a>`;
+      }).join('')}
+    </nav>
+    <div class="sidebar-footer">
+      <button onclick="showSettingsMenu && showSettingsMenu()" class="sidebar-link" style="width: 100%; border: none; background: none; cursor: pointer; text-align: left;">
+        <span class="sidebar-icon"><svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg></span>
+        <span class="sidebar-label">Settings</span>
+      </button>
+    </div>
+  </aside>`;
+}
+
+// ============================================================
 // SECTION 20: MORE MENU & MISC
 // ============================================================
 function showMoreMenu() {
@@ -2320,7 +2368,11 @@ function showMoreMenu() {
     { id: 'settings', icon: '\u2699\ufe0f', label: 'Settings', action: 'showSettingsMenu && showSettingsMenu()' },
   ];
   document.getElementById('moreMenuOverlay')?.remove();
-  const menuHtml = `<div id="moreMenuOverlay" onclick="closeMoreMenu()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 50;"><div onclick="event.stopPropagation()" style="position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); min-width: 180px;">${menuItems.map(item => `<button onclick="${item.action ? item.action : `navigateTo('${item.id}')`}; closeMoreMenu();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: none; background: transparent; cursor: pointer; border-radius: 10px; text-align: left;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'"><span style="font-size: 18px;">${item.icon}</span><span style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 500;">${item.label}</span></button>`).join('')}</div></div>`;
+  const isDesktop = window.innerWidth >= 768;
+  const popupStyle = isDesktop
+    ? `position: fixed; left: 230px; bottom: 60px; background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.3); min-width: 180px;`
+    : `position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); min-width: 180px;`;
+  const menuHtml = `<div id="moreMenuOverlay" onclick="closeMoreMenu()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 70;"><div onclick="event.stopPropagation()" style="${popupStyle}">${menuItems.map(item => `<button onclick="${item.action ? item.action : `navigateTo('${item.id}')`}; closeMoreMenu();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: none; background: transparent; cursor: pointer; border-radius: 10px; text-align: left;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'"><span style="font-size: 18px;">${item.icon}</span><span style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 500;">${item.label}</span></button>`).join('')}</div></div>`;
   document.body.insertAdjacentHTML('beforeend', menuHtml);
 }
 

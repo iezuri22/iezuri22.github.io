@@ -214,13 +214,23 @@ function renderHome() {
     ? renderSwipeTab()
     : renderSelectedTab();
 
+  const cookAgainHtml = renderCookAgainRow();
+  const patternHtml = renderPatternSection();
+
   return `
     <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
       ${renderHomeHeader(viewDate)}
-      ${renderCookAgainRow()}
-      ${renderPatternSection()}
-      ${renderHomeTabs()}
-      ${tabContent}
+      <div class="mobile-only-sections">${cookAgainHtml}${patternHtml}</div>
+      <div class="desktop-home-layout">
+        <div class="desktop-home-main">
+          ${renderHomeTabs()}
+          ${tabContent}
+        </div>
+        <div class="desktop-home-sidebar">
+          ${cookAgainHtml}
+          ${patternHtml}
+        </div>
+      </div>
     </div>
     ${calendarOverlay}
     <!-- Floating Quick Log Button -->
@@ -2593,8 +2603,12 @@ function render() {
 
   app.innerHTML = `
     <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'swipe-setup' ? '56px' : '0'};">
+      ${renderDesktopSidebar()}
       ${renderNav()}
-      ${content}
+      <div class="desktop-content-area">
+        ${renderDesktopPageTitle()}
+        ${content}
+      </div>
       ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}
       ${typeof renderReceiptScannerModal === 'function' ? renderReceiptScannerModal() : ''}
       ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
