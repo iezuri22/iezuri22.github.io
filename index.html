@@ -94,6 +94,14 @@
       .recipe-img-height {
         height: 90px !important;
       }
+      .kitchen-grid {
+        grid-template-columns: repeat(5, 1fr) !important;
+      }
+    }
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .kitchen-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
+      }
     }
 
     .mobile-filters { display: block; }
@@ -6726,26 +6734,77 @@ function renderReceiptModal() {
       `;
     }
 
-    function openAddMealForSlot(mealType, dateStr) {
-      // Open a choice modal: pick from recipes or log manually
+    function showMealActionSheet(mealType, dateStr, swapLogId) {
+      if (!dateStr) dateStr = state.myMealsDate || getToday();
+      if (!mealType) mealType = detectMealType ? detectMealType() : 'dinner';
+      const label = capitalize(mealType);
+      const dateLabel = typeof getFoodLogDateLabel === 'function' ? getFoodLogDateLabel(dateStr) : getDateLabel(dateStr);
+      const isSwap = !!swapLogId;
+      const title = isSwap ? `Swap ${label}` : `Add ${label}`;
+
       openModal(`
         <div style="color: ${CONFIG.text_color};">
-          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">Add ${capitalize(mealType)}</h3>
-          <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${getFoodLogDateLabel(dateStr)}</div>
+          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${title}</h3>
+          <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${dateLabel}</div>
 
-          <button onclick="closeModal(); showRecipePickerForSlot('${mealType}', '${dateStr}')"
-            style="width: 100%; padding: 14px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-            <svg width="20" height="20" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
-            Pick from recipes
-          </button>
-          <button onclick="closeModal(); showQuickLogModalForSlot('${mealType}', '${dateStr}')"
-            style="width: 100%; padding: 14px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-            <svg width="20" height="20" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
-            Log manually
-          </button>
-          <button onclick="closeModal()" style="width: 100%; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer; margin-top: 4px;">Cancel</button>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <button onclick="closeModal(); startSwipeForSlot('${mealType}', '${dateStr}'${isSwap ? `, '${swapLogId}'` : ''})"
+              style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 14px;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(232,93,93,0.12); display: flex; align-items: center; justify-content: center;">
+                <svg width="22" height="22" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008M6 18h.008M18 6h.008M18 18h.008M3 6a3 3 0 013-3h1.5a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75H6a3 3 0 00-3 3V6zm0 12a3 3 0 003 3h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75H6a3 3 0 01-3-3v3zm18-12a3 3 0 00-3-3h-1.5a.75.75 0 00-.75.75v1.5c0 .414.336.75.75.75H18a3 3 0 013 3V6zm0 12a3 3 0 01-3 3h-1.5a.75.75 0 01-.75-.75v-1.5c0-.414.336-.75.75-.75H18a3 3 0 003-3v3z"/></svg>
+              </div>
+              <div style="text-align: left;">
+                <div style="font-weight: 600;">Swipe for it</div>
+                <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Browse recipes by swiping</div>
+              </div>
+            </button>
+
+            <button onclick="closeModal(); showRecipePickerForSlot('${mealType}', '${dateStr}'${isSwap ? `; window._swapLogIdForPicker = '${swapLogId}'` : ''})"
+              style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 14px;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(232,93,93,0.12); display: flex; align-items: center; justify-content: center;">
+                <svg width="22" height="22" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+              </div>
+              <div style="text-align: left;">
+                <div style="font-weight: 600;">Pick from recipes</div>
+                <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Choose from your recipe collection</div>
+              </div>
+            </button>
+
+            <button onclick="closeModal(); showQuickLogModalForSlot('${mealType}', '${dateStr}')"
+              style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 14px;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(232,93,93,0.12); display: flex; align-items: center; justify-content: center;">
+                <svg width="22" height="22" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
+              </div>
+              <div style="text-align: left;">
+                <div style="font-weight: 600;">Log manually</div>
+                <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Type what you ate, add a photo</div>
+              </div>
+            </button>
+          </div>
+
+          <button onclick="closeModal()" style="width: 100%; margin-top: 12px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
         </div>
       `);
+    }
+
+    function startSwipeForSlot(mealType, dateStr, swapLogId) {
+      state.viewingDate = dateStr;
+      if (swapLogId) {
+        state._swapTargetLogId = swapLogId;
+        state._swapMealType = mealType;
+        state._swapDateStr = dateStr;
+        state._returnToFoodLog = true;
+      }
+      state.homeTab = 'swipe';
+      state.swipeMealType = mealType;
+      state.todaySwipeMealSlot = mealType;
+      state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(mealType) : buildSwipeDeck(mealType);
+      state.swipeIndex = 0;
+      navigateTo('home');
+    }
+
+    function openAddMealForSlot(mealType, dateStr) {
+      showMealActionSheet(mealType, dateStr);
     }
 
     function showRecipePickerForSlot(mealType, dateStr) {
@@ -7205,56 +7264,9 @@ function renderReceiptModal() {
     // QUICK LOG MODAL (floating + button)
     // ============================================================
     function showQuickLogModal() {
-      state._quickLogPhoto = null;
-      state._quickLogMealType = 'dinner';
-      // Use the current My Meals date if on that view
-      if (state.currentView === 'my-meals' && state.myMealsDate) {
-        state._quickLogDateStr = state.myMealsDate;
-      }
-      openModal(`
-        <div style="color: ${CONFIG.text_color};">
-          <h3 style="font-size: 18px; font-weight: 700; margin-bottom: ${CONFIG.space_lg};">Log a Meal</h3>
-
-          <div style="margin-bottom: ${CONFIG.space_sm};">
-            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">What did you eat?</label>
-            <input type="text" id="quickLogName" placeholder="e.g., Chicken tacos, leftover pizza"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box;" autofocus />
-          </div>
-
-          <div style="margin-bottom: ${CONFIG.space_md};">
-            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 8px;">Meal type</label>
-            <div id="quickLogMealPills" style="display: flex; gap: 8px; flex-wrap: wrap;">
-              ${['breakfast','lunch','dinner','snack'].map(mt => `
-                <button onclick="selectQuickLogMealType('${mt}')" id="qlpill-${mt}"
-                  style="padding: 8px 16px; border-radius: 20px; border: 1px solid ${mt === 'dinner' ? 'rgba(232,93,93,0.4)' : 'rgba(255,255,255,0.15)'}; background: ${mt === 'dinner' ? 'rgba(232,93,93,0.15)' : 'transparent'}; color: ${mt === 'dinner' ? '#e85d5d' : 'rgba(255,255,255,0.6)'}; font-size: 13px; font-weight: ${mt === 'dinner' ? '600' : '400'}; cursor: pointer;">
-                  ${capitalize(mt)}
-                </button>
-              `).join('')}
-            </div>
-          </div>
-
-          <div style="margin-bottom: ${CONFIG.space_md};">
-            <button onclick="document.getElementById('quickLogPhotoInput').click()" id="quickLogPhotoBtn"
-              style="width: 100%; padding: 14px; border: 1px dashed rgba(255,255,255,0.15); border-radius: 12px; background: transparent; color: ${CONFIG.text_muted}; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
-              Add a photo
-            </button>
-            <input type="file" id="quickLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleQuickLogPhoto(this)" />
-          </div>
-
-          <div style="margin-bottom: ${CONFIG.space_md};">
-            <label style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 4px;">Notes <span style="opacity: 0.5;">(optional)</span></label>
-            <textarea id="quickLogNotes" rows="2" placeholder="How was it? Would you make it again?"
-              style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};"></textarea>
-          </div>
-
-          <button onclick="submitQuickLog()"
-            style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
-            Log it
-          </button>
-          <button onclick="closeModal()" style="width: 100%; margin-top: 8px; padding: 12px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
-        </div>
-      `);
+      const mealType = detectMealType ? detectMealType() : 'dinner';
+      const dateStr = (state.currentView === 'my-meals' && state.myMealsDate) ? state.myMealsDate : getToday();
+      showMealActionSheet(mealType, dateStr);
     }
 
     function selectQuickLogMealType(mt) {
@@ -7325,16 +7337,7 @@ function renderReceiptModal() {
     // SWAP MEAL — Open swipe deck to replace a logged meal
     // ============================================================
     function openSwapMeal(logId, mealType, dateStr) {
-      state._swapTargetLogId = logId;
-      state._swapMealType = mealType;
-      state._swapDateStr = dateStr;
-      state.viewingDate = dateStr;
-      state.homeTab = 'swipe';
-      state.swipeMealType = mealType;
-      state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(mealType) : buildSwipeDeck(mealType);
-      state.swipeIndex = 0;
-      state._returnToFoodLog = true;
-      navigateTo('home');
+      showMealActionSheet(mealType, dateStr, logId);
     }
 
     // Override handleHomeSwipeRight when in swap mode
@@ -9293,6 +9296,7 @@ function navigateTo(view) {
     state.viewingFromTips = false;
     state.viewingFromMealOptions = false;
     state.viewingFromSwipe = false;
+    state.viewingFromKitchen = false;
   }
 
  state.currentView = view;
@@ -9314,7 +9318,7 @@ function navigateTo(view) {
    // All view rendering functions.
    // ============================================================
   function renderNav() {
-      if (state.currentView === 'home' || state.currentView === 'swipe' || state.currentView === 'swipe-setup') return '';
+      if (state.currentView === 'home' || state.currentView === 'swipe' || state.currentView === 'swipe-setup' || state.currentView === 'kitchen-detail') return '';
       
       // Get page title based on current view
       const pageTitles = {
@@ -9335,7 +9339,9 @@ function navigateTo(view) {
         'ingredient-detail': 'Ingredient',
         'swipe': 'Pick a Meal',
         'swipe-setup': 'Swipe Setup',
-        'swipe-confirm': 'Meal Selected'
+        'swipe-confirm': 'Meal Selected',
+        'kitchen': 'My Kitchen',
+        'kitchen-detail': 'Ingredient'
       };
       
       const pageTitle = pageTitles[state.currentView] || 'Yummy';
@@ -9347,7 +9353,7 @@ function navigateTo(view) {
         <nav style="background: ${CONFIG.surface_color}; box-shadow: 0 2px 8px rgba(0,0,0,0.3);" class="p-3 sticky top-0 z-50">
           <div class="max-w-4xl mx-auto flex items-center justify-between">
             <div class="flex items-center gap-3">
-              <button onclick="navigateTo('${state.currentView === 'food-log-detail' || state.currentView === 'my-plates' ? 'my-meals' : 'home'}')" style="color: ${CONFIG.text_muted}; font-size: 20px;" title="Back">
+              <button onclick="navigateTo('${state.currentView === 'food-log-detail' || state.currentView === 'my-plates' ? 'my-meals' : state.currentView === 'kitchen-detail' ? 'kitchen' : 'home'}')" style="color: ${CONFIG.text_muted}; font-size: 20px;" title="Back">
                 ←
               </button>
               <span style="color: ${CONFIG.text_color}; font-weight: ${CONFIG.type_header_weight}; font-size: ${CONFIG.type_header}; letter-spacing: ${CONFIG.type_header_tracking};">${pageTitle}</span>
@@ -9393,6 +9399,10 @@ function navigateTo(view) {
           inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>',
           active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>'
         },
+        kitchen: {
+          inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>',
+          active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>'
+        },
         grocery: {
           inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>',
           active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>'
@@ -9403,6 +9413,7 @@ function navigateTo(view) {
         { id: 'home', label: 'Home' },
         { id: 'recipes', label: 'Recipes' },
         { id: 'my-meals', label: 'My Meals' },
+        { id: 'kitchen', label: 'Kitchen' },
         { id: 'grocery', label: 'Grocery' }
       ];
 
@@ -9416,6 +9427,7 @@ function navigateTo(view) {
                 (item.id === 'home' && ['swipe', 'swipe-confirm'].includes(state.currentView)) ||
                 (item.id === 'recipes' && ['recipes', 'recipe-view', 'recipe-edit', 'freestyle-edit'].includes(state.currentView)) ||
                 (item.id === 'my-meals' && ['my-meals', 'food-log-detail', 'my-plates'].includes(state.currentView)) ||
+                (item.id === 'kitchen' && ['kitchen', 'kitchen-detail'].includes(state.currentView)) ||
                 (item.id === 'grocery' && ['grocery', 'grocery-list', 'grocery-select-meals', 'grocery-ingredients'].includes(state.currentView));
 
               const onClick = `navigateTo('${item.id}')`;
@@ -9926,7 +9938,7 @@ function navigateTo(view) {
         { id: 'inventory', icon: '📦', label: 'Pantry' },
         { id: 'budget-dashboard', icon: '💰', label: 'Budget' },
         { id: 'swipe-setup', icon: '🃏', label: 'Swipe Options' },
-        { id: 'settings', icon: '⚙️', label: 'Settings', action: 'showSettingsMenu()' }
+        { id: 'settings', icon: '⚙️', label: 'Settings', action: 'showSettingsMenu()' },
       ];
       
       // Remove existing menu if any
@@ -11075,21 +11087,18 @@ function navigateTo(view) {
       // Past day with no meal logged - allow retroactive logging
       if (meal.status === 'none' && isPastDay) {
         return `
-          <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_sm}; box-shadow: ${CONFIG.shadow};">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-              <span style="font-size: 16px;">${icon}</span>
-              <span style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_header}; font-weight: 600;">${label}</span>
-              <span style="background: rgba(255,255,255,0.05); color: ${CONFIG.text_tertiary}; padding: 2px 8px; border-radius: 8px; font-size: ${CONFIG.type_micro};">Not logged</span>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <button onclick="showTakeoutLogger('${mealType}')" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; width: 100%; text-align: left; transition: all 0.2s ease;" class="card-press">
-                <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
-                <span style="font-size: 14px; color: #ffffff;">Log takeout</span>
-              </button>
-              <button onclick="showQuickLogOptions('${mealType}')" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; width: 100%; text-align: left; transition: all 0.2s ease;" class="card-press">
-                <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
-                <span style="font-size: 14px; color: #ffffff;">Quick log</span>
-              </button>
+          <div onclick="showMealActionSheet('${mealType}', '${dateStr}')" style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_sm}; box-shadow: ${CONFIG.shadow}; cursor: pointer;" class="card-press">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.05);">
+                <svg width="22" height="22" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              </div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_header}; font-weight: 600;">${label}</span>
+                  <span style="background: rgba(255,255,255,0.05); color: ${CONFIG.text_tertiary}; padding: 2px 8px; border-radius: 8px; font-size: ${CONFIG.type_micro};">Not logged</span>
+                </div>
+                <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">Tap to log what you ate</div>
+              </div>
             </div>
           </div>
         `;
@@ -11098,24 +11107,15 @@ function navigateTo(view) {
       // Empty today/future - show options
       if (meal.status === 'none') {
         return `
-          <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_sm}; box-shadow: ${CONFIG.shadow};">
-            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-              <span style="font-size: 16px;">${icon}</span>
-              <span style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_header}; font-weight: 600;">${label}</span>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 8px;">
-              <button onclick="goToSwipe('${mealType}')" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; width: 100%; text-align: left; transition: all 0.2s ease;" class="card-press">
-                <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.042 21.672L13.684 16.6m0 0l-2.51 2.225.569-9.47 5.227 7.917-3.286-.672zM12 2.25V4.5m5.834.166l-1.591 1.591M20.25 10.5H18M7.757 14.743l-1.59 1.59M6 10.5H3.75m4.007-4.243l-1.59-1.59"/></svg>
-                <span style="font-size: 14px; color: #ffffff;">Swipe to choose</span>
-              </button>
-              <button onclick="showTakeoutLogger('${mealType}')" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; width: 100%; text-align: left; transition: all 0.2s ease;" class="card-press">
-                <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
-                <span style="font-size: 14px; color: #ffffff;">Log takeout</span>
-              </button>
-              <button onclick="showQuickLogOptions('${mealType}')" style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; width: 100%; text-align: left; transition: all 0.2s ease;" class="card-press">
-                <svg width="20" height="20" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
-                <span style="font-size: 14px; color: #ffffff;">Quick log</span>
-              </button>
+          <div onclick="showMealActionSheet('${mealType}', '${dateStr}')" style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_sm}; box-shadow: ${CONFIG.shadow}; cursor: pointer;" class="card-press">
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: rgba(232,93,93,0.1);">
+                <svg width="22" height="22" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              </div>
+              <div>
+                <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_header}; font-weight: 600;">${label}</div>
+                <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">Tap to add a meal</div>
+              </div>
             </div>
           </div>
         `;
@@ -11496,7 +11496,7 @@ function navigateTo(view) {
       dayData.meals[mealType] = freshMealSlot();
       saveMealDay(dateStr);
       state.viewingDate = dateStr;
-      goToSwipe(mealType);
+      showMealActionSheet(mealType, dateStr);
     }
 
     // --- Meal Progress Bar ---
@@ -13605,7 +13605,7 @@ const sourceLabel = r.sourceType === 'chefiq' ? '🤖 ChefIQ Guided' :
       return `
                   <div class="p-6 max-w-5xl mx-auto">
           <div class="flex items-center justify-between mb-4 mobile-stack gap-3">
-<button type="button" onclick="navigateTo('${state.viewingFromSwipe ? 'swipe' : 'recipes'}')"
+<button type="button" onclick="navigateTo('${state.viewingFromKitchen ? 'kitchen-detail' : state.viewingFromSwipe ? 'swipe' : 'recipes'}')"
                 class="px-4 py-2 rounded button-hover"
                 style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color};">
                 ← Back
@@ -16723,6 +16723,290 @@ function renderGroceryList() {
       `);
     }
 
+    // ===== MY KITCHEN =====
+    const KITCHEN_INGREDIENTS = {
+      'Proteins': {
+        items: [
+          { name: 'Chicken', image: 'https://images.unsplash.com/photo-1604503468506-a8da13d82791?w=200&h=200&fit=crop', tips: { methods: ['Pan-sear skin-side down 6-7 min for crispy skin, flip and finish 5 min', 'Bake boneless breasts at 425°F for 18-22 min', 'Poach in barely simmering broth for 12-15 min for juicy shredded chicken', 'Grill thighs over medium-high heat 5-6 min per side'], storage: 'Raw 1-2 days in fridge, cooked 3-4 days. Freeze raw up to 9 months.', prep: 'Pat dry with paper towels before cooking for better browning. Pound breasts to even thickness.', pairings: 'Lemon, garlic, thyme, rosemary, paprika, honey, soy sauce' } },
+          { name: 'Beef', image: 'https://images.unsplash.com/photo-1588168333986-5078d3ae3976?w=200&h=200&fit=crop', tips: { methods: ['Sear in a ripping hot cast iron pan 3-4 min per side for steak', 'Braise tough cuts low and slow at 300°F for 3-4 hours', 'Brown ground beef over medium-high heat, breaking into pieces', 'Reverse sear: oven at 250°F until 10° below target, then sear'], storage: 'Raw steaks 3-5 days in fridge, ground beef 1-2 days. Freeze up to 12 months.', prep: 'Let steaks come to room temperature 30-45 min before cooking. Season generously with salt.', pairings: 'Black pepper, garlic, mushrooms, red wine, blue cheese, onions' } },
+          { name: 'Salmon', image: 'https://images.unsplash.com/photo-1574781330855-d0db8cc6a79c?w=200&h=200&fit=crop', tips: { methods: ['Pan-sear skin-side down 4 min, flip and cook 2-3 min more', 'Bake at 400°F for 12-15 min until flaky', 'Broil 4-6 inches from heat for 8-10 min', 'Poach in court bouillon at a gentle simmer for 10 min'], storage: 'Fresh 1-2 days in fridge. Freeze up to 3 months wrapped tightly.', prep: 'Remove pin bones with tweezers. Pat skin dry for crispier results.', pairings: 'Dill, lemon, capers, soy sauce, ginger, avocado, asparagus' } },
+          { name: 'Shrimp', image: 'https://images.unsplash.com/photo-1565680018434-b513d5e5fd47?w=200&h=200&fit=crop', tips: { methods: ['Sauté over high heat 2-3 min per side until pink and curled', 'Grill on skewers over medium-high 2 min per side', 'Poach in seasoned water just until pink, about 3 min'], storage: 'Fresh 1-2 days in fridge. Frozen shrimp keeps up to 6 months.', prep: 'Devein by running a knife along the back. Thaw frozen shrimp under cold running water.', pairings: 'Garlic, butter, lemon, chili flakes, Old Bay, coconut milk, lime' } },
+          { name: 'Tofu', image: 'https://images.unsplash.com/photo-1628689469838-524a4a973b8e?w=200&h=200&fit=crop', tips: { methods: ['Press 20 min, cube and pan-fry in oil until golden on all sides', 'Bake at 400°F for 25-30 min, flipping halfway', 'Crumble and scramble like eggs with turmeric and veggies', 'Deep fry cubes at 375°F for 3-4 min until crispy shell forms'], storage: 'Opened tofu lasts 3-5 days submerged in water, changed daily. Freeze to change texture.', prep: 'Press firm tofu 20-30 min between towels with weight to remove excess water.', pairings: 'Soy sauce, sesame oil, ginger, garlic, scallions, chili, peanuts' } },
+          { name: 'Eggs', image: 'https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=200&h=200&fit=crop', tips: { methods: ['Scramble over low heat, stirring constantly for creamy curds', 'Fry in butter over medium-low, basting whites with hot fat', 'Soft-boil 6.5 min in boiling water, ice bath immediately', 'Hard-boil 10-12 min in boiling water, then ice bath'], storage: 'Raw eggs 3-5 weeks in fridge. Hard-boiled eggs 1 week in fridge.', prep: 'Bring to room temperature for more even cooking. Crack on a flat surface to avoid shell fragments.', pairings: 'Cheese, herbs, bacon, avocado, hot sauce, toast, smoked salmon' } },
+          { name: 'Pork', image: 'https://images.unsplash.com/photo-1432139555190-58524dae6a55?w=200&h=200&fit=crop', tips: { methods: ['Sear chops 4 min per side, rest 5 min before serving', 'Slow roast shoulder at 275°F for 6-8 hours until fork tender', 'Stir-fry thin slices over high heat for 3-4 min', 'Grill tenderloin over medium heat 15-20 min, turning occasionally'], storage: 'Raw 3-5 days in fridge, cooked 3-4 days. Freeze raw up to 6 months.', prep: 'Brine chops in saltwater 30 min for juicier results. Score fat cap on roasts.', pairings: 'Apple, sage, garlic, mustard, brown sugar, ginger, fennel' } },
+          { name: 'Turkey', image: 'https://images.unsplash.com/photo-1574672280600-4accfa5b6f98?w=200&h=200&fit=crop', tips: { methods: ['Roast whole bird at 325°F, about 13 min per pound', 'Brown ground turkey over medium-high heat 6-8 min', 'Pan-sear cutlets 3-4 min per side', 'Smoke at 275°F for about 30 min per pound'], storage: 'Raw 1-2 days in fridge, cooked 3-4 days. Freeze raw up to 9 months.', prep: 'Dry brine overnight with salt for crispier skin and juicier meat.', pairings: 'Cranberry, sage, thyme, stuffing, gravy, sweet potatoes, rosemary' } },
+          { name: 'Tuna', image: 'https://images.unsplash.com/photo-1544551763-46a013bb70d5?w=200&h=200&fit=crop', tips: { methods: ['Sear over highest heat 1-2 min per side for rare center', 'Grill steaks over high heat 2 min per side', 'Make poke bowls with sushi-grade tuna cubed raw'], storage: 'Fresh sushi-grade 1 day in fridge. Canned tuna 3-5 days after opening.', prep: 'Pat very dry. Use sushi-grade only for raw preparations.', pairings: 'Sesame, soy sauce, wasabi, avocado, ginger, sriracha, seaweed' } }
+        ]
+      },
+      'Grains & Pasta': {
+        items: [
+          { name: 'Rice', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200&h=200&fit=crop', tips: { methods: ['Simmer white rice 1:1.5 ratio covered for 18 min, rest 5 min', 'Rice cooker with measured water for foolproof results', 'Toast in oil before adding water for nutty pilaf flavor', 'Bake in oven at 350°F covered for 25 min'], storage: 'Cooked rice 4-6 days in fridge. Cool quickly to prevent bacteria. Freeze up to 6 months.', prep: 'Rinse rice 2-3 times until water runs clear to remove excess starch.', pairings: 'Soy sauce, sesame, beans, curry, stir-fry vegetables, lime, cilantro' } },
+          { name: 'Pasta', image: 'https://images.unsplash.com/photo-1551462147-ff29053bfc14?w=200&h=200&fit=crop', tips: { methods: ['Boil in heavily salted water until al dente, 1-2 min less than package', 'Finish cooking in the sauce with reserved pasta water', 'Bake in casseroles at 375°F for 25-30 min'], storage: 'Cooked pasta 3-5 days in fridge tossed with a little oil. Dry pasta keeps 1-2 years.', prep: 'Use 4-6 quarts of water per pound. Salt water like the sea. Save a cup of pasta water.', pairings: 'Tomato sauce, garlic, parmesan, olive oil, basil, cream, mushrooms' } },
+          { name: 'Bread', image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=200&h=200&fit=crop', tips: { methods: ['Toast slices at 350°F or in toaster for 2-3 min', 'Make croutons by cubing and baking at 375°F for 10-12 min with oil', 'Grill thick slices brushed with olive oil for 1-2 min per side'], storage: 'Room temperature 2-3 days in paper bag. Freeze sliced bread up to 3 months.', prep: 'Stale bread is perfect for breadcrumbs, croutons, and French toast.', pairings: 'Butter, olive oil, garlic, cheese, soups, eggs, avocado' } },
+          { name: 'Quinoa', image: 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=200&h=200&fit=crop', tips: { methods: ['Simmer 1:2 ratio for 15 min until water absorbed and tails visible', 'Toast dry in pan 2 min before adding water for nuttier flavor', 'Cook in broth instead of water for more flavor'], storage: 'Cooked quinoa 5-7 days in fridge. Freeze cooked quinoa up to 8 months.', prep: 'Rinse thoroughly to remove bitter saponin coating. Fluff with fork after cooking.', pairings: 'Black beans, avocado, lemon, feta, roasted vegetables, cilantro, lime' } },
+          { name: 'Oats', image: 'https://images.unsplash.com/photo-1517673400267-0251440c45dc?w=200&h=200&fit=crop', tips: { methods: ['Stovetop porridge: 1:2 ratio, simmer 5 min stirring occasionally', 'Overnight oats: equal parts oats and milk, refrigerate 6+ hours', 'Baked oatmeal at 350°F for 35-40 min'], storage: 'Dry oats keep 1-2 years in airtight container. Overnight oats 3-4 days in fridge.', prep: 'Use rolled oats for porridge, steel-cut for chewier texture (cook 20-30 min).', pairings: 'Banana, berries, honey, cinnamon, peanut butter, maple syrup, nuts' } }
+        ]
+      },
+      'Vegetables': {
+        items: [
+          { name: 'Broccoli', image: 'https://images.unsplash.com/photo-1459411552884-841db9b3cc2a?w=200&h=200&fit=crop', tips: { methods: ['Roast florets at 425°F for 20-25 min until charred edges', 'Steam 4-5 min until bright green and crisp-tender', 'Stir-fry over high heat 3-4 min with garlic', 'Blanch 2 min then shock in ice water to preserve color'], storage: 'Fresh 3-5 days in fridge in a loose bag. Freeze blanched florets up to 12 months.', prep: 'Cut into even-sized florets. Peel and slice the stem too — it is delicious.', pairings: 'Garlic, lemon, parmesan, sesame, soy sauce, cheddar, chili flakes' } },
+          { name: 'Spinach', image: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=200&h=200&fit=crop', tips: { methods: ['Sauté with garlic in olive oil 1-2 min until just wilted', 'Add raw to smoothies or salads', 'Wilt into soups and pasta at the very end of cooking'], storage: 'Fresh 5-7 days in fridge wrapped in paper towel in a bag. Freeze blanched up to 10 months.', prep: 'Wash thoroughly as spinach can be sandy. Remove thick stems from mature spinach.', pairings: 'Garlic, lemon, nutmeg, feta, eggs, cream, pine nuts, mushrooms' } },
+          { name: 'Peppers', image: 'https://images.unsplash.com/photo-1563565375-f3fdfdbefa83?w=200&h=200&fit=crop', tips: { methods: ['Roast whole under broiler turning until charred all over, then steam peel', 'Sauté strips over medium-high heat 5-6 min', 'Stuff halved peppers and bake at 375°F for 25-30 min', 'Grill halves over medium heat 4-5 min per side'], storage: 'Whole peppers 1-2 weeks in fridge. Cut peppers 3-5 days. Freeze chopped up to 6 months.', prep: 'Remove seeds and white membranes. Slice along natural ridges for even pieces.', pairings: 'Onions, garlic, cumin, cheese, rice, beans, lime, cilantro' } },
+          { name: 'Onions', image: 'https://images.unsplash.com/photo-1518977676601-b28d17ceb46e?w=200&h=200&fit=crop', tips: { methods: ['Caramelize sliced onions over low heat 35-45 min stirring occasionally', 'Sauté diced over medium heat 5-7 min until translucent', 'Roast wedges at 400°F for 30-35 min', 'Quick pickle sliced red onion in vinegar 30 min'], storage: 'Whole onions 2-3 months in cool dark place. Cut onions 7-10 days in fridge.', prep: 'Chill before cutting to reduce tears. Cut in half through root, then slice.', pairings: 'Garlic, butter, thyme, balsamic, beef, peppers, tomatoes' } },
+          { name: 'Tomatoes', image: 'https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=200&h=200&fit=crop', tips: { methods: ['Slow roast halved at 275°F for 2-3 hours for concentrated flavor', 'Sauté with garlic for quick pan sauce in 10 min', 'Blister cherry tomatoes in hot pan 3-4 min', 'Raw in salads when in season for best flavor'], storage: 'Never refrigerate whole tomatoes — store at room temperature. Cut tomatoes 2-3 days in fridge.', prep: 'Score bottom with X and blanch 30 sec for easy peeling. Remove seeds for less watery sauces.', pairings: 'Basil, mozzarella, garlic, olive oil, balsamic, oregano, onions' } },
+          { name: 'Potatoes', image: 'https://images.unsplash.com/photo-1518977676601-b28d17ceb46e?w=200&h=200&fit=crop', tips: { methods: ['Roast cubed at 425°F for 30-35 min, tossing halfway', 'Boil whole starting in cold salted water 20-25 min until fork tender', 'Mash boiled potatoes with butter and warm cream', 'Bake whole at 400°F for 50-60 min directly on rack'], storage: 'Cool dark place 2-3 weeks. Do not refrigerate raw — starch converts to sugar. Cooked 3-5 days in fridge.', prep: 'Scrub well. Soak cut potatoes in cold water 30 min to remove starch for crispier results.', pairings: 'Butter, rosemary, garlic, cheese, sour cream, chives, bacon' } },
+          { name: 'Garlic', image: 'https://images.unsplash.com/photo-1540148426945-6cf22a6b2571?w=200&h=200&fit=crop', tips: { methods: ['Mince and sauté 30-60 seconds until fragrant — burns quickly', 'Roast whole head at 400°F for 40 min wrapped in foil for sweet spread', 'Slice thin and fry in oil for crispy garlic chips', 'Add raw to dressings and marinades for sharp flavor'], storage: 'Whole head 3-5 months in cool dry place. Peeled cloves 1 week in fridge. Do not freeze raw.', prep: 'Crush clove with side of knife to easy peel. Let minced garlic sit 10 min to develop allicin.', pairings: 'Olive oil, butter, lemon, herbs, pasta, bread, ginger, chili' } },
+          { name: 'Mushrooms', image: 'https://images.unsplash.com/photo-1504545102780-26774c1bb073?w=200&h=200&fit=crop', tips: { methods: ['Sauté in single layer over high heat 5-6 min without stirring until golden', 'Roast at 400°F for 20-25 min until edges crisp', 'Grill large caps over medium heat 4-5 min per side', 'Simmer in broth for rich umami soup base'], storage: 'Fresh 7-10 days in fridge in paper bag — never plastic. Dried mushrooms keep 1 year.', prep: 'Wipe clean with damp cloth — never soak. Slice evenly. Do not crowd the pan.', pairings: 'Butter, garlic, thyme, soy sauce, cream, parsley, shallots, wine' } },
+          { name: 'Carrots', image: 'https://images.unsplash.com/photo-1447175008436-054170c2e979?w=200&h=200&fit=crop', tips: { methods: ['Roast halved at 400°F for 25-30 min with honey glaze', 'Steam 5-7 min until just tender', 'Sauté coins in butter with thyme 8-10 min', 'Eat raw with dips, or shred into salads'], storage: 'Remove green tops. Store in fridge 3-4 weeks. Freeze blanched up to 12 months.', prep: 'Peel or scrub well. Cut on the bias for more surface area and prettier presentation.', pairings: 'Butter, honey, ginger, cumin, orange, dill, thyme, parsley' } },
+          { name: 'Zucchini', image: 'https://images.unsplash.com/photo-1563252722-6434563a2a2f?w=200&h=200&fit=crop', tips: { methods: ['Grill sliced lengthwise over medium heat 3-4 min per side', 'Sauté half-moons in olive oil 4-5 min over medium-high', 'Spiralize into zoodles as pasta substitute', 'Roast at 425°F for 15-20 min until lightly charred'], storage: 'Whole in fridge 4-5 days. Do not freeze raw — gets mushy. Freeze cooked/shredded up to 3 months.', prep: 'Salt slices and let sit 10 min to draw out moisture for better browning. No need to peel.', pairings: 'Garlic, tomatoes, parmesan, basil, lemon, feta, mint, pine nuts' } }
+        ]
+      },
+      'Dairy': {
+        items: [
+          { name: 'Cheese', image: 'https://images.unsplash.com/photo-1486297678162-eb2a19b0a32d?w=200&h=200&fit=crop', tips: { methods: ['Melt low and slow for sauces — high heat makes it stringy', 'Grate cold cheese for even melting', 'Bring to room temperature before serving on a board', 'Broil on top of dishes for golden bubbly finish'], storage: 'Wrap in parchment then plastic. Hard cheese 3-4 weeks, soft cheese 1-2 weeks in fridge.', prep: 'Grate your own — pre-shredded has anti-caking agents that affect melting.', pairings: 'Bread, wine, fruit, honey, nuts, crackers, tomatoes, basil' } },
+          { name: 'Butter', image: 'https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=200&h=200&fit=crop', tips: { methods: ['Brown butter in saucepan over medium heat until nutty and golden', 'Cream softened butter with herbs for compound butter', 'Use cold cubed butter for flaky pastry', 'Clarify by simmering and skimming for high-heat cooking'], storage: 'Fridge 1-2 months, counter 1-2 days in butter dish. Freeze up to 6 months.', prep: 'Soften at room temperature 30-45 min — do not microwave. Cut into cubes for faster softening.', pairings: 'Garlic, lemon, herbs, bread, pasta, steak, vegetables, baking' } },
+          { name: 'Cream', image: 'https://images.unsplash.com/photo-1563729784474-d77dbb933a9e?w=200&h=200&fit=crop', tips: { methods: ['Whip cold heavy cream with chilled bowl and whisk to soft peaks', 'Simmer to reduce for thick pan sauces', 'Add to soups at end of cooking for richness'], storage: 'Heavy cream 2-3 weeks in fridge unopened. Once opened, use within 5-7 days.', prep: 'Chill bowl, whisk, and cream for best whipping results. Temper before adding to hot liquids.', pairings: 'Pasta, berries, chocolate, coffee, mushrooms, soups, potatoes' } },
+          { name: 'Yogurt', image: 'https://images.unsplash.com/photo-1488477181946-6428a0291777?w=200&h=200&fit=crop', tips: { methods: ['Use as marinade tenderizer for meats 2-24 hours', 'Stir into sauces off heat as cream substitute', 'Base for dressings and dips with herbs and garlic'], storage: 'Fridge 1-2 weeks past sell date. Do not freeze — texture changes.', prep: 'Strain through cheesecloth 2+ hours for thick Greek-style yogurt.', pairings: 'Honey, berries, granola, cucumber, dill, mint, cumin, garlic' } },
+          { name: 'Milk', image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=200&h=200&fit=crop', tips: { methods: ['Scald by heating to 180°F for custards and bread doughs', 'Make bechamel by whisking into butter-flour roux', 'Steam and froth for lattes and cappuccinos'], storage: 'Fridge up to 1 week after opening. Do not leave at room temperature over 2 hours.', prep: 'Bring to room temperature for baking. Whole milk gives richer results than skim.', pairings: 'Coffee, cereal, chocolate, baking, sauces, mashed potatoes, pancakes' } }
+        ]
+      },
+      'Pantry Staples': {
+        items: [
+          { name: 'Olive Oil', image: 'https://images.unsplash.com/photo-1474979266404-7eaacbcd87c5?w=200&h=200&fit=crop', tips: { methods: ['Drizzle extra virgin raw over finished dishes for flavor', 'Sauté over medium heat — smoke point around 375°F', 'Emulsify into dressings with acid and mustard', 'Infuse with herbs and garlic for flavored oil'], storage: 'Cool dark place up to 2 years unopened. Use opened bottles within 3-6 months. Never near stove.', prep: 'Use extra virgin for finishing and dressings, regular/light for high-heat cooking.', pairings: 'Garlic, lemon, basil, bread, tomatoes, pasta, vegetables, vinegar' } },
+          { name: 'Soy Sauce', image: 'https://images.unsplash.com/photo-1590301157890-4810ed352733?w=200&h=200&fit=crop', tips: { methods: ['Add to stir-fries in last 1-2 min of cooking', 'Use as base for marinades with ginger and garlic', 'Mix into dipping sauces with rice vinegar and sesame oil', 'Splash into soups and stews for umami depth'], storage: 'Pantry 2-3 years unopened. Refrigerate after opening for best quality, lasts 1-2 years.', prep: 'Start with less than you think — you can always add more. Use low-sodium to control salt.', pairings: 'Ginger, garlic, sesame, rice, noodles, tofu, honey, lime, chili' } },
+          { name: 'Flour', image: 'https://images.unsplash.com/photo-1556909114-44e3e70034e2?w=200&h=200&fit=crop', tips: { methods: ['Make roux by cooking equal parts flour and fat for sauces', 'Dredge proteins before pan-frying for crispy coating', 'Combine with water for simple thickening slurry'], storage: 'Airtight container in cool dry place 6-8 months. Whole wheat flour 3 months or freeze.', prep: 'Spoon and level for accurate measuring — scooping packs too much. Sift for lighter baked goods.', pairings: 'Butter, sugar, eggs, baking powder, milk, yeast, chocolate, vanilla' } },
+          { name: 'Beans', image: 'https://images.unsplash.com/photo-1551463652-600572e9d8df?w=200&h=200&fit=crop', tips: { methods: ['Simmer soaked dried beans 1-2 hours until creamy', 'Pressure cook dried beans 25-35 min without soaking', 'Mash cooked beans for dips and spreads', 'Add canned beans to soups in last 15 min'], storage: 'Dried beans 1-2 years in airtight container. Cooked beans 3-5 days in fridge, freeze up to 6 months.', prep: 'Soak dried beans 8+ hours or quick soak by boiling 1 min then resting 1 hour. Salt after cooking.', pairings: 'Rice, cumin, garlic, onions, tomatoes, cilantro, lime, chili' } },
+          { name: 'Lentils', image: 'https://images.unsplash.com/photo-1585996839363-2a23aa79dfc0?w=200&h=200&fit=crop', tips: { methods: ['Simmer red lentils 15-20 min until they break down for dal', 'Cook green/brown lentils 25-30 min for salads — they hold shape', 'Add to soups and stews for protein and body'], storage: 'Dried lentils 1 year in airtight container. Cooked 3-5 days in fridge, freeze up to 3 months.', prep: 'Rinse and pick through for debris. No soaking needed — much faster than beans.', pairings: 'Cumin, turmeric, garlic, onions, tomatoes, spinach, lemon, curry' } },
+          { name: 'Coconut Milk', image: 'https://images.unsplash.com/photo-1563636619-e9143da7973b?w=200&h=200&fit=crop', tips: { methods: ['Simmer as base for curries and soups', 'Whip chilled full-fat coconut cream for dairy-free topping', 'Use in smoothies for creamy tropical flavor', 'Cook rice in coconut milk for fragrant side dish'], storage: 'Canned 2-5 years in pantry. Opened 4-6 days in fridge. Shake can well before opening.', prep: 'Full-fat for cooking and richness, light for lighter dishes. Stir well as it separates.', pairings: 'Curry, lemongrass, ginger, lime, chili, rice, mango, basil, shrimp' } }
+        ]
+      }
+    };
+
+    function renderKitchen() {
+      const searchTerm = state.kitchenSearch || '';
+
+      // Count recipes per ingredient
+      const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+      const ingredientRecipeCounts = {};
+      recipes.forEach(r => {
+        const ings = recipeIngList(r);
+        ings.forEach(ing => {
+          const name = (ing.name || '').toLowerCase();
+          Object.values(KITCHEN_INGREDIENTS).forEach(cat => {
+            cat.items.forEach(item => {
+              if (name.includes(item.name.toLowerCase()) || item.name.toLowerCase().includes(name)) {
+                ingredientRecipeCounts[item.name] = (ingredientRecipeCounts[item.name] || 0) + 1;
+              }
+            });
+          });
+        });
+      });
+
+      let categoriesHtml = '';
+      Object.entries(KITCHEN_INGREDIENTS).forEach(([catName, catData]) => {
+        let items = catData.items;
+        if (searchTerm) {
+          const s = searchTerm.toLowerCase();
+          items = items.filter(i => i.name.toLowerCase().includes(s));
+        }
+        if (items.length === 0) return;
+
+        categoriesHtml += `
+          <div style="margin-bottom: ${CONFIG.space_lg};">
+            <h3 style="font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm}; padding-left: 4px;">${catName}</h3>
+            <div class="kitchen-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;">
+              ${items.map(item => {
+                const count = ingredientRecipeCounts[item.name] || 0;
+                return `
+                  <div onclick="openKitchenIngredient('${esc(item.name)}')" class="card-press"
+                    style="cursor: pointer; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
+                    <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
+                      <img loading="lazy" src="${esc(item.image)}" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none';this.parentElement.innerHTML='<div style=\\'width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;opacity:0.3;\\'>🥘</div>'" />
+                    </div>
+                    <div style="padding: 8px;">
+                      <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(item.name)}</div>
+                      <div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 2px;">${count} recipe${count !== 1 ? 's' : ''}</div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      });
+
+      // If search has no results
+      if (!categoriesHtml && searchTerm) {
+        categoriesHtml = `
+          <div style="text-align: center; padding: ${CONFIG.space_xl} ${CONFIG.space_md};">
+            <div style="font-size: 40px; opacity: 0.3; margin-bottom: ${CONFIG.space_sm};">🔍</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 14px;">No ingredients match "${esc(searchTerm)}"</div>
+          </div>
+        `;
+      }
+
+      return `
+        <div style="padding: ${CONFIG.space_md}; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
+          <!-- Search bar -->
+          <div style="position: sticky; top: 0; z-index: 10; padding: ${CONFIG.space_sm} 0; background: ${CONFIG.background_color};">
+            <div style="position: relative;">
+              <svg width="18" height="18" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+              <input type="text" id="kitchenSearch" placeholder="Search an ingredient..." value="${esc(searchTerm)}"
+                oninput="state.kitchenSearch = this.value; render();"
+                style="width: 100%; padding: 12px 12px 12px 40px; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-size: 15px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box; font-family: ${CONFIG.font_family};" />
+            </div>
+          </div>
+
+          ${categoriesHtml}
+        </div>
+      `;
+    }
+
+    function openKitchenIngredient(name) {
+      state.kitchenSelectedIngredient = name;
+      navigateTo('kitchen-detail');
+    }
+
+    function renderKitchenDetail() {
+      const name = state.kitchenSelectedIngredient;
+      if (!name) return '<div style="padding: 16px;">Ingredient not found</div>';
+
+      // Find ingredient data
+      let ingredientData = null;
+      Object.values(KITCHEN_INGREDIENTS).forEach(cat => {
+        cat.items.forEach(item => {
+          if (item.name === name) ingredientData = item;
+        });
+      });
+
+      if (!ingredientData) ingredientData = { name, image: '', tips: null };
+
+      // Find matching recipes
+      const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+      const matchingRecipes = recipes.filter(r => {
+        const ings = recipeIngList(r);
+        return ings.some(ing => {
+          const ingName = (ing.name || '').toLowerCase();
+          return ingName.includes(name.toLowerCase()) || name.toLowerCase().includes(ingName);
+        });
+      });
+
+      // Count from food log
+      const log = getFoodLog();
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+      const monthEntries = log.filter(e => {
+        if (e.dateCooked.split('T')[0] < monthStart) return false;
+        const ings = (e.ingredients || []).map(i => i.toLowerCase());
+        return ings.some(i => i.includes(name.toLowerCase()) || name.toLowerCase().includes(i))
+          || (e.recipeName || '').toLowerCase().includes(name.toLowerCase());
+      });
+
+      const tips = ingredientData.tips;
+
+      return `
+        <div style="padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
+          <!-- Hero -->
+          <div style="position: relative; width: 100%; height: 220px; overflow: hidden; background: ${CONFIG.surface_elevated};">
+            ${ingredientData.image ? `<img src="${esc(ingredientData.image)}&w=600&h=300&fit=crop" style="width:100%;height:100%;object-fit:cover;" onerror="this.style.display='none'" />` : ''}
+            <div style="position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(13,13,20,0.9));"></div>
+            <button onclick="navigateTo('kitchen')" style="position: absolute; top: 12px; left: 12px; width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+              <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+            </button>
+            <div style="position: absolute; bottom: 16px; left: 16px;">
+              <h1 style="font-size: 24px; font-weight: 700; color: white; margin: 0;">${esc(name)}</h1>
+              <div style="font-size: 13px; color: rgba(255,255,255,0.7); margin-top: 4px;">${matchingRecipes.length} recipe${matchingRecipes.length !== 1 ? 's' : ''} in your collection</div>
+            </div>
+          </div>
+
+          <div style="padding: 0 ${CONFIG.space_md};">
+            <!-- Usage stats -->
+            ${monthEntries.length > 0 ? `
+              <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: 14px 16px; margin-top: ${CONFIG.space_md}; box-shadow: ${CONFIG.shadow}; display: flex; align-items: center; gap: 12px;">
+                <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(50,215,75,0.12); display: flex; align-items: center; justify-content: center;">
+                  <svg width="20" height="20" fill="none" stroke="${CONFIG.success_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"/></svg>
+                </div>
+                <div>
+                  <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color};">You've made ${monthEntries.length} meal${monthEntries.length !== 1 ? 's' : ''} with ${esc(name)} this month</div>
+                </div>
+              </div>
+            ` : ''}
+
+            <!-- Recipes section -->
+            <div style="margin-top: ${CONFIG.space_lg};">
+              <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">Recipes with ${esc(name)}</h2>
+              ${matchingRecipes.length > 0 ? `
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px;">
+                  ${matchingRecipes.map(r => {
+                    const img = recipeThumb(r);
+                    const id = r.__backendId || r.id;
+                    return `
+                      <div onclick="state.viewingFromKitchen = true; state.selectedRecipeId = '${id}'; navigateTo('recipe-view')" class="card-press"
+                        style="cursor: pointer; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
+                        <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
+                          ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:32px;opacity:0.3;">🍽</div>`}
+                        </div>
+                        <div style="padding: 8px;">
+                          <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${esc(r.title)}</div>
+                          ${r.cookTime ? `<div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 3px;">${esc(r.cookTime)}</div>` : ''}
+                        </div>
+                      </div>
+                    `;
+                  }).join('')}
+                </div>
+              ` : `
+                <div style="text-align: center; padding: ${CONFIG.space_lg}; background: ${CONFIG.surface_color}; border-radius: 12px;">
+                  <div style="font-size: 32px; opacity: 0.3; margin-bottom: 8px;">🍽</div>
+                  <div style="color: ${CONFIG.text_muted}; font-size: 14px;">No recipes with ${esc(name)} yet</div>
+                  <div style="color: ${CONFIG.text_tertiary}; font-size: 12px; margin-top: 4px;">Add some recipes that use ${esc(name)}</div>
+                </div>
+              `}
+            </div>
+
+            <!-- Cooking tips -->
+            ${tips ? `
+              <div style="margin-top: ${CONFIG.space_lg};">
+                <h2 style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: ${CONFIG.space_sm};">How to cook ${esc(name.toLowerCase())}</h2>
+
+                ${tips.methods && tips.methods.length > 0 ? `
+                  <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
+                    <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Cooking Methods</div>
+                    ${tips.methods.map(m => `
+                      <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid ${CONFIG.divider_color};">
+                        <span style="color: ${CONFIG.primary_action_color}; font-size: 14px; flex-shrink: 0; margin-top: 2px;">•</span>
+                        <span style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4;">${esc(m)}</span>
+                      </div>
+                    `).join('')}
+                  </div>
+                ` : ''}
+
+                ${tips.storage ? `
+                  <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
+                    <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Storage</div>
+                    <div style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4;">${esc(tips.storage)}</div>
+                  </div>
+                ` : ''}
+
+                ${tips.prep ? `
+                  <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
+                    <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Prep Tip</div>
+                    <div style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4;">${esc(tips.prep)}</div>
+                  </div>
+                ` : ''}
+
+                ${tips.pairings ? `
+                  <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_md}; margin-bottom: 10px; box-shadow: ${CONFIG.shadow};">
+                    <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Goes Well With</div>
+                    <div style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4;">${esc(tips.pairings)}</div>
+                  </div>
+                ` : ''}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
     /** @type {Object.<string, Function>} Maps view names to their render functions */
     const VIEW_RENDERERS = {
       'home': renderHome,
@@ -16742,7 +17026,9 @@ function renderGroceryList() {
       'swipe-confirm': renderSwipeConfirm,
       'my-meals': renderMyMeals,
       'my-plates': renderMyPlates,
-      'food-log-detail': renderFoodLogDetail
+      'food-log-detail': renderFoodLogDetail,
+      'kitchen': renderKitchen,
+      'kitchen-detail': renderKitchenDetail
     };
 
     // ===== MAIN RENDER =====
