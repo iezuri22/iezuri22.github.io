@@ -72,7 +72,7 @@ function renderCookAgainRow() {
         ${favorites.map(entry => `
           <div onclick="${entry.recipeId ? `openRecipeView('${entry.recipeId}')` : `openFoodLogDetail('${entry.id}')`}" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 52px;">
             <div style="width: 48px; height: 48px; border-radius: 50%; overflow: hidden; margin: 0 auto 4px; border: 2px solid ${CONFIG.primary_action_color}; background: ${CONFIG.surface_elevated};">
-              ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;">🍽️</div>`}
+              ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:4px;"><span style="font-size:9px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.1;">${esc((entry.recipeName||'').substring(0,12))}</span></div>`}
             </div>
             <div style="font-size: 11px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}</div>
           </div>
@@ -357,7 +357,7 @@ function renderSwipeTab() {
       <div class="swipe-container">
         ${nextRecipe ? `
           <div style="position: absolute; top: 4px; left: 28px; right: 28px; bottom: 4px; background: ${CONFIG.surface_color}; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.2); overflow: hidden; transform: scale(0.97); opacity: 0.6;">
-            ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:48px;">🍽️</div>`}
+            ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #1a1a24, #242432); padding:16px;"><span style="color:#f5f5f7;font-size:16px;font-weight:600;text-align:center;">${esc(nextRecipe.title)}</span></div>`}
           </div>
         ` : ''}
 
@@ -366,7 +366,7 @@ function renderSwipeTab() {
           <div class="swipe-tint nope"></div>
           <div class="swipe-overlay like">SMASH</div>
           <div class="swipe-overlay nope">PASS</div>
-          ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder">🍽️</div>`}
+          ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
           <div class="card-body">
             <div class="card-title">${esc(recipe.title)}</div>
             <div class="card-meta">
@@ -993,7 +993,7 @@ function renderHomeSwipeCards(meal) {
       ${nextRecipe ? `
         <div style="position: absolute; width: 280px; max-width: 80vw; background: ${CONFIG.surface_color}; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); overflow: hidden; transform: scale(0.95) translateY(10px);">
           <div style="height: 240px; background: rgba(255,255,255,0.05);">
-            ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:48px;">🍽</div>`}
+            ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #1a1a24, #242432); padding:16px;"><span style="color:#f5f5f7;font-size:14px;font-weight:600;text-align:center;opacity:0.6;">${esc(nextRecipe.title)}</span></div>`}
           </div>
           <div style="padding: 16px;"><div style="font-size: 16px; font-weight: 600; color: ${CONFIG.text_muted};">${esc(nextRecipe.title)}</div></div>
         </div>
@@ -1002,7 +1002,7 @@ function renderHomeSwipeCards(meal) {
       <div class="swipe-card entering" data-active="true">
         <div class="swipe-overlay like">Cook!</div>
         <div class="swipe-overlay nope">Skip</div>
-        ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder">🍽</div>`}
+        ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
         <div class="card-body">
           <div class="card-title">${esc(recipe.title)}</div>
           <div class="card-meta">
@@ -1118,7 +1118,7 @@ function showDifferentRecipePicker(meal) {
         ${recipes.map(r => `
           <div onclick="closeModal(); logMealAsDifferent('${meal}', '${r.__backendId || r.id}')" class="card-press"
             style="display: flex; align-items: center; gap: 12px; padding: 10px; margin-bottom: 6px; background: ${CONFIG.background_color}; border-radius: 12px; cursor: pointer;">
-            ${recipeThumb(r) ? `<img loading="lazy" src="${esc(recipeThumb(r))}" style="width:48px; height:48px; object-fit:cover; border-radius:8px;" />` : `<div style="width:48px; height:48px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center;">🍽</div>`}
+            ${recipeThumb(r) ? `<img loading="lazy" src="${esc(recipeThumb(r))}" style="width:48px; height:48px; object-fit:cover; border-radius:8px;" />` : `<div style="width:48px; height:48px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:4px;"><span style="font-size:9px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.2;-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(r.title)}</span></div>`}
             <span style="font-size: 14px; font-weight: 500;">${esc(r.title)}</span>
           </div>
         `).join('')}
@@ -1968,7 +1968,7 @@ function renderSwipe() {
         ${nextRecipe ? `
           <div style="position: absolute; width: 280px; max-width: 80vw; height: auto; background: ${CONFIG.surface_color}; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); overflow: hidden; transform: scale(0.95) translateY(10px);">
             <div style="height: 240px; background: rgba(255,255,255,0.05);">
-              ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:48px;">🍽️</div>`}
+              ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #1a1a24, #242432); padding:16px;"><span style="color:#f5f5f7;font-size:14px;font-weight:600;text-align:center;opacity:0.6;">${esc(nextRecipe.title)}</span></div>`}
             </div>
             <div style="padding: 16px;">
               <div style="font-size: 16px; font-weight: 600; color: ${CONFIG.text_muted};">${esc(nextRecipe.title)}</div>
@@ -1981,7 +1981,7 @@ function renderSwipe() {
           <div class="swipe-tint nope"></div>
           <div class="swipe-overlay like">SMASH</div>
           <div class="swipe-overlay nope">PASS</div>
-          ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder">🍽️</div>`}
+          ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
           <div class="card-body">
             <div class="card-title">${esc(recipe.title)}</div>
             <div class="card-meta">
@@ -2036,7 +2036,7 @@ function renderSwipeConfirm() {
         </div>
 
         <div style="background: ${CONFIG.surface_color}; border-radius: 20px; overflow: hidden; box-shadow: ${CONFIG.shadow}; margin-bottom: 20px;">
-          ${img ? `<img loading="lazy" src="${esc(img)}" style="width: 100%; height: 200px; object-fit: cover;" />` : `<div style="height: 200px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #f5f5f5, #e0e0e0); font-size: 64px;">🍽️</div>`}
+          ${img ? `<img loading="lazy" src="${esc(img)}" style="width: 100%; height: 200px; object-fit: cover;" />` : `<div style="height: 200px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1a1a24, #242432);"><span style="color:#f5f5f7;font-size:24px;font-weight:700;text-align:center;padding:24px;">${esc(recipe.title)}</span></div>`}
           <div style="padding: 16px;">
             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
               <span style="font-size: 18px;">${mealEmoji}</span>
@@ -2489,7 +2489,7 @@ function renderAlreadySelected() {
         </div>
 
         <div style="border-radius: 20px; overflow: hidden; margin-bottom: ${CONFIG.space_lg}; box-shadow: 0 8px 30px rgba(0,0,0,0.3);">
-          ${img ? `<img loading="lazy" src="${esc(img)}" style="width: 100%; height: 280px; object-fit: cover;" />` : `<div style="height: 280px; display: flex; align-items: center; justify-content: center; background: ${CONFIG.surface_color}; font-size: 72px;">🍽️</div>`}
+          ${img ? `<img loading="lazy" src="${esc(img)}" style="width: 100%; height: 280px; object-fit: cover;" />` : `<div style="height: 280px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1a1a24, #242432);"><span style="color:#f5f5f7;font-size:28px;font-weight:700;text-align:center;padding:24px;">${esc(recipe.title)}</span></div>`}
         </div>
 
         <div style="display: flex; gap: 12px; margin-bottom: ${CONFIG.space_md};">
@@ -2592,7 +2592,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'swipe-setup' ? '56px' : '0'};">
+    <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: ${state.currentView !== 'swipe-setup' ? '56px' : '0'};">
       ${renderNav()}
       ${content}
       ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}

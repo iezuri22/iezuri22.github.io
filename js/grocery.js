@@ -978,7 +978,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
+    <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 72px;">
       ${renderNav()}
       ${content}
       ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}

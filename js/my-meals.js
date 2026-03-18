@@ -148,7 +148,7 @@ function renderFilledMealSlot(entry, dateStr, extraCount, allSlotEntries) {
       <!-- Main card content -->
       <div onclick="${onclickTarget}" class="card-press" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer; transition: background 0.15s;">
         <div style="width: 44px; height: 44px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated}; ${isPlanned ? 'opacity: 0.7;' : ''} position: relative;">
-          ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.4;">🍽</div>`}
+          ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:4px;"><span style="font-size:9px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.2;-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(entry.recipeName)}</span></div>`}
           ${hasMyPhoto ? `<div style="position: absolute; bottom: 2px; right: 2px; width: 16px; height: 16px; border-radius: 50%; background: ${CONFIG.primary_action_color}; display: flex; align-items: center; justify-content: center;"><svg width="10" height="10" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/></svg></div>` : ''}
         </div>
         <div style="flex: 1; min-width: 0;">
@@ -274,7 +274,7 @@ function showRecipePickerForSlot(mealType, dateStr) {
         <div onclick="selectRecipeForSlot('${id}', '${esc(mealType)}', '${esc(dateStr)}')" class="card-press"
           style="cursor: pointer; border-radius: 8px; overflow: hidden; background: ${CONFIG.surface_color};">
           <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
-            ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.4;">🍽️</div>`}
+            ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:8px;"><span style="color:${CONFIG.text_color};font-size:11px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(r.title)}</span></div>`}
           </div>
           <div style="padding: 6px; font-size: 11px; font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
         </div>`;
@@ -471,7 +471,7 @@ function openStackedMealDetail(mealType, dateStr, idsStr) {
     return `
       <div style="display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 10px; background: ${CONFIG.surface_color}; ${i === 0 ? 'border: 1px solid rgba(255,255,255,0.1);' : ''}">
         <div style="width: 48px; height: 48px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated};">
-          ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:20px;opacity:0.4;">🍽</div>`}
+          ${thumb ? `<img src="${esc(thumb)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:4px;"><span style="font-size:9px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.2;-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(entry.recipeName)}</span></div>`}
         </div>
         <div style="flex: 1; min-width: 0;" onclick="closeModal(); openFoodLogDetail('${entry.id}');" class="card-press" style="cursor: pointer;">
           <div style="display: flex; align-items: center; gap: 6px;">
@@ -1081,7 +1081,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
+    <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
       ${renderNav()}
       ${content}
       ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}

@@ -5005,7 +5005,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
+    <div class="app-shell" style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 56px;">
       ${renderNav()}
       ${content}
       ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}

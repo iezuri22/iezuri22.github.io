@@ -17,6 +17,38 @@
       -webkit-text-size-adjust: 100%;
     }
 
+    /* ===== RESPONSIVE APP SHELL ===== */
+    /* Desktop (768px+): centered 480px phone-preview container */
+    /* Mobile (<768px): full width, edge-to-edge, app-like */
+
+    .app-shell {
+      position: relative;
+      min-height: 100vh;
+      width: 100%;
+    }
+
+    @media (min-width: 768px) {
+      body {
+        background: #08080c;
+      }
+      .app-shell {
+        max-width: 480px;
+        margin: 0 auto;
+        background: #0d0d14;
+        box-shadow: 0 0 40px rgba(0,0,0,0.5);
+        position: relative;
+        overflow-x: hidden;
+      }
+      /* Bottom nav: constrain to container instead of full viewport */
+      .app-shell .bottom-nav {
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%);
+        width: 100%;
+        max-width: 480px;
+      }
+    }
+
     /* ===== GLOBAL TRANSITIONS ===== */
     button, a, [onclick] {
       transition: transform 250ms ease-out, opacity 250ms ease-out, background 250ms ease-out;
@@ -75,18 +107,9 @@
     }
 
     /* ===== RESPONSIVE: Mobile first ===== */
-    @media (min-width: 1024px) {
-      .recipe-img-height {
-        height: 90px !important;
-      }
-      .kitchen-grid {
-        grid-template-columns: repeat(5, 1fr) !important;
-      }
-    }
-    @media (min-width: 768px) and (max-width: 1023px) {
-      .kitchen-grid {
-        grid-template-columns: repeat(4, 1fr) !important;
-      }
+    /* Desktop overrides: within 480px container, keep mobile grid layouts */
+    .app-shell .kitchen-grid {
+      grid-template-columns: repeat(3, 1fr) !important;
     }
 
     .mobile-filters { display: block; }
@@ -122,13 +145,15 @@
       min-width: 0;
     }
 
-    @media (min-width: 1025px) {
-      .mobile-filters { display: none; }
-      .desktop-sidebar { display: grid; }
-      .recipe-card-desktop { display: grid; }
-      .recipe-list-mobile { display: none; }
-      .mobile-list-item { display: none; }
-    }
+    /* Inside app-shell, always show mobile layout (even on desktop) */
+    .app-shell .mobile-filters { display: block !important; }
+    .app-shell .desktop-sidebar { display: none !important; }
+    .app-shell .recipe-card-desktop { display: none !important; }
+    .app-shell .recipe-list-mobile { display: block !important; }
+    .app-shell .mobile-list-item { display: flex !important; flex-direction: row !important; }
+    .app-shell .mobile-stack { flex-direction: column; }
+    .app-shell .mobile-full { width: 100%; }
+    .app-shell .page-container { padding: 12px !important; }
 
     @media (max-width: 1024px) {
       .mobile-stack { flex-direction: column; }
@@ -308,22 +333,9 @@
       text-align: center;
       margin-top: 3px;
     }
-    @media (min-width: 768px) {
-      .recipe-select-grid {
-        grid-template-columns: repeat(5, 1fr);
-      }
-      .recipe-select-grid .rs-thumb {
-        width: 100px;
-        height: 100px;
-      }
-      .recipe-select-grid .rs-name {
-        font-size: 15px;
-      }
-    }
-    @media (min-width: 1024px) {
-      .recipe-select-grid {
-        grid-template-columns: repeat(6, 1fr);
-      }
+    /* Keep recipe select grid compact within app-shell */
+    .app-shell .recipe-select-grid {
+      grid-template-columns: repeat(4, 1fr) !important;
     }
 
     /* ===== SWIPE CARD STYLES ===== */
@@ -332,6 +344,7 @@
       width: 100%;
       height: calc(100dvh - 260px);
       min-height: 280px;
+      max-height: 500px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -370,7 +383,7 @@
       right: 0;
       bottom: 80px;
       width: 100%;
-      height: auto;
+      height: calc(100% - 80px);
       object-fit: cover;
       pointer-events: none;
     }

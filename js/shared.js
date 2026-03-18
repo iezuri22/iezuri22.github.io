@@ -2300,7 +2300,7 @@ function renderBottomNav() {
     grocery: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>' }
   };
 
-  return `<nav style="position: fixed; bottom: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; box-shadow: 0 -1px 8px rgba(0,0,0,0.3); z-index: 40; padding-bottom: env(safe-area-inset-bottom);"><div style="display: flex; justify-content: space-around; align-items: center; padding: 6px 0 4px;">${navItems.map(item => {
+  return `<nav class="bottom-nav" style="position: fixed; bottom: 0; left: 0; right: 0; background: ${CONFIG.surface_color}; box-shadow: 0 -1px 8px rgba(0,0,0,0.3); z-index: 40; padding-bottom: env(safe-area-inset-bottom);"><div style="display: flex; justify-content: space-around; align-items: center; padding: 6px 0 4px;">${navItems.map(item => {
     const isActive = item.pages.includes(currentPage);
     const iconSvg = isActive ? navIcons[item.id].active.replace('width="24" height="24"', 'width="20" height="20"') : navIcons[item.id].inactive.replace('width="24" height="24"', 'width="20" height="20"');
     const iconStyle = isActive ? `color: ${CONFIG.primary_action_color}; filter: drop-shadow(0 0 4px rgba(232,93,93,0.3));` : `color: ${CONFIG.text_muted};`;
@@ -3167,7 +3167,7 @@ function showRecipePickerForSlot(mealType, dateStr) {
         <div onclick="selectRecipeForSlot('${id}', '${esc(mealType)}', '${esc(dateStr)}')" class="card-press"
           style="cursor: pointer; border-radius: 8px; overflow: hidden; background: ${CONFIG.surface_color};">
           <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
-            ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:24px;opacity:0.4;">🍽️</div>`}
+            ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:8px;"><span style="color:${CONFIG.text_color};font-size:11px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(r.title)}</span></div>`}
           </div>
           <div style="padding: 6px; font-size: 11px; font-weight: 500; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(r.title)}</div>
         </div>`;
@@ -3548,8 +3548,8 @@ function filterSuggestions() {
             <img loading="lazy" src="${esc(recipeThumb(recipe))}"
                  style="width:60px; height:60px; object-fit:cover; border-radius:8px;" />
           ` : `
-            <div style="width:60px; height:60px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
-              🍽️
+            <div style="width:60px; height:60px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:6px;">
+              <span style="font-size:10px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.2;-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(recipe.title)}</span>
             </div>
           `}
           <div class="flex-1">
@@ -3917,8 +3917,8 @@ function showSuggestionsModal(filterTerm = '') {
                 <img loading="lazy" src="${esc(recipeThumb(recipe))}"
                      style="width:60px; height:60px; object-fit:cover; border-radius:8px;" />
               ` : `
-                <div style="width:60px; height:60px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:1.5rem;">
-                  🍽️
+                <div style="width:60px; height:60px; background:${CONFIG.surface_elevated}; border-radius:8px; display:flex; align-items:center; justify-content:center; padding:6px;">
+                  <span style="font-size:10px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.2;-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(recipe.title)}</span>
                 </div>
               `}
               <div class="flex-1">
