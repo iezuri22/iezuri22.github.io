@@ -23,25 +23,56 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   document.head.appendChild(script);
 })();
 
-// Auth check with exponential backoff (called after Supabase loads)
+// Auth check — uses getSession() (local cache) instead of getUser() (network call)
+// to prevent login popup on every page navigation.
 async function checkAuthAndInit() {
   if (!window.supabaseClient) return;
   try {
-    const { data: { user } } = await window.supabaseClient.auth.getUser();
-    if (!user) {
+    // getSession() reads from localStorage — no network round-trip
+    const { data: { session }, error } = await window.supabaseClient.auth.getSession();
+    if (error || !session || !session.user) {
+      // No valid session cached locally — need to login
+      clearAuthCache();
       showLoginModal();
     } else {
-      // User is logged in — load data from Supabase
+      const user = session.user;
+      // Cache auth info so future page loads can render instantly
+      localStorage.setItem('yummy_auth_user_id', user.id);
+      localStorage.setItem('yummy_auth_user_email', user.email);
+      localStorage.setItem('yummy_isLoggedIn', 'true');
+
+      // Show user indicator immediately
+      updateUserIndicator(user.email);
+
+      // If we have cached data, render immediately from cache, then refresh in background
+      const hasCachedData = state.dataLoaded || localStorage.getItem('meal_planner_data_v1');
+      if (hasCachedData && typeof render === 'function') {
+        render();
+      }
+
+      // Load fresh data from Supabase (will re-render when done)
       await loadDataFromSupabase();
       subscribeToChanges(user.id);
-      updateUserIndicator(user.email);
-      // Re-render the current page
       if (typeof render === 'function') render();
     }
   } catch (e) {
     console.error('Auth check failed:', e);
-    showLoginModal();
+    // If we have cached auth, don't show login — might just be a network blip
+    if (localStorage.getItem('yummy_isLoggedIn') === 'true') {
+      const cachedEmail = localStorage.getItem('yummy_auth_user_email');
+      if (cachedEmail) updateUserIndicator(cachedEmail);
+      if (typeof render === 'function') render();
+    } else {
+      showLoginModal();
+    }
   }
+}
+
+// Clear cached auth info
+function clearAuthCache() {
+  localStorage.removeItem('yummy_auth_user_id');
+  localStorage.removeItem('yummy_auth_user_email');
+  localStorage.removeItem('yummy_isLoggedIn');
 }
 
 // ============================================================
@@ -775,7 +806,8 @@ const storage = {
   async _syncCreate(item) {
     if (!window.supabaseClient) return;
     try {
-      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      const user = session?.user;
       if (!user) return;
       const { error } = await window.supabaseClient
         .from('meal_planner_data')
@@ -786,7 +818,8 @@ const storage = {
   async _syncUpdate(item) {
     if (!window.supabaseClient) return;
     try {
-      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      const user = session?.user;
       if (!user) return;
       const { error } = await window.supabaseClient
         .from('meal_planner_data')
@@ -799,7 +832,8 @@ const storage = {
   async _syncDelete(item) {
     if (!window.supabaseClient) return;
     try {
-      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      const user = session?.user;
       if (!user) return;
       const { error } = await window.supabaseClient
         .from('meal_planner_data')
@@ -1003,7 +1037,8 @@ async function uploadPhoto(file) {
   // Try Supabase storage upload if available
   if (window.supabaseClient) {
     try {
-      const { data: { user } } = await window.supabaseClient.auth.getUser();
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      const user = session?.user;
       if (user) {
         const fileExt = file.name.split('.').pop();
         const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.${fileExt}`;
@@ -2382,12 +2417,19 @@ async function handleLogin() {
   closeModal();
   showToast('Logged in successfully!', 'success');
 
+  // Cache auth state in localStorage so other pages don't show login popup
+  const user = data.user;
+  if (user) {
+    localStorage.setItem('yummy_auth_user_id', user.id);
+    localStorage.setItem('yummy_auth_user_email', user.email);
+    localStorage.setItem('yummy_isLoggedIn', 'true');
+  }
+
   // Migrate localStorage data to Supabase if any
   await migrateLocalStorageToSupabase();
 
   // Load data and render
   await loadDataFromSupabase();
-  const { data: { user } } = await window.supabaseClient.auth.getUser();
   if (user) {
     subscribeToChanges(user.id);
     updateUserIndicator(user.email);
@@ -2425,6 +2467,10 @@ async function handleSignup() {
 }
 
 async function handleLogout() {
+  // Clear all cached auth and user data from localStorage
+  clearAuthCache();
+  // Also clear cached app data so next login starts fresh
+  localStorage.removeItem('meal_planner_data_v1');
   await window.supabaseClient.auth.signOut();
   showToast('Logged out', 'success');
   location.reload();
@@ -2441,7 +2487,8 @@ async function migrateLocalStorageToSupabase() {
 
   try {
     const items = JSON.parse(localData);
-    const { data: { user } } = await window.supabaseClient.auth.getUser();
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    const user = session?.user;
 
     if (!user || items.length === 0) return;
 
@@ -2482,8 +2529,10 @@ function updateUserIndicator(email) {
 
 async function loadDataFromSupabase() {
   if (!window.supabaseClient) return;
-  const { data: { user } } = await window.supabaseClient.auth.getUser();
-  if (!user) return;
+  // Use getSession() (local cache) instead of getUser() (network call)
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session || !session.user) return;
+  const user = session.user;
 
   const { data, error } = await window.supabaseClient
     .from('meal_planner_data')
@@ -2611,9 +2660,9 @@ async function clearAllData() {
   // Also clear Supabase data
   if (window.supabaseClient) {
     try {
-      const { data: { user } } = await window.supabaseClient.auth.getUser();
-      if (user) {
-        await window.supabaseClient.from('meal_planner_data').delete().eq('user_id', user.id);
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (session?.user) {
+        await window.supabaseClient.from('meal_planner_data').delete().eq('user_id', session.user.id);
       }
     } catch (e) { console.error('Failed to clear Supabase data:', e); }
   }
@@ -2643,11 +2692,12 @@ function getExternalMealType(name) {
 // ============================================================
 
 async function showSettingsMenu() {
-  let userEmail = 'Not logged in';
-  if (window.supabaseClient) {
+  // Use cached email to avoid network call when opening settings
+  let userEmail = localStorage.getItem('yummy_auth_user_email') || 'Not logged in';
+  if (userEmail === 'Not logged in' && window.supabaseClient) {
     try {
-      const { data: { user } } = await window.supabaseClient.auth.getUser();
-      userEmail = user ? user.email : 'Not logged in';
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      userEmail = session?.user?.email || 'Not logged in';
     } catch (e) { console.error('Auth check failed:', e); }
   }
 
