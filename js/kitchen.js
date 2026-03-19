@@ -943,13 +943,6 @@ function renderKitchenDetail() {
       || (e.recipeName || '').toLowerCase().includes(name.toLowerCase());
   });
 
-  // All meals with this ingredient (for "Your meals" section)
-  const allMealsWithIngredient = log.filter(e => {
-    const ings = (e.ingredients || []).map(i => i.toLowerCase());
-    return ings.some(i => i.includes(name.toLowerCase()) || name.toLowerCase().includes(i))
-      || (e.recipeName || '').toLowerCase().includes(name.toLowerCase());
-  }).sort((a, b) => new Date(b.dateCooked) - new Date(a.dateCooked));
-
   const tips = getMergedTips(name, ingredientData.tips);
   const editing = state._editingKitchenTip || {};
   const isEditing = (field, idx) => editing.ingredient === name && editing.field === field && editing.idx === idx;
@@ -1137,47 +1130,21 @@ function renderKitchenDetail() {
           ${quickTipsRowHtml}
         </div>
 
-        ${allMealsWithIngredient.length > 0 ? `
-        <div style="margin-top: 16px;">
-          <h2 style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">Your meals with ${esc(name)}</h2>
-          <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;">
-            ${allMealsWithIngredient.map(entry => {
-              const mealPhoto = entry.myPhoto || entry.photo || entry.image || '';
-              const mealName = entry.recipeName || 'Meal';
-              const dateStr = entry.dateCooked ? new Date(entry.dateCooked).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
-              const logId = entry.id || '';
-              return `
-                <div onclick="navigateTo('food-log-detail'); state.selectedFoodLogId = '${esc(logId)}';" class="card-press" style="min-width:120px;max-width:140px;flex-shrink:0;cursor:pointer;border-radius:12px;overflow:hidden;background:${CONFIG.surface_color};box-shadow:${CONFIG.shadow};">
-                  <div style="width:100%;aspect-ratio:1;overflow:hidden;background:${CONFIG.surface_elevated};">
-                    ${mealPhoto ? `<img loading="lazy" src="${esc(mealPhoto)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><svg width="24" height="24" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:0.3;"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg></div>`}
-                  </div>
-                  <div style="padding:6px 8px;">
-                    <div style="font-size:12px;font-weight:600;color:${CONFIG.text_color};display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;">${esc(mealName)}</div>
-                    ${dateStr ? `<div style="font-size:10px;color:${CONFIG.text_muted};margin-top:2px;">${dateStr}</div>` : ''}
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-        ` : ''}
-
         <div style="margin-top: 16px;">
           <h2 style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">Recipes with ${esc(name)}</h2>
           ${matchingRecipes.length > 0 ? `
-            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+            <div class="kitchen-recipe-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;">
               ${matchingRecipes.map(r => {
                 const img = recipeThumb(r);
                 const id = r.__backendId || r.id;
                 return `
                   <div style="position:relative; border-radius: 10px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
                     <div onclick="window.location.href='/recipe-detail.html?id=${encodeURIComponent(id)}&from=kitchen&ingredient=${encodeURIComponent(name)}'" class="card-press" style="cursor: pointer;">
-                      <div style="width: 100%; aspect-ratio: 1; overflow: hidden; background: ${CONFIG.surface_elevated};">
+                      <div style="width: 100%; aspect-ratio: 1/1; overflow: hidden; background: ${CONFIG.surface_elevated};">
                         ${img ? `<img loading="lazy" src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;"><svg width="24" height="24" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:0.3;"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg></div>`}
                       </div>
                       <div style="padding: 6px;">
-                        <div style="font-size: 12px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">${esc(r.title)}</div>
-                        ${r.cookTime ? `<div style="font-size: 10px; color: ${CONFIG.text_muted}; margin-top: 2px;">${esc(r.cookTime)}</div>` : ''}
+                        <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">${esc(r.title)}</div>
                       </div>
                     </div>
                     <button onclick="event.stopPropagation();removeRecipeFromIngredient('${esc(name)}','${esc(id)}')" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.7);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;">
