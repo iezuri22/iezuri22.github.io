@@ -2759,6 +2759,8 @@ function saveBatchForm() {
   try {
     // Reorder
     state.batchForm.components.forEach((c, i) => c.order = i + 1);
+    // Ensure video order is populated
+    ensureBatchVideoOrder(state.batchForm);
     console.log('[saveBatchForm] Calling saveBatchRecipe...');
     saveBatchRecipe(state.batchForm);
     console.log('[saveBatchForm] saveBatchRecipe returned successfully');
@@ -2793,6 +2795,8 @@ function selectBatchRecipe(recipeId) {
   comp.instructions = r.instructions || '';
   comp.order = state.batchForm.components.length + 1;
   state.batchForm.components.push(comp);
+  // Re-sync video order to include new component's clips
+  ensureBatchVideoOrder(state.batchForm);
   state.batchRecipePickerOpen = false;
   render();
 }
@@ -2809,6 +2813,8 @@ function removeBatchComponent(compId) {
   if (!state.batchForm) return;
   state.batchForm.components = state.batchForm.components.filter(c => c.id !== compId);
   state.batchForm.components.forEach((c, i) => c.order = i + 1);
+  // Re-sync video order to remove clips from deleted component
+  ensureBatchVideoOrder(state.batchForm);
   render();
 }
 
@@ -2920,6 +2926,135 @@ function renderBatchEditLivePreview(form) {
   `;
 }
 
+// ===== VIDEO ORDER FOR PLATES =====
+
+function generateDefaultVideoOrder(batch) {
+  const order = [];
+  (batch.components || []).forEach(comp => {
+    if (comp.type !== 'recipe' || !comp.recipeId) return;
+    const r = getRecipeById(comp.recipeId);
+    if (!r || !r.videoClips || r.videoClips.length === 0) return;
+    const sorted = r.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+    sorted.forEach((clip, idx) => {
+      order.push({ recipeId: comp.recipeId, clipIndex: idx });
+    });
+  });
+  return order;
+}
+
+function ensureBatchVideoOrder(form) {
+  // Build expected set of all clips from components
+  const allClips = generateDefaultVideoOrder(form);
+  if (allClips.length === 0) { form.videoOrder = []; return; }
+
+  if (!form.videoOrder || form.videoOrder.length === 0) {
+    form.videoOrder = allClips;
+    return;
+  }
+
+  // Sync: add any new clips not in current order, remove stale ones
+  const existing = form.videoOrder;
+  const key = (ref) => ref.recipeId + ':' + ref.clipIndex;
+  const allKeys = new Set(allClips.map(key));
+  const existingKeys = new Set(existing.map(key));
+
+  // Remove stale entries
+  form.videoOrder = existing.filter(ref => allKeys.has(key(ref)));
+  // Add new entries at end
+  allClips.forEach(ref => {
+    if (!existingKeys.has(key(ref))) form.videoOrder.push(ref);
+  });
+}
+
+function renderBatchVideoOrderSection(form) {
+  // Check if any component recipes have video clips
+  const hasAnyClips = (form.components || []).some(comp => {
+    if (comp.type !== 'recipe' || !comp.recipeId) return false;
+    const r = getRecipeById(comp.recipeId);
+    return r && r.videoClips && r.videoClips.length > 0;
+  });
+  if (!hasAnyClips) return '';
+
+  ensureBatchVideoOrder(form);
+  const vo = form.videoOrder || [];
+  if (vo.length === 0) return '';
+
+  return `
+    <div style="margin-top:16px;">
+      <label class="block mb-2" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">
+        Video Order (${vo.length} clips)
+      </label>
+      <div style="font-size:11px; color:${CONFIG.text_muted}; margin-bottom:8px;">
+        Drag to reorder how clips play. Mix clips from different components.
+      </div>
+      <div id="batchVideoOrderList" style="display:flex; flex-direction:column; gap:8px;">
+        ${vo.map((ref, idx) => {
+          const r = getRecipeById(ref.recipeId);
+          const recipeName = r ? r.title : 'Unknown';
+          const clips = r && r.videoClips ? r.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0)) : [];
+          const clip = clips[ref.clipIndex] || {};
+          const thumb = clip.cloudflareVideoId ? getStreamThumbnail(clip.cloudflareVideoId) : '';
+          const caption = clip.caption || 'Clip ' + (ref.clipIndex + 1);
+          return `
+            <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:${CONFIG.surface_color}; border-radius:10px;"
+              draggable="true"
+              ondragstart="onBatchVODragStart(event, ${idx})"
+              ondragover="event.preventDefault(); event.dataTransfer.dropEffect='move';"
+              ondragenter="this.style.border='2px dashed ${CONFIG.primary_action_color}'"
+              ondragleave="this.style.border='none'"
+              ondrop="onBatchVODrop(event, ${idx})">
+              <div style="cursor:grab; color:${CONFIG.text_tertiary}; flex-shrink:0;">
+                <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg>
+              </div>
+              ${thumb ? `<img src="${esc(thumb)}" style="width:60px; height:45px; border-radius:6px; object-fit:cover; flex-shrink:0;" />` :
+                `<div style="width:60px; height:45px; border-radius:6px; background:${CONFIG.surface_elevated}; flex-shrink:0;"></div>`}
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:13px; font-weight:500; color:${CONFIG.text_color}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(caption)}</div>
+                <div style="font-size:11px; color:${CONFIG.text_muted};">from ${esc(recipeName)}</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:2px; flex-shrink:0;">
+                <button onclick="moveBatchVOItem(${idx}, -1)" class="button-hover" style="background:none; border:none; padding:2px; color:${CONFIG.text_muted}; cursor:pointer; ${idx === 0 ? 'opacity:0.3; pointer-events:none;' : ''}">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+                </button>
+                <button onclick="moveBatchVOItem(${idx}, 1)" class="button-hover" style="background:none; border:none; padding:2px; color:${CONFIG.text_muted}; cursor:pointer; ${idx === vo.length - 1 ? 'opacity:0.3; pointer-events:none;' : ''}">
+                  <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                </button>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// Batch video order drag
+let _batchVODragIdx = null;
+function onBatchVODragStart(e, idx) {
+  _batchVODragIdx = idx;
+  e.currentTarget.style.opacity = '0.4';
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onBatchVODrop(e, dropIdx) {
+  e.preventDefault();
+  e.currentTarget.style.border = 'none';
+  if (_batchVODragIdx === null || _batchVODragIdx === dropIdx || !state.batchForm) return;
+  const vo = state.batchForm.videoOrder;
+  if (!vo) return;
+  const item = vo.splice(_batchVODragIdx, 1)[0];
+  vo.splice(dropIdx, 0, item);
+  _batchVODragIdx = null;
+  render();
+}
+function moveBatchVOItem(idx, dir) {
+  if (!state.batchForm || !state.batchForm.videoOrder) return;
+  const vo = state.batchForm.videoOrder;
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= vo.length) return;
+  [vo[idx], vo[newIdx]] = [vo[newIdx], vo[idx]];
+  render();
+}
+
 function renderBatchEdit() {
   if (!state.batchForm) return '';
   const form = state.batchForm;
@@ -3020,6 +3155,9 @@ function renderBatchEdit() {
               </button>
             </div>
           </div>
+
+          <!-- Video Order section -->
+          ${renderBatchVideoOrderSection(form)}
 
           <!-- Save button -->
           <button onclick="saveBatchForm()" class="button-hover"

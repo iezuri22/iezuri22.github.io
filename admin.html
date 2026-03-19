@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1a1a24">
+  <title>Manage Recipe Videos</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg: #0d0d14;
+      --surface: #1a1a24;
+      --elevated: #242432;
+      --text: #f5f5f7;
+      --text-muted: #8e8e93;
+      --text-tertiary: #5c5c66;
+      --primary: #e85d5d;
+      --primary-subtle: rgba(232, 93, 93, 0.1);
+      --success: #32d74b;
+      --danger: #ff453a;
+      --divider: rgba(255, 255, 255, 0.06);
+      --shadow: 0 2px 8px rgba(0,0,0,0.3);
+      --radius: 16px;
+      --font: -apple-system, BlinkMacSystemFont, 'SF Pro', sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 15px;
+      min-height: 100dvh;
+    }
+    input, textarea {
+      background: rgba(0,0,0,0.2);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 10px;
+      padding: 8px 12px;
+      font-family: var(--font);
+      font-size: 14px;
+      width: 100%;
+      outline: none;
+    }
+    input:focus, textarea:focus { border-color: var(--primary); }
+    textarea { resize: vertical; min-height: 60px; }
+    button { font-family: var(--font); cursor: pointer; border: none; }
+    .btn-primary {
+      background: var(--primary); color: white; font-weight: 700;
+      padding: 10px 20px; border-radius: 10px; font-size: 15px;
+    }
+    .btn-secondary {
+      background: var(--elevated); color: var(--text);
+      padding: 8px 16px; border-radius: 10px; font-size: 14px; font-weight: 600;
+    }
+    .btn-ghost {
+      background: none; color: var(--text-muted); padding: 8px; border-radius: 8px;
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.05); }
+    .toast {
+      position: fixed; top: 16px; right: 16px; z-index: 9999;
+      background: var(--elevated); color: var(--text); border-radius: 12px;
+      padding: 12px 20px; font-size: 14px; font-weight: 500;
+      box-shadow: var(--shadow); animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+    /* Header */
+    .admin-header {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--bg); border-bottom: 1px solid var(--divider);
+      padding: 12px 16px; display: flex; align-items: center; gap: 12px;
+    }
+    .admin-header h1 { font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+
+    /* Layout */
+    .admin-body { display: flex; flex-direction: column; height: calc(100dvh - 53px); }
+    @media (min-width: 768px) {
+      .admin-body { flex-direction: row; }
+      .recipe-list-panel { width: 340px; flex-shrink: 0; border-right: 1px solid var(--divider); }
+      .clip-editor-panel { flex: 1; }
+    }
+    @media (max-width: 767px) {
+      .recipe-list-panel { max-height: 45dvh; }
+      .clip-editor-panel { flex: 1; }
+    }
+
+    /* Recipe list */
+    .recipe-list-panel {
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .filter-bar {
+      padding: 12px; display: flex; flex-direction: column; gap: 8px;
+      border-bottom: 1px solid var(--divider);
+    }
+    .filter-pills { display: flex; gap: 6px; }
+    .filter-pill {
+      padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 500;
+      background: transparent; color: var(--text-muted);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    .filter-pill.active {
+      background: var(--primary); color: white; border-color: var(--primary);
+    }
+    .recipe-scroll { flex: 1; overflow-y: auto; }
+    .recipe-row {
+      display: flex; align-items: center; gap: 12px; padding: 10px 12px;
+      cursor: pointer; border-bottom: 1px solid var(--divider);
+      transition: background 0.15s;
+    }
+    .recipe-row:hover { background: rgba(255,255,255,0.03); }
+    .recipe-row.selected { background: var(--primary-subtle); }
+    .recipe-row img { width: 48px; height: 48px; border-radius: 8px; object-fit: cover; flex-shrink: 0; }
+    .recipe-row .no-img {
+      width: 48px; height: 48px; border-radius: 8px; background: var(--elevated);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      color: var(--text-tertiary); font-size: 20px;
+    }
+    .recipe-row .info { flex: 1; min-width: 0; }
+    .recipe-row .name {
+      font-size: 14px; font-weight: 600; white-space: nowrap;
+      overflow: hidden; text-overflow: ellipsis;
+    }
+    .recipe-row .badge {
+      font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 10px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+    .badge-clips { background: rgba(50,215,75,0.15); color: var(--success); }
+    .badge-none { background: rgba(255,255,255,0.05); color: var(--text-tertiary); }
+
+    /* Clip editor */
+    .clip-editor-panel { overflow-y: auto; padding: 16px; }
+    .clip-card {
+      background: var(--surface); border-radius: 12px; padding: 12px;
+      margin-bottom: 12px; box-shadow: var(--shadow);
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .clip-card .drag-handle {
+      cursor: grab; color: var(--text-tertiary); padding: 4px;
+      display: flex; align-items: center; flex-shrink: 0; margin-top: 4px;
+    }
+    .clip-card .clip-content { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+    .clip-card .clip-thumb {
+      width: 80px; height: 60px; border-radius: 8px; object-fit: cover; flex-shrink: 0;
+      background: var(--elevated);
+    }
+    .clip-card .clip-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+    .clip-card .video-id { font-size: 11px; color: var(--text-tertiary); font-family: monospace; word-break: break-all; }
+    .validation-ok { color: var(--success); font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+    .validation-err { color: var(--danger); font-size: 12px; font-weight: 500; }
+    .mini-player { width: 200px; height: 113px; border-radius: 8px; border: none; margin-top: 4px; }
+
+    /* Plates section */
+    .plates-section { border-top: 1px solid var(--divider); padding: 12px; }
+    .plates-section h3 { font-size: 14px; font-weight: 600; margin-bottom: 8px; color: var(--text-muted); }
+    .plate-row {
+      display: flex; align-items: center; gap: 10px; padding: 8px;
+      border-radius: 10px; cursor: pointer; margin-bottom: 4px;
+    }
+    .plate-row:hover { background: rgba(255,255,255,0.03); }
+    .plate-comp {
+      display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 24px;
+      cursor: pointer; border-radius: 8px;
+    }
+    .plate-comp:hover { background: rgba(255,255,255,0.03); }
+
+    /* Video order list (plates) */
+    .video-order-list { display: flex; flex-direction: column; gap: 8px; }
+    .video-order-item {
+      display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+      background: var(--surface); border-radius: 10px;
+    }
+    .video-order-item .drag-handle { cursor: grab; color: var(--text-tertiary); flex-shrink: 0; }
+    .video-order-item img { width: 60px; height: 45px; border-radius: 6px; object-fit: cover; flex-shrink: 0; }
+    .video-order-item .vo-info { flex: 1; min-width: 0; }
+    .video-order-item .vo-caption { font-size: 13px; font-weight: 500; }
+    .video-order-item .vo-from { font-size: 11px; color: var(--text-muted); }
+
+    /* Dragging */
+    .dragging { opacity: 0.4; }
+    .drag-over { border: 2px dashed var(--primary); }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="admin-header">
+    <a href="index.html" style="color: var(--text); text-decoration: none; display: flex; align-items: center;">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+      </svg>
+    </a>
+    <h1>Manage Recipe Videos</h1>
+  </div>
+
+  <div class="admin-body">
+    <!-- Left: Recipe List -->
+    <div class="recipe-list-panel" id="recipeListPanel">
+      <div class="filter-bar">
+        <input type="text" id="recipeSearch" placeholder="Search recipes..." oninput="filterRecipes()" />
+        <div class="filter-pills">
+          <button class="filter-pill active" data-filter="all" onclick="setFilter('all')">All recipes</button>
+          <button class="filter-pill" data-filter="with" onclick="setFilter('with')">With clips</button>
+          <button class="filter-pill" data-filter="without" onclick="setFilter('without')">Without clips</button>
+        </div>
+      </div>
+      <div class="recipe-scroll" id="recipeScroll"></div>
+      <div class="plates-section" id="platesSection"></div>
+    </div>
+
+    <!-- Right: Clip Editor -->
+    <div class="clip-editor-panel" id="clipEditorPanel">
+      <div id="editorContent" style="max-width: 700px; margin: 0 auto;">
+        <div style="display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 20px; text-align:center;">
+          <div style="font-size:36px; margin-bottom:8px; opacity:0.3;">🎬</div>
+          <div style="color:var(--text-muted); font-size:14px; max-width:240px;">Select a recipe from the list to manage its video clips</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================================
+    // DATA LAYER — reads from same localStorage as main app
+    // ============================================================
+    const CLOUDFLARE_STREAM_SUBDOMAIN = 'customer-3z4sk2e6gw4kp3xc.cloudflarestream.com';
+
+    function saveToLS(key, data) { localStorage.setItem('yummy_' + key, JSON.stringify(data)); }
+    function loadFromLS(key, def) {
+      try { const d = localStorage.getItem('yummy_' + key); return d ? JSON.parse(d) : def; }
+      catch(e) { return def; }
+    }
+    function esc(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+    function getStreamThumbnail(videoId) {
+      return `https://${CLOUDFLARE_STREAM_SUBDOMAIN}/${videoId}/thumbnails/thumbnail.jpg?time=&height=400`;
+    }
+    function getStreamEmbedUrl(videoId, opts = {}) {
+      const { autoplay = false, muted = true, controls = true, loop = true } = opts;
+      const poster = encodeURIComponent(`https://${CLOUDFLARE_STREAM_SUBDOMAIN}/${videoId}/thumbnails/thumbnail.jpg?time=&height=600`);
+      return `https://${CLOUDFLARE_STREAM_SUBDOMAIN}/${videoId}/iframe?muted=${muted}&preload=true&loop=${loop}&autoplay=${autoplay}&controls=${controls}&poster=${poster}`;
+    }
+    function recipeThumb(r) {
+      const u = (r?.image_url || '').trim();
+      if (!u) return '';
+      if (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('data:')) return u;
+      return 'https://' + u;
+    }
+    function getRecipeById(id) {
+      if (!id) return null;
+      return recipes.find(r => r.__backendId === id || r.id === id) || null;
+    }
+
+    let recipes = loadFromLS('recipes', []);
+    let batchRecipes = loadFromLS('batchRecipes', []);
+    let selectedRecipeId = null;
+    let currentFilter = 'all';
+    let editingClips = []; // working copy of clips for selected recipe
+    let expandedPlateId = null;
+    let plateVideoOrderEditing = null; // { batchId, videoOrder: [...] }
+
+    function showToast(msg, type = 'info') {
+      const t = document.createElement('div');
+      t.className = 'toast';
+      if (type === 'success') t.style.borderLeft = '4px solid var(--success)';
+      else if (type === 'error') t.style.borderLeft = '4px solid var(--danger)';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; setTimeout(() => t.remove(), 300); }, 2500);
+    }
+
+    // ============================================================
+    // RECIPE LIST
+    // ============================================================
+    function setFilter(f) {
+      currentFilter = f;
+      document.querySelectorAll('.filter-pill').forEach(p => p.classList.toggle('active', p.dataset.filter === f));
+      renderRecipeList();
+    }
+
+    function filterRecipes() { renderRecipeList(); }
+
+    function renderRecipeList() {
+      const search = (document.getElementById('recipeSearch')?.value || '').toLowerCase().trim();
+      let list = recipes.filter(r => !r.isTip && !r.isDraft);
+
+      if (search) list = list.filter(r => (r.title || '').toLowerCase().includes(search));
+      if (currentFilter === 'with') list = list.filter(r => r.videoClips && r.videoClips.length > 0);
+      else if (currentFilter === 'without') list = list.filter(r => !r.videoClips || r.videoClips.length === 0);
+
+      // Sort: recipes with clips first
+      list.sort((a, b) => {
+        const ac = (a.videoClips || []).length;
+        const bc = (b.videoClips || []).length;
+        if (ac > 0 && bc === 0) return -1;
+        if (ac === 0 && bc > 0) return 1;
+        return (a.title || '').localeCompare(b.title || '');
+      });
+
+      const container = document.getElementById('recipeScroll');
+      if (list.length === 0) {
+        container.innerHTML = `<div style="padding:24px; text-align:center; color:var(--text-muted); font-size:13px;">No recipes found</div>`;
+        return;
+      }
+
+      container.innerHTML = list.map(r => {
+        const id = r.__backendId || r.id;
+        const clipCount = (r.videoClips || []).length;
+        const thumb = recipeThumb(r);
+        const isSelected = id === selectedRecipeId;
+        return `
+          <div class="recipe-row ${isSelected ? 'selected' : ''}" onclick="selectRecipe('${esc(id)}')">
+            ${thumb ? `<img src="${esc(thumb)}" alt="" />` : `<div class="no-img">🍽</div>`}
+            <div class="info">
+              <div class="name">${esc(r.title)}</div>
+            </div>
+            <span class="badge ${clipCount > 0 ? 'badge-clips' : 'badge-none'}">
+              ${clipCount > 0 ? clipCount + ' clip' + (clipCount !== 1 ? 's' : '') : 'No clips'}
+            </span>
+          </div>
+        `;
+      }).join('');
+    }
+
+    // ============================================================
+    // PLATES SECTION
+    // ============================================================
+    function renderPlatesSection() {
+      const container = document.getElementById('platesSection');
+      if (batchRecipes.length === 0) { container.innerHTML = ''; return; }
+
+      container.innerHTML = `
+        <h3>Plates</h3>
+        ${batchRecipes.map(batch => {
+          const comps = (batch.components || []).filter(c => c.type === 'recipe' && c.recipeId);
+          const isExpanded = expandedPlateId === batch.id;
+          return `
+            <div>
+              <div class="plate-row" onclick="togglePlateExpand('${esc(batch.id)}')">
+                <svg width="16" height="16" fill="none" stroke="var(--text-muted)" stroke-width="1.5" viewBox="0 0 24 24" style="transform:rotate(${isExpanded ? 90 : 0}deg); transition:transform 0.2s;">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+                </svg>
+                <span style="font-size:14px; font-weight:500;">${esc(batch.name || 'Untitled Plate')}</span>
+                <span style="font-size:11px; color:var(--text-muted); margin-left:auto;">${comps.length} recipe${comps.length !== 1 ? 's' : ''}</span>
+              </div>
+              ${isExpanded ? renderPlateExpanded(batch) : ''}
+            </div>
+          `;
+        }).join('')}
+      `;
+    }
+
+    function togglePlateExpand(batchId) {
+      if (expandedPlateId === batchId) {
+        expandedPlateId = null;
+        plateVideoOrderEditing = null;
+      } else {
+        expandedPlateId = batchId;
+        loadPlateVideoOrder(batchId);
+      }
+      renderPlatesSection();
+    }
+
+    function renderPlateExpanded(batch) {
+      const comps = (batch.components || []).filter(c => c.type === 'recipe' && c.recipeId);
+
+      // Component list with clip status
+      let compListHtml = comps.map(comp => {
+        const r = getRecipeById(comp.recipeId);
+        const name = r ? r.title : comp.name;
+        const clipCount = r && r.videoClips ? r.videoClips.length : 0;
+        const thumb = r ? recipeThumb(r) : '';
+        return `
+          <div class="plate-comp" onclick="selectRecipe('${esc(comp.recipeId)}')">
+            ${thumb ? `<img src="${esc(thumb)}" style="width:32px; height:32px; border-radius:6px; object-fit:cover;" />` :
+              `<div style="width:32px; height:32px; border-radius:6px; background:var(--elevated); display:flex; align-items:center; justify-content:center; font-size:14px;">🍽</div>`}
+            <span style="font-size:13px; flex:1;">${esc(name)}</span>
+            <span class="badge ${clipCount > 0 ? 'badge-clips' : 'badge-none'}" style="font-size:10px;">
+              ${clipCount > 0 ? clipCount + ' clip' + (clipCount !== 1 ? 's' : '') : 'No clips'}
+            </span>
+          </div>
+        `;
+      }).join('');
+
+      // Video order editor for this plate
+      let videoOrderHtml = '';
+      if (plateVideoOrderEditing && plateVideoOrderEditing.batchId === batch.id) {
+        const vo = plateVideoOrderEditing.videoOrder;
+        if (vo.length > 0) {
+          videoOrderHtml = `
+            <div style="margin-top:12px; padding-top:12px; border-top:1px solid var(--divider);">
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                <span style="font-size:13px; font-weight:600; color:var(--text-muted);">Video Order</span>
+                <button class="btn-primary" style="font-size:12px; padding:6px 14px;" onclick="savePlateVideoOrder('${esc(batch.id)}')">Save Order</button>
+              </div>
+              <div class="video-order-list" id="plateVideoOrder_${esc(batch.id)}">
+                ${vo.map((ref, idx) => renderPlateVideoOrderItem(ref, idx, batch.id)).join('')}
+              </div>
+            </div>
+          `;
+        }
+      }
+
+      return `
+        <div style="padding-left:12px;">
+          ${compListHtml}
+          ${videoOrderHtml}
+        </div>
+      `;
+    }
+
+    function renderPlateVideoOrderItem(ref, idx, batchId) {
+      const r = getRecipeById(ref.recipeId);
+      const recipeName = r ? r.title : 'Unknown recipe';
+      const clips = r && r.videoClips ? r.videoClips.slice().sort((a,b) => (a.order||0)-(b.order||0)) : [];
+      const clip = clips[ref.clipIndex] || {};
+      const thumb = clip.cloudflareVideoId ? getStreamThumbnail(clip.cloudflareVideoId) : '';
+      const caption = clip.caption || `Clip ${ref.clipIndex + 1}`;
+
+      return `
+        <div class="video-order-item" draggable="true"
+          ondragstart="onPlateVODragStart(event, ${idx})"
+          ondragover="onPlateVODragOver(event)"
+          ondragenter="event.currentTarget.classList.add('drag-over')"
+          ondragleave="event.currentTarget.classList.remove('drag-over')"
+          ondrop="onPlateVODrop(event, ${idx})">
+          <div class="drag-handle">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/><circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/><circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/></svg>
+          </div>
+          ${thumb ? `<img src="${esc(thumb)}" alt="" />` : `<div style="width:60px;height:45px;border-radius:6px;background:var(--elevated);"></div>`}
+          <div class="vo-info">
+            <div class="vo-caption">${esc(caption)}</div>
+            <div class="vo-from">from ${esc(recipeName)}</div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <button class="btn-ghost" style="padding:2px;" onclick="movePlateVOItem(${idx}, -1)" ${idx === 0 ? 'disabled style="opacity:0.3;padding:2px;"' : ''}>
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+            </button>
+            <button class="btn-ghost" style="padding:2px;" onclick="movePlateVOItem(${idx}, 1)" ${idx === plateVideoOrderEditing.videoOrder.length - 1 ? 'disabled style="opacity:0.3;padding:2px;"' : ''}>
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function loadPlateVideoOrder(batchId) {
+      const batch = batchRecipes.find(b => b.id === batchId);
+      if (!batch) return;
+
+      // If batch already has a saved videoOrder, use it
+      if (batch.videoOrder && batch.videoOrder.length > 0) {
+        plateVideoOrderEditing = { batchId, videoOrder: JSON.parse(JSON.stringify(batch.videoOrder)) };
+      } else {
+        // Auto-generate from component order
+        plateVideoOrderEditing = { batchId, videoOrder: generateDefaultVideoOrder(batch) };
+      }
+    }
+
+    function generateDefaultVideoOrder(batch) {
+      const order = [];
+      (batch.components || []).forEach(comp => {
+        if (comp.type !== 'recipe' || !comp.recipeId) return;
+        const r = getRecipeById(comp.recipeId);
+        if (!r || !r.videoClips || r.videoClips.length === 0) return;
+        const sorted = r.videoClips.slice().sort((a,b) => (a.order||0)-(b.order||0));
+        sorted.forEach((clip, idx) => {
+          order.push({ recipeId: comp.recipeId, clipIndex: idx });
+        });
+      });
+      return order;
+    }
+
+    function savePlateVideoOrder(batchId) {
+      if (!plateVideoOrderEditing || plateVideoOrderEditing.batchId !== batchId) return;
+      const batch = batchRecipes.find(b => b.id === batchId);
+      if (!batch) return;
+      batch.videoOrder = JSON.parse(JSON.stringify(plateVideoOrderEditing.videoOrder));
+      saveToLS('batchRecipes', batchRecipes);
+      showToast('Video order saved!', 'success');
+    }
+
+    // Plate video order drag and drop
+    let plateVODragIdx = null;
+    function onPlateVODragStart(e, idx) {
+      plateVODragIdx = idx;
+      e.currentTarget.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    function onPlateVODragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+    function onPlateVODrop(e, dropIdx) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      if (plateVODragIdx === null || plateVODragIdx === dropIdx || !plateVideoOrderEditing) return;
+      const vo = plateVideoOrderEditing.videoOrder;
+      const item = vo.splice(plateVODragIdx, 1)[0];
+      vo.splice(dropIdx, 0, item);
+      plateVODragIdx = null;
+      renderPlatesSection();
+    }
+    function movePlateVOItem(idx, dir) {
+      if (!plateVideoOrderEditing) return;
+      const vo = plateVideoOrderEditing.videoOrder;
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= vo.length) return;
+      [vo[idx], vo[newIdx]] = [vo[newIdx], vo[idx]];
+      renderPlatesSection();
+    }
+
+    // ============================================================
+    // RECIPE SELECTION & CLIP EDITOR
+    // ============================================================
+    function selectRecipe(id) {
+      selectedRecipeId = id;
+      const r = getRecipeById(id);
+      if (!r) return;
+      // Deep copy clips for editing
+      editingClips = (r.videoClips || []).slice().sort((a,b) => (a.order||0)-(b.order||0)).map(c => ({
+        cloudflareVideoId: c.cloudflareVideoId || '',
+        caption: c.caption || '',
+        instructions: c.instructions || '',
+        order: c.order || 0,
+        _validated: !!c.cloudflareVideoId,
+        _showPreview: false
+      }));
+      renderRecipeList();
+      renderClipEditor();
+    }
+
+    function renderClipEditor() {
+      const r = getRecipeById(selectedRecipeId);
+      if (!r) return;
+
+      const thumb = recipeThumb(r);
+      const editor = document.getElementById('editorContent');
+
+      editor.innerHTML = `
+        <!-- Selected recipe header -->
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+          ${thumb ? `<img src="${esc(thumb)}" style="width:64px; height:64px; border-radius:12px; object-fit:cover;" />` :
+            `<div style="width:64px; height:64px; border-radius:12px; background:var(--elevated); display:flex; align-items:center; justify-content:center; font-size:24px;">🍽</div>`}
+          <div>
+            <div style="font-size:17px; font-weight:700;">${esc(r.title)}</div>
+            <div style="font-size:13px; color:var(--text-muted);">${editingClips.length} clip${editingClips.length !== 1 ? 's' : ''}</div>
+          </div>
+        </div>
+
+        <!-- Clips list -->
+        <div id="clipsList">
+          ${editingClips.length === 0 ? `
+            <div style="padding:32px; text-align:center; color:var(--text-muted); font-size:14px; background:var(--surface); border-radius:12px;">
+              No clips yet. Add your first clip below.
+            </div>
+          ` : editingClips.map((clip, idx) => renderClipCard(clip, idx)).join('')}
+        </div>
+
+        <!-- Add clip button -->
+        <button onclick="addClip()" class="btn-secondary" style="width:100%; margin-top:12px; padding:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          Add Clip
+        </button>
+
+        <!-- Save button -->
+        <button onclick="saveClips()" class="btn-primary" style="width:100%; margin-top:12px; padding:14px;">
+          Save Clips
+        </button>
+      `;
+    }
+
+    function renderClipCard(clip, idx) {
+      const thumbUrl = clip.cloudflareVideoId ? getStreamThumbnail(clip.cloudflareVideoId) : '';
+      const hasId = !!clip.cloudflareVideoId;
+
+      return `
+        <div class="clip-card" draggable="true"
+          ondragstart="onClipDragStart(event, ${idx})"
+          ondragover="onClipDragOver(event)"
+          ondragenter="event.currentTarget.classList.add('drag-over')"
+          ondragleave="event.currentTarget.classList.remove('drag-over')"
+          ondrop="onClipDrop(event, ${idx})">
+
+          <!-- Drag handle -->
+          <div class="drag-handle">
+            <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <circle cx="5" cy="3" r="1.5"/><circle cx="11" cy="3" r="1.5"/>
+              <circle cx="5" cy="8" r="1.5"/><circle cx="11" cy="8" r="1.5"/>
+              <circle cx="5" cy="13" r="1.5"/><circle cx="11" cy="13" r="1.5"/>
+            </svg>
+          </div>
+
+          <!-- Content -->
+          <div class="clip-content">
+            <!-- Video ID input -->
+            <div>
+              <label style="font-size:11px; color:var(--text-muted); font-weight:500; margin-bottom:2px; display:block;">Cloudflare Video ID</label>
+              <input type="text" value="${esc(clip.cloudflareVideoId)}"
+                placeholder="e.g. 68c030875f569b166db2964f7237d7d9"
+                oninput="updateClipField(${idx}, 'cloudflareVideoId', this.value); validateVideoId(${idx}, this.value);"
+                style="font-family:monospace; font-size:12px;" />
+              <div id="clipValidation_${idx}" style="margin-top:4px;">
+                ${hasId && clip._validated ? `<span class="validation-ok">✓ Video found</span>` : ''}
+              </div>
+            </div>
+
+            <!-- Thumbnail + ID display row -->
+            ${hasId ? `
+              <div style="display:flex; gap:10px; align-items:flex-start;">
+                <img src="${esc(thumbUrl)}" class="clip-thumb" id="clipThumb_${idx}"
+                  onerror="this.style.display='none'; document.getElementById('clipValidation_${idx}').innerHTML='<span class=\\'validation-err\\'>✗ Invalid video ID</span>';"
+                  onload="document.getElementById('clipValidation_${idx}').innerHTML='<span class=\\'validation-ok\\'>✓ Video found</span>';" />
+                <div class="video-id">${esc(clip.cloudflareVideoId)}</div>
+              </div>
+            ` : ''}
+
+            <!-- Caption -->
+            <div>
+              <label style="font-size:11px; color:var(--text-muted); font-weight:500; margin-bottom:2px; display:block;">Caption</label>
+              <input type="text" value="${esc(clip.caption)}" placeholder="e.g. Prep ingredients"
+                oninput="updateClipField(${idx}, 'caption', this.value)" />
+            </div>
+
+            <!-- Instructions -->
+            <div>
+              <label style="font-size:11px; color:var(--text-muted); font-weight:500; margin-bottom:2px; display:block;">Instructions</label>
+              <textarea placeholder="Step-by-step instructions for this clip..."
+                oninput="updateClipField(${idx}, 'instructions', this.value)">${esc(clip.instructions)}</textarea>
+            </div>
+
+            <!-- Preview button & player -->
+            ${hasId ? `
+              <button class="btn-ghost" style="font-size:12px; color:var(--primary); padding:4px 0; text-align:left;" onclick="togglePreview(${idx})">
+                ${clip._showPreview ? '▾ Hide Preview' : '▸ Preview'}
+              </button>
+              ${clip._showPreview ? `
+                <iframe src="${getStreamEmbedUrl(clip.cloudflareVideoId, { autoplay: false, muted: true, controls: true, loop: false })}"
+                  class="mini-player" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+              ` : ''}
+            ` : ''}
+          </div>
+
+          <!-- Actions: up/down/delete -->
+          <div class="clip-actions">
+            <button class="btn-ghost" onclick="moveClip(${idx}, -1)" title="Move up" ${idx === 0 ? 'disabled style="opacity:0.3;"' : ''}>
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+            </button>
+            <button class="btn-ghost" onclick="moveClip(${idx}, 1)" title="Move down" ${idx === editingClips.length - 1 ? 'disabled style="opacity:0.3;"' : ''}>
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+            </button>
+            <button class="btn-ghost" onclick="deleteClip(${idx})" title="Delete clip" style="color:var(--danger);">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // ============================================================
+    // CLIP EDITING ACTIONS
+    // ============================================================
+    function updateClipField(idx, field, value) {
+      if (editingClips[idx]) editingClips[idx][field] = value;
+    }
+
+    function validateVideoId(idx, videoId) {
+      const id = (videoId || '').trim();
+      const el = document.getElementById('clipValidation_' + idx);
+      if (!el) return;
+      if (!id) { el.innerHTML = ''; return; }
+
+      // Try loading thumbnail to validate
+      const img = new Image();
+      img.onload = () => {
+        el.innerHTML = '<span class="validation-ok">✓ Video found</span>';
+        editingClips[idx]._validated = true;
+        // Update thumbnail display
+        const thumbEl = document.getElementById('clipThumb_' + idx);
+        if (thumbEl) { thumbEl.src = getStreamThumbnail(id); thumbEl.style.display = ''; }
+        else renderClipEditor(); // re-render to show thumb
+      };
+      img.onerror = () => {
+        el.innerHTML = '<span class="validation-err">✗ Invalid video ID</span>';
+        editingClips[idx]._validated = false;
+      };
+      img.src = getStreamThumbnail(id);
+    }
+
+    function addClip() {
+      editingClips.push({
+        cloudflareVideoId: '',
+        caption: '',
+        instructions: '',
+        order: editingClips.length + 1,
+        _validated: false,
+        _showPreview: false
+      });
+      renderClipEditor();
+      // Scroll to bottom
+      setTimeout(() => {
+        const panel = document.querySelector('.clip-editor-panel');
+        if (panel) panel.scrollTop = panel.scrollHeight;
+      }, 50);
+    }
+
+    function deleteClip(idx) {
+      editingClips.splice(idx, 1);
+      renderClipEditor();
+    }
+
+    function moveClip(idx, dir) {
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= editingClips.length) return;
+      [editingClips[idx], editingClips[newIdx]] = [editingClips[newIdx], editingClips[idx]];
+      renderClipEditor();
+    }
+
+    function togglePreview(idx) {
+      editingClips[idx]._showPreview = !editingClips[idx]._showPreview;
+      renderClipEditor();
+    }
+
+    // Clip drag and drop
+    let clipDragIdx = null;
+    function onClipDragStart(e, idx) {
+      clipDragIdx = idx;
+      e.currentTarget.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+    function onClipDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+    function onClipDrop(e, dropIdx) {
+      e.preventDefault();
+      e.currentTarget.classList.remove('drag-over');
+      if (clipDragIdx === null || clipDragIdx === dropIdx) return;
+      const item = editingClips.splice(clipDragIdx, 1)[0];
+      editingClips.splice(dropIdx, 0, item);
+      clipDragIdx = null;
+      renderClipEditor();
+    }
+
+    // ============================================================
+    // SAVE CLIPS
+    // ============================================================
+    function saveClips() {
+      if (!selectedRecipeId) return;
+      const r = getRecipeById(selectedRecipeId);
+      if (!r) return;
+
+      // Filter out clips with no video ID
+      const validClips = editingClips
+        .filter(c => c.cloudflareVideoId && c.cloudflareVideoId.trim())
+        .map((c, i) => ({
+          cloudflareVideoId: c.cloudflareVideoId.trim(),
+          caption: c.caption || '',
+          instructions: c.instructions || '',
+          order: i + 1
+        }));
+
+      r.videoClips = validClips;
+      saveToLS('recipes', recipes);
+
+      // Re-read to sync
+      recipes = loadFromLS('recipes', []);
+
+      showToast(`Saved ${validClips.length} clip${validClips.length !== 1 ? 's' : ''} for ${r.title}`, 'success');
+      renderRecipeList();
+
+      // Re-select to refresh editor
+      selectRecipe(selectedRecipeId);
+    }
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    renderRecipeList();
+    renderPlatesSection();
+  </script>
+</body>
+</html>

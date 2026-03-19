@@ -2446,11 +2446,29 @@ function recipeHasVideo(recipeId) {
   return r && Array.isArray(r.videoClips) && r.videoClips.length > 0;
 }
 
-// Build a Plate: stitch all component videos into one sequence with chapter dividers
+// Build a Plate: stitch all component videos into one sequence
+// Uses custom videoOrder if available, otherwise falls back to component order
+// No chapter dividers — component name shown on each clip instead
 function getBatchVideoSequence(batch) {
   if (!batch || !batch.components || batch.components.length === 0) return [];
+
+  // If plate has a custom videoOrder, use it
+  if (batch.videoOrder && batch.videoOrder.length > 0) {
+    const sequence = [];
+    batch.videoOrder.forEach(ref => {
+      const r = getRecipeById(ref.recipeId);
+      if (!r) return;
+      const clips = getRecipeVideoClips(ref.recipeId);
+      const clip = clips[ref.clipIndex];
+      if (!clip) return;
+      sequence.push({ type: 'clip', ...clip, componentName: r.title });
+    });
+    return sequence;
+  }
+
+  // Fallback: component order, no dividers
   const sequence = [];
-  batch.components.forEach((comp, compIdx) => {
+  batch.components.forEach(comp => {
     let compName = comp.name || 'Component';
     let clips = [];
     if (comp.type === 'recipe' && comp.recipeId) {
@@ -2461,10 +2479,6 @@ function getBatchVideoSequence(batch) {
       }
     }
     if (clips.length === 0) return;
-    // Add chapter divider before each component (except if it's the very first item)
-    if (sequence.length > 0) {
-      sequence.push({ type: 'divider', componentName: compName });
-    }
     clips.forEach(clip => {
       sequence.push({ type: 'clip', ...clip, componentName: compName });
     });
@@ -4119,6 +4133,12 @@ async function showSettingsMenu() {
           <div class="font-semibold text-lg">🔄 Sync Images to Library</div>
           <div class="text-sm" style="color: ${CONFIG.text_muted};">Add all preset ingredients (with photos) to your ingredient library</div>
         </button>
+
+        <a href="admin.html" onclick="closeModal();"
+                class="w-full p-4 rounded text-left button-hover block" style="background: ${CONFIG.primary_subtle}; text-decoration: none; color: inherit;">
+          <div class="font-semibold text-lg" style="color: ${CONFIG.text_color};">🎬 Manage Recipe Videos</div>
+          <div class="text-sm" style="color: ${CONFIG.text_muted};">Assign video clips to recipes and manage plate video order</div>
+        </a>
       </div>
      <div class="mt-6 p-4 rounded" style="background: ${CONFIG.surface_color};">
         <div class="text-sm" style="color: ${CONFIG.text_color};">
