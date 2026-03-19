@@ -674,6 +674,12 @@ function saveToLS(key, data) {
   localStorage.setItem('yummy_' + key, JSON.stringify(data));
 }
 
+// Temporary debug helper — run debugStorage() in console on any device
+window.debugStorage = function() {
+  console.log('Batch Recipes:', JSON.parse(localStorage.getItem('yummy_batchRecipes') || '[]'));
+  console.log('All localStorage keys:', Object.keys(localStorage));
+};
+
 function loadFromLS(key, defaultVal) {
   try {
     const d = localStorage.getItem('yummy_' + key);
