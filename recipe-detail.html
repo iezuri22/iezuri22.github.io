@@ -34,13 +34,21 @@
       return '/recipes.html';
     }
 
+    function goBackSafe() {
+      if (window.history.length > 1) {
+        window.history.back();
+      } else {
+        window.location.href = getBackUrl();
+      }
+    }
+
     function renderRecipeDetail() {
       const r = getRecipeById(recipeId);
       if (!r) return `<div style="padding: 40px 20px; text-align: center; color: ${CONFIG.text_muted};">
         <div style="font-size: 48px; margin-bottom: 16px;">🍽️</div>
         <div style="font-size: 18px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">Recipe not found</div>
         <div style="margin-bottom: 24px;">This recipe may have been removed.</div>
-        <a href="${getBackUrl()}" style="color: ${CONFIG.primary_action_color}; text-decoration: none; font-weight: 600;">Go back</a>
+        <a href="#" onclick="goBackSafe(); return false;" style="color: ${CONFIG.primary_action_color}; text-decoration: none; font-weight: 600;">Go back</a>
       </div>`;
 
       const img = recipeThumb(r);
@@ -97,7 +105,7 @@
               </div>
             `}
             <div style="position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(13,13,20,0.9));"></div>
-            <button onclick="window.location.href='${getBackUrl()}'" style="position: absolute; top: 12px; left: 12px; width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+            <button onclick="goBackSafe()" style="position: absolute; top: 12px; left: 12px; width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
               <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
             </button>
             <div style="position: absolute; bottom: 16px; left: 16px; right: 16px;">

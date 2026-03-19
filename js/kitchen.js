@@ -1100,7 +1100,7 @@ function renderKitchenDetail() {
           </div>
         `}
         <div style="position: absolute; inset: 0; background: linear-gradient(transparent 40%, rgba(13,13,20,0.9));"></div>
-        <button onclick="window.location.href='/kitchen.html'" style="position: absolute; top: 12px; left: 12px; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+        <button onclick="if(window.history.length>1){window.history.back();}else{window.location.href='/kitchen.html';}" style="position: absolute; top: 12px; left: 12px; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,0.5); backdrop-filter: blur(8px); border: none; color: white; cursor: pointer; display: flex; align-items: center; justify-content: center;">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
         </button>
         <div style="position: absolute; bottom: 12px; left: 12px;">
