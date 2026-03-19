@@ -737,6 +737,7 @@ function loadAllState() {
   state.weeklyBudgets = loadFromLS('weeklyBudgets', {});
   state.mealOptions = loadFromLS('mealOptions', []);
   state.batchRecipes = loadFromLS('batchRecipes', []);
+  if (!Array.isArray(state.batchRecipes)) { console.warn('[loadAllState] batchRecipes was not an array, resetting'); state.batchRecipes = []; }
   // Ensure today exists in mealDays
   const todayDate = new Date().toISOString().split('T')[0];
   if (!state.mealDays[todayDate]) {
@@ -2183,21 +2184,36 @@ function newBatchComponent(type) {
 }
 
 function saveBatchRecipe(batch) {
+  console.log('[saveBatchRecipe] Called with batch id:', batch.id, 'name:', batch.name);
+  // Ensure state.batchRecipes is always an array
+  if (!Array.isArray(state.batchRecipes)) {
+    console.warn('[saveBatchRecipe] state.batchRecipes was not an array, resetting to []');
+    state.batchRecipes = [];
+  }
   if (!batch.id) {
     batch.id = 'batch_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     batch.createdAt = new Date().toISOString();
+    console.log('[saveBatchRecipe] New plate, assigned id:', batch.id);
     state.batchRecipes.push(batch);
   } else {
     const idx = state.batchRecipes.findIndex(b => b.id === batch.id);
-    if (idx >= 0) state.batchRecipes[idx] = batch;
-    else state.batchRecipes.push(batch);
+    if (idx >= 0) { state.batchRecipes[idx] = batch; console.log('[saveBatchRecipe] Updated existing at index', idx); }
+    else { state.batchRecipes.push(batch); console.log('[saveBatchRecipe] Appended (id existed but not found in array)'); }
   }
+  console.log('[saveBatchRecipe] state.batchRecipes length:', state.batchRecipes.length);
   try {
     persistState();
+    console.log('[saveBatchRecipe] persistState() succeeded');
   } catch (e) {
-    console.error('Failed to persist batch recipe:', e);
+    console.error('[saveBatchRecipe] persistState() failed:', e);
     // Try saving just batchRecipes directly as fallback
-    try { saveToLS('batchRecipes', state.batchRecipes); } catch (e2) { console.error('Fallback save also failed:', e2); }
+    try {
+      saveToLS('batchRecipes', state.batchRecipes);
+      console.log('[saveBatchRecipe] Fallback saveToLS succeeded');
+    } catch (e2) {
+      console.error('[saveBatchRecipe] Fallback save also failed:', e2);
+      throw e2; // Re-throw so caller knows save failed
+    }
   }
 }
 

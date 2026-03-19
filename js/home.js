@@ -152,11 +152,6 @@ function renderHome() {
   // Calendar picker overlay
   const calendarOverlay = state.calendarPickerOpen ? renderDatePicker() : '';
 
-  // Tab-based content
-  const tabContent = state.homeTab === 'swipe'
-    ? renderSwipeTab()
-    : renderSelectedTab();
-
   const cookAgainHtml = renderCookAgainRow();
 
   return `
@@ -165,11 +160,9 @@ function renderHome() {
       <div class="mobile-only-sections" style="flex-shrink: 0;">${cookAgainHtml}</div>
       <div class="desktop-home-layout">
         <div class="desktop-home-main">
-          ${renderHomeTabs()}
-          ${tabContent}
+          ${renderSwipeTab()}
         </div>
         <div class="desktop-home-sidebar">
-          ${renderSelectedTab()}
           ${cookAgainHtml}
         </div>
       </div>
@@ -186,17 +179,7 @@ function renderHome() {
 // HOME TAB FUNCTIONS
 // ============================================================
 function setHomeTab(tab) {
-  state.homeTab = tab;
-  if (tab === 'swipe') {
-    const mealType = state.swipeMealType || detectMealType();
-    if (!state.swipeMealType) state.swipeMealType = mealType;
-    if (!state.swipeDeck || state.swipeDeck.length === 0) {
-      state.swipeDeck = state.swipeSettings.setupCompleted
-        ? buildSwipeDeckFiltered(state.swipeMealType)
-        : buildSwipeDeck(state.swipeMealType);
-      state.swipeIndex = 0;
-    }
-  }
+  // Legacy — always stay on swipe
   render();
 }
 
@@ -231,19 +214,7 @@ function renderHomeHeader(dateStr) {
   `;
 }
 
-function renderHomeTabs() {
-  const swipeActive = state.homeTab === 'swipe';
-  const selectedActive = state.homeTab === 'selected';
-
-  return `
-    <div style="padding: 0 12px 4px; flex-shrink: 0;">
-      <div class="home-tab-toggle">
-        <button class="home-tab-btn ${swipeActive ? 'active' : ''}" onclick="setHomeTab('swipe')">Swipe</button>
-        <button class="home-tab-btn ${selectedActive ? 'active' : ''}" onclick="setHomeTab('selected')">Selected</button>
-      </div>
-    </div>
-  `;
-}
+// renderHomeTabs removed — home page is swipe-only now
 
 function renderSwipeTab() {
   const dateStr = state.viewingDate;
@@ -354,40 +325,7 @@ function renderSwipeTab() {
   `;
 }
 
-function renderSelectedTab() {
-  const dateStr = state.viewingDate;
-  const dayData = getDayData(dateStr);
-  const isPastDay = isPastDate(dateStr);
-  const isFutureDay = isFutureDate(dateStr);
-  const mealOrder = ['breakfast', 'lunch', 'dinner'];
-  const progressBar = renderDayProgressBar(dayData, mealOrder);
-
-  return `
-    <div style="padding: 0 12px;">
-      ${progressBar}
-    </div>
-    <div style="padding: 0 12px;">
-      ${renderMealSection('breakfast', dayData.meals.breakfast, dateStr, isPastDay, isFutureDay)}
-      ${renderMealSection('lunch', dayData.meals.lunch, dateStr, isPastDay, isFutureDay)}
-      ${renderMealSection('dinner', dayData.meals.dinner, dateStr, isPastDay, isFutureDay)}
-
-      <div style="margin-top: ${CONFIG.space_md};">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: ${CONFIG.space_sm};">
-          <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight}; text-transform: uppercase; letter-spacing: ${CONFIG.type_micro_tracking};">Snacks</span>
-          <button onclick="showSnackPicker()" style="background: none; border: none; color: ${CONFIG.primary_action_color}; font-size: ${CONFIG.type_caption}; cursor: pointer; font-weight: 500;">+ Add</button>
-        </div>
-        ${dayData.meals.snacks && dayData.meals.snacks.length > 0 ? dayData.meals.snacks.map(snack => `
-          <div style="background: ${CONFIG.surface_color}; border-radius: 12px; padding: ${CONFIG.space_sm} ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_xs}; display: flex; align-items: center; gap: ${CONFIG.space_sm}; box-shadow: ${CONFIG.shadow};">
-            <span style="font-size: 16px;">🍿</span>
-            <span style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_caption}; flex: 1;">${esc(snack.name || 'Snack')}</span>
-          </div>
-        `).join('') : `
-          <div style="color: ${CONFIG.text_tertiary}; font-size: ${CONFIG.type_caption}; text-align: center; padding: ${CONFIG.space_sm};">No snacks logged</div>
-        `}
-      </div>
-    </div>
-  `;
-}
+// renderSelectedTab removed — home page is swipe-only now
 
 // ============================================================
 // DATE NAVIGATION
@@ -455,11 +393,9 @@ function onSwipeExit() {
     state._swapTargetLogId = null;
     state._swapMealType = null;
     state._swapDateStr = null;
-    state.homeTab = 'selected';
     navigateTo('my-meals');
     return;
   }
-  state.homeTab = 'selected';
   state.todaySwipeMealSlot = null;
   render();
 }
@@ -1347,7 +1283,6 @@ async function confirmHomeSwipeSelection(recipeId) {
     saveMealDay(dateStr)
   ]);
 
-  state.homeTab = 'selected';
   state.todaySwipeMealSlot = null;
   showToast(`${capitalize(meal)} picked!`, 'success');
   render();
@@ -1518,7 +1453,6 @@ function handleHomeSwipeRight() {
 
     if (state._returnToFoodLog) {
       state._returnToFoodLog = false;
-      state.homeTab = 'selected';
       navigateTo('my-meals');
       return;
     }
@@ -1566,7 +1500,6 @@ function handleHomeSwipeLeft() {
 
 async function skipMealSlot(meal) {
   await logMealAsSkipped(meal);
-  state.homeTab = 'selected';
   state.todaySwipeMealSlot = null;
   showToast(`${capitalize(meal)} skipped`);
 }

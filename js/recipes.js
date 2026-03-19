@@ -2231,20 +2231,25 @@ function closeBatchEditor() {
 }
 
 function saveBatchForm() {
-  if (!state.batchForm) return;
+  console.log('[saveBatchForm] Starting save...');
+  if (!state.batchForm) { console.warn('[saveBatchForm] No batchForm in state'); return; }
   const name = (state.batchForm.name || '').trim();
   if (!name) return showError('Please name your plate.');
+  console.log('[saveBatchForm] Name:', name);
+  console.log('[saveBatchForm] Components:', JSON.stringify(state.batchForm.components.map(c => ({ id: c.id, type: c.type, name: c.name }))));
   if (state.batchForm.components.length === 0) return showError('Add at least one component.');
 
   try {
     // Reorder
     state.batchForm.components.forEach((c, i) => c.order = i + 1);
+    console.log('[saveBatchForm] Calling saveBatchRecipe...');
     saveBatchRecipe(state.batchForm);
+    console.log('[saveBatchForm] saveBatchRecipe returned successfully');
     showToast('Plate saved!', 'success');
     state.batchForm = null;
     navigateTo('recipes');
   } catch (e) {
-    console.error('Error saving plate:', e);
+    console.error('[saveBatchForm] Error saving plate:', e, e.stack);
     showError('Failed to save plate. Please try again.');
   }
 }
@@ -2411,10 +2416,7 @@ function renderBatchEdit() {
 
   return `
     <div class="batch-edit-page" style="padding: 16px; max-width: 1200px; margin: 0 auto;">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.type_title}; font-weight:${CONFIG.type_title_weight};">
-          ${form.id ? 'Edit Plate' : 'Build a Plate'}
-        </h2>
+      <div class="flex items-center justify-end mb-4">
         <div class="flex gap-2">
           <button onclick="closeBatchEditor()" class="px-3 py-1.5 rounded button-hover"
             style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; min-height:44px; padding: 8px 16px;">Cancel</button>
