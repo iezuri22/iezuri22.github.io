@@ -88,11 +88,14 @@ function openRecipeView(id, fromPlan = null, fromStats = false, fromTips = false
 }
 
 async function saveRecipeForm() {
+  console.log('[saveRecipe] Starting save...');
   ensureRecipeForm();
 
   const title = (state.recipeForm.title || '').trim();
   const cat = (state.recipeForm.category || '').trim();
   const url = (state.recipeForm.recipe_url || '').trim();
+
+  console.log('[saveRecipe] Form data:', { title, category: cat, id: state.recipeForm.id, ingredientCount: (state.recipeForm.ingredientsRows || []).length });
 
   if (!title) return showError(state.recipeForm.isTip ? 'Tip Title is required.' : 'Recipe Title is required.');
   if (!cat) return showError('Category is required.');
@@ -104,7 +107,10 @@ async function saveRecipeForm() {
       name: (r.name || '').trim(),
       group: r.group || 'Other'
     }))
-    .filter(r => r.name); const payload = {
+    .filter(r => r.name);
+
+  const isEdit = !!state.recipeForm.id;
+  const payload = {
     ...state.recipeForm,
     title,
     category: cat,
@@ -118,17 +124,27 @@ async function saveRecipeForm() {
     isDraft: state.recipeForm.isDraft || false
   };
 
+  console.log('[saveRecipe] Payload ready:', { id: payload.id, title: payload.title, isEdit });
+
   try {
     if (payload.id) {
-      await storage.update(payload);
+      console.log('[saveRecipe] Updating existing recipe:', payload.id);
+      const result = await storage.update(payload);
+      console.log('[saveRecipe] Update result:', result);
     } else {
       payload.id = `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      await storage.create(payload);
+      console.log('[saveRecipe] Creating new recipe:', payload.id);
+      const result = await storage.create(payload);
+      console.log('[saveRecipe] Create result:', result);
     }
-    showToast(payload.isTip ? 'Tip saved!' : 'Recipe saved!', 'success');
+    const toastMsg = payload.isTip
+      ? (isEdit ? 'Tip updated!' : 'Tip saved!')
+      : (isEdit ? 'Recipe updated!' : 'Recipe saved!');
+    showToast(toastMsg, 'success');
+    console.log('[saveRecipe] Save complete, navigating away');
     closeRecipeEditor();
   } catch (e) {
-    console.error(e);
+    console.error('[saveRecipe] Error:', e);
     showError('Failed to save recipe.');
   }
 }
@@ -2415,7 +2431,7 @@ function renderBatchEdit() {
   const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
 
   return `
-    <div class="batch-edit-page" style="padding: 16px; max-width: 1200px; margin: 0 auto;">
+    <div class="batch-edit-page" style="padding: 16px; margin: 0 auto;">
       <div class="flex items-center justify-end mb-4">
         <div class="flex gap-2">
           <button onclick="closeBatchEditor()" class="px-3 py-1.5 rounded button-hover"

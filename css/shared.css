@@ -1377,14 +1377,14 @@
       }
       .desktop-home-main > * {
         width: 100%;
-        max-width: 420px;
+        max-width: 500px;
       }
       .desktop-home-main .swipe-container {
-        max-width: 420px;
+        max-width: 500px;
         width: 100%;
         flex: 1;
         min-height: 340px;
-        max-height: 480px;
+        max-height: 540px;
       }
       .desktop-home-main .swipe-card {
         left: 0;
@@ -1577,7 +1577,7 @@
 
       /* Swipe container desktop sizing */
       .swipe-container {
-        max-width: 420px;
+        max-width: 500px;
         margin: 0 auto;
       }
 
