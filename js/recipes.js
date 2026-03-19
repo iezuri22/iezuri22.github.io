@@ -1674,6 +1674,16 @@ function renderRecipes() {
     const sl = state.searchTerm.toLowerCase();
     batchList = batchList.filter(b => (b.name || '').toLowerCase().includes(sl));
   }
+  // Apply effort toggles to batch recipes too
+  const batchEffortToggles = state.recipeEffortToggles || {};
+  const batchActiveEfforts = Object.entries(batchEffortToggles).filter(([, v]) => v).map(([k]) => k);
+  if (batchActiveEfforts.length > 0) {
+    batchList = batchList.filter(b => {
+      const effort = getBatchEffortLevel(b);
+      if (batchActiveEfforts.includes('uncategorized') && effort === null) return true;
+      return effort && batchActiveEfforts.includes(effort);
+    });
+  }
 
   // Apply secondary source toggles (if any active, filter to those sources)
   const sourcesToggles = state.recipeSourceToggles || {};
