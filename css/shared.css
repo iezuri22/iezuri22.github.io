@@ -1555,10 +1555,7 @@
         gap: 24px;
       }
 
-      /* Fix sticky positions (no top nav on desktop) */
-      .kitchen-sticky-search {
-        top: 0 !important;
-      }
+      /* kitchen search bar scrolls with content */
 
       /* ---- Global desktop hover states ---- */
       .desktop-content-area button:not(.sidebar-link):hover,

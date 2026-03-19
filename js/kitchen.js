@@ -496,7 +496,7 @@ function renderKitchen() {
   }
   return `
     <div style="padding: 0; flex: 1;">
-      <div class="kitchen-sticky-search" style="position: sticky; top: 48px; z-index: 10; padding: 8px 12px; background: ${CONFIG.background_color};">
+      <div class="kitchen-sticky-search" style="padding: 8px 12px; background: ${CONFIG.background_color};">
         <div style="display: flex; gap: 8px; align-items: center;">
           <div style="position: relative; flex: 1;">
             <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
