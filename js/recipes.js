@@ -2244,6 +2244,10 @@ function saveBatchForm() {
 function addBatchComponentFromRecipe() {
   state.batchRecipePickerOpen = true;
   state.batchRecipePickerSearch = '';
+  // Pre-filter to the plate's meal type
+  state.batchPickerMealFilter = state.batchForm?.mealType || null;
+  state.batchPickerEffortFilter = null;
+  state.batchPickerSavedFilter = false;
   render();
 }
 
@@ -2254,6 +2258,9 @@ function selectBatchRecipe(recipeId) {
   const comp = newBatchComponent('recipe');
   comp.recipeId = recipeId;
   comp.name = r.title;
+  comp.photo = recipeThumb(r) || null;
+  comp.ingredients = recipeIngList(r).map(ing => `${ing.qty || ''} ${ing.unit || ''} ${ing.name}`.trim());
+  comp.instructions = r.instructions || '';
   comp.order = state.batchForm.components.length + 1;
   state.batchForm.components.push(comp);
   state.batchRecipePickerOpen = false;
@@ -2319,6 +2326,70 @@ async function handleBatchCompPhotoUpload(event, compId) {
   event.target.value = '';
 }
 
+function renderBatchEditLivePreview(form) {
+  const coverPhoto = getBatchCoverPhoto(form);
+  const totalTime = getBatchTotalTime(form);
+  const allIngs = getBatchRecipeIngredients(form);
+  const compCount = form.components.length;
+
+  return `
+    <div style="position:sticky; top:16px;">
+      <label class="block mb-2" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Preview</label>
+      <div style="border-radius:16px; overflow:hidden; background:${CONFIG.surface_color}; box-shadow:${CONFIG.shadow};">
+        ${coverPhoto ? `
+          <div style="height:180px; overflow:hidden; position:relative;">
+            <img src="${esc(coverPhoto)}" style="width:100%; height:100%; object-fit:cover;" />
+            ${form.mealType ? `<span style="position:absolute; top:10px; left:10px; padding:4px 10px; border-radius:12px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); color:white; font-size:11px; font-weight:600;">${capitalize(form.mealType)}</span>` : ''}
+          </div>
+        ` : `
+          <div style="height:120px; background:linear-gradient(135deg, ${CONFIG.surface_color}, ${CONFIG.surface_elevated}); display:flex; align-items:center; justify-content:center; position:relative;">
+            <svg width="40" height="40" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.41a2.25 2.25 0 013.182 0l2.909 2.91M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"/></svg>
+            ${form.mealType ? `<span style="position:absolute; top:10px; left:10px; padding:4px 10px; border-radius:12px; background:rgba(0,0,0,0.4); color:white; font-size:11px; font-weight:600;">${capitalize(form.mealType)}</span>` : ''}
+          </div>
+        `}
+        <div style="padding:14px 16px;">
+          <div style="color:${CONFIG.text_color}; font-size:16px; font-weight:700; margin-bottom:8px;">${esc(form.name || 'Untitled Plate')}</div>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:4px; color:${CONFIG.text_muted}; font-size:12px;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L12 12.75 6.429 9.75m11.142 0l4.179 2.25L12 17.25 2.25 12l4.179-2.25m11.142 0l4.179 2.25L12 22.5l-9.75-5.25 4.179-2.25"/></svg>
+              ${compCount} component${compCount !== 1 ? 's' : ''}
+            </div>
+            ${totalTime ? `
+              <div style="display:flex; align-items:center; gap:4px; color:${CONFIG.text_muted}; font-size:12px;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                ${totalTime} min
+              </div>
+            ` : ''}
+            <div style="display:flex; align-items:center; gap:4px; color:${CONFIG.text_muted}; font-size:12px;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 6.75h12M8.25 12h12m-12 5.25h12M3.75 6.75h.007v.008H3.75V6.75zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zM3.75 12h.007v.008H3.75V12zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0zm-.375 5.25h.007v.008H3.75v-.008zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+              ${allIngs.length} ingredient${allIngs.length !== 1 ? 's' : ''}
+            </div>
+          </div>
+          ${compCount > 0 ? `
+            <div style="margin-top:12px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.06);">
+              ${form.components.slice(0, 4).map((comp, i) => {
+                let cName = comp.name || '';
+                let cImg = comp.photo || '';
+                if (comp.type === 'recipe' && comp.recipeId) {
+                  const r = getRecipeById(comp.recipeId);
+                  if (r) { cName = r.title; cImg = recipeThumb(r) || cImg; }
+                }
+                return `<div style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+                  ${cImg ? `<img src="${esc(cImg)}" style="width:24px; height:24px; border-radius:4px; object-fit:cover; flex-shrink:0;" />` :
+                  `<div style="width:24px; height:24px; border-radius:4px; background:${CONFIG.surface_elevated}; flex-shrink:0; display:flex; align-items:center; justify-content:center; color:${CONFIG.text_tertiary}; font-size:10px; font-weight:700;">${i+1}</div>`}
+                  <span style="color:${CONFIG.text_color}; font-size:12px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(cName || 'Unnamed')}</span>
+                  ${comp.timing ? `<span style="margin-left:auto; font-size:10px; color:${CONFIG.text_muted}; flex-shrink:0;">${esc(comp.timing)}</span>` : ''}
+                </div>`;
+              }).join('')}
+              ${compCount > 4 ? `<div style="color:${CONFIG.text_muted}; font-size:11px; padding-top:4px;">+${compCount - 4} more</div>` : ''}
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function renderBatchEdit() {
   if (!state.batchForm) return '';
   const form = state.batchForm;
@@ -2341,84 +2412,98 @@ function renderBatchEdit() {
             style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; min-height:44px; padding: 8px 16px;">Cancel</button>
           ${form.id ? `<button onclick="if(confirm('Delete this plate?')) { deleteBatchRecipe('${form.id}'); closeBatchEditor(); }"
             class="px-3 py-1.5 rounded button-hover" style="background:${CONFIG.danger_color}; color:white; min-height:44px; padding: 8px 16px;">Delete</button>` : ''}
-          <button onclick="saveBatchForm()" class="px-3 py-1.5 rounded button-hover"
-            style="background:${CONFIG.primary_action_color}; color:white; min-height:44px; padding: 8px 16px;">Save</button>
         </div>
       </div>
 
-      <!-- Name input full width -->
-      <div class="mb-4">
-        <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Name your plate</label>
-        <input type="text" value="${esc(form.name || '')}"
-          oninput="state.batchForm.name = this.value"
-          placeholder="e.g. My Go-To Breakfast Bowl"
-          class="w-full px-3 py-2 rounded"
-          style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); height:44px; font-size:15px;" />
-      </div>
-
-      <!-- Meal type pills full width -->
-      <div class="mb-4">
-        <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Meal type</label>
-        <div class="flex gap-2 flex-wrap">
-          ${mealTypes.map(mt => `
-            <button onclick="state.batchForm.mealType = '${mt}'; render();"
-              style="padding:8px 18px; border-radius:20px; border:1px solid ${form.mealType === mt ? CONFIG.primary_action_color : 'rgba(255,255,255,0.12)'};
-              background:${form.mealType === mt ? CONFIG.primary_action_color : 'transparent'};
-              color:${form.mealType === mt ? 'white' : CONFIG.text_muted}; font-size:14px; font-weight:${form.mealType === mt ? '600' : '400'}; cursor:pointer;">
-              ${capitalize(mt)}
-            </button>
-          `).join('')}
-        </div>
-      </div>
-
-      <div class="batch-edit-body rounded-lg p-4" style="background:${CONFIG.surface_color};">
-        <!-- Cover photo -->
-        <div class="mb-4">
-          <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Cover photo (optional)</label>
-          ${form.coverPhoto ? `
-            <div class="relative mb-2" style="border-radius:12px; overflow:hidden;">
-              <img src="${esc(form.coverPhoto)}" style="width:100%; max-height:160px; object-fit:cover;" />
-              <button onclick="state.batchForm.coverPhoto = null; render();"
-                class="absolute top-2 right-2 px-2 py-1 rounded" style="background:rgba(220,38,38,0.9); color:white; font-size:12px;">Remove</button>
-            </div>
-          ` : `
-            <div class="p-4 rounded border-2 border-dashed text-center cursor-pointer"
-              style="border-color:rgba(255,255,255,0.15); background:rgba(255,255,255,0.03);"
-              onclick="document.getElementById('batchCoverInput').click();">
-              <div style="color:${CONFIG.text_muted}; font-size:13px;">Tap to add a photo</div>
-            </div>
-            <input type="file" id="batchCoverInput" accept="image/*" capture="environment" onchange="handleBatchCoverPhotoUpload(event)" style="display:none;" />
-          `}
-        </div>
-
-        <!-- Components -->
-        <div>
-          <label class="block mb-2" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">
-            Components (${form.components.length})
-          </label>
-
-          ${form.components.length === 0 ? `
-            <div class="p-6 rounded text-center" style="background:rgba(255,255,255,0.03); border:1px dashed rgba(255,255,255,0.1);">
-              <div style="color:${CONFIG.text_muted}; font-size:13px; margin-bottom:8px;">No components yet</div>
-              <div style="color:${CONFIG.text_tertiary}; font-size:11px;">Add recipes or freeform items to build your plate</div>
-            </div>
-          ` : `
-            <div class="space-y-3">
-              ${form.components.map((comp, idx) => renderBatchComponentCard(comp, idx, form.components.length)).join('')}
-            </div>
-          `}
-
-          <!-- Add component buttons -->
-          <div class="flex gap-2 mt-3">
-            <button onclick="addBatchComponentFromRecipe()" class="flex-1 px-3 py-2.5 rounded button-hover"
-              style="background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; font-size:14px; border:1px solid rgba(255,255,255,0.08); min-height:44px;">
-              + From recipes
-            </button>
-            <button onclick="addBatchFreeformComponent()" class="flex-1 px-3 py-2.5 rounded button-hover"
-              style="background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; font-size:14px; border:1px solid rgba(255,255,255,0.08); min-height:44px;">
-              + Freeform
-            </button>
+      <div class="batch-edit-columns">
+        <!-- Left column: form -->
+        <div class="batch-edit-left">
+          <!-- Name input -->
+          <div style="margin-bottom:12px;">
+            <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Name your plate</label>
+            <input type="text" value="${esc(form.name || '')}"
+              oninput="state.batchForm.name = this.value; document.querySelector('.batch-edit-preview-col')?.remove(); const pc = document.querySelector('.batch-edit-right'); if(pc) { const tmp = document.createElement('div'); tmp.innerHTML = renderBatchEditLivePreview(state.batchForm); const newNode = tmp.firstElementChild; pc.innerHTML = ''; pc.appendChild(newNode); }"
+              placeholder="e.g. My Go-To Breakfast Bowl"
+              class="w-full px-3 py-2 rounded"
+              style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); height:44px; font-size:15px; box-sizing:border-box;" />
           </div>
+
+          <!-- Meal type pills -->
+          <div style="margin-bottom:12px;">
+            <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Meal type</label>
+            <div class="flex gap-2 flex-wrap">
+              ${mealTypes.map(mt => `
+                <button onclick="state.batchForm.mealType = '${mt}'; render();"
+                  style="padding:8px 18px; border-radius:20px; border:1px solid ${form.mealType === mt ? CONFIG.primary_action_color : 'rgba(255,255,255,0.12)'};
+                  background:${form.mealType === mt ? CONFIG.primary_action_color : 'transparent'};
+                  color:${form.mealType === mt ? 'white' : CONFIG.text_muted}; font-size:14px; font-weight:${form.mealType === mt ? '600' : '400'}; cursor:pointer;">
+                  ${capitalize(mt)}
+                </button>
+              `).join('')}
+            </div>
+          </div>
+
+          <!-- Cover photo -->
+          <div style="margin-bottom:12px;">
+            <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Cover photo (optional)</label>
+            ${form.coverPhoto ? `
+              <div class="relative" style="border-radius:12px; overflow:hidden; margin-bottom:8px;">
+                <img src="${esc(form.coverPhoto)}" style="width:100%; max-height:160px; object-fit:cover;" />
+                <button onclick="state.batchForm.coverPhoto = null; render();"
+                  class="absolute top-2 right-2 px-2 py-1 rounded" style="background:rgba(220,38,38,0.9); color:white; font-size:12px;">Remove</button>
+              </div>
+            ` : `
+              <div class="p-4 rounded border-2 border-dashed text-center cursor-pointer"
+                style="border-color:rgba(255,255,255,0.15); background:rgba(255,255,255,0.03);"
+                onclick="document.getElementById('batchCoverInput').click();">
+                <div style="color:${CONFIG.text_muted}; font-size:13px;">Tap to add a photo</div>
+              </div>
+              <input type="file" id="batchCoverInput" accept="image/*" capture="environment" onchange="handleBatchCoverPhotoUpload(event)" style="display:none;" />
+            `}
+          </div>
+
+          <!-- Components -->
+          <div>
+            <label class="block mb-2" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">
+              Components (${form.components.length})
+            </label>
+
+            ${form.components.length === 0 ? `
+              <div class="p-6 rounded text-center" style="background:rgba(255,255,255,0.03); border:1px dashed rgba(255,255,255,0.1);">
+                <div style="color:${CONFIG.text_muted}; font-size:13px; margin-bottom:8px;">No components yet</div>
+                <div style="color:${CONFIG.text_tertiary}; font-size:11px;">Add recipes or freeform items to build your plate</div>
+              </div>
+            ` : `
+              <div style="display:flex; flex-direction:column; gap:12px;">
+                ${form.components.map((comp, idx) => renderBatchComponentCard(comp, idx, form.components.length)).join('')}
+              </div>
+            `}
+
+            <!-- Add component buttons -->
+            <div style="display:flex; flex-direction:column; gap:8px; margin-top:12px;">
+              <button onclick="addBatchComponentFromRecipe()" class="button-hover"
+                style="width:100%; height:48px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; font-size:14px; font-weight:600; border:1px solid rgba(255,255,255,0.08); border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                From Recipes
+              </button>
+              <button onclick="addBatchFreeformComponent()" class="button-hover"
+                style="width:100%; height:48px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; font-size:14px; font-weight:600; border:1px solid rgba(255,255,255,0.08); border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                Freeform
+              </button>
+            </div>
+          </div>
+
+          <!-- Save button -->
+          <button onclick="saveBatchForm()" class="button-hover"
+            style="width:100%; height:48px; margin-top:16px; background:${CONFIG.primary_action_color}; color:white; font-size:15px; font-weight:700; border:none; border-radius:10px; cursor:pointer;">
+            Save Plate
+          </button>
+        </div>
+
+        <!-- Right column: live preview (desktop only) -->
+        <div class="batch-edit-right">
+          ${renderBatchEditLivePreview(form)}
         </div>
       </div>
     </div>
@@ -2438,130 +2523,235 @@ function renderBatchComponentCard(comp, idx, total) {
   }
 
   return `
-    <div class="rounded-lg overflow-hidden" style="background:${CONFIG.surface_elevated}; border:1px solid rgba(255,255,255,0.06);">
-      <!-- Header with order badge and controls -->
-      <div style="display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid rgba(255,255,255,0.04);">
-        <div style="width:24px; height:24px; border-radius:50%; background:${CONFIG.primary_action_color}; color:white; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex-shrink:0;">
-          ${idx + 1}
-        </div>
-        ${recipeImg ? `<img src="${esc(recipeImg)}" style="width:32px; height:32px; border-radius:6px; object-fit:cover; flex-shrink:0;" />` : ''}
-        <div style="flex:1; min-width:0;">
-          ${isRecipe ? `
-            <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(recipeName)}</div>
-            <div style="color:${CONFIG.text_muted}; font-size:10px;">From recipes</div>
-          ` : `
-            <input type="text" value="${esc(comp.name || '')}"
-              oninput="setBatchCompField('${comp.id}', 'name', this.value)"
-              placeholder="Component name (e.g. Side salad)"
-              style="width:100%; background:transparent; border:none; color:${CONFIG.text_color}; font-size:13px; font-weight:600; outline:none;" />
-            <div style="color:${CONFIG.text_muted}; font-size:10px;">Freeform</div>
-          `}
-        </div>
-        <div style="display:flex; gap:2px; flex-shrink:0;">
-          ${idx > 0 ? `<button onclick="moveBatchComponent('${comp.id}', -1)" style="width:28px; height:28px; background:rgba(255,255,255,0.06); border:none; border-radius:6px; color:${CONFIG.text_muted}; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
-          </button>` : ''}
-          ${idx < total - 1 ? `<button onclick="moveBatchComponent('${comp.id}', 1)" style="width:28px; height:28px; background:rgba(255,255,255,0.06); border:none; border-radius:6px; color:${CONFIG.text_muted}; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
-          </button>` : ''}
-          <button onclick="removeBatchComponent('${comp.id}')" style="width:28px; height:28px; background:rgba(220,38,38,0.15); border:none; border-radius:6px; color:${CONFIG.danger_color}; cursor:pointer; display:flex; align-items:center; justify-content:center;">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
-          </button>
+    <div style="background:${CONFIG.surface_elevated}; border-radius:12px; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.2);">
+      <!-- Main row: image left, details right -->
+      <div style="display:flex; gap:0;">
+        <!-- Image -->
+        ${recipeImg ? `
+          <div style="width:80px; min-height:80px; flex-shrink:0; overflow:hidden;">
+            <img src="${esc(recipeImg)}" style="width:80px; height:100%; object-fit:cover; display:block;" />
+          </div>
+        ` : `
+          <div style="width:80px; min-height:80px; flex-shrink:0; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center;">
+            <div style="width:28px; height:28px; border-radius:50%; background:${CONFIG.primary_action_color}; color:white; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700;">${idx + 1}</div>
+          </div>
+        `}
+
+        <!-- Details -->
+        <div style="flex:1; min-width:0; padding:10px 12px; display:flex; flex-direction:column; gap:4px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            ${recipeImg ? `<div style="width:20px; height:20px; border-radius:50%; background:${CONFIG.primary_action_color}; color:white; display:flex; align-items:center; justify-content:center; font-size:10px; font-weight:700; flex-shrink:0;">${idx + 1}</div>` : ''}
+            <div style="flex:1; min-width:0;">
+              ${isRecipe ? `
+                <div style="color:${CONFIG.text_color}; font-size:14px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(recipeName)}</div>
+              ` : `
+                <input type="text" value="${esc(comp.name || '')}"
+                  oninput="setBatchCompField('${comp.id}', 'name', this.value)"
+                  placeholder="Component name"
+                  style="width:100%; background:transparent; border:none; color:${CONFIG.text_color}; font-size:14px; font-weight:600; outline:none; padding:0;" />
+              `}
+            </div>
+            <!-- Drag handle -->
+            <div style="flex-shrink:0; color:${CONFIG.text_tertiary}; display:flex; flex-direction:column; gap:1px; cursor:grab; padding:0 4px;">
+              ${idx > 0 ? `<button onclick="moveBatchComponent('${comp.id}', -1)" style="width:22px; height:18px; background:none; border:none; color:${CONFIG.text_muted}; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+              </button>` : ''}
+              ${idx < total - 1 ? `<button onclick="moveBatchComponent('${comp.id}', 1)" style="width:22px; height:18px; background:none; border:none; color:${CONFIG.text_muted}; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;">
+                <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+              </button>` : ''}
+            </div>
+            <!-- Delete -->
+            <button onclick="removeBatchComponent('${comp.id}')" style="width:28px; height:28px; background:rgba(220,38,38,0.1); border:none; border-radius:6px; color:${CONFIG.danger_color}; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+            </button>
+          </div>
+          <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+            <span style="color:${CONFIG.text_muted}; font-size:11px;">${isRecipe ? 'From recipes' : 'Freeform'}</span>
+            ${comp.timing ? `<span style="padding:2px 8px; border-radius:8px; background:rgba(255,255,255,0.06); color:${CONFIG.text_muted}; font-size:10px; font-weight:500;">${esc(comp.timing)}</span>` : ''}
+          </div>
         </div>
       </div>
 
-      <!-- Editable fields -->
-      <div style="padding:10px 12px;">
-        <!-- Notes -->
-        <div class="mb-2">
-          <input type="text" value="${esc(comp.notes || '')}"
-            oninput="setBatchCompField('${comp.id}', 'notes', this.value)"
-            placeholder="Notes (e.g. Start this first, it takes longest)"
-            style="width:100%; padding:6px 8px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:6px; color:${CONFIG.text_color}; font-size:12px;" />
-        </div>
-        <div class="flex gap-2">
-          <!-- Timing -->
+      <!-- Editable fields below -->
+      <div style="padding:8px 12px 10px; display:flex; flex-direction:column; gap:8px; border-top:1px solid rgba(255,255,255,0.04);">
+        <input type="text" value="${esc(comp.notes || '')}"
+          oninput="setBatchCompField('${comp.id}', 'notes', this.value)"
+          placeholder="Notes (e.g. Start this first)"
+          style="width:100%; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; box-sizing:border-box;" />
+        <div style="display:flex; gap:8px;">
           <input type="text" value="${esc(comp.timing || '')}"
             oninput="setBatchCompField('${comp.id}', 'timing', this.value)"
             placeholder="Timing (e.g. 15 min)"
-            style="flex:1; padding:6px 8px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:6px; color:${CONFIG.text_color}; font-size:12px;" />
-          <!-- Video link -->
+            style="flex:1; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; box-sizing:border-box;" />
           <input type="url" value="${esc(comp.videoLink || '')}"
             oninput="setBatchCompField('${comp.id}', 'videoLink', this.value)"
-            placeholder="Video tutorial URL"
-            style="flex:1; padding:6px 8px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:6px; color:${CONFIG.text_color}; font-size:12px;" />
+            placeholder="Video URL"
+            style="flex:1; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; box-sizing:border-box;" />
         </div>
 
         ${!isRecipe ? `
-          <!-- Freeform photo -->
-          <div class="mt-2">
+          <div>
             ${comp.photo ? `
-              <div class="flex items-center gap-2">
+              <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
                 <img src="${esc(comp.photo)}" style="width:40px; height:40px; border-radius:6px; object-fit:cover;" />
                 <button onclick="setBatchCompField('${comp.id}', 'photo', null); render();" style="color:${CONFIG.danger_color}; background:none; border:none; font-size:11px; cursor:pointer;">Remove</button>
               </div>
             ` : `
               <button onclick="document.getElementById('compPhoto_${comp.id}').click();"
-                style="background:rgba(255,255,255,0.05); border:1px dashed rgba(255,255,255,0.1); border-radius:6px; padding:6px 10px; color:${CONFIG.text_muted}; font-size:11px; cursor:pointer; width:100%;">
+                style="width:100%; background:rgba(255,255,255,0.05); border:1px dashed rgba(255,255,255,0.1); border-radius:8px; padding:8px 10px; color:${CONFIG.text_muted}; font-size:12px; cursor:pointer;">
                 + Add photo
               </button>
               <input type="file" id="compPhoto_${comp.id}" accept="image/*" capture="environment" onchange="handleBatchCompPhotoUpload(event, '${comp.id}')" style="display:none;" />
             `}
           </div>
-          <!-- Freeform ingredients -->
-          <div class="mt-2">
-            <textarea placeholder="Ingredients (one per line)"
-              oninput="setBatchCompField('${comp.id}', 'ingredients', this.value.split('\\n').filter(l => l.trim()))"
-              style="width:100%; padding:6px 8px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:6px; color:${CONFIG.text_color}; font-size:12px; min-height:50px; resize:vertical;">${esc((comp.ingredients || []).join('\n'))}</textarea>
-          </div>
-          <!-- Freeform instructions -->
-          <div class="mt-2">
-            <textarea placeholder="Instructions"
-              oninput="setBatchCompField('${comp.id}', 'instructions', this.value)"
-              style="width:100%; padding:6px 8px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:6px; color:${CONFIG.text_color}; font-size:12px; min-height:40px; resize:vertical;">${esc(comp.instructions || '')}</textarea>
-          </div>
+          <textarea placeholder="Ingredients (one per line)"
+            oninput="setBatchCompField('${comp.id}', 'ingredients', this.value.split('\\n').filter(l => l.trim()))"
+            style="width:100%; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; min-height:50px; resize:vertical; box-sizing:border-box;">${esc((comp.ingredients || []).join('\n'))}</textarea>
+          <textarea placeholder="Instructions"
+            oninput="setBatchCompField('${comp.id}', 'instructions', this.value)"
+            style="width:100%; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; min-height:40px; resize:vertical; box-sizing:border-box;">${esc(comp.instructions || '')}</textarea>
         ` : ''}
       </div>
     </div>
   `;
 }
 
+function toggleBatchPickerFilter(type, value) {
+  if (type === 'meal') {
+    state.batchPickerMealFilter = state.batchPickerMealFilter === value ? null : value;
+  } else if (type === 'effort') {
+    state.batchPickerEffortFilter = state.batchPickerEffortFilter === value ? null : value;
+  } else if (type === 'saved') {
+    state.batchPickerSavedFilter = !state.batchPickerSavedFilter;
+  }
+  render();
+}
+
 function renderBatchRecipePicker() {
   const search = (state.batchRecipePickerSearch || '').toLowerCase();
+  const mealFilter = state.batchPickerMealFilter;
+  const effortFilter = state.batchPickerEffortFilter;
+  const savedFilter = state.batchPickerSavedFilter;
+  const savedIds = new Set(getSavedRecipes());
+  const effortLevels = getRecipeEffortLevels();
+
   let list = state.recipes.filter(r => !r.isDraft && !r.isTip);
+
+  // Search by name and ingredients
   if (search) {
-    list = list.filter(r => (r.title || '').toLowerCase().includes(search));
+    list = list.filter(r => {
+      if ((r.title || '').toLowerCase().includes(search)) return true;
+      const ings = recipeIngList(r);
+      return ings.some(ing => (ing.name || '').toLowerCase().includes(search));
+    });
+  }
+
+  // Meal type filter
+  if (mealFilter) {
+    list = list.filter(r => (r.category || '').toLowerCase() === mealFilter.toLowerCase());
+  }
+
+  // Effort filter
+  if (effortFilter) {
+    list = list.filter(r => {
+      const id = r.__backendId || r.id;
+      return effortLevels[id] === effortFilter;
+    });
+  }
+
+  // Saved filter
+  if (savedFilter) {
+    list = list.filter(r => {
+      const id = r.__backendId || r.id;
+      return savedIds.has(id);
+    });
+  }
+
+  const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
+  const efforts = ['lazy', 'moderate', 'timely'];
+
+  function pill(label, active, onclick) {
+    return `<button onclick="${onclick}"
+      style="padding:6px 14px; border-radius:16px; border:1px solid ${active ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'};
+      background:${active ? CONFIG.primary_action_color : 'transparent'};
+      color:${active ? 'white' : CONFIG.text_muted}; font-size:12px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
+      ${label}
+    </button>`;
   }
 
   return `
-    <div class="p-4 max-w-2xl mx-auto">
-      <div class="flex items-center justify-between mb-3">
-        <h2 style="color:${CONFIG.text_color}; font-size:17px; font-weight:600;">Pick a recipe</h2>
-        <button onclick="state.batchRecipePickerOpen = false; render();"
-          class="px-3 py-1.5 rounded button-hover" style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; font-size:13px;">
-          Cancel
-        </button>
-      </div>
-      <input type="text" placeholder="Search recipes..."
-        value="${esc(state.batchRecipePickerSearch || '')}"
-        oninput="state.batchRecipePickerSearch = this.value; render();"
-        style="width:100%; padding:10px 12px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.08); border-radius:10px; font-size:14px; margin-bottom:12px; box-sizing:border-box;" />
-      ${list.length === 0 ? `<div style="text-align:center; padding:32px; color:${CONFIG.text_muted}; font-size:13px;">No recipes found</div>` : `
-        <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:4px;">
-          ${list.map(r => {
-            const id = r.__backendId || r.id;
-            const img = recipeThumb(r);
-            return `
-              <div onclick="selectBatchRecipe('${id}')" style="cursor:pointer; border-radius:8px; overflow:hidden; background:${CONFIG.surface_color};">
-                ${img ? `<div style="aspect-ratio:1; overflow:hidden;"><img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" /></div>` :
-                `<div style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; padding:8px; background:${CONFIG.surface_color};"><span style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span></div>`}
-                <div style="padding:4px 6px; background:${CONFIG.background_color};">
-                  <div style="color:${CONFIG.text_color}; font-size:10px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">${esc(r.title)}</div>
-                </div>
-              </div>`;
+    <div class="batch-recipe-picker-overlay">
+      <div class="batch-recipe-picker-modal">
+        <!-- Header -->
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 16px 0; flex-shrink:0;">
+          <h2 style="color:${CONFIG.text_color}; font-size:17px; font-weight:600; margin:0;">Pick a Recipe</h2>
+          <button onclick="state.batchRecipePickerOpen = false; render();"
+            style="width:32px; height:32px; border-radius:50%; background:${CONFIG.surface_elevated}; border:none; color:${CONFIG.text_color}; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Search bar -->
+        <div style="padding:12px 16px 0; flex-shrink:0;">
+          <div style="position:relative;">
+            <svg style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:${CONFIG.text_muted};" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            <input type="text" placeholder="Search recipes and ingredients..."
+              value="${esc(state.batchRecipePickerSearch || '')}"
+              oninput="state.batchRecipePickerSearch = this.value; render();"
+              style="width:100%; padding:10px 12px 10px 36px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.08); border-radius:10px; font-size:14px; box-sizing:border-box;" />
+          </div>
+        </div>
+
+        <!-- Filter pills -->
+        <div style="padding:10px 16px; display:flex; gap:6px; flex-wrap:wrap; flex-shrink:0; border-bottom:1px solid rgba(255,255,255,0.06);">
+          ${pill('All', !mealFilter && !effortFilter && !savedFilter, "state.batchPickerMealFilter=null;state.batchPickerEffortFilter=null;state.batchPickerSavedFilter=false;render();")}
+          ${pill('Saved', savedFilter, "toggleBatchPickerFilter('saved')")}
+          ${mealTypes.map(mt => pill(capitalize(mt), mealFilter === mt, `toggleBatchPickerFilter('meal','${mt}')`)).join('')}
+          ${efforts.map(ef => {
+            const e = EFFORT_LEVELS[ef];
+            const active = effortFilter === ef;
+            return `<button onclick="toggleBatchPickerFilter('effort','${ef}')"
+              style="padding:6px 14px; border-radius:16px; border:1px solid ${active ? e.border : 'rgba(255,255,255,0.1)'};
+              background:${active ? e.bg : 'transparent'};
+              color:${active ? e.color : CONFIG.text_muted}; font-size:12px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
+              ${e.label}
+            </button>`;
           }).join('')}
         </div>
-      `}
+
+        <!-- Recipe grid -->
+        <div style="flex:1; overflow-y:auto; padding:12px 16px 16px;">
+          ${list.length === 0 ? `<div style="text-align:center; padding:40px 16px; color:${CONFIG.text_muted}; font-size:13px;">No recipes match your filters</div>` : `
+            <div class="batch-picker-grid">
+              ${list.map(r => {
+                const id = r.__backendId || r.id;
+                const img = recipeThumb(r);
+                const effort = effortLevels[id];
+                const saved = savedIds.has(id);
+                return `
+                  <div onclick="selectBatchRecipe('${id}')" style="cursor:pointer; border-radius:10px; overflow:hidden; background:${CONFIG.surface_color}; transition:transform 150ms;">
+                    ${img ? `<div style="aspect-ratio:1; overflow:hidden; position:relative;">
+                      <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
+                      ${saved ? `<div style="position:absolute; top:6px; right:6px;">
+                        <svg width="16" height="16" fill="${CONFIG.primary_action_color}" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+                      </div>` : ''}
+                    </div>` :
+                    `<div style="aspect-ratio:1; display:flex; align-items:center; justify-content:center; padding:8px; background:${CONFIG.surface_color}; position:relative;">
+                      <span style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
+                      ${saved ? `<div style="position:absolute; top:6px; right:6px;">
+                        <svg width="16" height="16" fill="${CONFIG.primary_action_color}" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+                      </div>` : ''}
+                    </div>`}
+                    <div style="padding:6px 8px;">
+                      <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">${esc(r.title)}</div>
+                      ${effort ? `<div style="margin-top:3px;">${renderEffortPill(effort, 'sm')}</div>` : ''}
+                    </div>
+                  </div>`;
+              }).join('')}
+            </div>
+          `}
+        </div>
+      </div>
     </div>
   `;
 }

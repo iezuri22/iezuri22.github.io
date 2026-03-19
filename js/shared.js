@@ -637,7 +637,10 @@ const state = {
   batchViewId: null,
   batchComponentIndex: 0,
   batchRecipePickerOpen: false,
-  batchRecipePickerSearch: ''
+  batchRecipePickerSearch: '',
+  batchPickerMealFilter: null,
+  batchPickerEffortFilter: null,
+  batchPickerSavedFilter: false
 };
 
 // Bridge: state.today reads/writes state.mealDays[todayDate] for backward compatibility

@@ -1320,6 +1320,43 @@
       cursor: pointer;
     }
 
+    /* ===== Build a Plate: base/mobile styles ===== */
+    .batch-edit-columns {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .batch-edit-left {
+      min-width: 0;
+    }
+    .batch-edit-right {
+      display: none; /* hidden on mobile */
+    }
+
+    /* Batch recipe picker overlay */
+    .batch-recipe-picker-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: rgba(0,0,0,0.6);
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .batch-recipe-picker-modal {
+      position: absolute;
+      inset: 0;
+      background: #0d0d14;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .batch-picker-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
     /* ===== DESKTOP PAGE LAYOUTS (768px+) ===== */
     @media (min-width: 768px) {
       /* Hide mobile top nav bar on desktop — sidebar replaces it */
@@ -1609,6 +1646,38 @@
       .batch-edit-page,
       .batch-view-page {
         max-width: 1200px !important;
+        padding: 32px !important;
+      }
+
+      /* Batch edit: two-column layout on desktop */
+      .batch-edit-columns {
+        display: grid;
+        grid-template-columns: 60% 40%;
+        gap: 32px;
+        align-items: start;
+      }
+      .batch-edit-left {
+        min-width: 0;
+      }
+      .batch-edit-right {
+        min-width: 0;
+        display: block;
+      }
+
+      /* Batch picker: desktop centered modal */
+      .batch-recipe-picker-overlay {
+        align-items: center !important;
+      }
+      .batch-recipe-picker-modal {
+        width: 600px !important;
+        max-width: 600px !important;
+        max-height: 80vh !important;
+        border-radius: 16px !important;
+        position: relative !important;
+        inset: auto !important;
+      }
+      .batch-picker-grid {
+        grid-template-columns: repeat(4, 1fr) !important;
       }
 
       /* Batch view: side-by-side card + details on desktop */
