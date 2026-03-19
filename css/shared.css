@@ -1664,31 +1664,43 @@
     }
 
     /* ===== iOS STANDALONE WEB APP (Add to Home Screen) FIX ===== */
-    /* Fixes black gap below bottom nav on iPhones with home indicator */
+    /* Fixes black gap below bottom nav on iPhones with home indicator (34px) */
 
     @media all and (display-mode: standalone) {
+      body {
+        padding-bottom: 0 !important;
+      }
+
       .bottom-nav {
         position: fixed !important;
         bottom: 0 !important;
         left: 0 !important;
         right: 0 !important;
-        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+        padding-bottom: env(safe-area-inset-bottom, 34px) !important;
+        background-color: #1a1a24 !important;
+        background: #1a1a24 !important;
       }
 
       .app-shell {
-        padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+        padding-bottom: calc(56px + env(safe-area-inset-bottom, 34px));
       }
     }
 
-    /* Belt-and-suspenders: JS-based detection via navigator.standalone */
+    /* Belt-and-suspenders: JS-based iOS standalone detection */
+    html.ios-standalone body {
+      padding-bottom: 0 !important;
+    }
+
     html.ios-standalone .bottom-nav {
       position: fixed !important;
       bottom: 0 !important;
       left: 0 !important;
       right: 0 !important;
-      padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+      padding-bottom: env(safe-area-inset-bottom, 34px) !important;
+      background-color: #1a1a24 !important;
+      background: #1a1a24 !important;
     }
 
     html.ios-standalone .app-shell {
-      padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(56px + env(safe-area-inset-bottom, 34px));
     }
