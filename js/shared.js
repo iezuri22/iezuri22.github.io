@@ -2170,14 +2170,17 @@ function renderVideoOverlay() {
 
   const isClip = item.type === 'clip';
   const isDivider = item.type === 'divider';
+  const total = sequence.length;
+  const isFirst = currentIndex === 0;
+  const isLast = currentIndex === total - 1;
 
-  // Build video area (60% height)
+  // Build video area
   let videoAreaHtml = '';
   if (isClip) {
     const embedUrl = getStreamEmbedUrl(item.cloudflareVideoId, { autoplay: true, muted: muted, controls: false, loop: true });
     videoAreaHtml = `
       <div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#000;">
-        <div style="position:relative; width:100%; max-width:400px; height:100%;">
+        <div style="position:relative; width:100%; max-width:500px; height:100%;">
           <iframe id="videoOverlayIframe" src="${embedUrl}"
             style="width:100%; height:100%; border:none;"
             allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
@@ -2190,6 +2193,16 @@ function renderVideoOverlay() {
               <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
             `}
           </button>
+          <!-- Left arrow nav -->
+          ${!isFirst && total > 1 ? `
+          <button onclick="videoOverlayGoTo(${currentIndex - 1})" style="position:absolute; left:8px; top:50%; transform:translateY(-50%); width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); backdrop-filter:blur(4px); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10;">
+            <svg width="24" height="24" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+          </button>` : ''}
+          <!-- Right arrow nav -->
+          ${!isLast && total > 1 ? `
+          <button onclick="videoOverlayGoTo(${currentIndex + 1})" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); backdrop-filter:blur(4px); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10;">
+            <svg width="24" height="24" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+          </button>` : ''}
         </div>
       </div>
     `;
@@ -2198,70 +2211,109 @@ function renderVideoOverlay() {
     const compIdx = sequence.filter((s, i) => i <= currentIndex && s.type === 'divider').length;
     const totalComps = sequence.filter(s => s.type === 'divider').length + 1;
     videoAreaHtml = `
-      <div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:${CONFIG.surface_color};">
+      <div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:${CONFIG.surface_color}; position:relative;">
         <div style="color:${CONFIG.text_muted}; font-size:14px; margin-bottom:12px;">Up next</div>
         <div style="color:${CONFIG.text_color}; font-size:20px; font-weight:700; text-align:center; padding:0 24px;">${esc(item.componentName)}</div>
         <div style="color:${CONFIG.text_muted}; font-size:13px; margin-top:12px;">Step ${compIdx + 1} of ${totalComps}</div>
+        <!-- Left arrow nav on divider -->
+        ${!isFirst && total > 1 ? `
+        <button onclick="videoOverlayGoTo(${currentIndex - 1})" style="position:absolute; left:8px; top:50%; transform:translateY(-50%); width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); backdrop-filter:blur(4px); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10;">
+          <svg width="24" height="24" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+        </button>` : ''}
+        <!-- Right arrow nav on divider -->
+        ${!isLast && total > 1 ? `
+        <button onclick="videoOverlayGoTo(${currentIndex + 1})" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); backdrop-filter:blur(4px); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10;">
+          <svg width="24" height="24" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+        </button>` : ''}
       </div>
     `;
   }
 
-  // Build instructions area (40% height)
+  // Progress bar (Instagram-stories style segments)
+  let progressBarHtml = '';
+  if (total > 1) {
+    progressBarHtml = `
+      <div style="display:flex; align-items:center; gap:8px; padding:8px 16px 4px;">
+        <div style="display:flex; flex:1; gap:3px;">
+          ${sequence.map((s, i) => {
+            let segColor;
+            if (i === currentIndex) segColor = CONFIG.primary_action_color;
+            else if (i < currentIndex) segColor = 'rgba(255,255,255,0.85)';
+            else segColor = 'rgba(255,255,255,0.2)';
+            return `<button onclick="videoOverlayGoTo(${i})" style="flex:1; height:3px; border-radius:2px; border:none; padding:0; background:${segColor}; cursor:pointer; transition:background 0.2s;"></button>`;
+          }).join('')}
+        </div>
+        <div style="color:${CONFIG.text_muted}; font-size:13px; white-space:nowrap; flex-shrink:0;">${currentIndex + 1} of ${total}</div>
+      </div>
+    `;
+  }
+
+  // Build instructions area
   let instructionsHtml = '';
   if (isClip) {
     const caption = item.caption || '';
     const instructions = item.instructions || '';
-    const fromLabel = (type === 'batch' && item.componentName) ? `<div style="color:${CONFIG.text_muted}; font-size:12px; margin-bottom:6px;">From: ${esc(item.componentName)}</div>` : '';
+    const fromLabel = (type === 'batch' && item.componentName) ? `<div style="color:${CONFIG.text_muted}; font-size:14px; margin-bottom:6px;">From: ${esc(item.componentName)}</div>` : '';
     instructionsHtml = `
       ${fromLabel}
-      ${caption ? `<div style="color:${CONFIG.text_color}; font-size:16px; font-weight:700; margin-bottom:8px;">${esc(caption)}</div>` : ''}
-      ${instructions ? `<div style="color:${CONFIG.text_color}; font-size:14px; line-height:1.6; opacity:0.9;">${esc(instructions)}</div>` : `<div style="color:${CONFIG.text_muted}; font-size:14px; font-style:italic;">No instructions for this clip</div>`}
+      ${caption ? `<div style="color:#fff; font-size:20px; font-weight:700; margin-bottom:8px;">${esc(caption)}</div>` : ''}
+      ${instructions ? `<div style="color:#fff; font-size:16px; line-height:1.5;">${esc(instructions)}</div>` : `<div style="color:${CONFIG.text_muted}; font-size:16px; font-style:italic;">No instructions for this clip</div>`}
     `;
   } else {
     instructionsHtml = `
-      <div style="color:${CONFIG.text_muted}; font-size:14px; text-align:center;">Swipe to continue to the next clip</div>
+      <div style="color:${CONFIG.text_muted}; font-size:16px; text-align:center;">Swipe or tap arrows to continue</div>
     `;
   }
 
-  // Dot indicators
-  const dotsHtml = sequence.length > 1 ? `
-    <div style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; max-width:90%; margin:0 auto;">
-      ${sequence.map((s, i) => {
-        const isActive = i === currentIndex;
-        const isDot = s.type === 'clip';
-        return `<button onclick="videoOverlayGoTo(${i})"
-          style="width:${isActive ? '16px' : '6px'}; height:6px; border-radius:3px; border:none; padding:0;
-          background:${isActive ? CONFIG.primary_action_color : (isDot ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)')}; cursor:pointer; transition:all 0.2s; flex-shrink:0;">
-        </button>`;
-      }).join('')}
-    </div>
-  ` : '';
+  // Skip controls (Previous / Next or Done)
+  let skipControlsHtml = '';
+  if (total > 1) {
+    const prevBtn = !isFirst
+      ? `<button onclick="videoOverlayGoTo(${currentIndex - 1})" style="background:none; border:none; color:${CONFIG.text_muted}; font-size:15px; cursor:pointer; padding:8px 0;">\u2190 Previous</button>`
+      : `<div></div>`;
+    const nextBtn = !isLast
+      ? `<button onclick="videoOverlayGoTo(${currentIndex + 1})" style="background:none; border:none; color:${CONFIG.primary_action_color}; font-size:15px; font-weight:600; cursor:pointer; padding:8px 0;">Next \u2192</button>`
+      : `<button onclick="closeVideoOverlay()" style="background:none; border:none; color:${CONFIG.primary_action_color}; font-size:15px; font-weight:600; cursor:pointer; padding:8px 0;">Done</button>`;
+    skipControlsHtml = `
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08);">
+        ${prevBtn}
+        ${nextBtn}
+      </div>
+    `;
+  }
 
   const overlayHtml = `
     <div id="videoFullscreenOverlay" style="position:fixed; top:0; left:0; width:100%; height:100dvh; background:#000; z-index:9999; display:flex; flex-direction:column;">
       <!-- Close button -->
-      <button onclick="closeVideoOverlay()" style="position:absolute; top:12px; right:12px; z-index:10001; width:32px; height:32px; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+      <button onclick="closeVideoOverlay()" style="position:absolute; top:12px; right:12px; z-index:10001; width:36px; height:36px; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">
         <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
       </button>
 
-      <!-- Video area (60%) -->
-      <div id="videoOverlayVideoArea" style="flex:0 0 60%; overflow:hidden; position:relative;">
+      <!-- Video area: 75% on desktop, 65% on mobile -->
+      <div id="videoOverlayVideoArea" style="flex:0 0 68vh; overflow:hidden; position:relative;">
         ${videoAreaHtml}
       </div>
 
-      <!-- Gradient separator -->
-      <div style="height:2px; background:linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);"></div>
+      <!-- Progress bar segments -->
+      ${progressBarHtml}
 
-      <!-- Instructions area (remaining ~35%) -->
-      <div style="flex:1; overflow-y:auto; padding:16px 20px 8px; -webkit-overflow-scrolling:touch;">
+      <!-- Instructions area -->
+      <div style="flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch;">
         ${instructionsHtml}
+        ${skipControlsHtml}
       </div>
 
-      <!-- Dots + safe area (bottom ~5%) -->
-      <div style="flex-shrink:0; padding:8px 16px calc(env(safe-area-inset-bottom, 8px) + 8px);">
-        ${dotsHtml}
-      </div>
+      <!-- Safe area bottom spacer -->
+      <div style="flex-shrink:0; height:env(safe-area-inset-bottom, 0px);"></div>
     </div>
+    <style>
+      @media (min-width: 768px) {
+        #videoOverlayVideoArea { flex: 0 0 78vh !important; }
+      }
+      @media (max-width: 767px) {
+        #videoOverlayVideoArea { flex: 0 0 65vh !important; }
+      }
+    </style>
   `;
 
   // Insert or replace the overlay in the DOM
@@ -2312,10 +2364,17 @@ function initVideoOverlaySwipe() {
   });
 }
 
-// ESC key to close video overlay
+// Keyboard navigation for video overlay (ESC, left/right arrows)
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && state.videoOverlay) {
+  if (!state.videoOverlay) return;
+  if (e.key === 'Escape') {
     closeVideoOverlay();
+  } else if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    videoOverlayGoTo(state.videoOverlay.currentIndex - 1);
+  } else if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    videoOverlayGoTo(state.videoOverlay.currentIndex + 1);
   }
 });
 
