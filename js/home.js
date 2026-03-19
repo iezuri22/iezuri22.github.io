@@ -163,12 +163,13 @@ function renderHome() {
     <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
       ${renderHomeHeader(viewDate)}
       <div class="mobile-only-sections" style="flex-shrink: 0;">${cookAgainHtml}</div>
-      <div class="desktop-home-layout" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
-        <div class="desktop-home-main" style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+      <div class="desktop-home-layout">
+        <div class="desktop-home-main">
           ${renderHomeTabs()}
           ${tabContent}
         </div>
         <div class="desktop-home-sidebar">
+          ${renderSelectedTab()}
           ${cookAgainHtml}
         </div>
       </div>

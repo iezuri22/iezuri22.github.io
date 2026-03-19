@@ -309,18 +309,21 @@
       html {
         height: 100dvh;
         margin: 0;
+        overflow: hidden;
       }
       body {
         height: 100dvh;
         margin: 0;
         display: flex;
         flex-direction: column;
+        overflow: hidden;
       }
       #app {
         flex: 1;
         display: flex;
         flex-direction: column;
         min-height: 0;
+        overflow: hidden;
       }
       .app-shell {
         flex: 1;
@@ -333,17 +336,34 @@
         display: flex;
         flex-direction: column;
         min-height: 0;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
       .page-container { padding: 12px !important; }
       .desktop-content-area { padding: 0 !important; }
-      .desktop-home-layout { display: block; }
-      .desktop-home-sidebar { display: none; }
+      .desktop-home-layout {
+        display: flex !important;
+        flex-direction: column !important;
+        flex: 1;
+        min-height: 0;
+      }
+      .desktop-home-main {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+      }
+      .desktop-home-sidebar { display: none !important; }
       .desktop-mymeals-layout { display: block; }
       .desktop-mymeals-side { display: none; }
       .desktop-grocery-layout { display: block; }
       .desktop-grocery-main { display: block; }
       .desktop-grocery-side { display: none; }
       .desktop-kitchen-detail-layout { display: block; }
+      /* Ensure bottom nav sits flush */
+      .bottom-nav {
+        flex-shrink: 0;
+      }
     }
 
     @media (min-width: 768px) {
@@ -1326,38 +1346,77 @@
 
       /* ---- Home: two-column ---- */
       .desktop-home-layout {
-        display: grid;
-        grid-template-columns: 3fr 2fr;
+        display: grid !important;
+        grid-template-columns: 3fr 2fr !important;
         gap: 32px;
         align-items: start;
         padding: 0 12px;
+        flex: 1;
+        min-height: 0;
+        overflow: hidden;
       }
       .desktop-home-main {
         display: flex;
         flex-direction: column;
         align-items: center;
         min-height: 0;
+        height: 100%;
       }
       .desktop-home-main > * {
         width: 100%;
-        max-width: 400px;
+        max-width: 420px;
       }
       .desktop-home-main .swipe-container {
-        max-width: 400px;
+        max-width: 420px;
         width: 100%;
         flex: 1;
-        min-height: 220px;
-        max-height: 400px;
+        min-height: 340px;
+        max-height: 480px;
+      }
+      .desktop-home-main .swipe-card {
+        left: 0;
+        right: 0;
       }
       .desktop-home-main .swipe-card .card-image {
+        top: 0;
+        left: 0;
+        right: 0;
         bottom: 0;
+        width: 100%;
         height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .desktop-home-main .swipe-card .card-body {
+        padding: 20px 16px 14px;
+      }
+      .desktop-home-main .swipe-card .card-title {
+        font-size: 18px;
+      }
+      .desktop-home-main .swipe-card .card-meta {
+        font-size: 13px;
+      }
+      /* Desktop swipe action buttons */
+      .desktop-home-main button[id^="swipe-btn-"] {
+        width: 56px !important;
+        height: 56px !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+      }
+      .desktop-home-main button[id^="swipe-btn-"]:hover {
+        transform: scale(1.1);
+        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      }
+      /* Home tab toggle: hide on desktop (always show swipe + selected side-by-side) */
+      .desktop-home-main .home-tab-toggle {
+        display: none;
       }
       .desktop-home-sidebar {
-        display: flex;
+        display: flex !important;
         flex-direction: column;
-        gap: 24px;
+        gap: 16px;
         padding-top: 8px;
+        max-height: calc(100vh - 140px);
+        overflow-y: auto;
       }
 
       /* ---- Recipes: multi-column grid ---- */
@@ -1458,10 +1517,16 @@
         align-items: start;
       }
 
-      /* Kitchen recipe grid: 4-5 columns on desktop */
+      /* Kitchen recipe grid: 4-5 columns on desktop, square thumbnails */
       .kitchen-recipe-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
-        gap: 10px !important;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 180px)) !important;
+        gap: 12px !important;
+      }
+      .kitchen-recipe-grid img {
+        aspect-ratio: 1/1;
+        object-fit: cover;
+        width: 100%;
+        height: auto;
       }
 
       /* ---- Grocery: two-column ---- */
@@ -1502,7 +1567,7 @@
 
       /* Swipe container desktop sizing */
       .swipe-container {
-        max-width: 400px;
+        max-width: 420px;
         margin: 0 auto;
       }
 
@@ -1538,6 +1603,51 @@
       .my-plates-grid > div:hover {
         transform: scale(1.02);
         box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+      }
+
+      /* ---- Build a Plate: desktop layout ---- */
+      .batch-edit-page,
+      .batch-view-page {
+        max-width: 1200px !important;
+      }
+
+      /* Batch view: side-by-side card + details on desktop */
+      .batch-view-content {
+        display: grid;
+        grid-template-columns: 55% 45%;
+        gap: 24px;
+        align-items: start;
+      }
+      .batch-view-card-col {
+        min-width: 0;
+      }
+      .batch-view-detail-col {
+        min-width: 0;
+      }
+
+      /* Batch view: component card larger on desktop */
+      .batch-card-img-area {
+        height: 400px !important;
+      }
+
+      /* ---- General desktop scaling ---- */
+      .desktop-content-area h1 {
+        font-size: 28px !important;
+        font-weight: 700 !important;
+      }
+      .desktop-content-area h2 {
+        font-size: 18px !important;
+        font-weight: 600 !important;
+      }
+      .desktop-content-area button {
+        min-height: 36px;
+      }
+      .desktop-content-area input[type="text"],
+      .desktop-content-area input[type="url"],
+      .desktop-content-area input[type="search"],
+      .desktop-content-area textarea {
+        min-height: 44px;
+        font-size: 15px;
       }
 
       /* More menu position adjustment for desktop */

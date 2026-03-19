@@ -2324,32 +2324,47 @@ function renderBatchEdit() {
   const mealTypes = ['breakfast', 'lunch', 'dinner', 'snack'];
 
   return `
-    <div class="p-4 max-w-2xl mx-auto">
+    <div class="batch-edit-page" style="padding: 16px; max-width: 1200px; margin: 0 auto;">
       <div class="flex items-center justify-between mb-4">
         <h2 class="font-bold" style="color:${CONFIG.text_color}; font-size:${CONFIG.type_title}; font-weight:${CONFIG.type_title_weight};">
           ${form.id ? 'Edit Plate' : 'Build a Plate'}
         </h2>
         <div class="flex gap-2">
           <button onclick="closeBatchEditor()" class="px-3 py-1.5 rounded button-hover"
-            style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color};">Cancel</button>
+            style="background:${CONFIG.secondary_action_color}; color:${CONFIG.text_color}; min-height:44px; padding: 8px 16px;">Cancel</button>
           ${form.id ? `<button onclick="if(confirm('Delete this plate?')) { deleteBatchRecipe('${form.id}'); closeBatchEditor(); }"
-            class="px-3 py-1.5 rounded button-hover" style="background:${CONFIG.danger_color}; color:white;">Delete</button>` : ''}
+            class="px-3 py-1.5 rounded button-hover" style="background:${CONFIG.danger_color}; color:white; min-height:44px; padding: 8px 16px;">Delete</button>` : ''}
           <button onclick="saveBatchForm()" class="px-3 py-1.5 rounded button-hover"
-            style="background:${CONFIG.primary_action_color}; color:white;">Save</button>
+            style="background:${CONFIG.primary_action_color}; color:white; min-height:44px; padding: 8px 16px;">Save</button>
         </div>
       </div>
 
-      <div class="rounded-lg p-4" style="background:${CONFIG.surface_color};">
-        <!-- Name -->
-        <div class="mb-4">
-          <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Name your plate</label>
-          <input type="text" value="${esc(form.name || '')}"
-            oninput="state.batchForm.name = this.value"
-            placeholder="e.g. My Go-To Breakfast Bowl"
-            class="w-full px-3 py-2 rounded"
-            style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1);" />
-        </div>
+      <!-- Name input full width -->
+      <div class="mb-4">
+        <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Name your plate</label>
+        <input type="text" value="${esc(form.name || '')}"
+          oninput="state.batchForm.name = this.value"
+          placeholder="e.g. My Go-To Breakfast Bowl"
+          class="w-full px-3 py-2 rounded"
+          style="background:rgba(0,0,0,0.2); color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); height:44px; font-size:15px;" />
+      </div>
 
+      <!-- Meal type pills full width -->
+      <div class="mb-4">
+        <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Meal type</label>
+        <div class="flex gap-2 flex-wrap">
+          ${mealTypes.map(mt => `
+            <button onclick="state.batchForm.mealType = '${mt}'; render();"
+              style="padding:8px 18px; border-radius:20px; border:1px solid ${form.mealType === mt ? CONFIG.primary_action_color : 'rgba(255,255,255,0.12)'};
+              background:${form.mealType === mt ? CONFIG.primary_action_color : 'transparent'};
+              color:${form.mealType === mt ? 'white' : CONFIG.text_muted}; font-size:14px; font-weight:${form.mealType === mt ? '600' : '400'}; cursor:pointer;">
+              ${capitalize(mt)}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="batch-edit-body rounded-lg p-4" style="background:${CONFIG.surface_color};">
         <!-- Cover photo -->
         <div class="mb-4">
           <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Cover photo (optional)</label>
@@ -2367,21 +2382,6 @@ function renderBatchEdit() {
             </div>
             <input type="file" id="batchCoverInput" accept="image/*" capture="environment" onchange="handleBatchCoverPhotoUpload(event)" style="display:none;" />
           `}
-        </div>
-
-        <!-- Meal type pills -->
-        <div class="mb-4">
-          <label class="block mb-1" style="color:${CONFIG.text_color}; font-size:13px; font-weight:600;">Meal type</label>
-          <div class="flex gap-2 flex-wrap">
-            ${mealTypes.map(mt => `
-              <button onclick="state.batchForm.mealType = '${mt}'; render();"
-                style="padding:6px 14px; border-radius:20px; border:1px solid ${form.mealType === mt ? CONFIG.primary_action_color : 'rgba(255,255,255,0.12)'};
-                background:${form.mealType === mt ? CONFIG.primary_action_color : 'transparent'};
-                color:${form.mealType === mt ? 'white' : CONFIG.text_muted}; font-size:13px; font-weight:${form.mealType === mt ? '600' : '400'}; cursor:pointer;">
-                ${capitalize(mt)}
-              </button>
-            `).join('')}
-          </div>
         </div>
 
         <!-- Components -->
@@ -2404,11 +2404,11 @@ function renderBatchEdit() {
           <!-- Add component buttons -->
           <div class="flex gap-2 mt-3">
             <button onclick="addBatchComponentFromRecipe()" class="flex-1 px-3 py-2.5 rounded button-hover"
-              style="background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; font-size:13px; border:1px solid rgba(255,255,255,0.08);">
+              style="background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; font-size:14px; border:1px solid rgba(255,255,255,0.08); min-height:44px;">
               + From recipes
             </button>
             <button onclick="addBatchFreeformComponent()" class="flex-1 px-3 py-2.5 rounded button-hover"
-              style="background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; font-size:13px; border:1px solid rgba(255,255,255,0.08);">
+              style="background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; font-size:14px; border:1px solid rgba(255,255,255,0.08); min-height:44px;">
               + Freeform
             </button>
           </div>
@@ -2596,7 +2596,7 @@ function renderBatchView() {
   const steps = compInstructions ? compInstructions.split('\n').filter(s => s.trim()) : [];
 
   return `
-    <div class="p-4 max-w-2xl mx-auto">
+    <div class="batch-view-page" style="padding: 16px; max-width: 1200px; margin: 0 auto;">
       <!-- Header -->
       <div style="margin-bottom:16px;">
         <div class="flex items-center justify-between">
@@ -2626,102 +2626,108 @@ function renderBatchView() {
           </div>
         ` : ''}
 
-        <!-- Component card -->
-        <div id="batchCardContainer" style="position:relative; border-radius:16px; overflow:hidden; background:${CONFIG.surface_color}; box-shadow:${CONFIG.shadow}; margin-bottom:12px; touch-action:pan-y;">
-          ${compImg ? `
-            <div style="height:240px; overflow:hidden; position:relative;">
-              <img src="${esc(compImg)}" style="width:100%; height:100%; object-fit:cover;" />
-              <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); padding:4px 10px; border-radius:12px; color:white; font-size:12px; font-weight:600;">
-                ${idx + 1} of ${comps.length}
-              </div>
-              ${comp.videoLink ? `
-                <a href="${esc(comp.videoLink)}" target="_blank" rel="noopener noreferrer"
-                  style="position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:white; text-decoration:none;">
-                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                </a>
-              ` : ''}
-              ${comp.timing ? `
-                <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); padding:4px 10px; border-radius:12px; color:white; font-size:11px; font-weight:500;">
-                  ${esc(comp.timing)}
+        <div class="batch-view-content">
+          <!-- Component card -->
+          <div class="batch-view-card-col">
+            <div id="batchCardContainer" style="position:relative; border-radius:16px; overflow:hidden; background:${CONFIG.surface_color}; box-shadow:${CONFIG.shadow}; margin-bottom:12px; touch-action:pan-y;">
+              ${compImg ? `
+                <div class="batch-card-img-area" style="height:240px; overflow:hidden; position:relative;">
+                  <img src="${esc(compImg)}" style="width:100%; height:100%; object-fit:cover;" />
+                  <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); padding:4px 10px; border-radius:12px; color:white; font-size:12px; font-weight:600;">
+                    ${idx + 1} of ${comps.length}
+                  </div>
+                  ${comp.videoLink ? `
+                    <a href="${esc(comp.videoLink)}" target="_blank" rel="noopener noreferrer"
+                      style="position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:white; text-decoration:none;">
+                      <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </a>
+                  ` : ''}
+                  ${comp.timing ? `
+                    <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); padding:4px 10px; border-radius:12px; color:white; font-size:11px; font-weight:500;">
+                      ${esc(comp.timing)}
+                    </div>
+                  ` : ''}
                 </div>
-              ` : ''}
-            </div>
-          ` : `
-            <div style="height:160px; background:linear-gradient(135deg, ${CONFIG.surface_color}, ${CONFIG.surface_elevated}); display:flex; align-items:center; justify-content:center; position:relative;">
-              <span style="color:${CONFIG.text_color}; font-size:18px; font-weight:700; text-align:center; padding:16px;">${esc(compName)}</span>
-              <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:12px; color:white; font-size:12px; font-weight:600;">
-                ${idx + 1} of ${comps.length}
-              </div>
-              ${comp.videoLink ? `
-                <a href="${esc(comp.videoLink)}" target="_blank" rel="noopener noreferrer"
-                  style="position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; color:white; text-decoration:none;">
-                  <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                </a>
-              ` : ''}
-              ${comp.timing ? `
-                <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:12px; color:white; font-size:11px; font-weight:500;">
-                  ${esc(comp.timing)}
+              ` : `
+                <div class="batch-card-img-area" style="height:160px; background:linear-gradient(135deg, ${CONFIG.surface_color}, ${CONFIG.surface_elevated}); display:flex; align-items:center; justify-content:center; position:relative;">
+                  <span style="color:${CONFIG.text_color}; font-size:18px; font-weight:700; text-align:center; padding:16px;">${esc(compName)}</span>
+                  <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:12px; color:white; font-size:12px; font-weight:600;">
+                    ${idx + 1} of ${comps.length}
+                  </div>
+                  ${comp.videoLink ? `
+                    <a href="${esc(comp.videoLink)}" target="_blank" rel="noopener noreferrer"
+                      style="position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; color:white; text-decoration:none;">
+                      <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    </a>
+                  ` : ''}
+                  ${comp.timing ? `
+                    <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:12px; color:white; font-size:11px; font-weight:500;">
+                      ${esc(comp.timing)}
+                    </div>
+                  ` : ''}
                 </div>
-              ` : ''}
-            </div>
-          `}
-          <div style="padding:12px 14px;">
-            <div style="color:${CONFIG.text_color}; font-size:16px; font-weight:700;">${esc(compName)}</div>
-          </div>
-        </div>
-
-        <!-- Dot indicators -->
-        <div style="display:flex; justify-content:center; gap:6px; margin-bottom:16px;">
-          ${comps.map((_, i) => `
-            <button onclick="state.batchComponentIndex = ${i}; render();"
-              style="width:${i === idx ? '20px' : '8px'}; height:8px; border-radius:4px; border:none;
-              background:${i === idx ? CONFIG.primary_action_color : 'rgba(255,255,255,0.2)'}; cursor:pointer; transition:all 0.2s; padding:0;">
-            </button>
-          `).join('')}
-        </div>
-
-        <!-- Prev / Next buttons -->
-        <div class="flex gap-2 mb-4">
-          <button onclick="if(state.batchComponentIndex > 0) { state.batchComponentIndex--; render(); }"
-            style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${idx > 0 ? CONFIG.text_color : CONFIG.text_tertiary}; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;"
-            ${idx === 0 ? 'disabled' : ''}>
-            &larr; Previous
-          </button>
-          <button onclick="if(state.batchComponentIndex < ${comps.length - 1}) { state.batchComponentIndex++; render(); }"
-            style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${idx < comps.length - 1 ? CONFIG.text_color : CONFIG.text_tertiary}; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;"
-            ${idx === comps.length - 1 ? 'disabled' : ''}>
-            Next &rarr;
-          </button>
-        </div>
-
-        <!-- Current component ingredients & instructions -->
-        ${compIngs.length > 0 ? `
-          <div class="rounded-lg p-3 mb-3" style="background:${CONFIG.surface_color};">
-            <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:8px;">Ingredients</div>
-            ${compIngs.map(ing => `
-              <div style="color:${CONFIG.text_color}; font-size:13px; padding:4px 0; opacity:0.9;">
-                ${ing.qty ? esc(ing.qty) : ''} ${ing.unit ? esc(ing.unit) : ''} ${esc(capitalize(ing.name))}
+              `}
+              <div style="padding:12px 14px;">
+                <div style="color:${CONFIG.text_color}; font-size:16px; font-weight:700;">${esc(compName)}</div>
               </div>
-            `).join('')}
-          </div>
-        ` : ''}
+            </div>
 
-        ${steps.length > 0 ? `
-          <div class="rounded-lg p-3 mb-3" style="background:${CONFIG.surface_color};">
-            <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:8px;">Instructions</div>
-            <ol style="color:${CONFIG.text_color}; font-size:13px; padding-left:18px; margin:0;">
-              ${steps.map(s => `<li style="padding:4px 0; opacity:0.9;">${esc(s.replace(/^\d+\.\s*/, ''))}</li>`).join('')}
-            </ol>
+            <!-- Dot indicators -->
+            <div style="display:flex; justify-content:center; gap:6px; margin-bottom:16px;">
+              ${comps.map((_, i) => `
+                <button onclick="state.batchComponentIndex = ${i}; render();"
+                  style="width:${i === idx ? '20px' : '8px'}; height:8px; border-radius:4px; border:none;
+                  background:${i === idx ? CONFIG.primary_action_color : 'rgba(255,255,255,0.2)'}; cursor:pointer; transition:all 0.2s; padding:0;">
+                </button>
+              `).join('')}
+            </div>
+
+            <!-- Prev / Next buttons -->
+            <div class="flex gap-2 mb-4">
+              <button onclick="if(state.batchComponentIndex > 0) { state.batchComponentIndex--; render(); }"
+                style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${idx > 0 ? CONFIG.text_color : CONFIG.text_tertiary}; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; min-height:44px;"
+                ${idx === 0 ? 'disabled' : ''}>
+                &larr; Previous
+              </button>
+              <button onclick="if(state.batchComponentIndex < ${comps.length - 1}) { state.batchComponentIndex++; render(); }"
+                style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${idx < comps.length - 1 ? CONFIG.text_color : CONFIG.text_tertiary}; border:none; border-radius:10px; font-size:13px; font-weight:600; cursor:pointer; min-height:44px;"
+                ${idx === comps.length - 1 ? 'disabled' : ''}>
+                Next &rarr;
+              </button>
+            </div>
           </div>
-        ` : ''}
+
+          <!-- Ingredients & instructions column -->
+          <div class="batch-view-detail-col">
+            ${compIngs.length > 0 ? `
+              <div class="rounded-lg p-3 mb-3" style="background:${CONFIG.surface_color};">
+                <div style="font-size:15px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:8px;">Ingredients</div>
+                ${compIngs.map(ing => `
+                  <div style="color:${CONFIG.text_color}; font-size:14px; padding:4px 0; opacity:0.9;">
+                    ${ing.qty ? esc(ing.qty) : ''} ${ing.unit ? esc(ing.unit) : ''} ${esc(capitalize(ing.name))}
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
+
+            ${steps.length > 0 ? `
+              <div class="rounded-lg p-3 mb-3" style="background:${CONFIG.surface_color};">
+                <div style="font-size:15px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:8px;">Instructions</div>
+                <ol style="color:${CONFIG.text_color}; font-size:14px; padding-left:18px; margin:0;">
+                  ${steps.map(s => `<li style="padding:4px 0; opacity:0.9;">${esc(s.replace(/^\d+\.\s*/, ''))}</li>`).join('')}
+                </ol>
+              </div>
+            ` : ''}
+          </div>
+        </div>
       `}
 
       <!-- View all ingredients button -->
       ${comps.length > 0 ? `
-        <button onclick="showBatchAllIngredients('${batch.id}')" style="width:100%; padding:12px; background:${CONFIG.surface_elevated}; color:${CONFIG.primary_action_color}; border:1px solid rgba(232,93,93,0.2); border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:8px;">
+        <button onclick="showBatchAllIngredients('${batch.id}')" style="width:100%; padding:12px; background:${CONFIG.surface_elevated}; color:${CONFIG.primary_action_color}; border:1px solid rgba(232,93,93,0.2); border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; margin-bottom:8px; min-height:44px;">
           View all ingredients (${allIngs.length})
         </button>
-        <button onclick="showBatchIngredientPicker('${batch.id}')" style="width:100%; padding:12px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer;">
+        <button onclick="showBatchIngredientPicker('${batch.id}')" style="width:100%; padding:12px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:10px; font-size:14px; font-weight:600; cursor:pointer; min-height:44px;">
           Add to grocery list
         </button>
       ` : ''}

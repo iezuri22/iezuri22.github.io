@@ -1113,17 +1113,6 @@ function renderKitchenDetail() {
       </div>
 
       <div style="padding: 0 12px;">
-        <div onclick="showKitchenIngredientMeals('${esc(name)}')" class="card-press" style="cursor: pointer; background: rgba(255,255,255,0.05); border-radius: 12px; padding: 10px 12px; margin-top: 12px; display: flex; align-items: center; gap: 12px;">
-          <div style="width: 36px; height: 36px; border-radius: 12px; background: rgba(50,215,75,0.12); display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
-            <span style="font-size: 22px; font-weight: 700; color: ${CONFIG.success_color};">${monthEntries.length}</span>
-          </div>
-          <div style="flex: 1;">
-            <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color};">meal${monthEntries.length !== 1 ? 's' : ''} with ${esc(name)} this month</div>
-            <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Tap to see cooking history</div>
-          </div>
-          <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
-        </div>
-
         <div style="margin-top: 16px;">
           <h2 style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 8px;">How to cook ${esc(name.toLowerCase())}</h2>
           ${renderMethodsSection(tipsData.methods)}
