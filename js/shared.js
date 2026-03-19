@@ -2177,8 +2177,8 @@ function newBatchComponent(type) {
     instructions: '',
     order: 0,
     notes: '',
-    videoLink: '',
-    timing: ''
+    timing: '',
+    effort: null
   };
 }
 
@@ -2192,7 +2192,69 @@ function saveBatchRecipe(batch) {
     if (idx >= 0) state.batchRecipes[idx] = batch;
     else state.batchRecipes.push(batch);
   }
-  persistState();
+  try {
+    persistState();
+  } catch (e) {
+    console.error('Failed to persist batch recipe:', e);
+    // Try saving just batchRecipes directly as fallback
+    try { saveToLS('batchRecipes', state.batchRecipes); } catch (e2) { console.error('Fallback save also failed:', e2); }
+  }
+}
+
+function getBatchEffortLevel(batch) {
+  const order = { lazy: 1, moderate: 2, timely: 3 };
+  let highest = null;
+  let highestOrder = 0;
+  (batch.components || []).forEach(comp => {
+    let effort = null;
+    if (comp.type === 'recipe' && comp.recipeId) {
+      effort = getRecipeEffort(comp.recipeId);
+    } else if (comp.type === 'freeform') {
+      effort = comp.effort || null;
+    }
+    if (effort && order[effort] > highestOrder) {
+      highest = effort;
+      highestOrder = order[effort];
+    }
+  });
+  return highest;
+}
+
+function saveFreeformAsRecipe(compId) {
+  if (!state.batchForm) return;
+  const comp = state.batchForm.components.find(c => c.id === compId);
+  if (!comp || comp.type !== 'freeform') return;
+
+  // Create a new recipe from the freeform data
+  const newRecipe = {
+    id: 'recipe_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+    type: 'recipe',
+    title: comp.name || 'Untitled Recipe',
+    category: capitalize(state.batchForm.mealType || 'Dinner'),
+    recipe_url: '',
+    image_url: comp.photo || '',
+    tags: '',
+    notes: '',
+    instructions: comp.instructions || '',
+    ingredients: (comp.ingredients || []).map(ing => ({ qty: '', unit: '', name: ing.trim(), group: 'Other' })),
+    sourceType: 'user',
+    isDraft: false,
+    isTip: false
+  };
+  state.recipes.push(newRecipe);
+
+  // Set effort on the new recipe if the freeform had one
+  if (comp.effort) {
+    setRecipeEffort(newRecipe.id, comp.effort);
+  }
+
+  // Convert the component from freeform to recipe
+  comp.type = 'recipe';
+  comp.recipeId = newRecipe.id;
+
+  try { persistState(); } catch (e) { console.error('Persist error:', e); }
+  showToast('Saved as a new recipe!', 'success');
+  render();
 }
 
 function deleteBatchRecipe(batchId) {

@@ -1739,8 +1739,11 @@ function renderRecipes() {
                 </div>
               `}
               <!-- Stacked cards badge -->
-              <div style="position:absolute; top:4px; left:4px; z-index:2; width:22px; height:22px; border-radius:5px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
-                <svg width="14" height="14" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>
+              <div style="position:absolute; top:4px; left:4px; z-index:2; display:flex; gap:4px; align-items:center;">
+                <div style="width:22px; height:22px; border-radius:5px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
+                  <svg width="14" height="14" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>
+                </div>
+                ${renderEffortPill(getBatchEffortLevel(b), 'sm')}
               </div>
               <div style="padding:6px; background:${CONFIG.background_color};">
                 <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">${esc(b.name)}</div>
@@ -2233,12 +2236,17 @@ function saveBatchForm() {
   if (!name) return showError('Please name your plate.');
   if (state.batchForm.components.length === 0) return showError('Add at least one component.');
 
-  // Reorder
-  state.batchForm.components.forEach((c, i) => c.order = i + 1);
-  saveBatchRecipe(state.batchForm);
-  showToast(`"${name}" saved!`, 'success');
-  state.batchForm = null;
-  navigateTo('recipes');
+  try {
+    // Reorder
+    state.batchForm.components.forEach((c, i) => c.order = i + 1);
+    saveBatchRecipe(state.batchForm);
+    showToast('Plate saved!', 'success');
+    state.batchForm = null;
+    navigateTo('recipes');
+  } catch (e) {
+    console.error('Error saving plate:', e);
+    showError('Failed to save plate. Please try again.');
+  }
 }
 
 function addBatchComponentFromRecipe() {
@@ -2568,6 +2576,8 @@ function renderBatchComponentCard(comp, idx, total) {
           <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
             <span style="color:${CONFIG.text_muted}; font-size:11px;">${isRecipe ? 'From recipes' : 'Freeform'}</span>
             ${comp.timing ? `<span style="padding:2px 8px; border-radius:8px; background:rgba(255,255,255,0.06); color:${CONFIG.text_muted}; font-size:10px; font-weight:500;">${esc(comp.timing)}</span>` : ''}
+            ${isRecipe && comp.recipeId ? renderEffortPill(getRecipeEffort(comp.recipeId), 'sm') : ''}
+            ${!isRecipe && comp.effort ? renderEffortPill(comp.effort, 'sm') : ''}
           </div>
         </div>
       </div>
@@ -2578,18 +2588,26 @@ function renderBatchComponentCard(comp, idx, total) {
           oninput="setBatchCompField('${comp.id}', 'notes', this.value)"
           placeholder="Notes (e.g. Start this first)"
           style="width:100%; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; box-sizing:border-box;" />
-        <div style="display:flex; gap:8px;">
-          <input type="text" value="${esc(comp.timing || '')}"
-            oninput="setBatchCompField('${comp.id}', 'timing', this.value)"
-            placeholder="Timing (e.g. 15 min)"
-            style="flex:1; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; box-sizing:border-box;" />
-          <input type="url" value="${esc(comp.videoLink || '')}"
-            oninput="setBatchCompField('${comp.id}', 'videoLink', this.value)"
-            placeholder="Video URL"
-            style="flex:1; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; box-sizing:border-box;" />
-        </div>
+        <input type="text" value="${esc(comp.timing || '')}"
+          oninput="setBatchCompField('${comp.id}', 'timing', this.value)"
+          placeholder="Timing (e.g. 15 min)"
+          style="width:100%; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; box-sizing:border-box;" />
 
         ${!isRecipe ? `
+          <!-- Effort selector for freeform -->
+          <div>
+            <label style="color:${CONFIG.text_muted}; font-size:11px; font-weight:500; margin-bottom:4px; display:block;">Effort level</label>
+            <div style="display:flex; gap:6px;">
+              ${Object.entries(EFFORT_LEVELS).map(([key, e]) => `
+                <button onclick="setBatchCompField('${comp.id}', 'effort', ${comp.effort === key ? 'null' : `'${key}'`}); render();"
+                  style="flex:1; padding:6px 0; border-radius:8px; border:1px solid ${comp.effort === key ? e.border : 'rgba(255,255,255,0.08)'};
+                  background:${comp.effort === key ? e.bg : 'transparent'};
+                  color:${comp.effort === key ? e.color : CONFIG.text_muted}; font-size:12px; font-weight:${comp.effort === key ? '600' : '400'}; cursor:pointer;">
+                  ${e.label}
+                </button>
+              `).join('')}
+            </div>
+          </div>
           <div>
             ${comp.photo ? `
               <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
@@ -2610,6 +2628,13 @@ function renderBatchComponentCard(comp, idx, total) {
           <textarea placeholder="Instructions"
             oninput="setBatchCompField('${comp.id}', 'instructions', this.value)"
             style="width:100%; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.06); border-radius:8px; color:${CONFIG.text_color}; font-size:13px; min-height:40px; resize:vertical; box-sizing:border-box;">${esc(comp.instructions || '')}</textarea>
+          <!-- Save as recipe link -->
+          <div style="text-align:right; padding-top:2px;">
+            <button onclick="saveFreeformAsRecipe('${comp.id}')"
+              style="background:none; border:none; color:${CONFIG.primary_action_color}; font-size:12px; cursor:pointer; text-decoration:underline; padding:4px 0;">
+              Save as recipe
+            </button>
+          </div>
         ` : ''}
       </div>
     </div>
@@ -2833,12 +2858,6 @@ function renderBatchView() {
                   <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); padding:4px 10px; border-radius:12px; color:white; font-size:12px; font-weight:600;">
                     ${idx + 1} of ${comps.length}
                   </div>
-                  ${comp.videoLink ? `
-                    <a href="${esc(comp.videoLink)}" target="_blank" rel="noopener noreferrer"
-                      style="position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; color:white; text-decoration:none;">
-                      <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                    </a>
-                  ` : ''}
                   ${comp.timing ? `
                     <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); padding:4px 10px; border-radius:12px; color:white; font-size:11px; font-weight:500;">
                       ${esc(comp.timing)}
@@ -2851,12 +2870,6 @@ function renderBatchView() {
                   <div style="position:absolute; top:10px; left:10px; background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:12px; color:white; font-size:12px; font-weight:600;">
                     ${idx + 1} of ${comps.length}
                   </div>
-                  ${comp.videoLink ? `
-                    <a href="${esc(comp.videoLink)}" target="_blank" rel="noopener noreferrer"
-                      style="position:absolute; top:10px; right:10px; width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; color:white; text-decoration:none;">
-                      <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-                    </a>
-                  ` : ''}
                   ${comp.timing ? `
                     <div style="position:absolute; bottom:10px; right:10px; background:rgba(0,0,0,0.4); padding:4px 10px; border-radius:12px; color:white; font-size:11px; font-weight:500;">
                       ${esc(comp.timing)}
