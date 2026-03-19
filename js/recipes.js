@@ -76,6 +76,7 @@ function openRecipeView(id, fromPlan = null, fromStats = false, fromTips = false
   state.recipeViewReturnTo = state.currentView;
 
   state.selectedRecipeViewId = id;
+  state.videoCarouselIndex = 0;
   state.viewingFromPlan = fromPlan; // {date, meal} or null
   state.viewingFromStats = fromStats; // true if coming from recipe-stats
   state.viewingFromTips = fromTips; // true if coming from tips page
@@ -1802,6 +1803,9 @@ function renderRecipes() {
                 `}
               </div>
               ${effort ? `<div style="position:absolute; top:4px; left:4px; z-index:2;">${renderEffortPill(effort, 'sm')}</div>` : ''}
+              ${recipeHasVideo(id) ? `<div style="position:absolute; top:${effort ? '28px' : '4px'}; left:4px; z-index:2; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
+              </div>` : ''}
               <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}')"
                 style="position: absolute; top: 4px; right: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
                 <svg width="12" height="12" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
@@ -1987,6 +1991,8 @@ Step 3: Add wet ingredients..."
             oninput="setRecipeField('instructions', this.value)">${state.recipeForm.instructions || ''}</textarea>
         </div>
 
+        ${renderVideoClipsEditor()}
+
         <div class="mt-6">
           <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Notes (optional)</label>
           <textarea class="w-full px-4 py-3 rounded border"
@@ -2159,6 +2165,7 @@ ${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; 
           </div>
         ` : ''}
 
+        ${renderVideoCarousel(recipeId)}
 
         ${tags ? `<div class="mt-4" style="color:${CONFIG.text_color}; opacity:.85;">
           <span class="font-semibold">Tags:</span> ${esc(tags)}
@@ -2235,6 +2242,412 @@ ${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; 
     </div>`;
 }
 
+// ===== VIDEO CAROUSEL =====
+
+// State for video carousels
+if (!state.videoCarouselIndex) state.videoCarouselIndex = 0;
+if (!state.batchVideoIndex) state.batchVideoIndex = 0;
+
+function renderVideoCarousel(recipeId) {
+  const clips = getRecipeVideoClips(recipeId);
+  if (clips.length === 0) return '';
+  const idx = state.videoCarouselIndex || 0;
+  const safeIdx = Math.min(idx, clips.length - 1);
+
+  return `
+    <div class="mt-4">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div style="color:${CONFIG.text_color}; font-size:15px; font-weight:600;">Cooking Clips</div>
+        <span style="color:${CONFIG.text_muted}; font-size:12px;">${clips.length} clip${clips.length !== 1 ? 's' : ''}</span>
+      </div>
+      <div id="videoCarouselContainer" class="video-carousel-container" style="position:relative; overflow:hidden; border-radius:12px;">
+        <div class="video-carousel-track" id="videoCarouselTrack" style="display:flex; transition:transform 0.3s ease; will-change:transform;">
+          ${clips.map((clip, i) => `
+            <div class="video-carousel-slide" style="min-width:100%; position:relative;">
+              <div class="video-iframe-wrapper" style="position:relative; width:100%; padding-top:177.78%; background:#0a0a0b; border-radius:12px; overflow:hidden;">
+                ${(i === safeIdx || i === safeIdx + 1) ? `
+                  <iframe src="${getStreamEmbedUrl(clip.cloudflareVideoId, { autoplay: false, muted: true, controls: true, loop: true })}"
+                    style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;"
+                    allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+                    allowfullscreen></iframe>
+                ` : `
+                  <img src="${getStreamThumbnail(clip.cloudflareVideoId)}" style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0.5;" />
+                `}
+              </div>
+              <!-- Order badge -->
+              <div style="position:absolute; top:12px; left:12px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); padding:4px 10px; border-radius:8px; color:white; font-size:12px; font-weight:600;">
+                ${i + 1} of ${clips.length}
+              </div>
+              <!-- Caption overlay -->
+              <div style="position:absolute; bottom:0; left:0; right:0; padding:10px 14px; background:linear-gradient(transparent, rgba(0,0,0,0.7)); pointer-events:none;">
+                <div style="color:white; font-size:14px; font-weight:500;">${esc(clip.caption || '')}</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+      <!-- Dot indicators -->
+      ${clips.length > 1 ? `
+        <div style="display:flex; justify-content:center; gap:6px; margin-top:8px;">
+          ${clips.map((_, i) => `
+            <button onclick="videoCarouselGoTo(${i})"
+              style="width:${i === safeIdx ? '20px' : '8px'}; height:8px; border-radius:4px; border:none;
+              background:${i === safeIdx ? CONFIG.primary_action_color : 'rgba(255,255,255,0.2)'}; cursor:pointer; transition:all 0.2s; padding:0;">
+            </button>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function videoCarouselGoTo(idx) {
+  state.videoCarouselIndex = idx;
+  const track = document.getElementById('videoCarouselTrack');
+  if (track) {
+    track.style.transform = `translateX(-${idx * 100}%)`;
+    // Update dots without full re-render
+    const container = track.closest('.mt-4');
+    if (container) {
+      const dots = container.querySelectorAll('button[onclick^="videoCarouselGoTo"]');
+      dots.forEach((dot, i) => {
+        dot.style.width = i === idx ? '20px' : '8px';
+        dot.style.background = i === idx ? CONFIG.primary_action_color : 'rgba(255,255,255,0.2)';
+      });
+    }
+    // Update order badges
+    const slides = track.querySelectorAll('.video-carousel-slide');
+    slides.forEach((slide, i) => {
+      // Lazy load: load iframe for current and next slide
+      const wrapper = slide.querySelector('.video-iframe-wrapper');
+      if ((i === idx || i === idx + 1) && !wrapper.querySelector('iframe')) {
+        const r = getRecipeById(state.selectedRecipeViewId);
+        if (r && r.videoClips && r.videoClips[i]) {
+          const clip = r.videoClips.sort((a, b) => (a.order || 0) - (b.order || 0))[i];
+          const img = wrapper.querySelector('img');
+          if (img) {
+            const iframe = document.createElement('iframe');
+            iframe.src = getStreamEmbedUrl(clip.cloudflareVideoId, { autoplay: false, muted: true, controls: true, loop: true });
+            iframe.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; border:none;';
+            iframe.allow = 'accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture';
+            iframe.allowFullscreen = true;
+            img.replaceWith(iframe);
+          }
+        }
+      }
+    });
+  }
+}
+
+function initVideoCarouselSwipe() {
+  const container = document.getElementById('videoCarouselContainer');
+  if (!container) return;
+  const track = document.getElementById('videoCarouselTrack');
+  if (!track) return;
+
+  let startX = 0, currentX = 0, swiping = false;
+  const clips = track.querySelectorAll('.video-carousel-slide');
+  if (clips.length <= 1) return;
+
+  container.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    currentX = startX;
+    swiping = true;
+    track.style.transition = 'none';
+  }, { passive: true });
+
+  container.addEventListener('touchmove', e => {
+    if (!swiping) return;
+    currentX = e.touches[0].clientX;
+    const diff = currentX - startX;
+    const idx = state.videoCarouselIndex || 0;
+    const offset = -(idx * 100) + (diff / container.offsetWidth) * 100;
+    track.style.transform = `translateX(${offset}%)`;
+  }, { passive: true });
+
+  container.addEventListener('touchend', () => {
+    if (!swiping) return;
+    swiping = false;
+    track.style.transition = 'transform 0.3s ease';
+    const diff = currentX - startX;
+    const idx = state.videoCarouselIndex || 0;
+    const threshold = container.offsetWidth * 0.2;
+    if (diff < -threshold && idx < clips.length - 1) {
+      videoCarouselGoTo(idx + 1);
+    } else if (diff > threshold && idx > 0) {
+      videoCarouselGoTo(idx - 1);
+    } else {
+      track.style.transform = `translateX(-${idx * 100}%)`;
+    }
+  });
+}
+
+// ---- Build a Plate Video Carousel ----
+
+function renderBatchVideoCarousel(batch) {
+  const sequence = getBatchVideoSequence(batch);
+  if (sequence.length === 0) return '';
+  const idx = state.batchVideoIndex || 0;
+  const safeIdx = Math.min(idx, sequence.length - 1);
+  const totalClips = sequence.filter(s => s.type === 'clip').length;
+
+  return `
+    <div class="mt-4 mb-4">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <div style="color:${CONFIG.text_color}; font-size:15px; font-weight:600;">Cooking Clips</div>
+        <span style="color:${CONFIG.text_muted}; font-size:12px;">${totalClips} clip${totalClips !== 1 ? 's' : ''}</span>
+      </div>
+      <div id="batchVideoCarouselContainer" class="video-carousel-container" style="position:relative; overflow:hidden; border-radius:12px;">
+        <div class="video-carousel-track" id="batchVideoCarouselTrack" style="display:flex; transition:transform 0.3s ease; will-change:transform;">
+          ${sequence.map((item, i) => {
+            if (item.type === 'divider') {
+              return `
+                <div class="video-carousel-slide" style="min-width:100%; position:relative;">
+                  <div style="width:100%; padding-top:177.78%; background:${CONFIG.surface_color}; position:relative; border-radius:12px; overflow:hidden;">
+                    <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:24px;">
+                      <div style="color:${CONFIG.text_muted}; font-size:13px; margin-bottom:8px;">Up next</div>
+                      <div style="color:${CONFIG.text_color}; font-size:20px; font-weight:700; text-align:center;">${esc(item.componentName)}</div>
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+            return `
+              <div class="video-carousel-slide" style="min-width:100%; position:relative;">
+                <div class="video-iframe-wrapper" style="position:relative; width:100%; padding-top:177.78%; background:#0a0a0b; border-radius:12px; overflow:hidden;">
+                  ${(i === safeIdx || i === safeIdx + 1) ? `
+                    <iframe src="${getStreamEmbedUrl(item.cloudflareVideoId, { autoplay: false, muted: true, controls: true, loop: true })}"
+                      style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;"
+                      allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+                      allowfullscreen></iframe>
+                  ` : `
+                    <img src="${getStreamThumbnail(item.cloudflareVideoId)}" style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; opacity:0.5;" />
+                  `}
+                </div>
+                <div style="position:absolute; top:12px; left:12px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); padding:4px 10px; border-radius:8px; color:white; font-size:12px; font-weight:600;">
+                  ${i + 1} of ${sequence.length}
+                </div>
+                <div style="position:absolute; bottom:0; left:0; right:0; padding:10px 14px; background:linear-gradient(transparent, rgba(0,0,0,0.7)); pointer-events:none;">
+                  <div style="color:white; font-size:14px; font-weight:500;">${esc(item.caption || '')}</div>
+                  <div style="color:rgba(255,255,255,0.6); font-size:11px; margin-top:2px;">${esc(item.componentName)}</div>
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+      ${sequence.length > 1 ? `
+        <div style="display:flex; justify-content:center; gap:6px; margin-top:8px;">
+          ${sequence.map((_, i) => `
+            <button onclick="batchVideoCarouselGoTo(${i})"
+              style="width:${i === safeIdx ? '20px' : '8px'}; height:8px; border-radius:4px; border:none;
+              background:${i === safeIdx ? CONFIG.primary_action_color : 'rgba(255,255,255,0.2)'}; cursor:pointer; transition:all 0.2s; padding:0;">
+            </button>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+function batchVideoCarouselGoTo(idx) {
+  state.batchVideoIndex = idx;
+  const track = document.getElementById('batchVideoCarouselTrack');
+  if (track) {
+    track.style.transform = `translateX(-${idx * 100}%)`;
+    const container = track.closest('.mt-4');
+    if (container) {
+      const dots = container.querySelectorAll('button[onclick^="batchVideoCarouselGoTo"]');
+      dots.forEach((dot, i) => {
+        dot.style.width = i === idx ? '20px' : '8px';
+        dot.style.background = i === idx ? CONFIG.primary_action_color : 'rgba(255,255,255,0.2)';
+      });
+    }
+    // Lazy load iframes for current and next
+    const slides = track.querySelectorAll('.video-carousel-slide');
+    slides.forEach((slide, i) => {
+      if ((i === idx || i === idx + 1)) {
+        const wrapper = slide.querySelector('.video-iframe-wrapper');
+        if (wrapper && !wrapper.querySelector('iframe')) {
+          const img = wrapper.querySelector('img');
+          if (img) {
+            const batch = getBatchRecipeById(state.batchViewId);
+            if (batch) {
+              const sequence = getBatchVideoSequence(batch);
+              if (sequence[i] && sequence[i].type === 'clip') {
+                const iframe = document.createElement('iframe');
+                iframe.src = getStreamEmbedUrl(sequence[i].cloudflareVideoId, { autoplay: false, muted: true, controls: true, loop: true });
+                iframe.style.cssText = 'position:absolute; top:0; left:0; width:100%; height:100%; border:none;';
+                iframe.allow = 'accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture';
+                iframe.allowFullscreen = true;
+                img.replaceWith(iframe);
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+}
+
+function initBatchVideoCarouselSwipe() {
+  const container = document.getElementById('batchVideoCarouselContainer');
+  if (!container) return;
+  const track = document.getElementById('batchVideoCarouselTrack');
+  if (!track) return;
+
+  let startX = 0, currentX = 0, swiping = false;
+  const slides = track.querySelectorAll('.video-carousel-slide');
+  if (slides.length <= 1) return;
+
+  container.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    currentX = startX;
+    swiping = true;
+    track.style.transition = 'none';
+  }, { passive: true });
+
+  container.addEventListener('touchmove', e => {
+    if (!swiping) return;
+    currentX = e.touches[0].clientX;
+    const diff = currentX - startX;
+    const idx = state.batchVideoIndex || 0;
+    const offset = -(idx * 100) + (diff / container.offsetWidth) * 100;
+    track.style.transform = `translateX(${offset}%)`;
+  }, { passive: true });
+
+  container.addEventListener('touchend', () => {
+    if (!swiping) return;
+    swiping = false;
+    track.style.transition = 'transform 0.3s ease';
+    const diff = currentX - startX;
+    const idx = state.batchVideoIndex || 0;
+    const threshold = container.offsetWidth * 0.2;
+    if (diff < -threshold && idx < slides.length - 1) {
+      batchVideoCarouselGoTo(idx + 1);
+    } else if (diff > threshold && idx > 0) {
+      batchVideoCarouselGoTo(idx - 1);
+    } else {
+      track.style.transform = `translateX(-${idx * 100}%)`;
+    }
+  });
+}
+
+// ---- Video Clips Editor (Recipe Edit Form) ----
+
+function renderVideoClipsEditor() {
+  if (!state.recipeForm) return '';
+  if (state.recipeForm.isTip) return '';
+  const clips = state.recipeForm.videoClips || [];
+
+  return `
+    <div class="mt-6">
+      <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Cooking Clips</label>
+      ${clips.length > 0 ? `
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
+          ${clips.map((clip, i) => `
+            <div style="display:flex; align-items:center; gap:8px; background:${CONFIG.surface_elevated}; border-radius:10px; padding:8px;">
+              <img src="${getStreamThumbnail(clip.cloudflareVideoId)}" style="width:48px; height:64px; object-fit:cover; border-radius:6px; background:#0a0a0b;" onerror="this.style.background='${CONFIG.surface_color}'; this.alt='?';" />
+              <div style="flex:1; min-width:0;">
+                <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(clip.caption || 'No caption')}</div>
+                <div style="color:${CONFIG.text_muted}; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(clip.cloudflareVideoId)}</div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:4px;">
+                ${i > 0 ? `<button onclick="moveVideoClip(${i}, -1)" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:2px;" title="Move up">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+                </button>` : '<div style="width:16px; height:20px;"></div>'}
+                ${i < clips.length - 1 ? `<button onclick="moveVideoClip(${i}, 1)" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:2px;" title="Move down">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                </button>` : '<div style="width:16px; height:20px;"></div>'}
+              </div>
+              <button onclick="removeVideoClip(${i})" style="background:none; border:none; cursor:pointer; color:${CONFIG.danger_color}; padding:4px;" title="Remove clip">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+              </button>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      <button type="button" onclick="showAddVideoClipForm()"
+        style="padding:10px 16px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); border-radius:10px; cursor:pointer; font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        Add clip
+      </button>
+    </div>
+  `;
+}
+
+function showAddVideoClipForm() {
+  const html = `
+    <div style="color:${CONFIG.text_color};">
+      <h3 style="font-size:17px; font-weight:600; margin-bottom:16px;">Add Cooking Clip</h3>
+      <div style="margin-bottom:12px;">
+        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Cloudflare Video ID</label>
+        <input id="newClipVideoId" type="text" placeholder="Paste video ID from Cloudflare dashboard"
+          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box;"
+          oninput="previewVideoClipThumbnail(this.value)" />
+      </div>
+      <div id="clipThumbnailPreview" style="margin-bottom:12px; display:none;">
+        <img id="clipThumbnailImg" style="width:100%; max-width:200px; border-radius:8px; background:#0a0a0b;" />
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Caption</label>
+        <input id="newClipCaption" type="text" placeholder="e.g. Season and sear the chicken"
+          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box;" />
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button onclick="closeModal()" style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; border:none; border-radius:10px; cursor:pointer; font-size:14px;">Cancel</button>
+        <button onclick="addVideoClipFromForm()" style="flex:1; padding:10px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:10px; cursor:pointer; font-size:14px; font-weight:600;">Add Clip</button>
+      </div>
+    </div>
+  `;
+  openModal(html);
+}
+
+function previewVideoClipThumbnail(videoId) {
+  const preview = document.getElementById('clipThumbnailPreview');
+  const img = document.getElementById('clipThumbnailImg');
+  if (!preview || !img) return;
+  if (videoId && videoId.trim().length > 10) {
+    img.src = getStreamThumbnail(videoId.trim());
+    preview.style.display = 'block';
+    img.onerror = () => { preview.style.display = 'none'; };
+  } else {
+    preview.style.display = 'none';
+  }
+}
+
+function addVideoClipFromForm() {
+  const videoId = (document.getElementById('newClipVideoId')?.value || '').trim();
+  const caption = (document.getElementById('newClipCaption')?.value || '').trim();
+  if (!videoId) { showError('Video ID is required'); return; }
+  ensureRecipeForm();
+  if (!Array.isArray(state.recipeForm.videoClips)) state.recipeForm.videoClips = [];
+  const order = state.recipeForm.videoClips.length + 1;
+  state.recipeForm.videoClips.push({ cloudflareVideoId: videoId, caption, order });
+  closeModal();
+  render();
+}
+
+function removeVideoClip(idx) {
+  ensureRecipeForm();
+  if (!Array.isArray(state.recipeForm.videoClips)) return;
+  state.recipeForm.videoClips.splice(idx, 1);
+  // Reorder
+  state.recipeForm.videoClips.forEach((c, i) => { c.order = i + 1; });
+  render();
+}
+
+function moveVideoClip(idx, direction) {
+  ensureRecipeForm();
+  if (!Array.isArray(state.recipeForm.videoClips)) return;
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= state.recipeForm.videoClips.length) return;
+  const clips = state.recipeForm.videoClips;
+  [clips[idx], clips[newIdx]] = [clips[newIdx], clips[idx]];
+  clips.forEach((c, i) => { c.order = i + 1; });
+  render();
+}
+
 // ===== BATCH RECIPE (Build a Plate) =====
 
 function openNewBatchRecipe() {
@@ -2254,6 +2667,7 @@ function openEditBatchRecipe(batchId) {
 function openBatchRecipeView(batchId) {
   state.batchViewId = batchId;
   state.batchComponentIndex = 0;
+  state.batchVideoIndex = 0;
   state.currentView = 'batch-view';
   render();
   setTimeout(() => { const app = document.getElementById('app'); if (app) app.scrollTop = 0; }, 0);
@@ -2876,6 +3290,8 @@ function renderBatchView() {
       </div>
 
       ${comps.length === 0 ? `<div style="text-align:center; padding:32px; color:${CONFIG.text_muted};">No components</div>` : `
+        ${renderBatchVideoCarousel(batch)}
+
         <!-- Notes bar -->
         ${compNotes ? `
           <div style="background:rgba(255,214,10,0.08); border:1px solid rgba(255,214,10,0.2); border-radius:10px; padding:10px 12px; margin-bottom:12px;">
@@ -3086,7 +3502,8 @@ function render() {
   `;
 
   if (typeof renderChefChat === 'function') renderChefChat();
-  if (state.currentView === 'batch-view') setTimeout(initBatchCardSwipe, 0);
+  if (state.currentView === 'batch-view') { setTimeout(initBatchCardSwipe, 0); setTimeout(initBatchVideoCarouselSwipe, 100); }
+  if (state.currentView === 'recipe-view') setTimeout(initVideoCarouselSwipe, 100);
 }
 
 function setupKeyboardShortcuts() {

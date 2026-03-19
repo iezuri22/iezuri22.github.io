@@ -19,6 +19,28 @@
   cursor: grabbing;
 }
 
+/* ===== Video Carousel ===== */
+.video-carousel-container {
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+.video-carousel-track {
+  touch-action: pan-x;
+}
+
+.video-iframe-wrapper iframe {
+  pointer-events: auto;
+}
+
+/* Desktop: center video, max-width 400px */
+@media (min-width: 768px) {
+  .video-carousel-container {
+    max-width: 400px;
+    margin: 0 auto;
+  }
+}
+
 /* ===== Recipe Edit Form: Mobile Overflow Fix ===== */
 @media (max-width: 767px) {
   /* The .p-6 container for the edit form */

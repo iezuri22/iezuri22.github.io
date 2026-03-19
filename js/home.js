@@ -294,6 +294,7 @@ function renderSwipeTab() {
           <div class="swipe-overlay like">SMASH</div>
           <div class="swipe-overlay nope">PASS</div>
           ${img ? `<img class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="card-image-placeholder" style="display:none;"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
+          ${typeof recipeHasVideo === 'function' && recipeHasVideo(recipe.__backendId || recipe.id) ? `<div style="position:absolute; top:12px; left:12px; z-index:3; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;"><svg width="12" height="12" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg></div>` : ''}
           <div class="card-body">
             <div class="card-title">${esc(recipe.title)}</div>
             <div class="card-meta">
@@ -1928,6 +1929,7 @@ function renderSwipe() {
           <div class="swipe-overlay like">SMASH</div>
           <div class="swipe-overlay nope">PASS</div>
           ${img ? `<img class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="card-image-placeholder" style="display:none;"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
+          ${typeof recipeHasVideo === 'function' && recipeHasVideo(recipe.__backendId || recipe.id) ? `<div style="position:absolute; top:12px; left:12px; z-index:3; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;"><svg width="12" height="12" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg></div>` : ''}
           <div class="card-body">
             <div class="card-title">${esc(recipe.title)}</div>
             <div class="card-meta">

@@ -713,6 +713,7 @@ function persistState() {
 
 function loadAllState() {
   state.recipes = loadFromLS('recipes', []);
+  seedTestVideoClips();
   state.inventory = loadFromLS('inventory', []);
   state.planData = loadFromLS('planData', []);
   state.mealSelections = loadFromLS('mealSelections', []);
@@ -2148,6 +2149,75 @@ function recipeIngList(r) {
 }
 
 // ============================================================
+// SECTION 10a: CLOUDFLARE STREAM VIDEO HELPERS
+// ============================================================
+const CLOUDFLARE_STREAM_SUBDOMAIN = 'customer-3z4sk2e6gw4kp3xc.cloudflarestream.com';
+
+function getStreamEmbedUrl(videoId, opts = {}) {
+  const { autoplay = false, muted = true, controls = true, loop = true } = opts;
+  const poster = encodeURIComponent(`https://${CLOUDFLARE_STREAM_SUBDOMAIN}/${videoId}/thumbnails/thumbnail.jpg?time=&height=600`);
+  return `https://${CLOUDFLARE_STREAM_SUBDOMAIN}/${videoId}/iframe?muted=${muted}&preload=true&loop=${loop}&autoplay=${autoplay}&controls=${controls}&poster=${poster}`;
+}
+
+function getStreamThumbnail(videoId) {
+  return `https://${CLOUDFLARE_STREAM_SUBDOMAIN}/${videoId}/thumbnails/thumbnail.jpg?time=&height=400`;
+}
+
+function getRecipeVideoClips(recipeId) {
+  const r = getRecipeById(recipeId);
+  if (!r || !Array.isArray(r.videoClips) || r.videoClips.length === 0) return [];
+  return r.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+function recipeHasVideo(recipeId) {
+  const r = getRecipeById(recipeId);
+  return r && Array.isArray(r.videoClips) && r.videoClips.length > 0;
+}
+
+// Build a Plate: stitch all component videos into one sequence with chapter dividers
+function getBatchVideoSequence(batch) {
+  if (!batch || !batch.components || batch.components.length === 0) return [];
+  const sequence = [];
+  batch.components.forEach((comp, compIdx) => {
+    let compName = comp.name || 'Component';
+    let clips = [];
+    if (comp.type === 'recipe' && comp.recipeId) {
+      const r = getRecipeById(comp.recipeId);
+      if (r) {
+        compName = r.title;
+        clips = getRecipeVideoClips(comp.recipeId);
+      }
+    }
+    if (clips.length === 0) return;
+    // Add chapter divider before each component (except if it's the very first item)
+    if (sequence.length > 0) {
+      sequence.push({ type: 'divider', componentName: compName });
+    }
+    clips.forEach(clip => {
+      sequence.push({ type: 'clip', ...clip, componentName: compName });
+    });
+  });
+  return sequence;
+}
+
+function seedTestVideoClips() {
+  const testVideoId = '68c030875f569b166db2964f7237d7d9';
+  const recipes = state.recipes || [];
+  // Only seed the first 3 non-tip recipes that don't already have videoClips
+  let seeded = 0;
+  for (let i = 0; i < recipes.length && seeded < 3; i++) {
+    const r = recipes[i];
+    if (r.isTip) continue;
+    if (Array.isArray(r.videoClips) && r.videoClips.length > 0) { seeded++; continue; }
+    r.videoClips = [
+      { cloudflareVideoId: testVideoId, caption: 'Prep ingredients', order: 1 },
+      { cloudflareVideoId: testVideoId, caption: 'Cook and plate', order: 2 }
+    ];
+    seeded++;
+  }
+}
+
+// ============================================================
 // SECTION 10b: BATCH RECIPE (Build a Plate) HELPERS
 // ============================================================
 function getBatchRecipeById(id) {
@@ -2346,7 +2416,7 @@ function getBatchCoverPhoto(batch) {
 }
 
 function newRecipeDraft() {
-  return { type: 'recipe', title: '', category: 'Breakfast', tipCategory: 'Prep Techniques', recipe_url: '', image_url: '', tags: '', notes: '', instructions: '', ingredientsRows: [{ qty: '', unit: '', name: '', group: 'Produce' }], sourceType: 'user', isDraft: false, isTip: false };
+  return { type: 'recipe', title: '', category: 'Breakfast', tipCategory: 'Prep Techniques', recipe_url: '', image_url: '', tags: '', notes: '', instructions: '', ingredientsRows: [{ qty: '', unit: '', name: '', group: 'Produce' }], sourceType: 'user', isDraft: false, isTip: false, videoClips: [] };
 }
 
 function ensureRecipeForm() {
@@ -3538,6 +3608,8 @@ function applySupabaseData(data) {
   }
 
   state.recipes = data.filter(d => d.id && d.id.startsWith('recipe_'));
+  // Seed test video clips on first 3 recipes (if they don't already have clips)
+  seedTestVideoClips();
   state.inventory = data.filter(d => d.id && (d.id.startsWith('inventory_') || d.id.startsWith('inv_')));
 
   // Expiration defaults
