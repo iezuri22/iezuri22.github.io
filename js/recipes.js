@@ -3095,6 +3095,17 @@ function setupKeyboardShortcuts() {
 
 function init() {
   loadAllState();
+
+  // Check if we should open a recipe for editing (from recipe-detail.html)
+  const editRecipeId = sessionStorage.getItem('yummy_edit_recipe_id');
+  if (editRecipeId) {
+    sessionStorage.removeItem('yummy_edit_recipe_id');
+    openEditRecipe(editRecipeId);
+    setupKeyboardShortcuts();
+    render();
+    return;
+  }
+
   const targetView = sessionStorage.getItem('yummy_target_view');
   if (targetView && VIEW_RENDERERS[targetView]) {
     sessionStorage.removeItem('yummy_target_view');
