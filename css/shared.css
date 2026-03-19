@@ -1662,3 +1662,33 @@
         left: 70px !important;
       }
     }
+
+    /* ===== iOS STANDALONE WEB APP (Add to Home Screen) FIX ===== */
+    /* Fixes black gap below bottom nav on iPhones with home indicator */
+
+    @media all and (display-mode: standalone) {
+      .bottom-nav {
+        position: fixed !important;
+        bottom: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+      }
+
+      .app-shell {
+        padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+      }
+    }
+
+    /* Belt-and-suspenders: JS-based detection via navigator.standalone */
+    html.ios-standalone .bottom-nav {
+      position: fixed !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+    }
+
+    html.ios-standalone .app-shell {
+      padding-bottom: calc(56px + env(safe-area-inset-bottom, 0px));
+    }

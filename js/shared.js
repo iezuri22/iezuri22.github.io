@@ -10,6 +10,7 @@
 // instead of opening Safari with browser chrome.
 // ============================================================
 if (window.navigator.standalone === true) {
+  document.documentElement.classList.add('ios-standalone');
   document.addEventListener('click', function(e) {
     var link = e.target.closest('a');
     if (link && link.href && link.origin === window.location.origin) {
