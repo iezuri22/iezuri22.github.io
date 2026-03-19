@@ -72,6 +72,9 @@ function openRecipeView(id, fromPlan = null, fromStats = false, fromTips = false
     state.scrollPositions[state.currentView] = app.scrollTop;
   }
 
+  // Save the view we came from so the back button returns here
+  state.recipeViewReturnTo = state.currentView;
+
   state.selectedRecipeViewId = id;
   state.viewingFromPlan = fromPlan; // {date, meal} or null
   state.viewingFromStats = fromStats; // true if coming from recipe-stats
@@ -85,6 +88,21 @@ function openRecipeView(id, fromPlan = null, fromStats = false, fromTips = false
     const app = document.getElementById('app');
     if (app) app.scrollTop = 0;
   }, 0);
+}
+
+function goBackFromRecipeView() {
+  if (state.viewingFromSwipe) {
+    navigateTo('home');
+  } else if (state.viewingFromPlan) {
+    navigateTo('weekly-plan');
+  } else if (state.recipeViewReturnTo && state.recipeViewReturnTo !== 'recipe-view') {
+    navigateTo(state.recipeViewReturnTo);
+  } else if (!state.recipeViewReturnTo && window.history.length > 1) {
+    // Cross-page entry (e.g. from kitchen-detail.html) — browser history is correct
+    window.history.back();
+  } else {
+    navigateTo('recipes');
+  }
 }
 
 async function saveRecipeForm() {
@@ -2057,7 +2075,7 @@ function renderRecipeView() {
               <div class="p-6 max-w-5xl mx-auto" style="overflow-x:hidden; max-width:100%; box-sizing:border-box;">
       <!-- Compact header row -->
       <nav style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; min-height:36px;">
-        <button type="button" onclick="if(window.history.length>1){window.history.back();}else{window.location.href='/recipes.html';}" style="color:${CONFIG.text_color}; background:none; border:none; cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; padding:0;">
+        <button type="button" onclick="goBackFromRecipeView()" style="color:${CONFIG.text_color}; background:none; border:none; cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; padding:0;">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
         </button>
         <span style="color:${CONFIG.text_color}; font-weight:700; font-size:18px; flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 8px;">Recipe</span>

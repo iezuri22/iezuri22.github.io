@@ -334,6 +334,8 @@ function goToPreviousDay() {
   const current = new Date(state.viewingDate + 'T12:00:00');
   current.setDate(current.getDate() - 1);
   state.viewingDate = current.toISOString().split('T')[0];
+  state.swipeDeck = null;
+  state.swipeIndex = 0;
   render();
 }
 
@@ -341,11 +343,15 @@ function goToNextDay() {
   const current = new Date(state.viewingDate + 'T12:00:00');
   current.setDate(current.getDate() + 1);
   state.viewingDate = current.toISOString().split('T')[0];
+  state.swipeDeck = null;
+  state.swipeIndex = 0;
   render();
 }
 
 function goToToday() {
   state.viewingDate = getToday();
+  state.swipeDeck = null;
+  state.swipeIndex = 0;
   render();
 }
 
@@ -363,6 +369,8 @@ function closeDatePicker() {
 function selectDate(dateStr) {
   state.viewingDate = dateStr;
   state.calendarPickerOpen = false;
+  state.swipeDeck = null;
+  state.swipeIndex = 0;
   render();
 }
 
