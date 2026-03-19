@@ -1126,6 +1126,8 @@ function renderKitchenDetail() {
               ${matchingRecipes.map(r => {
                 const img = recipeThumb(r);
                 const id = r.__backendId || r.id;
+                const kSaved = isRecipeSaved(id);
+                const kUrl = (r.recipe_url || '').trim() || (typeof recipeUrl === 'function' ? recipeUrl(r) : '');
                 return `
                   <div style="position:relative; border-radius: 10px; overflow: hidden; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
                     <div onclick="window.location.href='/recipe-detail.html?id=${encodeURIComponent(id)}&from=kitchen&ingredient=${encodeURIComponent(name)}'" class="card-press" style="cursor: pointer;">
@@ -1136,9 +1138,20 @@ function renderKitchenDetail() {
                         <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_color}; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.3;">${esc(r.title)}</div>
                       </div>
                     </div>
-                    <button onclick="event.stopPropagation();removeRecipeFromIngredient('${esc(name)}','${esc(id)}')" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.7);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;">
+                    <!-- X button top-left -->
+                    <button onclick="event.stopPropagation();removeRecipeFromIngredient('${esc(name)}','${esc(id)}')" style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.7);border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;">
                       <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
+                    <!-- Bookmark icon top-right -->
+                    <button onclick="event.stopPropagation();toggleSaveRecipe('${esc(id)}')" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:${kSaved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;padding:0;">
+                      <svg width="12" height="12" fill="${kSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+                    </button>
+                    ${kUrl ? `
+                    <!-- External link icon bottom-right -->
+                    <a href="${esc(kUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="position:absolute;bottom:30px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);border:none;color:${CONFIG.primary_action_color};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;text-decoration:none;">
+                      <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
+                    </a>
+                    ` : ''}
                   </div>
                 `;
               }).join('')}
@@ -4173,15 +4186,30 @@ function renderIngredientDetailRecipes(name, displayName, relatedRecipes) {
             <div class="flex gap-3 overflow-x-auto pb-2" style="-webkit-overflow-scrolling:touch;">
               ${relatedRecipes.map(r => {
                 const recipeImg = recipeThumb(r);
+                const rId = r.__backendId || r.id;
+                const rSaved = isRecipeSaved(rId);
+                const rUrl = (r.recipe_url || '').trim() || (typeof recipeUrl === 'function' ? recipeUrl(r) : '');
                 return `
-                  <div onclick="openRecipeView('${r.__backendId || r.id}')"
-                    class="flex-shrink-0 rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
-                    style="width:130px; background:${CONFIG.background_color};">
-                    <div style="height:90px; overflow:hidden;">
-                      ${recipeImg ? `<img loading="lazy" src="${esc(recipeImg)}" style="width:100%; height:100%; object-fit:cover;" />`
-                      : `<div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:2rem; background: ${CONFIG.background_color};">\ud83c\udf7d\ufe0f</div>`}
+                  <div style="position:relative; width:130px; flex-shrink:0;">
+                    <div onclick="openRecipeView('${rId}')"
+                      class="rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
+                      style="background:${CONFIG.background_color};">
+                      <div style="height:90px; overflow:hidden;">
+                        ${recipeImg ? `<img loading="lazy" src="${esc(recipeImg)}" style="width:100%; height:100%; object-fit:cover;" />`
+                        : `<div style="height:100%; display:flex; align-items:center; justify-content:center; font-size:2rem; background: ${CONFIG.background_color};">\ud83c\udf7d\ufe0f</div>`}
+                      </div>
+                      <div class="p-2"><div class="truncate" style="color:${CONFIG.text_color}; font-size:12px; font-weight: 500;">${esc(r.title)}</div></div>
                     </div>
-                    <div class="p-2"><div class="truncate" style="color:${CONFIG.text_color}; font-size:12px; font-weight: 500;">${esc(r.title)}</div></div>
+                    <!-- Bookmark icon top-right -->
+                    <button onclick="event.stopPropagation();toggleSaveRecipe('${esc(rId)}')" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:${rSaved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;padding:0;">
+                      <svg width="11" height="11" fill="${rSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+                    </button>
+                    ${rUrl ? `
+                    <!-- External link icon top-left -->
+                    <a href="${esc(rUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:${CONFIG.primary_action_color};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;text-decoration:none;">
+                      <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
+                    </a>
+                    ` : ''}
                   </div>`;
               }).join('')}
             </div>

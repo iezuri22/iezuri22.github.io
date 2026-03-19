@@ -3093,7 +3093,7 @@ function renderDesktopPageTitle() {
 }
 
 function renderNav() {
-  if (state.currentView === 'home' || state.currentView === 'swipe' || state.currentView === 'swipe-setup' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals') return '';
+  if (state.currentView === 'home' || state.currentView === 'swipe' || state.currentView === 'swipe-setup' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals' || state.currentView === 'recipe-view') return '';
   const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient' };
   const pageTitle = pageTitles[state.currentView] || 'Yummy';
   const expiringItems = getExpiringItems(); const expiringCount = expiringItems.length;
