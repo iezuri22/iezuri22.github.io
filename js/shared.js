@@ -2118,6 +2118,208 @@ document.addEventListener('click', (e) => {
 });
 
 // ============================================================
+// SECTION 9b: FULLSCREEN VIDEO OVERLAY
+// ============================================================
+
+// State for the fullscreen video overlay
+if (!state.videoOverlay) state.videoOverlay = null; // { type: 'recipe'|'batch', id, sequence, currentIndex, muted }
+
+function openVideoOverlay(type, id) {
+  let sequence = [];
+  if (type === 'recipe') {
+    const clips = getRecipeVideoClips(id);
+    clips.forEach(clip => {
+      sequence.push({ type: 'clip', ...clip, componentName: null });
+    });
+  } else if (type === 'batch') {
+    const batch = getBatchRecipeById(id);
+    if (batch) sequence = getBatchVideoSequence(batch);
+  }
+  if (sequence.length === 0) return;
+  state.videoOverlay = { type, id, sequence, currentIndex: 0, muted: true };
+  document.body.style.overflow = 'hidden';
+  renderVideoOverlay();
+}
+
+function closeVideoOverlay() {
+  state.videoOverlay = null;
+  document.body.style.overflow = '';
+  const overlay = document.getElementById('videoFullscreenOverlay');
+  if (overlay) overlay.remove();
+}
+
+function videoOverlayGoTo(idx) {
+  if (!state.videoOverlay) return;
+  const seq = state.videoOverlay.sequence;
+  if (idx < 0 || idx >= seq.length) return;
+  state.videoOverlay.currentIndex = idx;
+  renderVideoOverlay();
+}
+
+function toggleVideoOverlayMute() {
+  if (!state.videoOverlay) return;
+  state.videoOverlay.muted = !state.videoOverlay.muted;
+  renderVideoOverlay();
+}
+
+function renderVideoOverlay() {
+  if (!state.videoOverlay) return;
+  const { sequence, currentIndex, muted, type } = state.videoOverlay;
+  const item = sequence[currentIndex];
+  if (!item) return;
+
+  const isClip = item.type === 'clip';
+  const isDivider = item.type === 'divider';
+
+  // Build video area (60% height)
+  let videoAreaHtml = '';
+  if (isClip) {
+    const embedUrl = getStreamEmbedUrl(item.cloudflareVideoId, { autoplay: true, muted: muted, controls: false, loop: true });
+    videoAreaHtml = `
+      <div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#000;">
+        <div style="position:relative; width:100%; max-width:400px; height:100%;">
+          <iframe id="videoOverlayIframe" src="${embedUrl}"
+            style="width:100%; height:100%; border:none;"
+            allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture"
+            allowfullscreen></iframe>
+          <!-- Mute/unmute button -->
+          <button onclick="toggleVideoOverlayMute()" style="position:absolute; bottom:12px; right:12px; width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10;">
+            ${muted ? `
+              <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+            ` : `
+              <svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            `}
+          </button>
+        </div>
+      </div>
+    `;
+  } else {
+    // Divider card
+    const compIdx = sequence.filter((s, i) => i <= currentIndex && s.type === 'divider').length;
+    const totalComps = sequence.filter(s => s.type === 'divider').length + 1;
+    videoAreaHtml = `
+      <div style="width:100%; height:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:${CONFIG.surface_color};">
+        <div style="color:${CONFIG.text_muted}; font-size:14px; margin-bottom:12px;">Up next</div>
+        <div style="color:${CONFIG.text_color}; font-size:20px; font-weight:700; text-align:center; padding:0 24px;">${esc(item.componentName)}</div>
+        <div style="color:${CONFIG.text_muted}; font-size:13px; margin-top:12px;">Step ${compIdx + 1} of ${totalComps}</div>
+      </div>
+    `;
+  }
+
+  // Build instructions area (40% height)
+  let instructionsHtml = '';
+  if (isClip) {
+    const caption = item.caption || '';
+    const instructions = item.instructions || '';
+    const fromLabel = (type === 'batch' && item.componentName) ? `<div style="color:${CONFIG.text_muted}; font-size:12px; margin-bottom:6px;">From: ${esc(item.componentName)}</div>` : '';
+    instructionsHtml = `
+      ${fromLabel}
+      ${caption ? `<div style="color:${CONFIG.text_color}; font-size:16px; font-weight:700; margin-bottom:8px;">${esc(caption)}</div>` : ''}
+      ${instructions ? `<div style="color:${CONFIG.text_color}; font-size:14px; line-height:1.6; opacity:0.9;">${esc(instructions)}</div>` : `<div style="color:${CONFIG.text_muted}; font-size:14px; font-style:italic;">No instructions for this clip</div>`}
+    `;
+  } else {
+    instructionsHtml = `
+      <div style="color:${CONFIG.text_muted}; font-size:14px; text-align:center;">Swipe to continue to the next clip</div>
+    `;
+  }
+
+  // Dot indicators
+  const dotsHtml = sequence.length > 1 ? `
+    <div style="display:flex; justify-content:center; gap:5px; flex-wrap:wrap; max-width:90%; margin:0 auto;">
+      ${sequence.map((s, i) => {
+        const isActive = i === currentIndex;
+        const isDot = s.type === 'clip';
+        return `<button onclick="videoOverlayGoTo(${i})"
+          style="width:${isActive ? '16px' : '6px'}; height:6px; border-radius:3px; border:none; padding:0;
+          background:${isActive ? CONFIG.primary_action_color : (isDot ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)')}; cursor:pointer; transition:all 0.2s; flex-shrink:0;">
+        </button>`;
+      }).join('')}
+    </div>
+  ` : '';
+
+  const overlayHtml = `
+    <div id="videoFullscreenOverlay" style="position:fixed; top:0; left:0; width:100%; height:100dvh; background:#000; z-index:9999; display:flex; flex-direction:column;">
+      <!-- Close button -->
+      <button onclick="closeVideoOverlay()" style="position:absolute; top:12px; right:12px; z-index:10001; width:32px; height:32px; background:rgba(0,0,0,0.5); backdrop-filter:blur(4px); border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+        <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+
+      <!-- Video area (60%) -->
+      <div id="videoOverlayVideoArea" style="flex:0 0 60%; overflow:hidden; position:relative;">
+        ${videoAreaHtml}
+      </div>
+
+      <!-- Gradient separator -->
+      <div style="height:2px; background:linear-gradient(to right, transparent, rgba(255,255,255,0.08), transparent);"></div>
+
+      <!-- Instructions area (remaining ~35%) -->
+      <div style="flex:1; overflow-y:auto; padding:16px 20px 8px; -webkit-overflow-scrolling:touch;">
+        ${instructionsHtml}
+      </div>
+
+      <!-- Dots + safe area (bottom ~5%) -->
+      <div style="flex-shrink:0; padding:8px 16px calc(env(safe-area-inset-bottom, 8px) + 8px);">
+        ${dotsHtml}
+      </div>
+    </div>
+  `;
+
+  // Insert or replace the overlay in the DOM
+  let existing = document.getElementById('videoFullscreenOverlay');
+  if (existing) {
+    existing.outerHTML = overlayHtml;
+  } else {
+    document.body.insertAdjacentHTML('beforeend', overlayHtml);
+  }
+
+  // Init swipe gestures on the overlay
+  setTimeout(initVideoOverlaySwipe, 50);
+}
+
+function initVideoOverlaySwipe() {
+  const videoArea = document.getElementById('videoOverlayVideoArea');
+  if (!videoArea || !state.videoOverlay || state.videoOverlay.sequence.length <= 1) return;
+
+  // Remove old listeners by replacing element
+  const clone = videoArea.cloneNode(true);
+  videoArea.parentNode.replaceChild(clone, videoArea);
+
+  let startX = 0, currentX = 0, swiping = false;
+
+  clone.addEventListener('touchstart', e => {
+    startX = e.touches[0].clientX;
+    currentX = startX;
+    swiping = true;
+  }, { passive: true });
+
+  clone.addEventListener('touchmove', e => {
+    if (!swiping) return;
+    currentX = e.touches[0].clientX;
+  }, { passive: true });
+
+  clone.addEventListener('touchend', () => {
+    if (!swiping) return;
+    swiping = false;
+    const diff = currentX - startX;
+    const threshold = 60;
+    const idx = state.videoOverlay.currentIndex;
+    const max = state.videoOverlay.sequence.length - 1;
+    if (diff < -threshold && idx < max) {
+      videoOverlayGoTo(idx + 1);
+    } else if (diff > threshold && idx > 0) {
+      videoOverlayGoTo(idx - 1);
+    }
+  });
+}
+
+// ESC key to close video overlay
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && state.videoOverlay) {
+    closeVideoOverlay();
+  }
+});
+
+// ============================================================
 // SECTION 10: RECIPE HELPERS
 // ============================================================
 function getRecipeById(id) {
@@ -2166,7 +2368,12 @@ function getStreamThumbnail(videoId) {
 function getRecipeVideoClips(recipeId) {
   const r = getRecipeById(recipeId);
   if (!r || !Array.isArray(r.videoClips) || r.videoClips.length === 0) return [];
-  return r.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  return r.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).map(c => ({
+    cloudflareVideoId: c.cloudflareVideoId,
+    caption: c.caption || '',
+    instructions: c.instructions || '',
+    order: c.order
+  }));
 }
 
 function recipeHasVideo(recipeId) {
@@ -2203,16 +2410,32 @@ function getBatchVideoSequence(batch) {
 function seedTestVideoClips() {
   const testVideoId = '68c030875f569b166db2964f7237d7d9';
   const recipes = state.recipes || [];
-  // Only seed the first 3 non-tip recipes that don't already have videoClips
+  const testClipSets = [
+    [
+      { cloudflareVideoId: testVideoId, caption: 'Prep ingredients', order: 1, instructions: 'Wash and chop all vegetables. Mince the garlic and dice the onions. Measure out your spices and set everything in small bowls for easy access.' },
+      { cloudflareVideoId: testVideoId, caption: 'Cook and plate', order: 2, instructions: 'Heat oil in a large skillet over medium-high heat. Add the aromatics first and cook until fragrant, about 30 seconds. Add the main ingredients and cook for 5-7 minutes, stirring occasionally. Plate on a warm dish and garnish.' }
+    ],
+    [
+      { cloudflareVideoId: testVideoId, caption: 'Season and sear', order: 1, instructions: 'Pat the protein dry with paper towels. Season generously with salt and pepper on both sides. Heat a cast iron skillet until smoking. Place skin-side down and don\'t move it for 4 minutes until golden and crispy.' },
+      { cloudflareVideoId: testVideoId, caption: 'Make the sauce', order: 2, instructions: 'Remove the protein and set aside. In the same pan, add shallots and deglaze with wine. Reduce by half, then add stock and butter. Swirl until the sauce is glossy and coats the back of a spoon.' },
+      { cloudflareVideoId: testVideoId, caption: 'Plate and serve', order: 3, instructions: 'Slice the protein against the grain. Fan slices on the plate. Spoon sauce over the top and around the plate. Add a sprinkle of flaky salt and fresh herbs to finish.' }
+    ],
+    [
+      { cloudflareVideoId: testVideoId, caption: 'Mix the batter', order: 1, instructions: 'Whisk together dry ingredients in a large bowl. In a separate bowl, combine wet ingredients. Make a well in the dry ingredients and pour in the wet mixture. Fold gently — a few lumps are fine. Do not overmix.' },
+      { cloudflareVideoId: testVideoId, caption: 'Bake and cool', order: 2, instructions: 'Pour batter into a prepared pan. Bake at 350°F for 25-30 minutes or until a toothpick comes out clean. Let cool in the pan for 10 minutes, then transfer to a wire rack.' }
+    ]
+  ];
+  const testClipSet4 = [
+    { cloudflareVideoId: testVideoId, caption: 'Toast the spices', order: 1, instructions: 'Add whole spices to a dry skillet over medium heat. Toast for 1-2 minutes, shaking the pan frequently, until fragrant and slightly darkened. Transfer to a mortar and pestle or spice grinder and grind to a fine powder.' },
+    { cloudflareVideoId: testVideoId, caption: 'Build the base', order: 2, instructions: 'Heat oil and sauté onions until deeply golden, about 10 minutes. Add garlic, ginger, and the ground spice blend. Cook for 1 minute until the raw smell disappears. Add tomatoes and simmer for 15 minutes.' }
+  ];
+  testClipSets.push(testClipSet4);
   let seeded = 0;
-  for (let i = 0; i < recipes.length && seeded < 3; i++) {
+  for (let i = 0; i < recipes.length && seeded < 4; i++) {
     const r = recipes[i];
     if (r.isTip) continue;
     if (Array.isArray(r.videoClips) && r.videoClips.length > 0) { seeded++; continue; }
-    r.videoClips = [
-      { cloudflareVideoId: testVideoId, caption: 'Prep ingredients', order: 1 },
-      { cloudflareVideoId: testVideoId, caption: 'Cook and plate', order: 2 }
-    ];
+    r.videoClips = testClipSets[seeded];
     seeded++;
   }
 }

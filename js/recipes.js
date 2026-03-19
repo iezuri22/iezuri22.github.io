@@ -2165,7 +2165,17 @@ ${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; 
           </div>
         ` : ''}
 
-        ${renderVideoCarousel(recipeId)}
+        ${recipeHasVideo(recipeId) ? `
+          <div class="mt-4">
+            <button type="button" onclick="openVideoOverlay('recipe', '${recipeId}')"
+              style="width:100%; height:44px; display:flex; align-items:center; justify-content:center; gap:8px;
+              background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.12); border-radius:10px;
+              color:${CONFIG.text_color}; font-size:14px; font-weight:600; cursor:pointer;">
+              <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              Watch Cooking Video
+            </button>
+          </div>
+        ` : ''}
 
         ${tags ? `<div class="mt-4" style="color:${CONFIG.text_color}; opacity:.85;">
           <span class="font-semibold">Tags:</span> ${esc(tags)}
@@ -2551,7 +2561,11 @@ function renderVideoClipsEditor() {
               <div style="flex:1; min-width:0;">
                 <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(clip.caption || 'No caption')}</div>
                 <div style="color:${CONFIG.text_muted}; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(clip.cloudflareVideoId)}</div>
+                ${clip.instructions ? `<div style="color:${CONFIG.text_muted}; font-size:10px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Instructions added</div>` : `<div style="color:${CONFIG.text_tertiary}; font-size:10px; margin-top:2px;">No instructions</div>`}
               </div>
+              <button onclick="editVideoClipInstructions(${i})" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:4px;" title="Edit instructions">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
+              </button>
               <div style="display:flex; flex-direction:column; gap:4px;">
                 ${i > 0 ? `<button onclick="moveVideoClip(${i}, -1)" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:2px;" title="Move up">
                   <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
@@ -2589,10 +2603,15 @@ function showAddVideoClipForm() {
       <div id="clipThumbnailPreview" style="margin-bottom:12px; display:none;">
         <img id="clipThumbnailImg" style="width:100%; max-width:200px; border-radius:8px; background:#0a0a0b;" />
       </div>
-      <div style="margin-bottom:16px;">
+      <div style="margin-bottom:12px;">
         <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Caption</label>
         <input id="newClipCaption" type="text" placeholder="e.g. Season and sear the chicken"
           style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box;" />
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Instructions</label>
+        <textarea id="newClipInstructions" rows="4" placeholder="Step-by-step instructions for this clip..."
+          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box; resize:vertical; font-family:inherit;"></textarea>
       </div>
       <div style="display:flex; gap:8px;">
         <button onclick="closeModal()" style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; border:none; border-radius:10px; cursor:pointer; font-size:14px;">Cancel</button>
@@ -2619,11 +2638,12 @@ function previewVideoClipThumbnail(videoId) {
 function addVideoClipFromForm() {
   const videoId = (document.getElementById('newClipVideoId')?.value || '').trim();
   const caption = (document.getElementById('newClipCaption')?.value || '').trim();
+  const instructions = (document.getElementById('newClipInstructions')?.value || '').trim();
   if (!videoId) { showError('Video ID is required'); return; }
   ensureRecipeForm();
   if (!Array.isArray(state.recipeForm.videoClips)) state.recipeForm.videoClips = [];
   const order = state.recipeForm.videoClips.length + 1;
-  state.recipeForm.videoClips.push({ cloudflareVideoId: videoId, caption, order });
+  state.recipeForm.videoClips.push({ cloudflareVideoId: videoId, caption, instructions, order });
   closeModal();
   render();
 }
@@ -2645,6 +2665,45 @@ function moveVideoClip(idx, direction) {
   const clips = state.recipeForm.videoClips;
   [clips[idx], clips[newIdx]] = [clips[newIdx], clips[idx]];
   clips.forEach((c, i) => { c.order = i + 1; });
+  render();
+}
+
+function editVideoClipInstructions(idx) {
+  ensureRecipeForm();
+  if (!Array.isArray(state.recipeForm.videoClips)) return;
+  const clip = state.recipeForm.videoClips[idx];
+  if (!clip) return;
+  const html = `
+    <div style="color:${CONFIG.text_color};">
+      <h3 style="font-size:17px; font-weight:600; margin-bottom:4px;">Edit Clip Instructions</h3>
+      <div style="color:${CONFIG.text_muted}; font-size:13px; margin-bottom:16px;">${esc(clip.caption || 'Clip ' + (idx + 1))}</div>
+      <div style="margin-bottom:12px;">
+        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Caption</label>
+        <input id="editClipCaption" type="text" value="${esc(clip.caption || '')}"
+          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box;" />
+      </div>
+      <div style="margin-bottom:16px;">
+        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Instructions</label>
+        <textarea id="editClipInstructions" rows="6" placeholder="Step-by-step instructions for this clip..."
+          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box; resize:vertical; font-family:inherit;">${esc(clip.instructions || '')}</textarea>
+      </div>
+      <div style="display:flex; gap:8px;">
+        <button onclick="closeModal()" style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; border:none; border-radius:10px; cursor:pointer; font-size:14px;">Cancel</button>
+        <button onclick="saveVideoClipEdit(${idx})" style="flex:1; padding:10px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:10px; cursor:pointer; font-size:14px; font-weight:600;">Save</button>
+      </div>
+    </div>
+  `;
+  openModal(html);
+}
+
+function saveVideoClipEdit(idx) {
+  ensureRecipeForm();
+  if (!Array.isArray(state.recipeForm.videoClips)) return;
+  const clip = state.recipeForm.videoClips[idx];
+  if (!clip) return;
+  clip.caption = (document.getElementById('editClipCaption')?.value || '').trim();
+  clip.instructions = (document.getElementById('editClipInstructions')?.value || '').trim();
+  closeModal();
   render();
 }
 
@@ -3290,7 +3349,17 @@ function renderBatchView() {
       </div>
 
       ${comps.length === 0 ? `<div style="text-align:center; padding:32px; color:${CONFIG.text_muted};">No components</div>` : `
-        ${renderBatchVideoCarousel(batch)}
+        ${getBatchVideoSequence(batch).length > 0 ? `
+          <div style="margin-bottom:12px;">
+            <button type="button" onclick="openVideoOverlay('batch', '${batch.id}')"
+              style="width:100%; height:44px; display:flex; align-items:center; justify-content:center; gap:8px;
+              background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.12); border-radius:10px;
+              color:${CONFIG.text_color}; font-size:14px; font-weight:600; cursor:pointer;">
+              <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              Watch Cooking Video
+            </button>
+          </div>
+        ` : ''}
 
         <!-- Notes bar -->
         ${compNotes ? `
