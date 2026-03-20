@@ -46,8 +46,13 @@ function openNewTip() {
 }
 
 function openEditRecipe(recipeId) {
+  console.log('[openEditRecipe] Looking for recipe:', recipeId);
   const r = getRecipeById(recipeId);
-  if (!r) return;
+  if (!r) {
+    console.error('[openEditRecipe] Recipe not found:', recipeId, 'recipes count:', state.recipes.length);
+    showToast('Recipe not found — it may not have synced yet.', 'error');
+    return;
+  }
 
   const rows = Array.isArray(r.ingredientsRows) ? r.ingredientsRows : [];
   state.recipeForm = {

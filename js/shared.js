@@ -838,6 +838,8 @@ const storage = {
       case 'config': break;
       default: break;
     }
+    // Guard against realtime events overwriting this save
+    state.ignoreRealtimeUntil = Date.now() + 3000;
     persistState();
     // Sync to Supabase
     await this._syncCreate(item);
@@ -849,7 +851,10 @@ const storage = {
     const updateInArray = (arr) => {
       const idx = arr.findIndex(x => x.id === item.id);
       if (idx >= 0) { arr[idx] = { ...arr[idx], ...item }; return true; }
-      return false;
+      // Item not found in array — push it so the update isn't silently lost
+      console.warn('[storage.update] Item not found in array, pushing:', item.id);
+      arr.push(item);
+      return true;
     };
     switch(prefix) {
       case 'recipe': updateInArray(state.recipes); break;
@@ -872,8 +877,10 @@ const storage = {
       case 'todayMeals': { const dateStr = item.date || item.id.replace('todayMeals_', ''); if (item.meals) state.mealDays[dateStr] = { date: dateStr, meals: item.meals }; } break;
       default: break;
     }
+    // Guard against realtime events overwriting this save
+    state.ignoreRealtimeUntil = Date.now() + 3000;
     persistState();
-    // Sync to Supabase
+    // Sync to Supabase (upsert to handle missing rows)
     await this._syncUpdate(item);
     return { isOk: true };
   },
@@ -900,6 +907,8 @@ const storage = {
       case 'meallog': removeFromArray(state.mealLogs); break;
       default: break;
     }
+    // Guard against realtime events overwriting this delete
+    state.ignoreRealtimeUntil = Date.now() + 3000;
     persistState();
     // Sync to Supabase
     await this._syncDelete(item);
@@ -931,11 +940,10 @@ const storage = {
       const { data: { session } } = await window.supabaseClient.auth.getSession();
       const user = session?.user;
       if (!user) return;
+      // Use upsert so items that only exist locally get created in Supabase
       const { error } = await window.supabaseClient
         .from('meal_planner_data')
-        .update({ data: item })
-        .eq('id', item.id)
-        .eq('user_id', user.id);
+        .upsert({ id: item.id, user_id: user.id, data: item }, { onConflict: 'id' });
       if (error) console.error('Supabase update error:', error);
     } catch (e) { console.error('Sync update failed:', e); }
   },
