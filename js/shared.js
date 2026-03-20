@@ -2263,7 +2263,7 @@ function renderVideoOverlay() {
     instructionsHtml = `
       ${fromLabel}
       ${caption ? `<div style="color:#fff; font-size:20px; font-weight:700; margin-bottom:8px;">${esc(caption)}</div>` : ''}
-      ${instructions ? `<div style="color:#fff; font-size:16px; line-height:1.5;">${esc(instructions)}</div>` : `<div style="color:${CONFIG.text_muted}; font-size:16px; font-style:italic;">No instructions for this clip</div>`}
+      ${instructions ? `<div style="color:#fff; font-size:16px; line-height:1.5; white-space:pre-line;">${esc(instructions)}</div>` : `<div style="color:${CONFIG.text_muted}; font-size:16px; font-style:italic;">No instructions for this clip</div>`}
     `;
   } else {
     instructionsHtml = `
@@ -2433,12 +2433,50 @@ function getStreamThumbnail(videoId) {
 function getRecipeVideoClips(recipeId) {
   const r = getRecipeById(recipeId);
   if (!r || !Array.isArray(r.videoClips) || r.videoClips.length === 0) return [];
-  return r.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).map(c => ({
-    cloudflareVideoId: c.cloudflareVideoId,
-    caption: c.caption || '',
-    instructions: c.instructions || '',
-    order: c.order
-  }));
+
+  // Parse recipe instructions into steps for dynamic linking
+  const rawInstr = Array.isArray(r.instructions)
+    ? r.instructions.join('\n')
+    : (r.instructions || '').trim();
+  let recipeSteps = [];
+  if (rawInstr) {
+    const lines = rawInstr.split('\n');
+    let currentStep = null;
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      if (/^\d+[\.\)]\s*/.test(trimmed)) {
+        if (currentStep) recipeSteps.push(currentStep);
+        currentStep = trimmed.replace(/^\d+[\.\)]\s*/, '');
+      } else if (currentStep) {
+        currentStep += ' ' + trimmed;
+      } else {
+        recipeSteps.push(trimmed);
+        currentStep = null;
+      }
+    });
+    if (currentStep) recipeSteps.push(currentStep);
+  }
+
+  return r.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0)).map(c => {
+    // If clip has linkedSteps, dynamically build instructions from current recipe steps
+    let instructions = c.instructions || '';
+    if (Array.isArray(c.linkedSteps) && c.linkedSteps.length > 0 && recipeSteps.length > 0) {
+      const stepsText = c.linkedSteps
+        .filter(n => n >= 1 && n <= recipeSteps.length)
+        .map(n => `${n}. ${recipeSteps[n - 1]}`)
+        .join('\n');
+      const notesText = (c.notes || '').trim();
+      instructions = stepsText;
+      if (notesText) instructions += (instructions ? '\n\n' : '') + notesText;
+    }
+    return {
+      cloudflareVideoId: c.cloudflareVideoId,
+      caption: c.caption || '',
+      instructions,
+      order: c.order
+    };
+  });
 }
 
 function recipeHasVideo(recipeId) {

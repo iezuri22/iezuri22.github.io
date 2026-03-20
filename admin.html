@@ -516,6 +516,33 @@
     // ============================================================
     // RECIPE SELECTION & CLIP EDITOR
     // ============================================================
+    // Parse recipe instructions string into numbered steps array
+    function parseRecipeInstructions(recipe) {
+      const raw = Array.isArray(recipe.instructions)
+        ? recipe.instructions.join('\n')
+        : (recipe.instructions || '').trim();
+      if (!raw) return [];
+      const lines = raw.split('\n');
+      const steps = [];
+      let currentStep = null;
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        if (/^\d+[\.\)]\s*/.test(trimmed)) {
+          if (currentStep) steps.push(currentStep);
+          currentStep = trimmed.replace(/^\d+[\.\)]\s*/, '');
+        } else if (currentStep) {
+          currentStep += ' ' + trimmed;
+        } else {
+          steps.push(trimmed);
+          currentStep = null;
+        }
+      });
+      if (currentStep) steps.push(currentStep);
+      return steps;
+    }
+
     function selectRecipe(id) {
       selectedRecipeId = id;
       const r = getRecipeById(id);
@@ -525,6 +552,8 @@
         cloudflareVideoId: c.cloudflareVideoId || '',
         caption: c.caption || '',
         instructions: c.instructions || '',
+        linkedSteps: Array.isArray(c.linkedSteps) ? [...c.linkedSteps] : [],
+        notes: c.notes || '',
         order: c.order || 0,
         _validated: !!c.cloudflareVideoId,
         _showPreview: false
@@ -564,6 +593,13 @@
         <button onclick="addClip()" class="btn-secondary" style="width:100%; margin-top:12px; padding:12px; display:flex; align-items:center; justify-content:center; gap:6px;">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
           Add Clip
+        </button>
+
+        <!-- Preview button -->
+        <button onclick="previewClips()" class="btn-secondary" style="width:100%; margin-top:12px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px; ${editingClips.filter(c => c.cloudflareVideoId && c.cloudflareVideoId.trim()).length === 0 ? 'opacity:0.4; pointer-events:none;' : ''}"
+          ${editingClips.filter(c => c.cloudflareVideoId && c.cloudflareVideoId.trim()).length === 0 ? 'disabled' : ''}>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"/></svg>
+          Preview video (${editingClips.filter(c => c.cloudflareVideoId && c.cloudflareVideoId.trim()).length} clips)
         </button>
 
         <!-- Save button -->
@@ -625,11 +661,17 @@
                 oninput="updateClipField(${idx}, 'caption', this.value)" />
             </div>
 
-            <!-- Instructions -->
+            <!-- Linked instruction steps -->
             <div>
-              <label style="font-size:11px; color:var(--text-muted); font-weight:500; margin-bottom:2px; display:block;">Instructions</label>
-              <textarea placeholder="Step-by-step instructions for this clip..."
-                oninput="updateClipField(${idx}, 'instructions', this.value)">${esc(clip.instructions)}</textarea>
+              <label style="font-size:11px; color:var(--text-muted); font-weight:500; margin-bottom:4px; display:block;">Linked Instructions</label>
+              ${renderInstructionStepsPicker(clip, idx)}
+            </div>
+
+            <!-- Additional notes -->
+            <div>
+              <label style="font-size:11px; color:var(--text-muted); font-weight:500; margin-bottom:2px; display:block;">Additional Notes <span style="color:var(--text-tertiary);">(optional)</span></label>
+              <textarea placeholder="Extra tips not covered by instruction steps..."
+                rows="2" oninput="updateClipField(${idx}, 'notes', this.value)">${esc(clip.notes || '')}</textarea>
             </div>
 
             <!-- Preview button & player -->
@@ -690,11 +732,64 @@
       img.src = getStreamThumbnail(id);
     }
 
+    function renderInstructionStepsPicker(clip, idx) {
+      const r = getRecipeById(selectedRecipeId);
+      if (!r) return '';
+      const steps = parseRecipeInstructions(r);
+      if (steps.length === 0) {
+        const recipeId = r.__backendId || r.id;
+        return `
+          <div style="padding:12px; background:rgba(255,255,255,0.03); border-radius:8px; border:1px dashed rgba(255,255,255,0.1);">
+            <div style="color:var(--text-muted); font-size:13px; margin-bottom:6px;">No instructions found.</div>
+            <div style="font-size:12px; color:var(--text-tertiary);">Add instructions to this recipe first, then come back to link them to clips.</div>
+          </div>
+        `;
+      }
+      const linked = clip.linkedSteps || [];
+      return `
+        <div style="display:flex; flex-direction:column; gap:2px; max-height:200px; overflow-y:auto; padding:4px 0;">
+          ${steps.map((step, stepIdx) => {
+            const stepNum = stepIdx + 1;
+            const isChecked = linked.includes(stepNum);
+            return `
+              <label style="display:flex; align-items:flex-start; gap:8px; padding:6px 8px; border-radius:6px; cursor:pointer; background:${isChecked ? 'rgba(232,93,93,0.08)' : 'transparent'}; transition:background 0.15s;"
+                onmouseenter="this.style.background='${isChecked ? 'rgba(232,93,93,0.12)' : 'rgba(255,255,255,0.03)'}'"
+                onmouseleave="this.style.background='${isChecked ? 'rgba(232,93,93,0.08)' : 'transparent'}'">
+                <input type="checkbox" ${isChecked ? 'checked' : ''}
+                  onchange="toggleLinkedStep(${idx}, ${stepNum})"
+                  style="accent-color:var(--primary); margin-top:2px; flex-shrink:0; width:16px; height:16px;" />
+                <span style="font-size:13px; color:${isChecked ? 'var(--text)' : 'var(--text-muted)'}; line-height:1.4;">
+                  <span style="color:var(--text-tertiary); font-weight:600; font-size:11px; margin-right:4px;">${stepNum}.</span>${esc(step)}
+                </span>
+              </label>
+            `;
+          }).join('')}
+        </div>
+        ${linked.length > 0 ? `<div style="font-size:11px; color:var(--text-tertiary); margin-top:4px;">Linked: step${linked.length > 1 ? 's' : ''} ${linked.join(', ')}</div>` : ''}
+      `;
+    }
+
+    function toggleLinkedStep(clipIdx, stepNum) {
+      const clip = editingClips[clipIdx];
+      if (!clip) return;
+      if (!clip.linkedSteps) clip.linkedSteps = [];
+      const pos = clip.linkedSteps.indexOf(stepNum);
+      if (pos >= 0) {
+        clip.linkedSteps.splice(pos, 1);
+      } else {
+        clip.linkedSteps.push(stepNum);
+        clip.linkedSteps.sort((a, b) => a - b);
+      }
+      renderClipEditor();
+    }
+
     function addClip() {
       editingClips.push({
         cloudflareVideoId: '',
         caption: '',
         instructions: '',
+        linkedSteps: [],
+        notes: '',
         order: editingClips.length + 1,
         _validated: false,
         _showPreview: false
@@ -750,15 +845,29 @@
       const r = getRecipeById(selectedRecipeId);
       if (!r) return;
 
+      // Parse the recipe's instruction steps for building instructions text
+      const recipeSteps = parseRecipeInstructions(r);
+
       // Filter out clips with no video ID
       const validClips = editingClips
         .filter(c => c.cloudflareVideoId && c.cloudflareVideoId.trim())
-        .map((c, i) => ({
-          cloudflareVideoId: c.cloudflareVideoId.trim(),
-          caption: c.caption || '',
-          instructions: c.instructions || '',
-          order: i + 1
-        }));
+        .map((c, i) => {
+          // Build instructions text from linked steps
+          const linked = (c.linkedSteps || []).filter(n => n >= 1 && n <= recipeSteps.length);
+          const stepsText = linked.map(n => `${n}. ${recipeSteps[n - 1]}`).join('\n');
+          const notesText = (c.notes || '').trim();
+          let fullInstructions = stepsText;
+          if (notesText) fullInstructions += (fullInstructions ? '\n\n' : '') + notesText;
+
+          return {
+            cloudflareVideoId: c.cloudflareVideoId.trim(),
+            caption: c.caption || '',
+            instructions: fullInstructions || c.instructions || '',
+            linkedSteps: linked,
+            notes: notesText,
+            order: i + 1
+          };
+        });
 
       r.videoClips = validClips;
       saveToLS('recipes', recipes);
@@ -772,6 +881,201 @@
       // Re-select to refresh editor
       selectRecipe(selectedRecipeId);
     }
+
+    // ============================================================
+    // PREVIEW — fullscreen video overlay matching user experience
+    // ============================================================
+    let previewState = null; // { sequence, currentIndex, muted }
+
+    function previewClips() {
+      const r = getRecipeById(selectedRecipeId);
+      if (!r) return;
+      const recipeSteps = parseRecipeInstructions(r);
+
+      // Build sequence from current editing state (unsaved)
+      const sequence = editingClips
+        .filter(c => c.cloudflareVideoId && c.cloudflareVideoId.trim())
+        .map(c => {
+          const linked = (c.linkedSteps || []).filter(n => n >= 1 && n <= recipeSteps.length);
+          const stepsText = linked.map(n => `${n}. ${recipeSteps[n - 1]}`).join('\n');
+          const notesText = (c.notes || '').trim();
+          let fullInstructions = stepsText;
+          if (notesText) fullInstructions += (fullInstructions ? '\n\n' : '') + notesText;
+          return {
+            type: 'clip',
+            cloudflareVideoId: c.cloudflareVideoId.trim(),
+            caption: c.caption || '',
+            instructions: fullInstructions || c.instructions || '',
+            componentName: null
+          };
+        });
+      if (sequence.length === 0) return;
+
+      previewState = { sequence, currentIndex: 0, muted: true };
+      document.body.style.overflow = 'hidden';
+      renderPreviewOverlay();
+    }
+
+    function closePreview() {
+      previewState = null;
+      document.body.style.overflow = '';
+      const overlay = document.getElementById('previewOverlay');
+      if (overlay) overlay.remove();
+    }
+
+    function previewGoTo(idx) {
+      if (!previewState) return;
+      if (idx < 0 || idx >= previewState.sequence.length) return;
+      previewState.currentIndex = idx;
+      renderPreviewOverlay();
+    }
+
+    function togglePreviewMute() {
+      if (!previewState) return;
+      previewState.muted = !previewState.muted;
+      renderPreviewOverlay();
+    }
+
+    function renderPreviewOverlay() {
+      if (!previewState) return;
+      const { sequence, currentIndex, muted } = previewState;
+      const item = sequence[currentIndex];
+      if (!item) return;
+      const total = sequence.length;
+      const isFirst = currentIndex === 0;
+      const isLast = currentIndex === total - 1;
+
+      const embedUrl = getStreamEmbedUrl(item.cloudflareVideoId, { autoplay: true, muted, controls: false, loop: true });
+
+      // Progress bar
+      let progressHtml = '';
+      if (total > 1) {
+        progressHtml = `
+          <div style="display:flex; align-items:center; gap:8px; padding:8px 16px 4px;">
+            <div style="display:flex; flex:1; gap:3px;">
+              ${sequence.map((s, i) => {
+                let c;
+                if (i === currentIndex) c = 'var(--primary)';
+                else if (i < currentIndex) c = 'rgba(255,255,255,0.85)';
+                else c = 'rgba(255,255,255,0.2)';
+                return `<button onclick="previewGoTo(${i})" style="flex:1; height:3px; border-radius:2px; border:none; padding:0; background:${c}; cursor:pointer;"></button>`;
+              }).join('')}
+            </div>
+            <div style="color:var(--text-muted); font-size:13px; white-space:nowrap;">${currentIndex + 1} of ${total}</div>
+          </div>
+        `;
+      }
+
+      // Instructions
+      const caption = item.caption || '';
+      const instructions = item.instructions || '';
+      const instructionsHtml = `
+        ${caption ? `<div style="color:#fff; font-size:20px; font-weight:700; margin-bottom:8px;">${esc(caption)}</div>` : ''}
+        ${instructions ? `<div style="color:#fff; font-size:16px; line-height:1.5; white-space:pre-line;">${esc(instructions)}</div>` : `<div style="color:var(--text-muted); font-size:16px; font-style:italic;">No instructions for this clip</div>`}
+      `;
+
+      // Nav controls
+      let navHtml = '';
+      if (total > 1) {
+        const prevBtn = !isFirst
+          ? `<button onclick="previewGoTo(${currentIndex - 1})" style="background:none; border:none; color:var(--text-muted); font-size:15px; cursor:pointer; padding:8px 0;">\u2190 Previous</button>`
+          : `<div></div>`;
+        const nextBtn = !isLast
+          ? `<button onclick="previewGoTo(${currentIndex + 1})" style="background:none; border:none; color:var(--primary); font-size:15px; font-weight:600; cursor:pointer; padding:8px 0;">Next \u2192</button>`
+          : `<button onclick="closePreview()" style="background:none; border:none; color:var(--primary); font-size:15px; font-weight:600; cursor:pointer; padding:8px 0;">Done</button>`;
+        navHtml = `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding-top:12px; border-top:1px solid rgba(255,255,255,0.08);">
+            ${prevBtn}${nextBtn}
+          </div>
+        `;
+      }
+
+      const html = `
+        <div id="previewOverlay" style="position:fixed; top:0; left:0; width:100%; height:100dvh; background:#000; z-index:9999; display:flex; flex-direction:column;">
+          <!-- Close -->
+          <button onclick="closePreview()" style="position:absolute; top:12px; right:12px; z-index:10001; width:36px; height:36px; background:rgba(0,0,0,0.6); backdrop-filter:blur(8px); border:none; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center;">
+            <svg width="20" height="20" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+
+          <!-- Video area -->
+          <div id="previewVideoArea" style="flex:0 0 68vh; overflow:hidden; position:relative;">
+            <div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center; background:#000;">
+              <div style="position:relative; width:100%; max-width:500px; height:100%;">
+                <iframe src="${embedUrl}" style="width:100%; height:100%; border:none;"
+                  allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>
+                <!-- Mute -->
+                <button onclick="togglePreviewMute()" style="position:absolute; bottom:12px; right:12px; width:36px; height:36px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10;">
+                  ${muted
+                    ? `<svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51A8.796 8.796 0 0021 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06a8.99 8.99 0 003.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>`
+                    : `<svg width="20" height="20" fill="white" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`}
+                </button>
+                <!-- Left nav -->
+                ${!isFirst && total > 1 ? `
+                <button onclick="previewGoTo(${currentIndex - 1})" style="position:absolute; left:8px; top:50%; transform:translateY(-50%); width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); backdrop-filter:blur(4px); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10;">
+                  <svg width="24" height="24" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+                </button>` : ''}
+                <!-- Right nav -->
+                ${!isLast && total > 1 ? `
+                <button onclick="previewGoTo(${currentIndex + 1})" style="position:absolute; right:8px; top:50%; transform:translateY(-50%); width:48px; height:48px; border-radius:50%; background:rgba(255,255,255,0.2); backdrop-filter:blur(4px); border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; z-index:10;">
+                  <svg width="24" height="24" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+                </button>` : ''}
+              </div>
+            </div>
+          </div>
+
+          ${progressHtml}
+
+          <!-- Instructions -->
+          <div style="flex:1; overflow-y:auto; padding:16px; -webkit-overflow-scrolling:touch;">
+            ${instructionsHtml}
+            ${navHtml}
+          </div>
+
+          <div style="flex-shrink:0; height:env(safe-area-inset-bottom, 0px);"></div>
+        </div>
+        <style>
+          @media (min-width: 768px) { #previewVideoArea { flex: 0 0 78vh !important; } }
+          @media (max-width: 767px) { #previewVideoArea { flex: 0 0 65vh !important; } }
+        </style>
+      `;
+
+      const existing = document.getElementById('previewOverlay');
+      if (existing) {
+        existing.outerHTML = html;
+      } else {
+        document.body.insertAdjacentHTML('beforeend', html);
+      }
+
+      // Swipe gestures
+      setTimeout(initPreviewSwipe, 50);
+    }
+
+    function initPreviewSwipe() {
+      const area = document.getElementById('previewVideoArea');
+      if (!area || !previewState || previewState.sequence.length <= 1) return;
+      const clone = area.cloneNode(true);
+      area.parentNode.replaceChild(clone, area);
+      let startX = 0, currentX = 0, swiping = false;
+      clone.addEventListener('touchstart', e => { startX = e.touches[0].clientX; currentX = startX; swiping = true; }, { passive: true });
+      clone.addEventListener('touchmove', e => { if (swiping) currentX = e.touches[0].clientX; }, { passive: true });
+      clone.addEventListener('touchend', () => {
+        if (!swiping) return;
+        swiping = false;
+        const diff = currentX - startX;
+        const idx = previewState.currentIndex;
+        const max = previewState.sequence.length - 1;
+        if (diff < -60 && idx < max) previewGoTo(idx + 1);
+        else if (diff > 60 && idx > 0) previewGoTo(idx - 1);
+      });
+    }
+
+    // Keyboard nav for preview overlay
+    document.addEventListener('keydown', (e) => {
+      if (!previewState) return;
+      if (e.key === 'Escape') closePreview();
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); previewGoTo(previewState.currentIndex - 1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); previewGoTo(previewState.currentIndex + 1); }
+    });
 
     // ============================================================
     // INIT
