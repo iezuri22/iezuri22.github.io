@@ -670,8 +670,54 @@ Object.defineProperty(state, 'today', {
 // ============================================================
 // SECTION 4: LOCALSTORAGE STORAGE LAYER
 // ============================================================
+
+// Cleanup bloated localStorage entries on every page load
+function cleanupStorage() {
+  const chatMessages = localStorage.getItem('yummy_chefChatMessages');
+  if (chatMessages && chatMessages.length > 500000) {
+    try {
+      const parsed = JSON.parse(chatMessages);
+      if (Array.isArray(parsed) && parsed.length > 20) {
+        localStorage.setItem('yummy_chefChatMessages', JSON.stringify(parsed.slice(-20)));
+      }
+    } catch(e) {
+      localStorage.removeItem('yummy_chefChatMessages');
+    }
+  }
+}
+cleanupStorage();
+
+// Storage usage monitor — call checkStorageUsage() in console to debug
+function checkStorageUsage() {
+  let total = 0;
+  let breakdown = {};
+  for (let key in localStorage) {
+    if (localStorage.hasOwnProperty(key)) {
+      const size = localStorage[key].length;
+      total += size;
+      breakdown[key] = (size / 1024).toFixed(1) + ' KB';
+    }
+  }
+  console.log('localStorage usage:', (total / 1024 / 1024).toFixed(2) + ' MB');
+  console.log('Breakdown:', breakdown);
+  return breakdown;
+}
+window.checkStorageUsage = checkStorageUsage;
+
 function saveToLS(key, data) {
-  localStorage.setItem('yummy_' + key, JSON.stringify(data));
+  try {
+    localStorage.setItem('yummy_' + key, JSON.stringify(data));
+  } catch(e) {
+    if (e.name === 'QuotaExceededError') {
+      cleanupStorage();
+      try {
+        localStorage.setItem('yummy_' + key, JSON.stringify(data));
+      } catch(e2) {
+        console.error('Storage still full after cleanup:', e2);
+        alert('Storage is full. Please clear some data in Settings.');
+      }
+    }
+  }
 }
 
 // Temporary debug helper — run debugStorage() in console on any device
@@ -700,7 +746,7 @@ function persistState() {
   saveToLS('seasoningBlends', state.seasoningBlends);
   saveToLS('ingredientKnowledge', state.ingredientKnowledge);
   saveToLS('mealDays', state.mealDays);
-  saveToLS('chefChatMessages', state.chefChatMessages);
+  saveToLS('chefChatMessages', state.chefChatMessages.slice(-50));
   saveToLS('swipeSettings', state.swipeSettings);
   saveToLS('expirationDefaults', state.expirationDefaults);
   saveToLS('receiptMappings', state.receiptMappings);
