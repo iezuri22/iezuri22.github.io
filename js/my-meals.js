@@ -1349,12 +1349,9 @@ function render() {
         ${renderDesktopPageTitle()}
         ${content}
       </div>
-      ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
       ${renderBottomNav()}
     </div>
   `;
-
-  if (typeof renderChefChat === 'function') renderChefChat();
 
   if (state.currentView === 'my-meals') {
     initMyMealsSwipeGestures();

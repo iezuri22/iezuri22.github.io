@@ -2571,12 +2571,9 @@ function render() {
       </div>
       ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}
       ${typeof renderReceiptScannerModal === 'function' ? renderReceiptScannerModal() : ''}
-      ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
       ${state.currentView === 'swipe-setup' ? '' : renderBottomNav()}
     </div>
   `;
-
-  if (typeof renderChefChat === 'function') renderChefChat();
 
   if (state.currentView === 'swipe' || (state.currentView === 'home' && state.homeTab === 'swipe')) {
     initSwipeGestures();

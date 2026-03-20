@@ -552,10 +552,6 @@ const state = {
   receipts: [],
   draggedMeal: null,
   mealPlanTab: 'week',
-  chefChatOpen: false,
-  chefChatMessages: [],
-  chefChatLoading: false,
-  chefChatView: 'chat',
   finishedTimers: [],
   frequentItems: [],
   activeTimers: [],
@@ -673,17 +669,7 @@ Object.defineProperty(state, 'today', {
 
 // Cleanup bloated localStorage entries on every page load
 function cleanupStorage() {
-  const chatMessages = localStorage.getItem('yummy_chefChatMessages');
-  if (chatMessages && chatMessages.length > 500000) {
-    try {
-      const parsed = JSON.parse(chatMessages);
-      if (Array.isArray(parsed) && parsed.length > 20) {
-        localStorage.setItem('yummy_chefChatMessages', JSON.stringify(parsed.slice(-20)));
-      }
-    } catch(e) {
-      localStorage.removeItem('yummy_chefChatMessages');
-    }
-  }
+  localStorage.removeItem('yummy_chefChatMessages');
 }
 cleanupStorage();
 
@@ -746,7 +732,6 @@ function persistState() {
   saveToLS('seasoningBlends', state.seasoningBlends);
   saveToLS('ingredientKnowledge', state.ingredientKnowledge);
   saveToLS('mealDays', state.mealDays);
-  saveToLS('chefChatMessages', state.chefChatMessages.slice(-50));
   saveToLS('swipeSettings', state.swipeSettings);
   saveToLS('expirationDefaults', state.expirationDefaults);
   saveToLS('receiptMappings', state.receiptMappings);
@@ -775,7 +760,6 @@ function loadAllState() {
   state.seasoningBlends = loadFromLS('seasoningBlends', []);
   state.ingredientKnowledge = loadFromLS('ingredientKnowledge', []);
   state.mealDays = loadFromLS('mealDays', {});
-  state.chefChatMessages = loadFromLS('chefChatMessages', []);
   state.swipeSettings = loadFromLS('swipeSettings', state.swipeSettings);
   state.expirationDefaults = loadFromLS('expirationDefaults', {});
   state.receiptMappings = loadFromLS('receiptMappings', {});
@@ -3369,87 +3353,8 @@ async function trackFrequentItem(itemName, category) {
 
 function getFrequentItems(limit = 10) { return [...state.frequentItems].sort((a, b) => (b.count || 0) - (a.count || 0)).slice(0, limit); }
 
-// ============================================================
-// SECTION 15: CHEF CHAT
-// ============================================================
-function renderChefChatButton() {
-  if (state.chefChatOpen) return '';
-  const bottomPosition = state.currentView === 'home' ? '140px' : '70px';
-  return `<button onclick="toggleChefChat()" class="fixed z-40 rounded-full shadow-lg hover:scale-105 transition-transform" style="bottom: ${bottomPosition}; right: 16px; width: 52px; height: 52px; background: ${CONFIG.surface_elevated}; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(232, 93, 93, 0.4);" title="Ask Chef Claude"><span style="font-size: 24px;">&#128104;&#8205;&#127859;</span></button>`;
-}
-
-function saveChefChatHistory() {
-  const messagesToSave = state.chefChatMessages.slice(-50);
-  saveToLS('chefChatMessages', messagesToSave);
-}
-
-function clearChefChatHistory() {
-  if (confirm('Clear all chat history with Chef Claude?')) { state.chefChatMessages = []; saveChefChatHistory(); renderChefChat(); showToast('Chat history cleared', 'success'); }
-}
-
-function deleteConversation(topic, timestamp) {
-  if (!confirm('Delete this conversation?')) return;
-  const startIdx = state.chefChatMessages.findIndex(m => m.timestamp === timestamp && m.role === 'user');
-  if (startIdx === -1) return;
-  let endIdx = startIdx + 1;
-  while (endIdx < state.chefChatMessages.length) { if (state.chefChatMessages[endIdx].role === 'user') { const prevMsg = state.chefChatMessages[endIdx - 1]; if (prevMsg && prevMsg.role === 'assistant') break; } endIdx++; }
-  state.chefChatMessages.splice(startIdx, endIdx - startIdx);
-  saveChefChatHistory(); renderChefChat(); showToast('Conversation deleted', 'success');
-}
-
-function getChefChatHistory() {
-  const conversations = []; let currentConvo = null;
-  state.chefChatMessages.forEach((msg, idx) => {
-    const msgDate = msg.timestamp ? new Date(msg.timestamp).toLocaleDateString() : 'Unknown';
-    if (msg.role === 'user') { const prevMsg = state.chefChatMessages[idx - 1]; if (!currentConvo || (prevMsg && prevMsg.role === 'assistant')) { currentConvo = { date: msgDate, topic: msg.content.slice(0, 50) + (msg.content.length > 50 ? '...' : ''), messages: [], timestamp: msg.timestamp }; conversations.push(currentConvo); } }
-    if (currentConvo) currentConvo.messages.push(msg);
-  });
-  const grouped = {};
-  conversations.forEach(convo => { if (!grouped[convo.date]) grouped[convo.date] = []; grouped[convo.date].push(convo); });
-  return Object.entries(grouped).sort((a, b) => new Date(b[0]) - new Date(a[0])).map(([date, convos]) => ({ date, conversations: convos }));
-}
-
 function formatChefMessage(text) {
   return text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>').replace(/__(.+?)__/g, '<strong>$1</strong>').replace(/\*(.+?)\*/g, '<em>$1</em>').replace(/_(.+?)_/g, '<em>$1</em>').replace(/^(\d+)\.\s+(.+)$/gm, '<div style="margin-left:1rem;">$1. $2</div>').replace(/^[-\u2022]\s+(.+)$/gm, '<div style="margin-left:1rem;">\u2022 $1</div>').replace(/\n/g, '<br>');
-}
-
-function toggleChefChat() { state.chefChatOpen = !state.chefChatOpen; renderChefChat(); }
-
-function renderChefChat() {
-  document.getElementById('chefChatModal')?.remove();
-  if (!state.chefChatOpen) return;
-  // Simplified chat rendering - full version in page JS if needed
-  const chatHtml = `<div id="chefChatModal" class="fixed z-50" style="bottom: ${state.currentView !== 'home' ? '70px' : '90px'}; right: 12px; width: 360px; max-width: calc(100vw - 24px);"><div class="rounded-xl shadow-2xl flex flex-col" style="background:${CONFIG.surface_color}; max-height: 70vh; border: 1px solid rgba(255,255,255,0.1);"><div class="flex items-center justify-between p-3" style="border-bottom: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_elevated}; border-radius: 12px 12px 0 0;"><div class="flex items-center gap-2"><span style="font-size:1.2rem;">&#128104;&#8205;&#127859;</span><span style="color: white; font-size: 15px; font-weight:600;">Chef Claude</span></div><div class="flex items-center gap-1">${state.chefChatMessages.length > 0 ? `<button onclick="state.chefChatView = state.chefChatView === 'history' ? 'chat' : 'history'; renderChefChat();" class="p-1 px-2 rounded" style="color: white; font-size: 12px; background: rgba(255,255,255,0.2);">${state.chefChatView === 'history' ? '\u2190' : '\ud83d\udcdc'}</button>` : ''}<button onclick="toggleChefChat()" class="p-1 px-2 rounded" style="color: white; font-size: 14px; background: rgba(255,255,255,0.2);">&#10005;</button></div></div><div id="chefChatMessages" class="flex-1 overflow-y-auto p-3 space-y-2" style="min-height: 350px; max-height: 450px;">${state.chefChatView === 'history' ? (() => { const history = getChefChatHistory(); if (history.length === 0) return `<div style="color:${CONFIG.text_color}; opacity:0.6; text-align:center; padding:2rem;">No chat history yet</div>`; let html = ''; history.forEach(group => { html += `<div class="mb-4"><div style="color:${CONFIG.text_color}; opacity:0.5; font-size:${CONFIG.font_size * 0.8}px; margin-bottom:8px; font-weight:600;">${group.date}</div>`; group.conversations.forEach(convo => { html += `<div class="mb-2 rounded-lg" style="background:rgba(255,255,255,0.05);"><div class="p-3 cursor-pointer" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? 'block' : 'none'"><span style="font-size:${CONFIG.font_size * 0.9}px; color:${CONFIG.text_color};">&#9654; ${esc(convo.topic)}</span></div><div style="display:none; padding:12px; border-top:1px solid rgba(255,255,255,0.1);">`; convo.messages.forEach(msg => { html += `<div style="display:flex; justify-content:${msg.role === 'user' ? 'flex-end' : 'flex-start'}; margin-bottom:8px;"><div style="max-width:85%; padding:8px 12px; border-radius:8px; background:${msg.role === 'user' ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px;">${formatChefMessage(msg.content)}</div></div>`; }); html += `</div></div>`; }); html += `</div>`; }); return html; })() : `${state.chefChatMessages.length === 0 ? `<div style="color:${CONFIG.text_color}; opacity:0.6; text-align:center; padding:2rem;"><div style="font-size:2rem; margin-bottom:0.5rem;">&#128104;&#8205;&#127859;</div><div>Ask me anything about cooking!</div></div>` : state.chefChatMessages.map((msg, idx) => `<div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}"><div class="max-w-xs sm:max-w-sm px-3 py-2 rounded-lg" style="background:${msg.role === 'user' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${msg.role === 'user' ? 'white' : CONFIG.text_color};">${msg.image ? `<img loading="lazy" src="${msg.image}" style="width: 100%; max-width: 200px; border-radius: 8px; margin-bottom: 8px;" />` : ''}${formatChefMessage(msg.content)}${msg.role === 'assistant' ? `<div class="flex gap-1 mt-2 pt-2" style="border-top:1px solid rgba(255,255,255,0.1);"><button onclick="saveClaudeAsRecipe(${idx})" class="px-2 py-1 rounded text-xs" style="background:${CONFIG.primary_action_color}; color:white;">Recipe</button><button onclick="saveClaudeAsTip(${idx})" class="px-2 py-1 rounded text-xs" style="background:${CONFIG.warning_color}; color:white;">Tip</button><button onclick="saveClaudeToHistory(${idx})" class="px-2 py-1 rounded text-xs" style="background:#8b5cf6; color:white;">Save</button></div>` : ''}</div></div>`).join('')}${state.chefChatLoading ? `<div class="flex justify-start"><div class="px-3 py-2 rounded-lg" style="background:rgba(255,255,255,0.1); color:${CONFIG.text_color};"><span class="animate-pulse">Thinking...</span></div></div>` : ''}`}</div>${state.chefChatImage ? `<div style="padding: 8px 12px; border-top: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.background_color};"><div style="display: flex; align-items: center; gap: 8px;"><img loading="lazy" src="${state.chefChatImage}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 8px;" /><div style="flex: 1; color: ${CONFIG.text_muted}; font-size: 12px;">Image attached</div><button onclick="state.chefChatImage = null; renderChefChat();" style="background: none; border: none; color: ${CONFIG.danger_color}; cursor: pointer; font-size: 16px;">&#10005;</button></div></div>` : ''}<div class="p-3" style="border-top: 1px solid rgba(255,255,255,0.1);"><div class="flex gap-2 items-center"><input type="file" id="chefChatImageInput" accept="image/*" style="display: none;" onchange="handleChefImageUpload(event)" /><button onclick="document.getElementById('chefChatImageInput').click()" class="p-2 rounded-lg" style="background: ${CONFIG.background_color}; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; font-size: 18px;" ${state.chefChatLoading ? 'disabled' : ''}>&#128247;</button><input type="text" id="chefChatInput" placeholder="${state.chefChatImage ? 'Ask about this image...' : 'Ask a cooking question...'}" class="flex-1 px-3 py-2 rounded-lg" style="background: ${CONFIG.background_color}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); font-size: 16px;" onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendChefMessage(); }" ${state.chefChatLoading ? 'disabled' : ''} /><button onclick="sendChefMessage()" class="px-3 py-2 rounded-lg" style="background:${CONFIG.primary_action_color}; color:white; font-size: 14px;" ${state.chefChatLoading ? 'disabled' : ''}>Send</button></div></div></div></div>`;
-  document.body.insertAdjacentHTML('beforeend', chatHtml);
-  setTimeout(() => { const messagesDiv = document.getElementById('chefChatMessages'); if (messagesDiv) messagesDiv.scrollTop = messagesDiv.scrollHeight; }, 50);
-}
-
-function handleChefImageUpload(event) {
-  const file = event.target.files[0]; if (!file) return;
-  if (file.size > 5 * 1024 * 1024) { showError('Image too large. Please use an image under 5MB.'); return; }
-  const reader = new FileReader(); reader.onload = (e) => { state.chefChatImage = e.target.result; renderChefChat(); }; reader.readAsDataURL(file);
-}
-
-async function sendChefMessage() {
-  const input = document.getElementById('chefChatInput'); const message = input?.value.trim();
-  if (!message || state.chefChatLoading) return;
-  const userMessage = { role: 'user', content: message, timestamp: new Date().toISOString() };
-  if (state.chefChatImage) userMessage.image = state.chefChatImage;
-  state.chefChatMessages.push(userMessage);
-  state.chefChatImage = null; input.value = ''; state.chefChatLoading = true; renderChefChat();
-  try {
-    const recipeContext = state.recipes.filter(r => !r.isDraft && !r.isTip).slice(0, 10).map(r => r.title).join(', ');
-    const systemPrompt = `You are Chef Claude, a friendly cooking assistant. Always include specific times and temperatures. Keep responses concise. Use bullet points for steps.`;
-    const apiMessages = state.chefChatMessages.map(m => {
-      if (m.image) return { role: m.role, content: [{ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: m.image.split(',')[1] } }, { type: 'text', text: m.content || 'What is this?' }] };
-      return { role: m.role, content: m.content };
-    });
-    const response = await fetch(CHEF_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ systemPrompt, messages: apiMessages, recipeContext: recipeContext ? `User's saved recipes: ${recipeContext}` : null }) });
-    const data = await response.json();
-    if (data.content && data.content[0]?.text) { state.chefChatMessages.push({ role: 'assistant', content: data.content[0].text, timestamp: new Date().toISOString() }); }
-    else { state.chefChatMessages.push({ role: 'assistant', content: 'Sorry, I encountered an error. Please try again.', timestamp: new Date().toISOString() }); }
-  } catch (error) { state.chefChatMessages.push({ role: 'assistant', content: 'Sorry, I couldn\'t connect. Please check your internet and try again.', timestamp: new Date().toISOString() }); }
-  finally { state.chefChatLoading = false; renderChefChat(); saveChefChatHistory(); }
 }
 
 // ============================================================
@@ -3502,92 +3407,6 @@ function editIngredientImage(name) { /* Rendered by page JS */ }
 function saveEditedIngredientImage(name) { const url = document.getElementById('editIngredientUrl')?.value.trim(); if (!url) { showError('Please enter an image URL'); return; } customIngredientImages[name] = url; saveCustomIngredientImages(); showToast(`Image updated`, 'success'); }
 function deleteIngredientImage(name) { if (customIngredientImages[name]) { delete customIngredientImages[name]; saveCustomIngredientImages(); showToast(`Custom image removed`, 'success'); } }
 
-// ============================================================
-// SECTION 17: CLAUDE RECIPE SAVE FUNCTIONS
-// ============================================================
-async function saveClaudeAsRecipe(messageIndex) {
-  const message = state.chefChatMessages[messageIndex]; if (!message) return;
-  toggleChefChat(); state.isLoading = true; if (typeof render === 'function') render();
-  showToast('Converting to recipe...', 'info');
-  try {
-    const response = await fetch(CHEF_API_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'user', content: `Convert this to a structured recipe. Return ONLY valid JSON: {"title":"...","category":"...","servings":4,"prepTime":"...","cookTime":"...","ingredients":[{"item":"...","amount":"...","unit":"...","group":"..."}],"instructions":["Step 1","Step 2"],"notes":"..."}\n\nContent:\n${message.content}` }] }) });
-    const data = await response.json();
-    if (data.content && data.content[0]?.text) {
-      let cleanText = data.content[0].text.trim().replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/\s*```$/i, '');
-      const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) { showClaudeRecipePreviewModal(JSON.parse(jsonMatch[0])); } else { showError('Could not convert to recipe format'); }
-    } else { showError('Could not convert to recipe'); }
-  } catch (error) { console.error('Convert error:', error); showError('Failed to convert recipe'); }
-  finally { state.isLoading = false; if (typeof render === 'function') render(); }
-}
-
-function showClaudeRecipePreviewModal(recipeData) {
-  const ingredientsList = (recipeData.ingredients || []).map(ing => `${ing.amount || ''} ${ing.unit || ''} ${ing.item}`.trim()).join('\n');
-  const instructionsList = (recipeData.instructions || []).map((step, i) => `${i + 1}. ${step}`).join('\n');
-  openModal(`<div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;"><h2 class="text-2xl font-bold mb-4">Save Chef Claude Recipe</h2><div class="mb-4"><label class="block mb-2 font-semibold">Title:</label><input type="text" id="claudeRecipeTitle" value="${esc(recipeData.title || '')}" class="w-full px-3 py-2 border rounded" /></div><div class="grid grid-cols-2 gap-4 mb-4"><div><label class="block mb-2 font-semibold">Category:</label><select id="claudeRecipeCategory" class="w-full px-3 py-2 border rounded">${MEAL_CATEGORIES.map(c => `<option value="${c}" ${recipeData.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></div><div><label class="block mb-2 font-semibold">Servings:</label><input type="number" id="claudeRecipeServings" value="${recipeData.servings || 4}" class="w-full px-3 py-2 border rounded" min="1" /></div></div><div class="mb-4"><label class="block mb-2 font-semibold">Ingredients:</label><textarea id="claudeRecipeIngredients" rows="6" class="w-full px-3 py-2 border rounded font-mono text-sm">${esc(ingredientsList)}</textarea></div><div class="mb-4"><label class="block mb-2 font-semibold">Instructions:</label><textarea id="claudeRecipeInstructions" rows="6" class="w-full px-3 py-2 border rounded text-sm">${esc(instructionsList)}</textarea></div><div class="mb-4"><label class="block mb-2 font-semibold">Notes:</label><textarea id="claudeRecipeNotes" rows="2" class="w-full px-3 py-2 border rounded">${esc(recipeData.notes || '')}</textarea></div><input type="hidden" id="claudeRecipeIngredientsData" value='${JSON.stringify(recipeData.ingredients || [])}' /><div class="flex gap-2 justify-end"><button onclick="closeModal()" class="px-4 py-2 rounded" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="saveClaudeRecipe()" class="px-4 py-2 rounded" style="background: ${CONFIG.success_color}; color: white;">Save Recipe</button></div></div>`);
-}
-
-async function saveClaudeRecipe() {
-  const title = document.getElementById('claudeRecipeTitle')?.value.trim();
-  const category = document.getElementById('claudeRecipeCategory')?.value;
-  const ingredientsData = JSON.parse(document.getElementById('claudeRecipeIngredientsData')?.value || '[]');
-  const instructionsText = document.getElementById('claudeRecipeInstructions')?.value || '';
-  const notes = document.getElementById('claudeRecipeNotes')?.value.trim();
-  if (!title) { showError('Please enter a recipe title'); return; }
-  const recipe = { id: `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`, title, category, ingredientsRows: ingredientsData.map(ing => ({ qty: ing.amount || '', unit: ing.unit || '', name: ing.item || '', group: ing.group || 'Other' })), instructions: instructionsText.split('\n').map(line => line.replace(/^\d+\.\s*/, '').trim()).filter(l => l).join('\n'), notes, sourceType: 'claude', favorite: false, isDraft: false, createdAt: new Date().toISOString() };
-  closeModal(); state.isLoading = true; if (typeof render === 'function') render();
-  try { await storage.create(recipe); showToast(`"${title}" saved from Chef Claude!`, 'success'); } catch (e) { console.error('Save error:', e); showError('Failed to save recipe'); }
-  finally { state.isLoading = false; if (typeof render === 'function') render(); }
-}
-
-async function saveClaudeAsTip(messageIndex) {
-  const message = state.chefChatMessages[messageIndex]; if (!message) return;
-  state.chefChatOpen = false; document.getElementById('chefChatModal')?.remove();
-  const contentLower = message.content.toLowerCase();
-  const produceAndProteins = ['chicken breast','chicken thighs','ground beef','salmon','shrimp','eggs','onion','garlic','tomato','bell pepper','carrot','broccoli','spinach','potato','avocado','lemon','lime'];
-  const detectedIngredients = produceAndProteins.filter(ing => contentLower.includes(ing));
-  const allIngredients = [...new Set([...Object.keys(INGREDIENT_IMAGES), ...state.ingredientKnowledge.map(k => k.name.toLowerCase())])].sort();
-  const firstLine = message.content.split('\n')[0] || '';
-  const extractedTitle = firstLine.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim().slice(0, 60);
-  openModal(`<div style="color: ${CONFIG.text_color}; max-height: 80vh; overflow-y: auto;"><h2 class="text-2xl font-bold mb-4">Save Tip to Ingredients</h2><div class="mb-4"><label class="block mb-2 font-semibold">Tip Title:</label><input type="text" id="claudeTipTitle" value="${esc(extractedTitle)}" class="w-full px-3 py-2 border rounded" /></div><div class="mb-4"><label class="block mb-2 font-semibold">Tip Content:</label><textarea id="claudeTipContent" rows="5" class="w-full px-3 py-2 border rounded text-sm">${esc(message.content)}</textarea></div><div class="mb-4"><label class="block mb-2 font-semibold">Add to which ingredients:</label><input type="text" id="ingredientTipSearch" class="w-full px-3 py-2 border rounded mb-2" placeholder="Search..." oninput="filterIngredientCheckboxes(this.value)" /><div id="ingredientCheckboxes" style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 8px;">${detectedIngredients.map(ing => `<label class="flex items-center gap-2 p-1 rounded cursor-pointer ingredient-checkbox-label" data-name="${esc(ing.toLowerCase())}"><input type="checkbox" name="tipIngredients" value="${esc(ing)}" checked /><span style="text-transform:capitalize;">${esc(ing)}</span></label>`).join('')}${allIngredients.filter(ing => !detectedIngredients.includes(ing)).map(ing => `<label class="flex items-center gap-2 p-1 rounded cursor-pointer ingredient-checkbox-label" data-name="${esc(ing.toLowerCase())}"><input type="checkbox" name="tipIngredients" value="${esc(ing)}" /><span style="text-transform:capitalize;">${esc(ing)}</span></label>`).join('')}</div></div><div class="flex gap-2 justify-end"><button onclick="closeModal()" class="px-4 py-2 rounded" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button><button onclick="saveTipToIngredients()" class="px-4 py-2 rounded" style="background: ${CONFIG.warning_color}; color: white;">Save</button></div></div>`);
-}
-
-async function saveClaudeToHistory(messageIndex) {
-  const message = state.chefChatMessages[messageIndex]; if (!message) return;
-  const firstLine = message.content.split('\n')[0] || '';
-  let extractedTitle = firstLine.replace(/\*\*/g, '').replace(/^#+\s*/, '').replace(/:$/, '').trim().slice(0, 50);
-  const contentLower = message.content.toLowerCase();
-  const ingredients = ['chicken breast','chicken thighs','chicken','ground beef','beef','steak','salmon','shrimp','eggs','onion','garlic','tomato','bell pepper','carrot','broccoli','spinach','potato','avocado','lemon','lime'];
-  const sorted = [...ingredients].sort((a, b) => b.length - a.length);
-  const detected = []; for (const ing of sorted) { if (contentLower.includes(ing) && !detected.some(d => d.includes(ing) || ing.includes(d))) detected.push(ing); }
-  if (detected.length === 0) { showToast('No ingredients detected. Use Tip to save manually.', 'info'); return; }
-  state.chefChatOpen = false; document.getElementById('chefChatModal')?.remove(); state.isLoading = true; if (typeof render === 'function') render();
-  try {
-    for (const ingredientName of detected) { let knowledge = getIngredientKnowledge(ingredientName); if (!knowledge) knowledge = createDefaultIngredientKnowledge(ingredientName); knowledge.notes = knowledge.notes || []; knowledge.notes.push(`📌 ${extractedTitle}\n\n${message.content.replace(/^.*?\n/, '').trim()}`); await saveIngredientKnowledge(knowledge); }
-    showToast(`"${extractedTitle}" saved to ${detected.slice(0, 3).map(i => capitalize(i)).join(', ')}`, 'success');
-  } catch (e) { console.error('Save error:', e); showError('Failed to save'); }
-  finally { state.isLoading = false; if (typeof render === 'function') render(); }
-}
-
-function filterIngredientCheckboxes(searchTerm) {
-  const labels = document.querySelectorAll('.ingredient-checkbox-label'); const search = searchTerm.toLowerCase();
-  labels.forEach(label => { label.style.display = label.dataset.name.includes(search) ? 'flex' : 'none'; });
-}
-
-async function saveTipToIngredients() {
-  const title = document.getElementById('claudeTipTitle')?.value.trim();
-  const content = document.getElementById('claudeTipContent')?.value.trim();
-  const checkboxes = document.querySelectorAll('input[name="tipIngredients"]:checked');
-  const selectedIngredients = Array.from(checkboxes).map(cb => cb.value.toLowerCase());
-  if (!title) { showError('Please enter a tip title'); return; }
-  if (selectedIngredients.length === 0) { showError('Please select at least one ingredient'); return; }
-  closeModal(); state.isLoading = true; if (typeof render === 'function') render();
-  try {
-    for (const ingredientName of selectedIngredients) { let knowledge = getIngredientKnowledge(ingredientName); if (!knowledge) knowledge = createDefaultIngredientKnowledge(ingredientName); knowledge.notes = knowledge.notes || []; knowledge.notes.push(`💡 ${title}\n${content}`); await saveIngredientKnowledge(knowledge); }
-    showToast(`Tip saved to ${selectedIngredients.length} ingredient${selectedIngredients.length > 1 ? 's' : ''}!`, 'success');
-  } catch (e) { console.error('Save error:', e); showError('Failed to save tip'); }
-  finally { state.isLoading = false; if (typeof render === 'function') render(); }
-}
 
 // ============================================================
 // SECTION 18: NAVIGATION
@@ -4023,9 +3842,6 @@ function applySupabaseData(data) {
   state.purchaseHistory = data.filter(d => d.id && d.id.startsWith('history_'));
   state.receipts = data.filter(d => d.id && d.id.startsWith('receipt_'));
 
-  // Chef chat
-  const chatHistory = data.find(d => d.id === 'chef_chat_history');
-  state.chefChatMessages = chatHistory?.messages || [];
 
   state.frequentItems = data.filter(d => d.id?.startsWith('frequent_'));
   state.ingredientKnowledge = data.filter(d => d.id?.startsWith('ingredient_') && d.type === 'ingredient_knowledge');

@@ -4275,10 +4275,6 @@ function renderIngredientDetail() {
         ${renderIngredientDetailNotes(name, knowledge)}
         ${renderIngredientDetailRecipes(name, displayName, relatedRecipes)}
         ${renderIngredientDetailInventory(name, inInventory)}
-        <button onclick="askClaudeAboutIngredient('${esc(name)}')"
-          style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; color: white; border: none; border-radius: 12px; cursor: pointer; font-weight: 600; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: ${CONFIG.shadow};">
-          \ud83d\udc68\u200d\ud83c\udf73 Ask Chef Claude about ${esc(displayName)}
-        </button>
       </div>
     `;
   }
@@ -4980,17 +4976,7 @@ function toggleIngredientFavorite(name) {
     render();
   }
 
-function askClaudeAboutIngredient(name) {
-    state.chefChatOpen = true;
-    if (typeof renderChefChat === 'function') renderChefChat();
-    setTimeout(() => {
-      const input = document.getElementById('chefChatInput');
-      if (input) {
-        input.value = `Tell me about ${name}: cooking times for different methods, storage tips, what it pairs well with, and any freezing instructions.`;
-        input.focus();
-      }
-    }, 100);
-  }
+
 
 // ===== PAGE RENDER & INIT (for kitchen.html) =====
 
@@ -5032,12 +5018,10 @@ function render() {
       </div>
       ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}
       ${typeof renderReceiptScannerModal === 'function' ? renderReceiptScannerModal() : ''}
-      ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
       ${renderBottomNav()}
     </div>
   `;
 
-  if (typeof renderChefChat === 'function') renderChefChat();
   if (state.currentView === 'kitchen') initKitchenCardSwipeGestures();
 }
 

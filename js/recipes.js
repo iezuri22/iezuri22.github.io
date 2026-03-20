@@ -3718,12 +3718,10 @@ function render() {
       </div>
       ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}
       ${typeof renderReceiptScannerModal === 'function' ? renderReceiptScannerModal() : ''}
-      ${typeof renderChefChatButton === 'function' ? renderChefChatButton() : ''}
       ${renderBottomNav()}
     </div>
   `;
 
-  if (typeof renderChefChat === 'function') renderChefChat();
   if (state.currentView === 'batch-view') { setTimeout(initBatchCardSwipe, 0); setTimeout(initBatchVideoCarouselSwipe, 100); }
   if (state.currentView === 'recipe-view') setTimeout(initVideoCarouselSwipe, 100);
 }
