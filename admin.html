@@ -388,6 +388,43 @@
         `;
       }).join('');
 
+      // Build the plate video sequence for preview + summary
+      const plateSequence = buildPlateVideoSequence(batch);
+      const totalClips = plateSequence.length;
+      const hasClips = totalClips > 0;
+
+      // Preview plate video button
+      const previewBtnHtml = `
+        <button onclick="previewPlateVideo('${esc(batch.id)}')" class="btn-secondary" style="width:100%; margin-top:12px; padding:12px; display:flex; align-items:center; justify-content:center; gap:8px; ${!hasClips ? 'opacity:0.4; pointer-events:none;' : ''}"
+          ${!hasClips ? 'disabled' : ''}>
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5.25 5.653c0-.856.917-1.398 1.667-.986l11.54 6.348a1.125 1.125 0 010 1.971l-11.54 6.347a1.125 1.125 0 01-1.667-.985V5.653z"/></svg>
+          Preview full plate video (${totalClips} clip${totalClips !== 1 ? 's' : ''})
+        </button>
+      `;
+
+      // Clip summary list
+      let clipSummaryHtml = '';
+      if (hasClips) {
+        clipSummaryHtml = `
+          <div style="margin-top:10px;">
+            <div style="font-size:11px; font-weight:600; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.5px;">Clip Sequence</div>
+            ${plateSequence.map((item, i) => {
+              const thumb = item.cloudflareVideoId ? getStreamThumbnail(item.cloudflareVideoId) : '';
+              return `
+                <div style="display:flex; align-items:center; gap:8px; padding:4px 0;">
+                  <span style="font-size:10px; color:var(--text-muted); width:16px; text-align:right; flex-shrink:0;">${i + 1}</span>
+                  ${thumb
+                    ? `<img src="${esc(thumb)}" style="width:40px; height:30px; border-radius:4px; object-fit:cover; flex-shrink:0;" />`
+                    : `<div style="width:40px; height:30px; border-radius:4px; background:var(--elevated); flex-shrink:0;"></div>`}
+                  <span style="font-size:12px; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(item.caption || 'Untitled clip')}</span>
+                  <span style="font-size:11px; color:var(--text-muted); flex-shrink:0; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(item.componentName || '')}</span>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        `;
+      }
+
       // Video order editor for this plate
       let videoOrderHtml = '';
       if (plateVideoOrderEditing && plateVideoOrderEditing.batchId === batch.id) {
@@ -410,6 +447,8 @@
       return `
         <div style="padding-left:12px;">
           ${compListHtml}
+          ${previewBtnHtml}
+          ${clipSummaryHtml}
           ${videoOrderHtml}
         </div>
       `;
@@ -883,6 +922,72 @@
     }
 
     // ============================================================
+    // PLATE VIDEO SEQUENCE & PREVIEW
+    // ============================================================
+
+    function buildPlateVideoSequence(batch) {
+      const comps = (batch.components || []).filter(c => c.type === 'recipe' && c.recipeId);
+      const sequence = [];
+
+      if (batch.videoOrder && batch.videoOrder.length > 0) {
+        // Use custom video order
+        batch.videoOrder.forEach(ref => {
+          const r = getRecipeById(ref.recipeId);
+          if (!r || !r.videoClips) return;
+          const sorted = r.videoClips.slice().sort((a,b) => (a.order||0)-(b.order||0));
+          const clip = sorted[ref.clipIndex];
+          if (!clip || !clip.cloudflareVideoId || !clip.cloudflareVideoId.trim()) return;
+          const recipeSteps = parseRecipeInstructions(r);
+          const linked = (clip.linkedSteps || []).filter(n => n >= 1 && n <= recipeSteps.length);
+          const stepsText = linked.map(n => `${n}. ${recipeSteps[n - 1]}`).join('\n');
+          const notesText = (clip.notes || '').trim();
+          let fullInstructions = stepsText;
+          if (notesText) fullInstructions += (fullInstructions ? '\n\n' : '') + notesText;
+          sequence.push({
+            type: 'clip',
+            cloudflareVideoId: clip.cloudflareVideoId.trim(),
+            caption: clip.caption || '',
+            instructions: fullInstructions || clip.instructions || '',
+            componentName: r.title || 'Unknown'
+          });
+        });
+      } else {
+        // Default: component order
+        comps.forEach(comp => {
+          const r = getRecipeById(comp.recipeId);
+          if (!r || !r.videoClips || r.videoClips.length === 0) return;
+          const sorted = r.videoClips.slice().sort((a,b) => (a.order||0)-(b.order||0));
+          const recipeSteps = parseRecipeInstructions(r);
+          sorted.forEach(clip => {
+            if (!clip.cloudflareVideoId || !clip.cloudflareVideoId.trim()) return;
+            const linked = (clip.linkedSteps || []).filter(n => n >= 1 && n <= recipeSteps.length);
+            const stepsText = linked.map(n => `${n}. ${recipeSteps[n - 1]}`).join('\n');
+            const notesText = (clip.notes || '').trim();
+            let fullInstructions = stepsText;
+            if (notesText) fullInstructions += (fullInstructions ? '\n\n' : '') + notesText;
+            sequence.push({
+              type: 'clip',
+              cloudflareVideoId: clip.cloudflareVideoId.trim(),
+              caption: clip.caption || '',
+              instructions: fullInstructions || clip.instructions || '',
+              componentName: r.title || 'Unknown'
+            });
+          });
+        });
+      }
+      return sequence;
+    }
+
+    function previewPlateVideo(batchId) {
+      const batch = batchRecipes.find(b => b.id === batchId);
+      if (!batch) return;
+      const sequence = buildPlateVideoSequence(batch);
+      if (sequence.length === 0) return;
+      previewState = { sequence, currentIndex: 0, muted: true };
+      document.body.style.overflow = 'hidden';
+      renderPreviewOverlay();
+    }
+
     // PREVIEW — fullscreen video overlay matching user experience
     // ============================================================
     let previewState = null; // { sequence, currentIndex, muted }
@@ -969,7 +1074,9 @@
       // Instructions
       const caption = item.caption || '';
       const instructions = item.instructions || '';
+      const componentLabel = item.componentName ? `<div style="color:var(--text-muted); font-size:13px; margin-bottom:6px;">From: ${esc(item.componentName)}</div>` : '';
       const instructionsHtml = `
+        ${componentLabel}
         ${caption ? `<div style="color:#fff; font-size:20px; font-weight:700; margin-bottom:8px;">${esc(caption)}</div>` : ''}
         ${instructions ? `<div style="color:#fff; font-size:16px; line-height:1.5; white-space:pre-line;">${esc(instructions)}</div>` : `<div style="color:var(--text-muted); font-size:16px; font-style:italic;">No instructions for this clip</div>`}
       `;
