@@ -21,6 +21,31 @@ if (window.navigator.standalone === true) {
 }
 
 // ============================================================
+// EARLY SAFETY CLEANUP — runs before anything else
+// ============================================================
+(function earlySafetyCleanup() {
+  try { localStorage.removeItem('yummy_chefChatMessages'); } catch(e) {}
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && localStorage[key] && localStorage[key].length > 2000000) {
+        console.warn('[SAFETY] Removing oversized key:', key, '(' + (localStorage[key].length / 1024 / 1024).toFixed(1) + ' MB)');
+        localStorage.removeItem(key);
+      }
+    }
+  } catch(e) { console.error('[SAFETY] Cleanup error:', e); }
+
+  // Diagnostic: log what's in localStorage right now
+  console.log('[BOOT] localStorage key count:', localStorage.length);
+  const yummyKeys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key) yummyKeys.push(key + ': ' + (localStorage[key].length / 1024).toFixed(1) + 'KB');
+  }
+  console.log('[BOOT] All localStorage keys:', yummyKeys.join(', ') || '(EMPTY — no data in localStorage!)');
+})();
+
+// ============================================================
 // SUPABASE INITIALIZATION — DISABLED (localStorage-only mode)
 // ============================================================
 // Backend disabled — all data stored in localStorage only.
@@ -657,11 +682,37 @@ window.debugStorage = function() {
   console.log('All localStorage keys:', Object.keys(localStorage));
 };
 
+// Comprehensive debug — run debugAll() in console to see everything
+window.debugAll = function() {
+  console.log('=== FULL DEBUG REPORT ===');
+  console.log('localStorage key count:', localStorage.length);
+  const breakdown = checkStorageUsage();
+  console.log('---');
+  console.log('state.recipes:', state.recipes?.length);
+  console.log('state.inventory:', state.inventory?.length);
+  console.log('state.groceryItems:', state.groceryItems?.length);
+  console.log('state.mealDays:', Object.keys(state.mealDays || {}).length, 'days');
+  console.log('state.mealLogs:', state.mealLogs?.length);
+  console.log('state.planData:', state.planData?.length);
+  console.log('state.dataLoaded:', state.dataLoaded);
+  console.log('---');
+  console.log('foodLog (direct key):', getFoodLog()?.length);
+  console.log('savedRecipes (direct key):', getSavedRecipes()?.length);
+  console.log('smartGroceryList (direct key):', getSmartGroceryList()?.length);
+  console.log('---');
+  console.log('Supabase client:', typeof window.supabaseClient !== 'undefined' ? 'loaded' : 'NOT loaded (localStorage-only mode)');
+  console.log('=== END DEBUG REPORT ===');
+  return breakdown;
+};
+
 function loadFromLS(key, defaultVal) {
   try {
     const d = localStorage.getItem('yummy_' + key);
-    return d ? JSON.parse(d) : defaultVal;
+    if (!d) return defaultVal;
+    const parsed = JSON.parse(d);
+    return parsed;
   } catch(e) {
+    console.error('[loadFromLS] Failed to parse key "yummy_' + key + '":', e.message);
     return defaultVal;
   }
 }
@@ -692,6 +743,7 @@ function persistState() {
 }
 
 function loadAllState() {
+  console.log('[loadAllState] Starting data load from localStorage...');
   state.recipes = loadFromLS('recipes', []);
   seedTestVideoClips();
   state.inventory = loadFromLS('inventory', []);
@@ -716,6 +768,30 @@ function loadAllState() {
   state.mealOptions = loadFromLS('mealOptions', []);
   state.batchRecipes = loadFromLS('batchRecipes', []);
   if (!Array.isArray(state.batchRecipes)) { console.warn('[loadAllState] batchRecipes was not an array, resetting'); state.batchRecipes = []; }
+
+  // Also load food log and grocery list (stored with direct keys, not yummy_ prefix)
+  const foodLog = getFoodLog();
+  const savedRecipes = getSavedRecipes();
+  const smartGrocery = getSmartGroceryList();
+
+  console.log('[loadAllState] Data loaded — recipes:', state.recipes.length,
+    '| inventory:', state.inventory.length,
+    '| mealDays:', Object.keys(state.mealDays).length,
+    '| groceryItems:', state.groceryItems.length,
+    '| smartGrocery:', smartGrocery.length,
+    '| foodLog:', foodLog.length,
+    '| savedRecipes:', savedRecipes.length,
+    '| mealLogs:', state.mealLogs.length,
+    '| planData:', state.planData.length);
+
+  if (state.recipes.length === 0 && state.inventory.length === 0 && foodLog.length === 0 && smartGrocery.length === 0) {
+    console.warn('[loadAllState] ⚠️ ALL DATA IS EMPTY — localStorage may have been cleared!');
+    console.warn('[loadAllState] Check: localStorage has', localStorage.length, 'keys total');
+    console.warn('[loadAllState] yummy_recipes raw:', localStorage.getItem('yummy_recipes')?.substring(0, 100) || '(null)');
+    console.warn('[loadAllState] foodLog raw:', localStorage.getItem('foodLog')?.substring(0, 100) || '(null)');
+    console.warn('[loadAllState] smartGroceryList_v1 raw:', localStorage.getItem('smartGroceryList_v1')?.substring(0, 100) || '(null)');
+  }
+
   // Ensure today exists in mealDays
   const todayDate = getToday();
   if (!state.mealDays[todayDate]) {
