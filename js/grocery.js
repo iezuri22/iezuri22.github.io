@@ -878,7 +878,15 @@ function toggleGroceryItem(ingredientKey) {
       // Debounced full render (to move items between checked/unchecked sections)
       clearTimeout(state._groceryRenderTimeout);
       state._groceryRenderTimeout = setTimeout(() => {
-        if (state.currentView === 'grocery-list') render();
+        if (state.currentView === 'grocery-list') {
+          const scrollEl = document.getElementById('app');
+          const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
+          render();
+          requestAnimationFrame(() => {
+            if (scrollEl) scrollEl.scrollTop = scrollPos;
+            else window.scrollTo(0, scrollPos);
+          });
+        }
       }, 1500);
 
       // === BATCHED STORAGE SAVE (deduped by ingredientKey) ===

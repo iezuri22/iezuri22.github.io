@@ -1877,7 +1877,17 @@ function toggleSmartGroceryItem(itemId) {
   if (row) { const cb = row.querySelector('.gro-checkbox'); const label = row.querySelector('.gro-label'); if (item.checked) { if (cb) { cb.style.background = CONFIG.primary_action_color; cb.style.borderColor = CONFIG.primary_action_color; cb.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; } if (label) { label.style.textDecoration = 'line-through'; label.style.opacity = '0.4'; } } else { if (cb) { cb.style.background = 'transparent'; cb.style.borderColor = CONFIG.text_muted; cb.innerHTML = ''; } if (label) { label.style.textDecoration = 'none'; label.style.opacity = '1'; } } }
   _updateGroceryBadge();
   clearTimeout(state._smartGroceryRenderTimeout);
-  state._smartGroceryRenderTimeout = setTimeout(() => { if (['grocery-list'].includes(state.currentView) && typeof render === 'function') render(); }, 1200);
+  state._smartGroceryRenderTimeout = setTimeout(() => {
+    if (['grocery-list'].includes(state.currentView) && typeof render === 'function') {
+      const scrollEl = document.getElementById('app');
+      const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
+      render();
+      requestAnimationFrame(() => {
+        if (scrollEl) scrollEl.scrollTop = scrollPos;
+        else window.scrollTo(0, scrollPos);
+      });
+    }
+  }, 1200);
 }
 
 function removeSmartGroceryItem(itemId) {
@@ -1886,7 +1896,17 @@ function removeSmartGroceryItem(itemId) {
   if (row) { row.style.transition = 'opacity 150ms, transform 150ms'; row.style.opacity = '0'; row.style.transform = 'translateX(-20px)'; setTimeout(() => row.remove(), 150); }
   _updateGroceryBadge();
   clearTimeout(state._smartGroceryRenderTimeout);
-  state._smartGroceryRenderTimeout = setTimeout(() => { if (['grocery-list'].includes(state.currentView) && typeof render === 'function') render(); }, 600);
+  state._smartGroceryRenderTimeout = setTimeout(() => {
+    if (['grocery-list'].includes(state.currentView) && typeof render === 'function') {
+      const scrollEl = document.getElementById('app');
+      const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
+      render();
+      requestAnimationFrame(() => {
+        if (scrollEl) scrollEl.scrollTop = scrollPos;
+        else window.scrollTo(0, scrollPos);
+      });
+    }
+  }, 600);
 }
 
 function clearCheckedGrocery() { saveSmartGroceryList(getSmartGroceryList().filter(i => !i.checked)); showToast('Checked items cleared', 'success'); if (typeof render === 'function') render(); }
