@@ -42,7 +42,7 @@ function renderMyMeals() {
   const photoPreviewHtml = recentPhotos.length > 0 ? `
     <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: 16px;">
       <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-        <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color};">My Plates</div>
+        <div style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color};">Cooking Journal</div>
         <button onclick="navigateTo('my-plates')" style="font-size: 12px; color: ${CONFIG.primary_action_color}; background: none; border: none; cursor: pointer;">View all</button>
       </div>
       <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
@@ -837,7 +837,7 @@ function saveFoodLogNotes(logId) {
 }
 
 // ============================================================
-// MY PLATES - Photo Gallery
+// COOKING JOURNAL - Photo Gallery
 // ============================================================
 
 function renderMyPlates() {

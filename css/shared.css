@@ -1333,8 +1333,8 @@
         right: 32px;
       }
 
-      /* My Plates grid on desktop */
-      .my-plates-grid {
+      /* Cooking Journal grid on desktop */
+      .my-plates-grid, .journal-grid {
         grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
         gap: 4px !important;
       }
