@@ -95,7 +95,12 @@ async function checkAuthAndInit() {
     }
     const user = session.user;
     console.log('[AUTH] Session found for:', user.email);
-    // User is logged in — load data from Supabase
+    // User is logged in — migrate saved/plates then load data from Supabase
+    try {
+      await migrateSavedAndPlatesToSupabase();
+    } catch (migErr) {
+      console.error('[AUTH] Saved/plates migration failed (non-fatal):', migErr);
+    }
     try {
       await loadDataFromSupabase();
       console.log('[AUTH] Data loaded from Supabase');
@@ -970,6 +975,8 @@ const storage = {
       case 'mapping': state.receiptMappings[item.rawText] = { name: item.correctedName, category: item.category, ingredientId: item.ingredientId || null }; break;
       case 'expdefault': state.expirationDefaults[item.itemName] = item.days; break;
       case 'todayMeals': { const dateStr = item.date || item.id.replace('todayMeals_', ''); if (item.meals) state.mealDays[dateStr] = { date: dateStr, meals: item.meals }; } break;
+      case 'batch': { const idx = state.batchRecipes.findIndex(b => b.id === item.id); if (idx >= 0) state.batchRecipes[idx] = item; else state.batchRecipes.push(item); } break;
+      case 'savedRecipes': break; // handled via localStorage directly
       case 'config': break;
       default: break;
     }
@@ -1009,6 +1016,7 @@ const storage = {
       case 'mapping': state.receiptMappings[item.rawText] = { name: item.correctedName, category: item.category, ingredientId: item.ingredientId || null }; break;
       case 'expdefault': state.expirationDefaults[item.itemName] = item.days; break;
       case 'todayMeals': { const dateStr = item.date || item.id.replace('todayMeals_', ''); if (item.meals) state.mealDays[dateStr] = { date: dateStr, meals: item.meals }; } break;
+      case 'batch': updateInArray(state.batchRecipes); break;
       default: break;
     }
     // Guard against realtime events overwriting this save
@@ -1038,6 +1046,7 @@ const storage = {
       case 'recording': removeFromArray(state.recordingNeeds); break;
       case 'frequent': removeFromArray(state.frequentItems); break;
       case 'meallog': removeFromArray(state.mealLogs); break;
+      case 'batch': removeFromArray(state.batchRecipes); break;
       default: break;
     }
     // Guard against realtime events overwriting this delete
@@ -1495,7 +1504,20 @@ function toggleSaveRecipe(recipeId) {
   if (saved.includes(recipeId)) { saved = saved.filter(id => id !== recipeId); showToast('Removed from saved', 'success'); }
   else { saved.push(recipeId); showToast('Saved!', 'success'); }
   localStorage.setItem(SAVED_RECIPES_KEY, JSON.stringify(saved));
+  syncSavedRecipesToSupabase(saved);
   if (typeof render === 'function') render();
+}
+
+async function syncSavedRecipesToSupabase(saved) {
+  if (!window.supabaseClient) return;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return;
+    const item = { id: 'savedRecipes_list', type: 'savedRecipes', recipeIds: saved };
+    await window.supabaseClient
+      .from('meal_planner_data')
+      .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  } catch (e) { console.error('Sync saved recipes failed:', e); }
 }
 function isRecipeSaved(recipeId) { return getSavedRecipes().includes(recipeId); }
 
@@ -3231,6 +3253,19 @@ function saveBatchRecipe(batch) {
       throw e2; // Re-throw so caller knows save failed
     }
   }
+  // Sync to Supabase
+  syncBatchRecipeToSupabase(batch);
+}
+
+async function syncBatchRecipeToSupabase(batch) {
+  if (!window.supabaseClient) return;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return;
+    await window.supabaseClient
+      .from('meal_planner_data')
+      .upsert({ id: batch.id, user_id: session.user.id, data: batch }, { onConflict: 'id' });
+  } catch (e) { console.error('Sync batch recipe failed:', e); }
 }
 
 function getBatchEffortLevel(batch) {
@@ -3292,6 +3327,15 @@ function saveFreeformAsRecipe(compId) {
 function deleteBatchRecipe(batchId) {
   state.batchRecipes = state.batchRecipes.filter(b => b.id !== batchId);
   persistState();
+  // Sync deletion to Supabase
+  (async () => {
+    if (!window.supabaseClient) return;
+    try {
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (!session?.user) return;
+      await window.supabaseClient.from('meal_planner_data').delete().eq('id', batchId).eq('user_id', session.user.id);
+    } catch (e) { console.error('Sync batch delete failed:', e); }
+  })();
 }
 
 function getBatchRecipeIngredients(batch) {
@@ -4254,6 +4298,7 @@ async function handleLogin() {
 
     // Migrate localStorage data to Supabase if any
     try { await migrateLocalStorageToSupabase(); } catch(e) { console.error('Migration failed (non-fatal):', e); }
+    try { await migrateSavedAndPlatesToSupabase(); } catch(e) { console.error('Saved/plates migration failed (non-fatal):', e); }
 
     // Load data and render
     await loadDataFromSupabase();
@@ -4355,6 +4400,34 @@ async function migrateLocalStorageToSupabase() {
   }
 }
 
+async function migrateSavedAndPlatesToSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return;
+    const userId = session.user.id;
+
+    // Migrate saved recipes list
+    const saved = getSavedRecipes();
+    if (saved.length > 0) {
+      const item = { id: 'savedRecipes_list', type: 'savedRecipes', recipeIds: saved };
+      await window.supabaseClient.from('meal_planner_data')
+        .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+      console.log('[migrate] Synced', saved.length, 'saved recipe IDs to Supabase');
+    }
+
+    // Migrate batch recipes (plates)
+    const batches = state.batchRecipes || [];
+    for (const batch of batches) {
+      if (batch.id) {
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: batch.id, user_id: userId, data: batch }, { onConflict: 'id' });
+      }
+    }
+    if (batches.length > 0) console.log('[migrate] Synced', batches.length, 'plates to Supabase');
+  } catch (e) { console.error('Migration of saved/plates failed (non-fatal):', e); }
+}
+
 function updateUserIndicator(email) {
   const displayText = email || 'Not logged in';
   const indicator = document.getElementById('userIndicator');
@@ -4439,6 +4512,19 @@ function applySupabaseData(data) {
   state.seasoningBlends = data.filter(d => d.id && d.id.startsWith('blend_'));
   state.cookingTasks = data.filter(d => d.id && d.id.startsWith('task_'));
   state.mealLogs = data.filter(d => d.id && d.id.startsWith('meallog_'));
+
+  // Load batch recipes (plates) from Supabase
+  const batchItems = data.filter(d => d.id && d.id.startsWith('batch_'));
+  if (batchItems.length > 0) {
+    state.batchRecipes = batchItems;
+    saveToLS('batchRecipes', state.batchRecipes);
+  }
+
+  // Load saved recipe IDs from Supabase
+  const savedRecipesRow = data.find(d => d.id === 'savedRecipes_list');
+  if (savedRecipesRow && Array.isArray(savedRecipesRow.recipeIds)) {
+    localStorage.setItem(SAVED_RECIPES_KEY, JSON.stringify(savedRecipesRow.recipeIds));
+  }
 
   // Load mealDays (last 90 days)
   const todayDate = getToday();
