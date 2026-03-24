@@ -371,8 +371,19 @@ function renderGroceryList() {
         </div>
       ` : '';
 
+      const photosOn = getGroceryPhotoToggle();
+
       return `
         <div style="padding: 0 12px; flex: 1;">
+
+          <!-- Photo toggle -->
+          <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:6px;">
+            <button onclick="setGroceryPhotoToggle(!getGroceryPhotoToggle());render();"
+              style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:16px;border:1px solid ${photosOn ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'};background:${photosOn ? CONFIG.primary_subtle : 'transparent'};color:${photosOn ? CONFIG.primary_action_color : CONFIG.text_muted};font-size:11px;font-weight:500;cursor:pointer;font-family:${CONFIG.font_family};">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z"/></svg>
+              Photos ${photosOn ? 'on' : 'off'}
+            </button>
+          </div>
 
           <!-- Manual Add Input -->
           <div style="display: flex; gap: 8px; margin-bottom: 6px;">
@@ -475,6 +486,9 @@ function _renderGroceryRow(item, isChecked) {
       const qtyLabel = item.qty ? `${item.qty}${item.unit ? ' ' + item.unit : ''}` : '';
       const sourceLabel = item.sourceMeals && item.sourceMeals.length > 0
         ? item.sourceMeals.join(', ') : '';
+      const photosOn = getGroceryPhotoToggle();
+      const photo = photosOn ? getIngredientPhotoFromLibrary(item.name) : null;
+      const escapedItemName = esc(item.name).replace(/'/g, "\\'");
 
       return `
         <div data-gro-id="${esc(item.id)}"
@@ -484,6 +498,15 @@ function _renderGroceryRow(item, isChecked) {
                style="width: 20px; height: 20px; border: 1.5px solid ${isChecked ? CONFIG.primary_action_color : CONFIG.text_muted}; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: ${isChecked ? CONFIG.primary_action_color : 'transparent'}; transition: all 150ms ease;">
             ${isChecked ? '<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
           </div>
+          ${photosOn ? `
+            <div onclick="event.stopPropagation();openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})"
+              style="width:36px;height:36px;border-radius:6px;overflow:hidden;flex-shrink:0;background:${CONFIG.surface_elevated};display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              ${photo
+                ? `<img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover;" />`
+                : `<svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>`
+              }
+            </div>
+          ` : ''}
           <div class="gro-label" style="flex: 1; min-width: 0; ${isChecked ? 'text-decoration: line-through; opacity: 0.4;' : ''}">
             <div style="display: flex; align-items: baseline; gap: 6px;">
               <span style="color: ${CONFIG.text_color}; font-size: 13px;">${esc(name)}</span>

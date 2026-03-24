@@ -1864,16 +1864,22 @@ function renderRecipeEdit() {
           <!-- Tab Selection -->
           <div class="flex gap-2 mb-3">
             <button type="button"
-              onclick="document.getElementById('imageUrlTab').style.display='block'; document.getElementById('imageUploadTab').style.display='none'; this.style.background='${CONFIG.primary_action_color}'; this.nextElementSibling.style.background='rgba(255,255,255,0.05)';"
+              onclick="document.getElementById('imageUrlTab').style.display='block'; document.getElementById('imageUploadTab').style.display='none'; this.style.background='${CONFIG.primary_action_color}'; this.nextElementSibling.style.background='rgba(255,255,255,0.05)'; this.nextElementSibling.nextElementSibling.style.background='rgba(255,255,255,0.05)';"
               class="px-3 py-2 rounded button-hover"
               style="background:${CONFIG.primary_action_color}; color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
               Image URL
             </button>
             <button type="button"
-              onclick="document.getElementById('imageUrlTab').style.display='none'; document.getElementById('imageUploadTab').style.display='block'; this.style.background='${CONFIG.primary_action_color}'; this.previousElementSibling.style.background='rgba(255,255,255,0.05)';"
+              onclick="document.getElementById('imageUrlTab').style.display='none'; document.getElementById('imageUploadTab').style.display='block'; this.style.background='${CONFIG.primary_action_color}'; this.previousElementSibling.style.background='rgba(255,255,255,0.05)'; this.nextElementSibling.style.background='rgba(255,255,255,0.05)';"
               class="px-3 py-2 rounded button-hover"
               style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
               Upload Image
+            </button>
+            <button type="button"
+              onclick="openPhotoSearch(state.recipeForm.title||'food',function(url){setRecipeField('image_url',url);render();})"
+              class="px-3 py-2 rounded button-hover"
+              style="background:rgba(255,255,255,0.05); color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.9}px;">
+              Search Photo
             </button>
           </div>
 

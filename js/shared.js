@@ -1035,8 +1035,13 @@ function getIngredientImage(ingredientName, category) {
   const knowledge = state.ingredientKnowledge.find(k => k.name.toLowerCase() === name);
   if (knowledge?.image_url) return knowledge.image_url;
   if (customIngredientImages[name]) return customIngredientImages[name];
+  // Check global ingredient photo library
+  if (ingredientPhotos[name]) return ingredientPhotos[name];
   if (INGREDIENT_IMAGES[name]) return INGREDIENT_IMAGES[name];
   for (const [key, url] of Object.entries(customIngredientImages)) {
+    if (name.includes(key) || key.includes(name)) return url;
+  }
+  for (const [key, url] of Object.entries(ingredientPhotos)) {
     if (name.includes(key) || key.includes(name)) return url;
   }
   for (const [key, url] of Object.entries(INGREDIENT_IMAGES)) {
@@ -1850,7 +1855,15 @@ function addManualGroceryItemSmart() {
   if (catInput) catInput.value = 'Other';
   showToast(`${capitalize(name)} added to ${category}`, 'success');
   if (typeof render === 'function') render();
-  setTimeout(() => { const newInput = document.getElementById('groceryManualInput'); if (newInput) newInput.focus(); }, 50);
+  // Prompt to add a photo if no photo exists yet
+  const existingPhoto = getIngredientPhotoFromLibrary(name);
+  if (!existingPhoto) {
+    setTimeout(() => {
+      openPhotoSearch(name, function(url) { setIngredientPhoto(name, url); if (typeof render === 'function') render(); });
+    }, 300);
+  } else {
+    setTimeout(() => { const newInput = document.getElementById('groceryManualInput'); if (newInput) newInput.focus(); }, 50);
+  }
 }
 
 function toggleSmartGroceryItem(itemId) {
@@ -2063,6 +2076,369 @@ document.addEventListener('click', (e) => {
   const modal = document.getElementById('modal');
   if (e.target === modal) closeModal();
 });
+
+// ============================================================
+// SECTION 9a: PHOTO SEARCH SYSTEM
+// ============================================================
+
+// API Keys (replace with real keys)
+const UNSPLASH_ACCESS_KEY = 'YOUR_UNSPLASH_KEY';
+const SERPER_API_KEY = 'YOUR_SERPER_KEY';
+
+// Ingredient photo library — persists across sessions
+let ingredientPhotos = {};
+
+function loadIngredientPhotos() {
+  try {
+    const saved = localStorage.getItem('yummy_ingredientPhotos');
+    if (saved) ingredientPhotos = JSON.parse(saved);
+  } catch (e) { ingredientPhotos = {}; }
+}
+
+function saveIngredientPhotos() {
+  localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos));
+}
+
+function setIngredientPhoto(name, url) {
+  if (!name || !url) return;
+  ingredientPhotos[name.toLowerCase().trim()] = url;
+  saveIngredientPhotos();
+}
+
+function getIngredientPhotoFromLibrary(name) {
+  if (!name) return null;
+  const key = name.toLowerCase().trim();
+  if (ingredientPhotos[key]) return ingredientPhotos[key];
+  // Fuzzy match
+  for (const [k, url] of Object.entries(ingredientPhotos)) {
+    if (key.includes(k) || k.includes(key)) return url;
+  }
+  return null;
+}
+
+// Load on startup
+loadIngredientPhotos();
+
+// Grocery photo toggle
+function getGroceryPhotoToggle() {
+  return localStorage.getItem('yummy_groceryPhotoToggle') === 'true';
+}
+
+function setGroceryPhotoToggle(val) {
+  localStorage.setItem('yummy_groceryPhotoToggle', val ? 'true' : 'false');
+}
+
+// Photo search state
+let _photoSearchState = {
+  query: '',
+  tab: 'unsplash', // 'unsplash' | 'google'
+  results: [],
+  selectedIdx: -1,
+  selectedUrl: '',
+  loading: false,
+  callback: null,
+  debounceTimer: null
+};
+
+/**
+ * Opens the photo search modal.
+ * @param {string} defaultQuery - Pre-filled search query
+ * @param {function} callback - Called with selected image URL (or base64 for uploads)
+ */
+function openPhotoSearch(defaultQuery, callback) {
+  _photoSearchState = {
+    query: defaultQuery || '',
+    tab: 'unsplash',
+    results: [],
+    selectedIdx: -1,
+    selectedUrl: '',
+    loading: !!defaultQuery,
+    callback: callback || null,
+    debounceTimer: null
+  };
+  _renderPhotoSearchModal();
+  // Auto-search on open
+  if (defaultQuery) {
+    _photoSearchFetch(defaultQuery, 'unsplash');
+  }
+}
+
+function _renderPhotoSearchModal() {
+  const s = _photoSearchState;
+  const overlay = document.getElementById('photoSearchOverlay');
+  if (overlay) overlay.remove();
+
+  const div = document.createElement('div');
+  div.id = 'photoSearchOverlay';
+  div.style.cssText = `position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.85);display:flex;align-items:flex-end;justify-content:center;`;
+  div.onclick = function(e) { if (e.target === div) _closePhotoSearch(); };
+
+  div.innerHTML = `
+    <div id="photoSearchPanel" style="
+      width:100%;max-width:500px;max-height:92dvh;
+      background:${CONFIG.surface_elevated};
+      border-radius:16px 16px 0 0;
+      display:flex;flex-direction:column;
+      font-family:${CONFIG.font_family};
+      animation:photoSearchSlideUp 250ms ease-out;
+    ">
+      <style>
+        @keyframes photoSearchSlideUp {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+        @media (min-width: 768px) {
+          #photoSearchPanel {
+            border-radius: 16px !important;
+            margin: auto !important;
+            max-height: 80vh !important;
+          }
+          #photoSearchOverlay {
+            align-items: center !important;
+          }
+        }
+      </style>
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 16px 12px;">
+        <div style="font-size:17px;font-weight:600;color:${CONFIG.text_color};">Search Photos</div>
+        <button onclick="_closePhotoSearch()" style="width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.1);border:none;color:${CONFIG.text_color};cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:18px;">&times;</button>
+      </div>
+
+      <!-- Search bar -->
+      <div style="padding:0 16px 10px;">
+        <input id="photoSearchInput" type="text" value="${esc(s.query)}"
+          placeholder="Search for photos..."
+          oninput="_onPhotoSearchInput(this.value)"
+          style="width:100%;padding:10px 14px;height:44px;box-sizing:border-box;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:${CONFIG.text_color};font-size:15px;outline:none;font-family:${CONFIG.font_family};" />
+      </div>
+
+      <!-- Tabs -->
+      <div style="display:flex;gap:0;padding:0 16px 8px;">
+        <button onclick="_switchPhotoTab('unsplash')" id="photoTabUnsplash"
+          style="flex:1;padding:8px 0;border:none;border-radius:20px 0 0 20px;font-size:13px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};
+          ${s.tab === 'unsplash' ? `background:${CONFIG.primary_action_color};color:white;` : `background:${CONFIG.surface_color};color:${CONFIG.text_muted};`}">
+          Photos
+        </button>
+        <button onclick="_switchPhotoTab('google')" id="photoTabGoogle"
+          style="flex:1;padding:8px 0;border:none;border-radius:0 20px 20px 0;font-size:13px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};
+          ${s.tab === 'google' ? `background:${CONFIG.primary_action_color};color:white;` : `background:${CONFIG.surface_color};color:${CONFIG.text_muted};`}">
+          Google
+        </button>
+      </div>
+
+      <!-- Upload link -->
+      <div style="padding:0 16px 10px;">
+        <input id="photoSearchUploadInput" type="file" accept="image/*" capture="environment" style="display:none;" onchange="_handlePhotoSearchUpload(this)" />
+        <button onclick="document.getElementById('photoSearchUploadInput').click()"
+          style="background:none;border:none;color:${CONFIG.primary_action_color};font-size:13px;cursor:pointer;padding:0;font-family:${CONFIG.font_family};">
+          Or upload your own
+        </button>
+      </div>
+
+      <!-- Results grid -->
+      <div id="photoSearchResults" style="flex:1;overflow-y:auto;padding:0 16px 16px;-webkit-overflow-scrolling:touch;">
+        ${_renderPhotoSearchResults()}
+      </div>
+
+      <!-- Use this photo button -->
+      <div id="photoSearchAction" style="padding:12px 16px;${s.selectedIdx >= 0 ? '' : 'display:none;'}">
+        <button onclick="_confirmPhotoSelection()"
+          style="width:100%;height:44px;border:none;border-radius:10px;background:${CONFIG.primary_action_color};color:white;font-size:15px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};">
+          Use this photo
+        </button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(div);
+
+  // Focus search input
+  setTimeout(() => {
+    const input = document.getElementById('photoSearchInput');
+    if (input) input.focus();
+  }, 100);
+}
+
+function _renderPhotoSearchResults() {
+  const s = _photoSearchState;
+
+  if (s.loading) {
+    return `<div style="display:flex;align-items:center;justify-content:center;padding:40px 0;">
+      <div style="width:28px;height:28px;border:3px solid rgba(255,255,255,0.1);border-top-color:${CONFIG.primary_action_color};border-radius:50%;animation:photoSearchSpin 0.6s linear infinite;"></div>
+      <style>@keyframes photoSearchSpin { to { transform: rotate(360deg); } }</style>
+    </div>`;
+  }
+
+  if (s.query && s.results.length === 0) {
+    return `<div style="text-align:center;padding:40px 16px;color:${CONFIG.text_muted};font-size:14px;line-height:1.5;">
+      No results found.<br>Try a different search or upload your own.
+    </div>`;
+  }
+
+  if (s.results.length === 0) {
+    return `<div style="text-align:center;padding:40px 16px;color:${CONFIG.text_muted};font-size:14px;">
+      Search for ingredient or product photos above.
+    </div>`;
+  }
+
+  return `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:2px;">
+    ${s.results.map((img, i) => {
+      const thumb = img.thumb;
+      const isSelected = i === s.selectedIdx;
+      return `<div onclick="_selectPhotoResult(${i})" style="position:relative;cursor:pointer;aspect-ratio:1/1;overflow:hidden;${isSelected ? `outline:3px solid ${CONFIG.primary_action_color};outline-offset:-3px;border-radius:4px;` : ''}">
+        <img src="${esc(thumb)}" loading="lazy" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.style.display='none';" />
+        ${isSelected ? `<div style="position:absolute;top:6px;right:6px;width:22px;height:22px;border-radius:50%;background:${CONFIG.primary_action_color};display:flex;align-items:center;justify-content:center;">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>` : ''}
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function _updatePhotoSearchResults() {
+  const container = document.getElementById('photoSearchResults');
+  if (container) container.innerHTML = _renderPhotoSearchResults();
+
+  const action = document.getElementById('photoSearchAction');
+  if (action) action.style.display = _photoSearchState.selectedIdx >= 0 ? '' : 'none';
+}
+
+function _onPhotoSearchInput(value) {
+  _photoSearchState.query = value;
+  _photoSearchState.selectedIdx = -1;
+  _photoSearchState.selectedUrl = '';
+  _updatePhotoSearchResults();
+
+  clearTimeout(_photoSearchState.debounceTimer);
+  if (!value.trim()) {
+    _photoSearchState.loading = false;
+    _photoSearchState.results = [];
+    _updatePhotoSearchResults();
+    return;
+  }
+  _photoSearchState.debounceTimer = setTimeout(() => {
+    _photoSearchFetch(value.trim(), _photoSearchState.tab);
+  }, 500);
+}
+
+function _switchPhotoTab(tab) {
+  _photoSearchState.tab = tab;
+  _photoSearchState.selectedIdx = -1;
+  _photoSearchState.selectedUrl = '';
+  _photoSearchState.results = [];
+
+  // Update tab styles
+  const unsplashTab = document.getElementById('photoTabUnsplash');
+  const googleTab = document.getElementById('photoTabGoogle');
+  if (unsplashTab) {
+    unsplashTab.style.background = tab === 'unsplash' ? CONFIG.primary_action_color : CONFIG.surface_color;
+    unsplashTab.style.color = tab === 'unsplash' ? 'white' : CONFIG.text_muted;
+  }
+  if (googleTab) {
+    googleTab.style.background = tab === 'google' ? CONFIG.primary_action_color : CONFIG.surface_color;
+    googleTab.style.color = tab === 'google' ? 'white' : CONFIG.text_muted;
+  }
+
+  _updatePhotoSearchResults();
+
+  if (_photoSearchState.query.trim()) {
+    _photoSearchFetch(_photoSearchState.query.trim(), tab);
+  }
+}
+
+async function _photoSearchFetch(query, source) {
+  _photoSearchState.loading = true;
+  _photoSearchState.results = [];
+  _updatePhotoSearchResults();
+
+  try {
+    if (source === 'unsplash') {
+      const resp = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=21&client_id=${UNSPLASH_ACCESS_KEY}`);
+      if (!resp.ok) throw new Error('Unsplash API error');
+      const data = await resp.json();
+      _photoSearchState.results = (data.results || []).map(r => ({
+        thumb: r.urls.small,
+        full: r.urls.regular
+      }));
+    } else {
+      const resp = await fetch('https://google.serper.dev/images', {
+        method: 'POST',
+        headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: query, num: 21 })
+      });
+      if (!resp.ok) throw new Error('Serper API error');
+      const data = await resp.json();
+      _photoSearchState.results = (data.images || []).map(r => ({
+        thumb: r.thumbnailUrl,
+        full: r.imageUrl
+      }));
+    }
+  } catch (e) {
+    console.error('Photo search error:', e);
+    _photoSearchState.results = [];
+  }
+
+  _photoSearchState.loading = false;
+  _updatePhotoSearchResults();
+}
+
+function _selectPhotoResult(idx) {
+  const s = _photoSearchState;
+  if (idx === s.selectedIdx) {
+    // Deselect
+    s.selectedIdx = -1;
+    s.selectedUrl = '';
+  } else {
+    s.selectedIdx = idx;
+    s.selectedUrl = s.results[idx]?.full || '';
+  }
+  _updatePhotoSearchResults();
+}
+
+function _confirmPhotoSelection() {
+  const s = _photoSearchState;
+  if (s.selectedUrl && s.callback) {
+    s.callback(s.selectedUrl);
+  }
+  _closePhotoSearch();
+}
+
+function _handlePhotoSearchUpload(input) {
+  if (!input.files || !input.files[0]) return;
+  const file = input.files[0];
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    // Compress before returning
+    const img = new Image();
+    img.onerror = function() {
+      showToast('Could not load image. Try a different file.', 'error');
+      _closePhotoSearch();
+    };
+    img.onload = function() {
+      const canvas = document.createElement('canvas');
+      const maxSize = 800;
+      let w = img.width, h = img.height;
+      if (w > h) { if (w > maxSize) { h = Math.round(h * maxSize / w); w = maxSize; } }
+      else { if (h > maxSize) { w = Math.round(w * maxSize / h); h = maxSize; } }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      const base64 = canvas.toDataURL('image/jpeg', 0.7);
+      if (_photoSearchState.callback) {
+        _photoSearchState.callback(base64);
+      }
+      _closePhotoSearch();
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function _closePhotoSearch() {
+  clearTimeout(_photoSearchState.debounceTimer);
+  const overlay = document.getElementById('photoSearchOverlay');
+  if (overlay) overlay.remove();
+}
 
 // ============================================================
 // SECTION 9b: FULLSCREEN VIDEO OVERLAY
