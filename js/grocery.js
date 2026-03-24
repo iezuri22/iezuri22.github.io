@@ -1183,7 +1183,13 @@ if (typeof addQuickGroceryItem === 'undefined') {
 }
 
 function init() {
-  loadAllState();
+  console.log('[grocery] init() starting');
+  try {
+    loadAllState();
+    console.log('[grocery] loadAllState done — recipes:', state.recipes?.length, 'groceryItems:', state.groceryItems?.length, 'smartList:', getSmartGroceryList()?.length);
+  } catch (e) {
+    console.error('[grocery] loadAllState failed:', e);
+  }
   const targetView = sessionStorage.getItem('yummy_target_view');
   if (targetView && VIEW_RENDERERS[targetView]) {
     sessionStorage.removeItem('yummy_target_view');
@@ -1191,8 +1197,10 @@ function init() {
   } else {
     state.currentView = 'grocery-list';
   }
+  console.log('[grocery] currentView:', state.currentView);
   setupKeyboardShortcuts();
   render();
+  console.log('[grocery] init() done');
 }
 
 init();

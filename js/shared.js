@@ -1679,8 +1679,9 @@ function addMealToGrocery(recipeId) {
 }
 
 function showMealIngredientPicker(recipeId) {
+  console.log('[grocery] showMealIngredientPicker called — recipeId:', recipeId);
   const recipe = getRecipeById(recipeId);
-  if (!recipe) { showToast('Recipe not found', 'error'); return; }
+  if (!recipe) { console.error('[grocery] Recipe not found:', recipeId); showToast('Recipe not found', 'error'); return; }
   const ingredients = recipeIngList(recipe);
   if (ingredients.length === 0) { showToast('No ingredients found', 'info'); return; }
 
@@ -1971,6 +1972,7 @@ function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) re
 window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
 
 function showAddFromMealModal() {
+  console.log('[grocery] showAddFromMealModal called — total recipes:', state.recipes?.length);
   window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
 
   // Build full recipe list once (all recipes with ingredients)
@@ -1997,6 +1999,7 @@ function showAddFromMealModal() {
   });
 
   window._mealPickerAllItems = allItems;
+  console.log('[grocery] showAddFromMealModal — recipes with ingredients:', allItems.length);
 
   const modalHtml = `<div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
     <h2 style="font-size:17px;font-weight:600;margin-bottom:12px;">Add from a meal</h2>
