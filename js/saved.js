@@ -671,8 +671,7 @@ function renderCookingJournal() {
           <div style="font-size: 48px; opacity: 0.3; margin-bottom: ${CONFIG.space_md};">
             <svg width="48" height="48" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto;"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
           </div>
-          <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">No photos yet</div>
-          <div style="color: ${CONFIG.text_muted}; font-size: 14px;">Your cooking photos will appear here.<br>Add photos when logging meals!</div>
+          <div style="color: ${CONFIG.text_muted}; font-size: 14px; line-height: 1.5;">No cooking photos yet.<br>Mark meals as cooked and add photos to see them here.</div>
         </div>
       </div>
     `;
@@ -683,6 +682,7 @@ function renderCookingJournal() {
     id: e.id,
     photo: e.myPhoto || e.photo,
     recipeName: e.recipeName || 'Unknown',
+    mealType: e.mealType || 'meal',
     date: e.dateCooked?.split('T')[0] || getToday(),
     dateLabel: getFoodLogDateLabel(e.dateCooked?.split('T')[0] || getToday())
   })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
@@ -715,7 +715,7 @@ function renderCookingJournal() {
                   <img loading="lazy" src="${esc(p.photo)}" style="width:100%; height:100%; object-fit:cover;" />
                 </div>
                 <div style="padding:6px; background:${CONFIG.background_color};">
-                  <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
+                  <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:700; -webkit-line-clamp:1; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
                     ${esc(p.recipeName)}
                   </div>
                 </div>
