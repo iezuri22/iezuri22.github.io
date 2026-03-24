@@ -46,20 +46,86 @@ if (window.navigator.standalone === true) {
 })();
 
 // ============================================================
-// SUPABASE INITIALIZATION — DISABLED (localStorage-only mode)
+// SUPABASE INITIALIZATION
 // ============================================================
-// Backend disabled — all data stored in localStorage only.
-// Supabase code preserved below in comments for future re-enablement.
-/*
 const SUPABASE_URL = 'https://blqbxduxgimarrhgyfgn.supabase.co';
-const SUPABASE_KEY = '...';
-(function loadSupabase() { ... })();
-*/
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJscWJ4ZHV4Z2ltYXJyaGd5ZmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1NjgyNDcsImV4cCI6MjA4MzE0NDI0N30.iNrBLJLSQEUEV24VCnhrMPTTJ6A_0rIuSAOinuFd-vM';
 
-// No-op auth — app works without login
+// Load Supabase library dynamically
+(function loadSupabase() {
+  const script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js';
+  script.onload = () => {
+    try {
+      window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+      console.log('[BOOT] Supabase loaded successfully');
+      // Once Supabase is loaded, check auth
+      checkAuthAndInit();
+    } catch (e) {
+      console.error('[BOOT] Supabase client creation failed:', e);
+      // Fallback: load from localStorage and render
+      loadAllState();
+      if (typeof render === 'function') render();
+    }
+  };
+  script.onerror = () => {
+    console.error('[BOOT] Supabase script failed to load — falling back to localStorage');
+    loadAllState();
+    if (typeof render === 'function') render();
+  };
+  document.head.appendChild(script);
+})();
+
+// Auth check (called after Supabase loads)
 async function checkAuthAndInit() {
-  // localStorage-only mode — no auth required, just render
-  if (typeof render === 'function') render();
+  if (!window.supabaseClient) {
+    console.warn('[AUTH] No Supabase client — falling back to localStorage');
+    loadAllState();
+    if (typeof render === 'function') render();
+    return;
+  }
+  try {
+    // Use getSession (local cache) first for speed; fall back to getUser if needed
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session || !session.user) {
+      // No active session — show login
+      console.log('[AUTH] No session found — showing login');
+      showLoginModal();
+      return;
+    }
+    const user = session.user;
+    console.log('[AUTH] Session found for:', user.email);
+    // User is logged in — load data from Supabase
+    try {
+      await loadDataFromSupabase();
+      console.log('[AUTH] Data loaded from Supabase');
+    } catch (loadErr) {
+      console.error('[AUTH] Supabase data load failed, falling back to localStorage:', loadErr);
+      loadAllState();
+    }
+    try {
+      subscribeToChanges(user.id);
+    } catch (subErr) {
+      console.error('[AUTH] Realtime subscription failed (non-fatal):', subErr);
+    }
+    try {
+      updateUserIndicator(user.email);
+    } catch (uiErr) {
+      console.error('[AUTH] User indicator update failed (non-fatal):', uiErr);
+    }
+    // Re-render the current page
+    if (typeof render === 'function') render();
+  } catch (e) {
+    console.error('[AUTH] Auth check failed:', e);
+    // Try to show login, but if that fails too, at least load localStorage
+    try {
+      showLoginModal();
+    } catch (modalErr) {
+      console.error('[AUTH] Login modal also failed — loading from localStorage:', modalErr);
+      loadAllState();
+      if (typeof render === 'function') render();
+    }
+  }
 }
 
 function clearAuthCache() {
@@ -4167,12 +4233,40 @@ async function handleLogin() {
     return;
   }
 
-  // localStorage-only mode — just cache email and close
-  localStorage.setItem('yummy_auth_user_email', email);
-  localStorage.setItem('yummy_isLoggedIn', 'true');
-  closeModal();
-  showToast('Signed in locally', 'success');
-  if (typeof render === 'function') render();
+  if (!window.supabaseClient) {
+    showError('Supabase not loaded — please refresh and try again');
+    return;
+  }
+
+  try {
+    const { data, error } = await window.supabaseClient.auth.signInWithPassword({
+      email: email,
+      password: password
+    });
+
+    if (error) {
+      showError('Login failed: ' + error.message);
+      return;
+    }
+
+    closeModal();
+    showToast('Logged in successfully!', 'success');
+
+    // Migrate localStorage data to Supabase if any
+    try { await migrateLocalStorageToSupabase(); } catch(e) { console.error('Migration failed (non-fatal):', e); }
+
+    // Load data and render
+    await loadDataFromSupabase();
+    const { data: { user } } = await window.supabaseClient.auth.getUser();
+    if (user) {
+      subscribeToChanges(user.id);
+      updateUserIndicator(user.email);
+    }
+    if (typeof render === 'function') render();
+  } catch (e) {
+    console.error('Login error:', e);
+    showError('Login failed: ' + e.message);
+  }
 }
 
 async function handleSignup() {
@@ -4184,19 +4278,41 @@ async function handleSignup() {
     return;
   }
 
-  // localStorage-only mode — just cache email and close
-  localStorage.setItem('yummy_auth_user_email', email);
-  localStorage.setItem('yummy_isLoggedIn', 'true');
-  closeModal();
-  showToast('Account created locally', 'success');
-  if (typeof render === 'function') render();
+  if (password.length < 6) {
+    showError('Password must be at least 6 characters');
+    return;
+  }
+
+  if (!window.supabaseClient) {
+    showError('Supabase not loaded — please refresh and try again');
+    return;
+  }
+
+  try {
+    const { data, error } = await window.supabaseClient.auth.signUp({
+      email: email,
+      password: password
+    });
+
+    if (error) {
+      showError('Signup failed: ' + error.message);
+      return;
+    }
+
+    closeModal();
+    showToast('Account created! Check your email to verify.', 'success');
+    showLoginModal();
+  } catch (e) {
+    console.error('Signup error:', e);
+    showError('Signup failed: ' + e.message);
+  }
 }
 
 async function handleLogout() {
   clearAuthCache();
   localStorage.removeItem('meal_planner_data_v1');
   if (window.supabaseClient) {
-    try { await window.supabaseClient.auth.signOut(); } catch(e) {}
+    try { await window.supabaseClient.auth.signOut(); } catch(e) { console.error('Signout error:', e); }
   }
   showToast('Logged out', 'success');
   location.reload();
@@ -4390,6 +4506,47 @@ async function clearAllData() {
   }
   loadAllState(); closeModal(); showToast('All data cleared', 'success'); navigateTo('home');
 }
+
+// ============================================================
+// SUPABASE DEBUG — call window.testSupabase() from console
+// ============================================================
+window.testSupabase = async function() {
+  try {
+    if (!window.supabaseClient) {
+      console.error('Supabase client not loaded!');
+      return;
+    }
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    console.log('Auth session:', session ? { user: session.user?.email, expires: session.expires_at } : 'NO SESSION');
+
+    if (!session?.user) {
+      console.log('Not logged in — cannot query tables');
+      return;
+    }
+
+    // Try to read from the main data table
+    const { data, error } = await window.supabaseClient
+      .from('meal_planner_data')
+      .select('id')
+      .eq('user_id', session.user.id);
+
+    if (error) {
+      console.error('meal_planner_data query error:', error.message);
+    } else {
+      console.log('meal_planner_data: ' + (data?.length || 0) + ' rows');
+      if (data && data.length > 0) {
+        const prefixes = {};
+        data.forEach(row => {
+          const prefix = row.id?.split('_')[0] || 'unknown';
+          prefixes[prefix] = (prefixes[prefix] || 0) + 1;
+        });
+        console.log('Row breakdown by prefix:', prefixes);
+      }
+    }
+  } catch(e) {
+    console.error('Supabase test failed:', e);
+  }
+};
 
 // ============================================================
 // CROSS-PAGE NAVIGATION FALLBACKS
