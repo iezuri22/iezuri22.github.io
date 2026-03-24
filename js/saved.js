@@ -378,66 +378,32 @@ function renderCookingJournal() {
     `;
   }
 
-  // Group by meal type in order
-  const mealOrder = ['breakfast', 'lunch', 'dinner', 'snack'];
-  const grouped = {};
-  photosEntries.forEach(e => {
-    const mt = (e.mealType || 'dinner').toLowerCase();
-    if (!grouped[mt]) grouped[mt] = [];
-    grouped[mt].push({
-      id: e.id,
-      photo: e.myPhoto || e.photo,
-      recipeName: e.recipeName || 'Unknown',
-      mealType: mt,
-      date: e.dateCooked?.split('T')[0] || '',
-      dateLabel: getFoodLogDateLabel(e.dateCooked?.split('T')[0] || getToday())
-    });
-  });
-
-  // Collapsed state from localStorage
-  const collapsedState = JSON.parse(localStorage.getItem('myPlatesCollapsed') || '{}');
-
-  const sections = mealOrder
-    .filter(mt => grouped[mt] && grouped[mt].length > 0)
-    .map(mt => {
-      const photos = grouped[mt];
-      const count = photos.length;
-      const label = capitalize(mt);
-      const isCollapsed = collapsedState[mt] === true;
-
-      return `
-        <div style="margin-bottom: ${CONFIG.space_md};">
-          <div onclick="toggleJournalSection('${mt}')" style="display: flex; align-items: center; justify-content: space-between; padding: 12px ${CONFIG.space_md}; cursor: pointer; -webkit-tap-highlight-color: transparent;">
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 16px; font-weight: 700; color: ${CONFIG.text_color};">${label}</span>
-              <span style="font-size: 13px; color: ${CONFIG.text_muted};">&middot; ${count} photo${count !== 1 ? 's' : ''}</span>
-            </div>
-            <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="2" viewBox="0 0 24 24" style="transition: transform 0.2s; transform: rotate(${isCollapsed ? '-90deg' : '0deg'});">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
-            </svg>
-          </div>
-          ${isCollapsed ? '' : `
-            <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
-              ${photos.map(p => `
-                <div onclick="showJournalFullscreen('${p.id}')" style="cursor: pointer; overflow: hidden; border-radius: 8px;">
-                  <div style="aspect-ratio: 1; width: 100%; overflow: hidden;">
-                    <img src="${esc(p.photo)}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" />
-                  </div>
-                  <div style="padding: 6px; background: ${CONFIG.background_color};">
-                    <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 600; -webkit-line-clamp: 2; -webkit-box-orient: vertical; display: -webkit-box; overflow: hidden; line-height: 1.3;">${esc(p.recipeName)}</div>
-                    <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-top: 2px;">${p.dateLabel}</div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          `}
-        </div>
-      `;
-    }).join('');
+  // Flat list sorted newest first (no meal-type grouping)
+  const allPhotos = photosEntries.map(e => ({
+    id: e.id,
+    photo: e.myPhoto || e.photo,
+    recipeName: e.recipeName || 'Unknown',
+    date: e.dateCooked?.split('T')[0] || '',
+    dateLabel: getFoodLogDateLabel(e.dateCooked?.split('T')[0] || getToday())
+  })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
   return `
     <div style="padding: 0; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
-      ${sections}
+      <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
+        ${allPhotos.map(p => `
+          <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 8px;" onclick="showJournalFullscreen('${p.id}')">
+            <div style="aspect-ratio:1; width:100%; overflow:hidden;">
+              <img loading="lazy" src="${esc(p.photo)}" style="width:100%; height:100%; object-fit:cover;" />
+            </div>
+            <div style="padding:6px; background:${CONFIG.background_color};">
+              <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
+                ${esc(p.recipeName)}
+              </div>
+              <div style="color:${CONFIG.text_muted}; font-size:10px; margin-top:2px;">${p.dateLabel}</div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
     </div>
   `;
 }
