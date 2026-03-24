@@ -2371,7 +2371,7 @@ document.addEventListener('click', (e) => {
 // ============================================================
 
 // API Keys (replace with real keys)
-const UNSPLASH_ACCESS_KEY = 'YOUR_UNSPLASH_KEY';
+const UNSPLASH_ACCESS_KEY = 'bRX98BNJez65z3Y8QZYmp_HlrIedG2Qi6n6xkaODjCw';
 const SERPER_API_KEY = 'YOUR_SERPER_KEY';
 
 // Grocery photo toggle
