@@ -19,6 +19,24 @@ let savedPrimaryFilter = 'all';
 let platesSearchTerm = '';
 let platesPrimaryFilter = 'all';
 
+// Journal tab local state
+let journalSearchTerm = '';
+let journalFilterMealType = 'all';
+
+function handleJournalSearch(value) {
+  journalSearchTerm = value;
+  render();
+  setTimeout(() => {
+    const input = document.getElementById('journalSearchInput');
+    if (input) { input.focus(); input.setSelectionRange(input.value.length, input.value.length); }
+  }, 0);
+}
+
+function setJournalFilter(filter) {
+  journalFilterMealType = filter;
+  render();
+}
+
 function setSavedTab(tab) {
   savedActiveTab = tab;
   render();
@@ -358,16 +376,80 @@ function renderPlatesTab() {
 // ============================================================
 function renderCookingJournal() {
   const log = getFoodLog();
-  const photosEntries = log.filter(e => {
+  let photosEntries = log.filter(e => {
     if (e.myPhoto) return true;
     if (e.photo && e.photo.startsWith('data:')) return true;
     return false;
   });
 
+  // Filter pills
+  const filters = [
+    { id: 'all', label: 'All' },
+    { id: 'breakfast', label: 'Breakfast' },
+    { id: 'lunch', label: 'Lunch' },
+    { id: 'dinner', label: 'Dinner' },
+    { id: 'snack', label: 'Snack' }
+  ];
+
+  const filterRow = filters.map(f => {
+    const active = journalFilterMealType === f.id;
+    return `<button onclick="setJournalFilter('${f.id}')"
+      style="flex-shrink:0; padding:8px 16px; border-radius:20px; border:none;
+      background:${active ? CONFIG.primary_action_color : 'transparent'};
+      color:${active ? 'white' : CONFIG.text_muted};
+      font-size:13px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">
+      ${f.label}</button>`;
+  }).join('');
+
+  // Apply meal type filter
+  if (journalFilterMealType !== 'all') {
+    photosEntries = photosEntries.filter(e => (e.mealType || '').toLowerCase() === journalFilterMealType);
+  }
+
+  // Apply search filter
+  if (journalSearchTerm) {
+    const sl = journalSearchTerm.toLowerCase();
+    photosEntries = photosEntries.filter(e => (e.recipeName || '').toLowerCase().includes(sl));
+  }
+
+  const searchAndFilters = `
+    <!-- Search bar -->
+    <div style="padding: 8px 12px 0;">
+      <div style="position:relative;">
+        <input id="journalSearchInput" type="text" placeholder="Search photos..."
+          value="${esc(journalSearchTerm)}"
+          oninput="handleJournalSearch(this.value)"
+          style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
+          background:${CONFIG.surface_color}; color:${CONFIG.text_color};
+          border:1px solid rgba(255,255,255,0.08); border-radius:10px;
+          font-size:14px; font-family:${CONFIG.font_family};" />
+        ${journalSearchTerm ? `
+          <button onclick="journalSearchTerm=''; render(); setTimeout(() => { const i = document.getElementById('journalSearchInput'); if(i) i.focus(); }, 0);"
+            style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+            background:rgba(255,255,255,0.1); border:none; border-radius:50%;
+            width:20px; height:20px; display:flex; align-items:center; justify-content:center;
+            color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        ` : `
+          <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          </div>
+        `}
+      </div>
+    </div>
+
+    <!-- Filter pills -->
+    <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 12px 6px; -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+      ${filterRow}
+    </div>
+  `;
+
   if (photosEntries.length === 0) {
     return `
-      <div style="padding: ${CONFIG.space_md}; padding-bottom: 80px; max-width: 600px; margin: 0 auto; text-align: center;">
-        <div style="padding: ${CONFIG.space_2xl} ${CONFIG.space_md};">
+      <div style="padding: 0; padding-bottom: 80px; max-width: 100%; overflow-x: hidden;">
+        ${searchAndFilters}
+        <div style="padding: ${CONFIG.space_2xl} ${CONFIG.space_md}; text-align: center;">
           <div style="font-size: 48px; opacity: 0.3; margin-bottom: ${CONFIG.space_md};">
             <svg width="48" height="48" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto;"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
           </div>
@@ -388,7 +470,8 @@ function renderCookingJournal() {
   })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
   return `
-    <div style="padding: 0; padding-bottom: 80px; max-width: 600px; margin: 0 auto;">
+    <div style="padding: 0; padding-bottom: 80px; max-width: 100%; overflow-x: hidden;">
+      ${searchAndFilters}
       <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
         ${allPhotos.map(p => `
           <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 8px;" onclick="showJournalFullscreen('${p.id}')">
