@@ -1333,20 +1333,6 @@
         right: 32px;
       }
 
-      /* Cooking Journal grid on desktop */
-      .my-plates-grid, .journal-grid {
-        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)) !important;
-        gap: 4px !important;
-      }
-      .my-plates-grid > div {
-        border-radius: 8px;
-        transition: transform 200ms ease, box-shadow 200ms ease;
-      }
-      .my-plates-grid > div:hover {
-        transform: scale(1.02);
-        box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-      }
-
       /* ---- Build a Plate: desktop layout ---- */
       .batch-edit-page,
       .batch-view-page {

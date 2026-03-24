@@ -1642,9 +1642,6 @@ function showRecipeMoreFilters() {
         <button onclick="closeModal();showImportRecipeModal();" style="flex:1;padding:10px;background:${CONFIG.surface_color};color:${CONFIG.text_color};border:none;border-radius:8px;font-size:13px;cursor:pointer;">Import Recipe</button>
         <button onclick="closeModal();openNewRecipe();" style="flex:1;padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">+ New Recipe</button>
       </div>
-      <div style="margin-top:8px;">
-        <button onclick="closeModal();openNewBatchRecipe();" style="width:100%;padding:10px;background:${CONFIG.surface_color};color:${CONFIG.primary_action_color};border:1px solid rgba(232,93,93,0.2);border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">+ Build a Plate</button>
-      </div>
     </div>
   `;
   openModal(content);
@@ -1662,26 +1659,6 @@ function renderRecipes() {
     list = list.filter(r => (r.category || '') === primaryFilter);
   }
   // 'all' shows everything
-
-  // Get batch recipes for display
-  let batchList = state.batchRecipes || [];
-  if (['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(primaryFilter)) {
-    batchList = batchList.filter(b => capitalize(b.mealType || '') === primaryFilter);
-  }
-  if (state.searchTerm) {
-    const sl = state.searchTerm.toLowerCase();
-    batchList = batchList.filter(b => (b.name || '').toLowerCase().includes(sl));
-  }
-  // Apply effort toggles to batch recipes too
-  const batchEffortToggles = state.recipeEffortToggles || {};
-  const batchActiveEfforts = Object.entries(batchEffortToggles).filter(([, v]) => v).map(([k]) => k);
-  if (batchActiveEfforts.length > 0) {
-    batchList = batchList.filter(b => {
-      const effort = getBatchEffortLevel(b);
-      if (batchActiveEfforts.includes('uncategorized') && effort === null) return true;
-      return effort && batchActiveEfforts.includes(effort);
-    });
-  }
 
   // Apply secondary source toggles (if any active, filter to those sources)
   const sourcesToggles = state.recipeSourceToggles || {};
@@ -1743,7 +1720,7 @@ function renderRecipes() {
       ${renderRecipeFilterPills()}
 
       <!-- Results -->
-      ${(list.length === 0 && batchList.length === 0) ? `
+      ${list.length === 0 ? `
         <div style="padding: 48px 12px; text-align: center;">
           <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">
             ${state.searchTerm ? 'No matches found' : 'No recipes yet'}
@@ -1759,31 +1736,7 @@ function renderRecipes() {
         </div>
       ` : `
         <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
-          ${batchList.map(b => {
-            const bImg = getBatchCoverPhoto(b);
-            return `
-            <div style="position:relative; cursor:pointer; overflow:hidden; border-radius:8px;" onclick="openBatchRecipeView('${b.id}')">
-              ${bImg ? `
-                <div style="aspect-ratio:1; width:100%; overflow:hidden;">
-                  <img loading="lazy" src="${esc(bImg)}" style="width:100%; height:100%; object-fit:cover;" />
-                </div>
-              ` : `
-                <div style="aspect-ratio:1; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
-                  <span style="color:${CONFIG.text_color}; font-size:12px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(b.name)}</span>
-                </div>
-              `}
-              <!-- Stacked cards badge -->
-              <div style="position:absolute; top:4px; left:4px; z-index:2; display:flex; gap:4px; align-items:center;">
-                <div style="width:22px; height:22px; border-radius:5px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
-                  <svg width="14" height="14" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>
-                </div>
-                ${renderEffortPill(getBatchEffortLevel(b), 'sm')}
-              </div>
-              <div style="padding:6px; background:${CONFIG.background_color};">
-                <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">${esc(b.name)}</div>
-              </div>
-            </div>`;
-          }).join('')}${list.map(r => {
+          ${list.map(r => {
             const id = r.__backendId || r.id;
             const img = recipeThumb(r);
             const saved = isRecipeSaved(id);

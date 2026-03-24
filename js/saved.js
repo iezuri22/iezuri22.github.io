@@ -175,7 +175,7 @@ function renderSavedRecipes() {
           </div>
         </div>
       ` : `
-        <div class="saved-grid">
+        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
           ${list.map(r => {
             const id = r.__backendId || r.id;
             const img = recipeThumb(r);
@@ -320,37 +320,30 @@ function renderPlatesTab() {
           ` : ''}
         </div>
       ` : `
-        <div class="build-plates-grid">
+        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
           ${list.map(b => {
             const bImg = getBatchCoverPhoto(b);
             const compCount = (b.components || []).length;
-            const effort = getBatchEffortLevel(b);
             return `
-            <div style="position:relative; cursor:pointer; overflow:hidden; border-radius: 12px; background: ${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};" onclick="openBatchRecipeView('${b.id}')">
+            <div style="position:relative; cursor:pointer; overflow:hidden; border-radius:8px;" onclick="openBatchRecipeView('${b.id}')">
               ${bImg ? `
                 <div style="aspect-ratio:1; width:100%; overflow:hidden;">
                   <img loading="lazy" src="${esc(bImg)}" style="width:100%; height:100%; object-fit:cover;" />
                 </div>
               ` : `
-                <div style="aspect-ratio:1; width:100%; background:${CONFIG.surface_elevated}; display:flex; align-items:center; justify-content:center; padding:12px;">
-                  <span style="color:${CONFIG.text_color}; font-size:14px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(b.name)}</span>
+                <div style="aspect-ratio:1; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
+                  <span style="color:${CONFIG.text_color}; font-size:12px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(b.name)}</span>
                 </div>
               `}
               <!-- Stacked cards badge -->
-              <div style="position:absolute; top:6px; left:6px; z-index:2; display:flex; gap:4px; align-items:center;">
+              <div style="position:absolute; top:4px; left:4px; z-index:2;">
                 <div style="width:22px; height:22px; border-radius:5px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
                   <svg width="14" height="14" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>
                 </div>
               </div>
-              <div style="padding:10px;">
-                <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3; margin-bottom:6px;">
-                  ${esc(b.name)}
-                </div>
-                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-                  <span style="font-size:11px; color:${CONFIG.text_muted};">${compCount} recipe${compCount !== 1 ? 's' : ''}</span>
-                  ${b.mealType ? `<span style="font-size:10px; padding:2px 8px; border-radius:10px; background:rgba(255,255,255,0.06); color:${CONFIG.text_muted}; font-weight:500;">${capitalize(b.mealType)}</span>` : ''}
-                  ${effort ? renderEffortPill(effort, 'sm') : ''}
-                </div>
+              <div style="padding:6px; background:${CONFIG.background_color};">
+                <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">${esc(b.name)}</div>
+                <div style="color:${CONFIG.text_muted}; font-size:10px; margin-top:2px;">${compCount} recipe${compCount !== 1 ? 's' : ''}</div>
               </div>
             </div>`;
           }).join('')}
@@ -424,13 +417,16 @@ function renderCookingJournal() {
             </svg>
           </div>
           ${isCollapsed ? '' : `
-            <div class="journal-grid">
+            <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
               ${photos.map(p => `
-                <div onclick="showJournalFullscreen('${p.id}')" style="cursor: pointer;">
-                  <div style="aspect-ratio: 1; overflow: hidden; position: relative;">
+                <div onclick="showJournalFullscreen('${p.id}')" style="cursor: pointer; overflow: hidden; border-radius: 8px;">
+                  <div style="aspect-ratio: 1; width: 100%; overflow: hidden;">
                     <img src="${esc(p.photo)}" style="width: 100%; height: 100%; object-fit: cover;" loading="lazy" />
                   </div>
-                  <div style="padding: 4px 4px 8px; font-size: 12px; font-weight: 600; color: ${CONFIG.text_color}; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;">${esc(p.recipeName)}</div>
+                  <div style="padding: 6px; background: ${CONFIG.background_color};">
+                    <div style="color: ${CONFIG.text_color}; font-size: 11px; font-weight: 600; -webkit-line-clamp: 2; -webkit-box-orient: vertical; display: -webkit-box; overflow: hidden; line-height: 1.3;">${esc(p.recipeName)}</div>
+                    <div style="color: ${CONFIG.text_muted}; font-size: 10px; margin-top: 2px;">${p.dateLabel}</div>
+                  </div>
                 </div>
               `).join('')}
             </div>
