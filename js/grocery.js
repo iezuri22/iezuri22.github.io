@@ -1120,11 +1120,20 @@ function render() {
 
   const renderer = VIEW_RENDERERS[state.currentView];
   let content;
-  if (renderer) {
-    content = renderer();
-  } else {
-    content = renderGroceryList();
-    state.currentView = 'grocery-list';
+  try {
+    if (renderer) {
+      content = renderer();
+    } else {
+      content = renderGroceryList();
+      state.currentView = 'grocery-list';
+    }
+  } catch (e) {
+    console.error('[render] Error rendering grocery view:', e);
+    content = `<div style="padding:24px;text-align:center;color:${CONFIG.text_muted};">
+      <div style="font-size:15px;margin-bottom:8px;">Something went wrong loading the grocery list.</div>
+      <div style="font-size:12px;margin-bottom:16px;">${esc(String(e.message || 'Unknown error'))}</div>
+      <button onclick="render()" style="padding:8px 16px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Try Again</button>
+    </div>`;
   }
 
   app.innerHTML = `

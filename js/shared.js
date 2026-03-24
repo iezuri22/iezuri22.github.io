@@ -723,6 +723,30 @@ function loadAllState() {
   }
   state.dataLoaded = true;
   cleanupCookingData();
+  migrateOldGroceryData();
+}
+
+// One-time migration: old groceryItems → smartGroceryList_v1
+function migrateOldGroceryData() {
+  const newList = getSmartGroceryList();
+  if (newList.length > 0) return; // new system already has data
+  const oldItems = state.groceryItems;
+  if (!oldItems || oldItems.length === 0) return;
+  const migrated = oldItems.map(item => ({
+    id: item.id || ('gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
+    name: item.name || item.ingredientKey || '',
+    category: item.category || item.group || 'Other',
+    qty: item.quantity || item.qty || '',
+    unit: item.unit || '',
+    checked: !!item.checked,
+    manual: true,
+    sourceMeals: [],
+    addedAt: item.addedAt ? new Date(item.addedAt).getTime() : Date.now()
+  })).filter(item => item.name);
+  if (migrated.length > 0) {
+    saveSmartGroceryList(migrated);
+    console.log('[migrateGroceryData] Migrated ' + migrated.length + ' items from old groceryItems to smartGroceryList_v1');
+  }
 }
 
 // One-time cleanup: reset fake timesCooked/cookCount data on recipes.
@@ -1028,6 +1052,40 @@ function saveCustomIngredientImages() {
 
 // Load on startup
 loadCustomIngredientImages();
+
+// Ingredient photo library — persists across sessions
+let ingredientPhotos = {};
+
+function loadIngredientPhotos() {
+  try {
+    const saved = localStorage.getItem('yummy_ingredientPhotos');
+    if (saved) ingredientPhotos = JSON.parse(saved);
+  } catch (e) { ingredientPhotos = {}; }
+}
+
+function saveIngredientPhotos() {
+  localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos));
+}
+
+function setIngredientPhoto(name, url) {
+  if (!name || !url) return;
+  ingredientPhotos[name.toLowerCase().trim()] = url;
+  saveIngredientPhotos();
+}
+
+function getIngredientPhotoFromLibrary(name) {
+  if (!name) return null;
+  const key = name.toLowerCase().trim();
+  if (ingredientPhotos[key]) return ingredientPhotos[key];
+  // Fuzzy match
+  for (const [k, url] of Object.entries(ingredientPhotos)) {
+    if (key.includes(k) || k.includes(key)) return url;
+  }
+  return null;
+}
+
+// Load on startup
+loadIngredientPhotos();
 
 function getIngredientImage(ingredientName, category) {
   if (!ingredientName) return null;
@@ -1855,15 +1913,7 @@ function addManualGroceryItemSmart() {
   if (catInput) catInput.value = 'Other';
   showToast(`${capitalize(name)} added to ${category}`, 'success');
   if (typeof render === 'function') render();
-  // Prompt to add a photo if no photo exists yet
-  const existingPhoto = getIngredientPhotoFromLibrary(name);
-  if (!existingPhoto) {
-    setTimeout(() => {
-      openPhotoSearch(name, function(url) { setIngredientPhoto(name, url); if (typeof render === 'function') render(); });
-    }, 300);
-  } else {
-    setTimeout(() => { const newInput = document.getElementById('groceryManualInput'); if (newInput) newInput.focus(); }, 50);
-  }
+  setTimeout(() => { const newInput = document.getElementById('groceryManualInput'); if (newInput) newInput.focus(); }, 50);
 }
 
 function toggleSmartGroceryItem(itemId) {
@@ -2084,40 +2134,6 @@ document.addEventListener('click', (e) => {
 // API Keys (replace with real keys)
 const UNSPLASH_ACCESS_KEY = 'YOUR_UNSPLASH_KEY';
 const SERPER_API_KEY = 'YOUR_SERPER_KEY';
-
-// Ingredient photo library — persists across sessions
-let ingredientPhotos = {};
-
-function loadIngredientPhotos() {
-  try {
-    const saved = localStorage.getItem('yummy_ingredientPhotos');
-    if (saved) ingredientPhotos = JSON.parse(saved);
-  } catch (e) { ingredientPhotos = {}; }
-}
-
-function saveIngredientPhotos() {
-  localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos));
-}
-
-function setIngredientPhoto(name, url) {
-  if (!name || !url) return;
-  ingredientPhotos[name.toLowerCase().trim()] = url;
-  saveIngredientPhotos();
-}
-
-function getIngredientPhotoFromLibrary(name) {
-  if (!name) return null;
-  const key = name.toLowerCase().trim();
-  if (ingredientPhotos[key]) return ingredientPhotos[key];
-  // Fuzzy match
-  for (const [k, url] of Object.entries(ingredientPhotos)) {
-    if (key.includes(k) || k.includes(key)) return url;
-  }
-  return null;
-}
-
-// Load on startup
-loadIngredientPhotos();
 
 // Grocery photo toggle
 function getGroceryPhotoToggle() {
