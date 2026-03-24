@@ -1594,29 +1594,12 @@ function getCategorizedSuggestions() {
     });
   });
 
-  // 2. Saved/bookmarked recipes not in plan
-  const saved = [];
-  const savedIds = getSavedRecipes();
-  savedIds.forEach(id => {
-    if (plannedRecipeIds.has(id)) return;
-    const recipe = getRecipeById(id);
-    if (!recipe) return;
-    const ings = recipeIngList(recipe);
-    if (ings.length === 0) return;
-    ings.forEach(ing => {
-      const key = normalizeIngredient(ing.name);
-      if (!key || listKeys.has(key) || isStaple(ing.name) || seenKeys.has(key)) return;
-      seenKeys.add(key);
-      saved.push({ name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', mealNames: [recipe.title], recipeName: recipe.title });
-    });
-  });
-
-  // 3. Frequent ingredient suggestions removed — "Things you make often"
+  // 2. Frequent ingredient suggestions removed — "Things you make often"
   //    now shows meal cards (in grocery.js renderGroceryList) instead of
   //    individual ingredient pills from cooking history.
   const frequent = [];
 
-  return { planned, saved, frequent };
+  return { planned, frequent };
 }
 
 function addSuggestedToGrocery(name, category, qty, unit, mealNames) {

@@ -272,7 +272,7 @@ function renderGroceryList() {
 
       // Categorized suggestions (planned > saved only — no frequent ingredient pills)
       const catSugg = getCategorizedSuggestions();
-      const allSuggestions = [...catSugg.planned, ...catSugg.saved];
+      const allSuggestions = [...catSugg.planned];
       _cachedSuggestions = allSuggestions;
 
       // Split items into unique vs staples
@@ -330,7 +330,6 @@ function renderGroceryList() {
       const suggestionsHtml = allSuggestions.length > 0 ? `
         <div style="margin-bottom: 12px;">
           ${_buildSuggestionPills(catSugg.planned, 0, 'For your upcoming meals', s => s.recipeName || '')}
-          ${_buildSuggestionPills(catSugg.saved, catSugg.planned.length, 'From your saved recipes', s => s.recipeName || '')}
         </div>
       ` : '';
 
