@@ -1,4 +1,4 @@
-/* Saved Recipes page styles */
+/* Saved page styles — Saved Recipes + My Plates */
 
 .saved-grid {
   display: grid;
@@ -19,4 +19,12 @@
   .saved-grid {
     grid-template-columns: repeat(5, 1fr);
   }
+}
+
+/* My Plates — 3-column Instagram-style grid */
+.plates-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2px;
+  padding: 0 1px;
 }

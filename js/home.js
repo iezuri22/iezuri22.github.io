@@ -2507,8 +2507,7 @@ function renderExternalMealPicker() {
 const VIEW_RENDERERS = {
   'home': renderHome,
   'my-meals': renderHome,
-  'food-log-detail': typeof renderFoodLogDetail === 'function' ? renderFoodLogDetail : renderHome,
-  'my-plates': typeof renderMyPlates === 'function' ? renderMyPlates : renderHome
+  'food-log-detail': typeof renderFoodLogDetail === 'function' ? renderFoodLogDetail : renderHome
 };
 
 function render() {

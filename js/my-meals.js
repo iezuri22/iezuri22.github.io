@@ -1321,8 +1321,7 @@ function submitEditMeal() {
   var MY_MEALS_VIEW_RENDERERS = {
     'my-meals': renderMyMeals,
     'home': renderMyMeals,
-    'food-log-detail': renderFoodLogDetail,
-    'my-plates': renderMyPlates
+    'food-log-detail': renderFoodLogDetail
   };
 
   window.render = function() {

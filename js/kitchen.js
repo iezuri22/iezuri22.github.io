@@ -1956,13 +1956,40 @@ function renderInventory() {
     const grouped = {};
     categories.forEach(cat => grouped[cat] = []);
 
+    // Category filter pills
+    const categoryFilters = [
+      { id: 'all', label: 'All' },
+      { id: 'Proteins', label: 'Proteins' },
+      { id: 'Produce', label: 'Produce' },
+      { id: 'Dairy', label: 'Dairy' },
+      { id: 'Grains', label: 'Grains' },
+      { id: 'Pantry', label: 'Pantry' },
+      { id: 'Spices', label: 'Spices' }
+    ];
+    const activeCatFilter = state.inventoryCategoryFilter || 'all';
+
+    // Category mapping for filter matching
+    const categoryFilterMap = {
+      'Proteins': ['Proteins', 'Meat & Seafood'],
+      'Produce': ['Produce', 'Vegetables', 'Fruits'],
+      'Dairy': ['Dairy', 'Dairy & Eggs'],
+      'Grains': ['Grains', 'Bakery'],
+      'Pantry': ['Pantry', 'Pantry Staples', 'Other', 'Frozen', 'Snacks', 'Beverages'],
+      'Spices': ['Herbs & Spices']
+    };
+
     let filteredInventory = inventory;
-    if (state.inventoryFilter === 'expiring') {
-      filteredInventory = inventory.filter(i => ['expired', 'expiring-soon'].includes(getExpirationStatus(i)));
-    } else if (state.inventoryFilter === 'wantToUse') {
-      filteredInventory = inventory.filter(i => i.wantToUse);
-    } else if (state.inventoryFilter === 'frozen') {
-      filteredInventory = inventory.filter(i => i.isFrozen);
+
+    // Apply category filter
+    if (activeCatFilter !== 'all') {
+      const matchCats = categoryFilterMap[activeCatFilter] || [activeCatFilter];
+      filteredInventory = filteredInventory.filter(i => matchCats.includes(i.category || 'Uncategorized'));
+    }
+
+    // Apply search
+    const searchTerm = (state.inventorySearchTerm || '').toLowerCase();
+    if (searchTerm) {
+      filteredInventory = filteredInventory.filter(i => (i.name || '').toLowerCase().includes(searchTerm));
     }
 
     filteredInventory.forEach(item => {
@@ -1978,14 +2005,9 @@ function renderInventory() {
       });
     });
 
-    const expiringCount = inventory.filter(i => ['expired', 'expiring-soon'].includes(getExpirationStatus(i))).length;
-    const frozenCount = inventory.filter(i => i.isFrozen).length;
-    const toUseCount = inventory.filter(i => i.wantToUse).length;
-    const unverifiedItems = inventory.filter(i => i.fromReceipt && i.expirationVerified === false);
-
     return `
       <div class="p-3 max-w-4xl mx-auto">
-        <!-- Header -->
+        <!-- Action buttons -->
         <div class="flex items-center justify-between mb-3">
           <div class="flex gap-1">
             <button onclick="showAddInventoryModal()"
@@ -1998,131 +2020,42 @@ function renderInventory() {
               style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;">
               Scan
             </button>
-            <button onclick="consolidateInventory()"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;"
-              title="Merge duplicates">
-              Merge
-            </button>
-          </div>
-          <div class="flex gap-1">
-            <button onclick="requestNotificationPermission()"
-              class="px-2 py-1 rounded"
-              style="background:${state.notificationsEnabled ? CONFIG.success_color : CONFIG.surface_color}; color:${state.notificationsEnabled ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
-              ${state.notificationsEnabled ? 'Alerts On' : 'Alerts'}
-            </button>
-            <button onclick="confirmClearAllInventory()"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.danger_color}; font-size:10px; border:none;">
-              Clear
-            </button>
           </div>
         </div>
 
-        <!-- Subtabs -->
-        <div class="flex gap-1 mb-3">
-          <button onclick="state.pantryTab = 'instock'; render();"
-            class="px-2 py-1 rounded"
-            style="background: ${(state.pantryTab || 'instock') === 'instock' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(state.pantryTab || 'instock') === 'instock' ? 'white' : CONFIG.text_color}; font-size:11px; border:none;">
-            In Stock (${inventory.length})
-          </button>
-          <button onclick="state.pantryTab = 'ingredients'; render();"
-            class="px-2 py-1 rounded"
-            style="background: ${state.pantryTab === 'ingredients' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'ingredients' ? 'white' : CONFIG.text_color}; font-size:11px; border:none;">
-            Ingredients (${(state.ingredientKnowledge || []).length})
-          </button>
-          <button onclick="state.pantryTab = 'blends'; render();"
-            class="px-2 py-1 rounded"
-            style="background: ${state.pantryTab === 'blends' ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${state.pantryTab === 'blends' ? 'white' : CONFIG.text_color}; font-size:11px; border:none;">
-            Blends (${(state.seasoningBlends || []).length})
-          </button>
+        <!-- Search bar -->
+        <div style="position:relative; margin-bottom: 8px;">
+          <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          <input type="text" id="inventorySearchInput" placeholder="Search inventory..."
+            value="${esc(state.inventorySearchTerm || '')}"
+            oninput="state.inventorySearchTerm = this.value; render(); setTimeout(() => { const i = document.getElementById('inventorySearchInput'); if(i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0);"
+            style="width:100%; height:40px; padding:0 10px 0 34px; border:1px solid rgba(255,255,255,0.08); border-radius:10px; font-size:14px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-sizing:border-box; font-family:${CONFIG.font_family};" />
         </div>
 
-        ${state.pantryTab === 'blends' ? renderMyBlends() : state.pantryTab === 'ingredients' ? renderAllIngredients() : `
-
-        <!-- Filters -->
-        <div class="flex gap-1 mb-3 flex-wrap">
-          <button onclick="state.inventoryFilter = 'all'; render();"
-            class="px-2 py-1 rounded"
-            style="background: ${(!state.inventoryFilter || state.inventoryFilter === 'all') ? CONFIG.primary_action_color : CONFIG.surface_color}; color: ${(!state.inventoryFilter || state.inventoryFilter === 'all') ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
-            All (${inventory.length})
-          </button>
-          <button onclick="state.inventoryFilter = 'expiring'; render();"
-            class="px-2 py-1 rounded"
-            style="background: ${state.inventoryFilter === 'expiring' ? CONFIG.warning_color : CONFIG.surface_color}; color: ${state.inventoryFilter === 'expiring' ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
-            Expiring (${expiringCount})
-          </button>
-          <button onclick="state.inventoryFilter = 'wantToUse'; render();"
-            class="px-2 py-1 rounded"
-            style="background: ${state.inventoryFilter === 'wantToUse' ? '#34d399' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'wantToUse' ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
-            To Use (${toUseCount})
-          </button>
-          <button onclick="state.inventoryFilter = 'frozen'; render();"
-            class="px-2 py-1 rounded"
-            style="background: ${state.inventoryFilter === 'frozen' ? '#3b82f6' : CONFIG.surface_color}; color: ${state.inventoryFilter === 'frozen' ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
-            Frozen (${frozenCount})
-          </button>
+        <!-- Category filter pills -->
+        <div style="display:flex; gap:6px; overflow-x:auto; margin-bottom:12px; -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+          ${categoryFilters.map(f => {
+            const active = activeCatFilter === f.id;
+            return `<button onclick="state.inventoryCategoryFilter = '${f.id}'; render();"
+              style="flex-shrink:0; padding:8px 16px; border-radius:20px; border:none;
+              background:${active ? CONFIG.primary_action_color : 'transparent'};
+              color:${active ? 'white' : CONFIG.text_muted};
+              font-size:13px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">
+              ${f.label}</button>`;
+          }).join('')}
         </div>
-
-        <!-- Expiring Alert -->
-        ${expiringCount > 0 && (!state.inventoryFilter || state.inventoryFilter === 'all') ? `
-          <div onclick="state.inventoryFilter = 'expiring'; render();" class="mb-3 p-2 rounded-lg cursor-pointer" style="background:rgba(239,68,68,0.1); border-left:3px solid ${CONFIG.danger_color};">
-            <div style="color:${CONFIG.danger_color}; font-size:12px; font-weight:500;">
-              ${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon
-            </div>
-          </div>
-        ` : ''}
-
-        <!-- Unverified Items -->
-        ${unverifiedItems.length > 0 ? `
-          <details class="mb-3">
-            <summary class="cursor-pointer px-3 py-2 rounded-lg" style="background:rgba(255,214,10,0.1); color:#b45309; font-size:12px; list-style:none; border-left:3px solid ${CONFIG.warning_color};">
-              Verify ${unverifiedItems.length} item${unverifiedItems.length > 1 ? 's' : ''} from receipt
-            </summary>
-            <div class="mt-2 p-2 rounded-lg" style="background:${CONFIG.surface_color}; max-height:200px; overflow-y:auto;">
-              ${unverifiedItems.map(item => {
-                const status = getExpirationStatus(item);
-                const statusColor = status === 'expired' ? CONFIG.danger_color : status === 'expiring-soon' ? CONFIG.warning_color : '#22c55e';
-                return `
-                  <div style="display:flex; align-items:center; gap:8px; padding:8px; border-bottom:1px solid rgba(255,255,255,0.06);">
-                    <div style="flex:1; min-width:0;">
-                      <div style="font-size:12px; font-weight:500; color:${CONFIG.text_color}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${esc(item.name)}</div>
-                      <div style="font-size:10px; color:${statusColor};">
-                        ${item.expirationDate ? new Date(item.expirationDate + 'T00:00:00').toLocaleDateString() : 'No date'}
-                      </div>
-                    </div>
-                    <button onclick="showVerifyItemModal('${item.id}')" style="padding:4px 8px; background:${CONFIG.background_color}; color:${CONFIG.text_color}; border:none; border-radius:4px; font-size:10px; cursor:pointer;">
-                      Edit
-                    </button>
-                    <button onclick="verifyItem('${item.id}')" style="padding:4px 8px; background:#22c55e; color:white; border:none; border-radius:4px; font-size:10px; cursor:pointer;">
-                      \u2713
-                    </button>
-                  </div>
-                `;
-              }).join('')}
-              <button onclick="verifyAllItems()" style="width:100%; margin-top:8px; padding:8px; background:${CONFIG.warning_color}; color:white; border:none; border-radius:6px; font-size:11px; cursor:pointer;">
-                Verify All
-              </button>
-            </div>
-          </details>
-        ` : ''}
 
         <!-- Empty State -->
         ${filteredInventory.length === 0 ? `
           <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
-            <div style="font-size:2rem; margin-bottom:8px;">
-              ${state.inventoryFilter === 'wantToUse' ? '\u2713' : state.inventoryFilter === 'expiring' ? '\u26a0\ufe0f' : state.inventoryFilter === 'frozen' ? '\u2744\ufe0f' : '\ud83d\udce6'}
-            </div>
+            <div style="font-size:2rem; margin-bottom:8px;">\ud83d\udce6</div>
             <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:4px;">
-              ${state.inventoryFilter === 'wantToUse' ? 'No items marked' :
-                state.inventoryFilter === 'expiring' ? 'Nothing expiring' :
-                state.inventoryFilter === 'frozen' ? 'Nothing frozen' :
-                'Pantry is empty'}
+              ${searchTerm || activeCatFilter !== 'all' ? 'No matches found' : 'Pantry is empty'}
             </div>
             <div style="font-size:12px; color:${CONFIG.text_muted}; margin-bottom:12px;">
-              ${state.inventoryFilter && state.inventoryFilter !== 'all' ? 'Try a different filter' : 'Add items to get started'}
+              ${searchTerm || activeCatFilter !== 'all' ? 'Try a different search or filter' : 'Add items to get started'}
             </div>
-            ${!state.inventoryFilter || state.inventoryFilter === 'all' ? `
+            ${!searchTerm && activeCatFilter === 'all' ? `
               <div style="display:flex; gap:8px; justify-content:center;">
                 <button onclick="showReceiptModal()" style="padding:8px 16px; background:${CONFIG.success_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
                   Scan Receipt
@@ -2132,7 +2065,7 @@ function renderInventory() {
                 </button>
               </div>
             ` : `
-              <button onclick="state.inventoryFilter = 'all'; render();" style="padding:8px 16px; background:${CONFIG.surface_color}; color:${CONFIG.primary_action_color}; border:1px solid ${CONFIG.primary_action_color}; border-radius:8px; cursor:pointer; font-size:12px;">
+              <button onclick="state.inventoryCategoryFilter = 'all'; state.inventorySearchTerm = ''; render();" style="padding:8px 16px; background:${CONFIG.surface_color}; color:${CONFIG.primary_action_color}; border:1px solid ${CONFIG.primary_action_color}; border-radius:8px; cursor:pointer; font-size:12px;">
                 Show All
               </button>
             `}
@@ -2142,7 +2075,6 @@ function renderInventory() {
           ${categories.map(cat => renderInventoryCategory(cat, grouped[cat])).join('')}
         `}
       </div>
-    `}
     `;
   }
 
