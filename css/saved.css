@@ -1,0 +1,22 @@
+/* Saved Recipes page styles */
+
+.saved-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  padding: 4px;
+}
+
+@media (min-width: 768px) {
+  .saved-grid {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    padding: 6px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .saved-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}

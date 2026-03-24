@@ -93,10 +93,7 @@ function renderGroceryIngredients() {
 
 function renderGrocerySelectMeals() {
   // Get yesterday's date
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  const yesterdayStr = getYesterday();
 
   // Get all planned meals and filter to yesterday + next 7 days
   const allMeals = getPlannedMealsForWeek(yesterdayStr);
@@ -823,6 +820,25 @@ function toggleGroceryItem(ingredientKey) {
       }
 
       const isChecked = item.checked;
+
+      // Auto-add to inventory when checking off a grocery item
+      if (isChecked) {
+        const groceryList = getGroceryList();
+        const groceryItem = groceryList.find(gi => normalizeIngredient(gi.name) === ingredientKey);
+        if (groceryItem) {
+          const alreadyInInventory = (state.inventory || []).some(inv =>
+            inv.name.toLowerCase() === groceryItem.name.toLowerCase()
+          );
+          if (!alreadyInInventory) {
+            addInventoryItem({
+              name: groceryItem.name,
+              quantity: 1,
+              unit: groceryItem.unit || '',
+              category: guessGroceryCategory(groceryItem.name)
+            });
+          }
+        }
+      }
 
       // === INSTANT VISUAL TOGGLE (<1ms, optimistic UI) ===
       const row = document.querySelector(`[data-key="${CSS.escape(ingredientKey)}"]`);

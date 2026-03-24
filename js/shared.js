@@ -21,70 +21,22 @@ if (window.navigator.standalone === true) {
 }
 
 // ============================================================
-// SUPABASE INITIALIZATION
+// SUPABASE INITIALIZATION — DISABLED (localStorage-only mode)
 // ============================================================
+// Backend disabled — all data stored in localStorage only.
+// Supabase code preserved below in comments for future re-enablement.
+/*
 const SUPABASE_URL = 'https://blqbxduxgimarrhgyfgn.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJscWJ4ZHV4Z2ltYXJyaGd5ZmduIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc1NjgyNDcsImV4cCI6MjA4MzE0NDI0N30.iNrBLJLSQEUEV24VCnhrMPTTJ6A_0rIuSAOinuFd-vM';
+const SUPABASE_KEY = '...';
+(function loadSupabase() { ... })();
+*/
 
-// Load Supabase library dynamically
-(function loadSupabase() {
-  const script = document.createElement('script');
-  script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.0/dist/umd/supabase.js';
-  script.onload = () => {
-    window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-    console.log('✅ Supabase loaded', window.supabaseClient);
-    // Once Supabase is loaded, check auth
-    checkAuthAndInit();
-  };
-  document.head.appendChild(script);
-})();
-
-// Auth check — uses getSession() (local cache) instead of getUser() (network call)
-// to prevent login popup on every page navigation.
+// No-op auth — app works without login
 async function checkAuthAndInit() {
-  if (!window.supabaseClient) return;
-  try {
-    // getSession() reads from localStorage — no network round-trip
-    const { data: { session }, error } = await window.supabaseClient.auth.getSession();
-    if (error || !session || !session.user) {
-      // No valid session cached locally — need to login
-      clearAuthCache();
-      showLoginModal();
-    } else {
-      const user = session.user;
-      // Cache auth info so future page loads can render instantly
-      localStorage.setItem('yummy_auth_user_id', user.id);
-      localStorage.setItem('yummy_auth_user_email', user.email);
-      localStorage.setItem('yummy_isLoggedIn', 'true');
-
-      // Show user indicator immediately
-      updateUserIndicator(user.email);
-
-      // If we have cached data, render immediately from cache, then refresh in background
-      const hasCachedData = state.dataLoaded || localStorage.getItem('meal_planner_data_v1');
-      if (hasCachedData && typeof render === 'function') {
-        render();
-      }
-
-      // Load fresh data from Supabase (will re-render when done)
-      await loadDataFromSupabase();
-      subscribeToChanges(user.id);
-      if (typeof render === 'function') render();
-    }
-  } catch (e) {
-    console.error('Auth check failed:', e);
-    // If we have cached auth, don't show login — might just be a network blip
-    if (localStorage.getItem('yummy_isLoggedIn') === 'true') {
-      const cachedEmail = localStorage.getItem('yummy_auth_user_email');
-      if (cachedEmail) updateUserIndicator(cachedEmail);
-      if (typeof render === 'function') render();
-    } else {
-      showLoginModal();
-    }
-  }
+  // localStorage-only mode — no auth required, just render
+  if (typeof render === 'function') render();
 }
 
-// Clear cached auth info
 function clearAuthCache() {
   localStorage.removeItem('yummy_auth_user_id');
   localStorage.removeItem('yummy_auth_user_email');
@@ -533,12 +485,6 @@ const state = {
   mealOptions: [],
   planData: [],
   groceryItems: [],
-  budgetExpenses: [],
-  weeklyBudget: 200,
-  groceryBudget: 150,
-  takeoutBudget: 50,
-  weeklyBudgets: {},
-  budgetWeekStart: null,
   selectedCategory: null,
   freestyleMeals: [],
   recordingNeeds: [],
@@ -594,9 +540,8 @@ const state = {
   groceryViewMode: 'all',
   currentWeekStartDate: (() => {
     const today = new Date();
-    const sunday = new Date(today);
-    sunday.setDate(today.getDate() - today.getDay());
-    return sunday.toISOString().split('T')[0];
+    const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+    return sunday.getFullYear() + '-' + String(sunday.getMonth()+1).padStart(2,'0') + '-' + String(sunday.getDate()).padStart(2,'0');
   })(),
   isLoading: false,
   selectedRecipeViewId: null,
@@ -609,7 +554,7 @@ const state = {
   currentMealSelection: null,
   mealLogs: [],
   mealDays: {},
-  viewingDate: new Date().toISOString().split('T')[0],
+  viewingDate: (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); })(),
   swipeContext: { active: false, mealType: null, forDate: null },
   homeTab: 'swipe',
   calendarPickerOpen: false,
@@ -642,14 +587,14 @@ const state = {
 // Bridge: state.today reads/writes state.mealDays[todayDate] for backward compatibility
 Object.defineProperty(state, 'today', {
   get() {
-    const todayDate = new Date().toISOString().split('T')[0];
+    const todayDate = getToday();
     if (!state.mealDays[todayDate]) {
       state.mealDays[todayDate] = {
         date: todayDate,
         meals: {
-          breakfast: { status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null },
-          lunch: { status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null },
-          dinner: { status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null },
+          breakfast: freshMealSlot(),
+          lunch: freshMealSlot(),
+          dinner: freshMealSlot(),
           snacks: []
         }
       };
@@ -657,7 +602,7 @@ Object.defineProperty(state, 'today', {
     return state.mealDays[todayDate];
   },
   set(val) {
-    const todayDate = val.date || new Date().toISOString().split('T')[0];
+    const todayDate = val.date || getToday();
     state.mealDays[todayDate] = val;
   },
   configurable: true
@@ -727,7 +672,6 @@ function persistState() {
   saveToLS('planData', state.planData);
   saveToLS('mealSelections', state.mealSelections);
   saveToLS('groceryItems', state.groceryItems);
-  saveToLS('budgetExpenses', state.budgetExpenses);
   saveToLS('freestyleMeals', state.freestyleMeals);
   saveToLS('seasoningBlends', state.seasoningBlends);
   saveToLS('ingredientKnowledge', state.ingredientKnowledge);
@@ -743,7 +687,6 @@ function persistState() {
   saveToLS('purchaseHistory', state.purchaseHistory);
   saveToLS('cookingTasks', state.cookingTasks);
   saveToLS('recordingNeeds', state.recordingNeeds);
-  saveToLS('weeklyBudgets', state.weeklyBudgets);
   saveToLS('mealOptions', state.mealOptions);
   saveToLS('batchRecipes', state.batchRecipes);
 }
@@ -755,7 +698,6 @@ function loadAllState() {
   state.planData = loadFromLS('planData', []);
   state.mealSelections = loadFromLS('mealSelections', []);
   state.groceryItems = loadFromLS('groceryItems', []);
-  state.budgetExpenses = loadFromLS('budgetExpenses', []);
   state.freestyleMeals = loadFromLS('freestyleMeals', []);
   state.seasoningBlends = loadFromLS('seasoningBlends', []);
   state.ingredientKnowledge = loadFromLS('ingredientKnowledge', []);
@@ -771,15 +713,13 @@ function loadAllState() {
   state.purchaseHistory = loadFromLS('purchaseHistory', []);
   state.cookingTasks = loadFromLS('cookingTasks', []);
   state.recordingNeeds = loadFromLS('recordingNeeds', []);
-  state.weeklyBudgets = loadFromLS('weeklyBudgets', {});
   state.mealOptions = loadFromLS('mealOptions', []);
   state.batchRecipes = loadFromLS('batchRecipes', []);
   if (!Array.isArray(state.batchRecipes)) { console.warn('[loadAllState] batchRecipes was not an array, resetting'); state.batchRecipes = []; }
   // Ensure today exists in mealDays
-  const todayDate = new Date().toISOString().split('T')[0];
+  const todayDate = getToday();
   if (!state.mealDays[todayDate]) {
-    const mealSlotDefault = () => ({ status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null });
-    state.mealDays[todayDate] = { date: todayDate, meals: { breakfast: mealSlotDefault(), lunch: mealSlotDefault(), dinner: mealSlotDefault(), snacks: [] } };
+    state.mealDays[todayDate] = { date: todayDate, meals: { breakfast: freshMealSlot(), lunch: freshMealSlot(), dinner: freshMealSlot(), snacks: [] } };
   }
   state.dataLoaded = true;
   cleanupCookingData();
@@ -851,7 +791,6 @@ const storage = {
       case 'inventory': case 'inv': state.inventory.push(item); break;
       case 'ingredient': if (item.type === 'ingredient_knowledge') state.ingredientKnowledge.push(item); break;
       case 'plan': { const idx = state.planData.findIndex(p => p.id === item.id); if (idx >= 0) state.planData[idx] = item; else state.planData.push(item); } break;
-      case 'expense': state.budgetExpenses.push(item); break;
       case 'receipt': state.receipts.push(item); break;
       case 'freestyle': state.freestyleMeals.push(item); break;
       case 'blend': state.seasoningBlends.push(item); break;
@@ -891,7 +830,6 @@ const storage = {
       case 'inventory': case 'inv': updateInArray(state.inventory); break;
       case 'ingredient': if (item.type === 'ingredient_knowledge') updateInArray(state.ingredientKnowledge); break;
       case 'plan': updateInArray(state.planData); break;
-      case 'expense': updateInArray(state.budgetExpenses); break;
       case 'receipt': updateInArray(state.receipts); break;
       case 'freestyle': updateInArray(state.freestyleMeals); break;
       case 'blend': updateInArray(state.seasoningBlends); break;
@@ -927,7 +865,6 @@ const storage = {
       case 'inventory': case 'inv': removeFromArray(state.inventory); break;
       case 'ingredient': removeFromArray(state.ingredientKnowledge); break;
       case 'plan': removeFromArray(state.planData); break;
-      case 'expense': removeFromArray(state.budgetExpenses); break;
       case 'receipt': removeFromArray(state.receipts); break;
       case 'freestyle': removeFromArray(state.freestyleMeals); break;
       case 'blend': removeFromArray(state.seasoningBlends); break;
@@ -995,7 +932,7 @@ const storage = {
     // Helper to query across all data
     const allData = [
       ...state.recipes, ...state.inventory, ...state.ingredientKnowledge,
-      ...state.planData, ...state.budgetExpenses, ...state.receipts,
+      ...state.planData, ...state.receipts,
       ...state.freestyleMeals, ...state.seasoningBlends, ...state.cookingTasks,
       ...state.frequentItems, ...state.mealLogs
     ];
@@ -1010,12 +947,11 @@ const dataHandler = {
   onDataChanged(data) {
     // For localStorage version, data comes pre-loaded into state
     // Just ensure today exists and render
-    const todayDate = new Date().toISOString().split('T')[0];
-    const mealSlotDefault = () => ({ status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null });
+    const todayDate = getToday();
     if (!state.mealDays[todayDate]) {
       state.mealDays[todayDate] = {
         date: todayDate,
-        meals: { breakfast: mealSlotDefault(), lunch: mealSlotDefault(), dinner: mealSlotDefault(), snacks: [] }
+        meals: { breakfast: freshMealSlot(), lunch: freshMealSlot(), dinner: freshMealSlot(), snacks: [] }
       };
     }
     state.dataLoaded = true;
@@ -1041,41 +977,6 @@ async function saveMealDay(dateStr) {
 
 async function saveTodayMeals() {
   return saveMealDay(getToday());
-}
-
-async function loadWeeklyBudgets(data) {
-  // Try localStorage first (faster)
-  try {
-    const backup = localStorage.getItem('weeklyBudgetsBackup');
-    if (backup) {
-      state.weeklyBudgets = JSON.parse(backup);
-      console.log('Loaded budgets from localStorage:', state.weeklyBudgets);
-    }
-  } catch (e) {
-    console.error('localStorage load failed:', e);
-  }
-
-  // Try main storage (overrides localStorage if found)
-  const budgetData = data.find(item => item.type === 'weeklyBudgets' || item.id === 'weeklyBudgets');
-  if (budgetData?.budgets) {
-    state.weeklyBudgets = budgetData.budgets;
-    console.log('Loaded budgets from storage:', state.weeklyBudgets);
-  } else {
-    // Migrate from old weekBudget_ records if they exist
-    const oldBudgets = data.filter(d => d.id && d.id.startsWith('weekBudget_'));
-    if (oldBudgets.length > 0) {
-      state.weeklyBudgets = {};
-      oldBudgets.forEach(b => {
-        if (b.weekStart) {
-          state.weeklyBudgets[b.weekStart] = (b.grocery || 0) + (b.takeout || 0);
-        }
-      });
-      console.log('Migrated budgets from old records:', state.weeklyBudgets);
-    }
-  }
-
-  if (!state.weeklyBudgets) state.weeklyBudgets = {};
-  console.log('Final weeklyBudgets state:', state.weeklyBudgets);
 }
 
 // ============================================================
@@ -1251,7 +1152,7 @@ function getWeekDates(startDate) {
   for (let i = 0; i < 7; i++) {
     const date = new Date(start);
     date.setDate(start.getDate() + i);
-    dates.push(date.toISOString().split('T')[0]);
+    dates.push(_localDateStr(date));
   }
   return dates;
 }
@@ -1389,8 +1290,8 @@ function getFoodLogGroupedByDate() {
 }
 
 function getFoodLogDateLabel(dateStr) {
-  const today = new Date().toISOString().split('T')[0];
-  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const today = getToday();
+  const yesterday = getYesterday();
   if (dateStr === today) return 'Today';
   if (dateStr === yesterday) return 'Yesterday';
   const d = new Date(dateStr + 'T12:00:00');
@@ -1411,8 +1312,7 @@ function showAddToMealsModal(recipeId) {
   else if (catLower === 'lunch') defaultMeal = 'lunch';
   else if (catLower === 'snack') defaultMeal = 'snack';
 
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = getToday();
 
   // Store modal state on window for callbacks
   window._addToMealsState = {
@@ -1438,22 +1338,22 @@ function _renderAddToMealsModalContent() {
     { key: 'snack', label: 'Snack' }
   ];
 
-  // Build week days
+  // Build week days (using local dates to avoid timezone issues)
   const today = new Date();
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = _localDateStr(today);
   // Get Monday of current week + offset
-  const refDate = new Date(today);
+  const refDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   refDate.setDate(refDate.getDate() - ((refDate.getDay() + 6) % 7) + (ms.weekOffset * 7));
   const weekDays = [];
   const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(refDate);
-    d.setDate(refDate.getDate() + i);
+    const d = new Date(refDate.getFullYear(), refDate.getMonth(), refDate.getDate() + i);
+    const ds = _localDateStr(d);
     weekDays.push({
-      dateStr: d.toISOString().split('T')[0],
+      dateStr: ds,
       dayNum: d.getDate(),
       label: dayLabels[i],
-      isToday: d.toISOString().split('T')[0] === todayStr
+      isToday: ds === todayStr
     });
   }
 
@@ -2880,17 +2780,17 @@ function suggestExpirationDate(itemName, category, purchaseDate) {
   const days = getExpirationDays(itemName, category);
   const date = new Date(purchaseDate || new Date());
   date.setDate(date.getDate() + days);
-  return date.toISOString().split('T')[0];
+  return _localDateStr(date);
 }
 
 function getExpiringItems() { return getInventoryItems().filter(item => { const status = getExpirationStatus(item); return status === 'expired' || status === 'expiring-soon'; }); }
 
 function checkExpirationNotifications() {
   const expiringItems = getExpiringItems(); if (expiringItems.length === 0) return;
-  const today = new Date().toISOString().split('T')[0];
-  const dismissKey = 'yummy_expiration_dismissed_' + today;
-  if (sessionStorage.getItem(dismissKey) || state.lastNotificationCheck === today) return;
-  state.lastNotificationCheck = today;
+  const todayCheck = getToday();
+  const dismissKey = 'yummy_expiration_dismissed_' + todayCheck;
+  if (sessionStorage.getItem(dismissKey) || state.lastNotificationCheck === todayCheck) return;
+  state.lastNotificationCheck = todayCheck;
   sessionStorage.setItem(dismissKey, '1');
   const expired = expiringItems.filter(i => getExpirationStatus(i) === 'expired');
   const expiringSoon = expiringItems.filter(i => getExpirationStatus(i) === 'expiring-soon');
@@ -2903,8 +2803,7 @@ function checkExpirationNotifications() {
 
 function dismissExpirationAlert() {
   document.getElementById('expirationAlert')?.remove();
-  const today = new Date().toISOString().split('T')[0];
-  sessionStorage.setItem('yummy_expiration_dismissed_' + today, '1');
+  sessionStorage.setItem('yummy_expiration_dismissed_' + getToday(), '1');
 }
 
 function showExpirationAlert(message, items) {
@@ -2940,7 +2839,7 @@ function getExpirationColor(status) {
 function getInventoryItems() { return state.inventory || []; }
 
 async function addInventoryItem(item) {
-  const purchaseDate = item.purchaseDate || new Date().toISOString().split('T')[0];
+  const purchaseDate = item.purchaseDate || getToday();
   const category = item.category || 'Uncategorized';
   const isFromReceipt = item.fromReceipt || false;
   const inventoryItem = { id: `inventory_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: item.name, quantity: item.quantity || 1, unit: item.unit || '', category, purchaseDate, expirationDate: item.expirationDate || suggestExpirationDate(item.name, category, purchaseDate), price: item.price || null, image_url: item.image_url || null, isFrozen: item.isFrozen || false, fromReceipt: isFromReceipt, expirationVerified: !isFromReceipt };
@@ -3087,13 +2986,13 @@ function renderReceiptModal() { if (!receiptScanState.showModal) return ''; retu
 
 async function addReceiptItemsToInventory() {
   const items = receiptScanState.extractedItems || []; const itemsToAdd = [];
-  const purchaseDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
+  const purchaseDate = receiptScanState.receiptDate || getToday();
   const purchaseDateObj = new Date(purchaseDate + 'T00:00:00');
   for (let i = 0; i < items.length; i++) {
     const checkbox = document.getElementById(`receiptItem${i}`); if (!checkbox?.checked) continue;
     const item = items[i]; const quantity = item.quantity || 1; const pricePerItem = (item.price || 0) / quantity;
     let expirationDate = null;
-    if (item.daysUntilExpiration) { const expDate = new Date(purchaseDateObj); expDate.setDate(expDate.getDate() + item.daysUntilExpiration); expirationDate = expDate.toISOString().split('T')[0]; }
+    if (item.daysUntilExpiration) { const expDate = new Date(purchaseDateObj); expDate.setDate(expDate.getDate() + item.daysUntilExpiration); expirationDate = _localDateStr(expDate); }
     for (let q = 0; q < quantity; q++) { itemsToAdd.push({ id: `inventory_${Date.now()}_${i}_${q}_${Math.random().toString(36).slice(2)}`, type: 'inventory', name: item.name, category: item.category || 'Other', quantity: 1, unit: '', purchasePrice: pricePerItem, purchaseDate, expirationDate, store: receiptScanState.store || '', image_url: getIngredientImage(item.name, item.category) || '', fromReceipt: true, expirationVerified: false }); }
   }
   showToast(`Adding ${itemsToAdd.length} items...`, 'info');
@@ -3101,14 +3000,6 @@ async function addReceiptItemsToInventory() {
   showToast(`Added ${itemsToAdd.length} items to pantry!`, 'success'); closeReceiptModal(); if (typeof render === 'function') render();
 }
 
-async function saveReceiptToExpenses() {
-  const total = receiptScanState.detectedTotal || 0; if (total <= 0) { showError('No total to save'); return; }
-  const receiptDate = receiptScanState.receiptDate || new Date().toISOString().split('T')[0];
-  const weekStart = new Date(receiptDate + 'T00:00:00'); weekStart.setDate(weekStart.getDate() - weekStart.getDay());
-  const expense = { id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`, type: 'grocery', amount: total, note: receiptScanState.store ? `Receipt from ${receiptScanState.store}` : 'Grocery receipt', date: receiptDate, weekOf: weekStart.toISOString().split('T')[0], receiptImage: receiptScanState.imageUrl || '' };
-  await storage.create(expense); state.budgetExpenses.push(expense);
-  showToast(`$${total.toFixed(2)} added to budget!`, 'success'); closeReceiptModal(); if (typeof render === 'function') render();
-}
 
 function editReceiptItem(idx) { /* Complex modal - rendered by page JS */ }
 function closeReceiptItemEdit() { document.getElementById('receiptItemEditOverlay')?.remove(); }
@@ -3207,7 +3098,7 @@ async function saveReceiptExpense() {
   const itemsToAdd = Array.from(itemCheckboxes).map(cb => ({ name: cb.dataset.name, price: parseFloat(cb.dataset.price), category: cb.dataset.category, fromReceipt: true }));
   closeReceiptModal(); if (typeof render === 'function') render();
   try {
-    const expense = { id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`, type: 'grocery', amount, date: new Date().toISOString().split('T')[0], note, receipt_url: receiptScanState.imageUrl };
+    const expense = { id: `expense_${Date.now()}_${Math.random().toString(36).slice(2)}`, type: 'grocery', amount, date: getToday(), note, receipt_url: receiptScanState.imageUrl };
     await storage.create(expense);
     for (const item of itemsToAdd) { await addInventoryItem(item); }
     showToast(`Grocery expense logged!${itemsToAdd.length > 0 ? ` + ${itemsToAdd.length} items added` : ''}`, 'success');
@@ -3218,12 +3109,13 @@ async function saveReceiptExpense() {
 // SECTION 12: DATE HELPERS
 // ============================================================
 function freshMealSlot() { return { status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null }; }
-function getToday() { return new Date().toISOString().split('T')[0]; }
+function _localDateStr(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
+function getToday() { return _localDateStr(new Date()); }
 function isToday(dateStr) { return dateStr === getToday(); }
 function isPastDate(dateStr) { return dateStr < getToday(); }
 function isFutureDate(dateStr) { return dateStr > getToday(); }
-function getYesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return d.toISOString().split('T')[0]; }
-function getTomorrow() { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; }
+function getYesterday() { const d = new Date(); d.setDate(d.getDate() - 1); return _localDateStr(d); }
+function getTomorrow() { const d = new Date(); d.setDate(d.getDate() + 1); return _localDateStr(d); }
 
 function getDayData(dateStr) {
   if (!state.mealDays[dateStr]) { state.mealDays[dateStr] = { date: dateStr, meals: { breakfast: freshMealSlot(), lunch: freshMealSlot(), dinner: freshMealSlot(), snacks: [] } }; }
@@ -3412,19 +3304,21 @@ function deleteIngredientImage(name) { if (customIngredientImages[name]) { delet
 // SECTION 18: NAVIGATION
 // ============================================================
 function navigateTo(view) {
-  if (view === 'swipe') view = 'home';
+  if (view === 'swipe' || view === 'swipe-setup' || view === 'swipe-confirm') view = 'home';
+  if (view === 'my-meals') view = 'home';
   if (view === 'grocery') view = 'grocery-list';
   if (view === 'pantry') view = 'inventory';
-  if (view === 'budget') view = 'budget-dashboard';
 
   const pageMap = {
-    'home': '/index.html', 'swipe-setup': '/index.html', 'swipe-confirm': '/index.html', 'external-meal-picker': '/index.html',
+    'home': '/index.html', 'food-log-detail': '/index.html', 'my-plates': '/index.html',
+    'my-meals': '/index.html',
     'recipes': '/recipes.html', 'recipe-view': '/recipes.html', 'recipe-edit': '/recipes.html', 'freestyle-edit': '/recipes.html', 'batch-edit': '/recipes.html', 'batch-view': '/recipes.html',
-    'my-meals': '/my-meals.html', 'food-log-detail': '/my-meals.html', 'my-plates': '/my-meals.html',
-    'kitchen': '/kitchen.html', 'inventory': '/kitchen.html', 'ingredients': '/kitchen.html', 'ingredient-detail': '/kitchen.html', 'budget-dashboard': '/kitchen.html',
+    'kitchen': '/kitchen.html', 'inventory': '/kitchen.html', 'ingredients': '/kitchen.html', 'ingredient-detail': '/kitchen.html',
     'kitchen-detail': '/kitchen-detail.html', 'kitchen-ingredient-meals': '/kitchen-detail.html',
     'recipe-detail': '/recipe-detail.html',
-    'grocery-list': '/grocery.html', 'grocery-select-meals': '/grocery.html', 'grocery-ingredients': '/grocery.html'
+    'grocery-list': '/grocery.html', 'grocery-select-meals': '/grocery.html', 'grocery-ingredients': '/grocery.html',
+    'saved': '/saved.html',
+    'plates-page': '/plates.html'
   };
 
   const targetPage = pageMap[view] || '/index.html';
@@ -3451,20 +3345,20 @@ function navigateTo(view) {
 // SECTION 19: NAV RENDERING
 // ============================================================
 function renderDesktopPageTitle() {
-  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home' };
+  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'Home', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home' };
   const title = pageTitles[state.currentView] || 'Yummy';
   return `<div class="desktop-page-title-bar" style="display: none; padding-bottom: 24px;"><h1 style="font-size: 28px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">${title}</h1></div>`;
 }
 
 function renderNav() {
-  if (state.currentView === 'home' || state.currentView === 'swipe' || state.currentView === 'swipe-setup' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals' || state.currentView === 'recipe-view') return '';
-  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'My Meals', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'external-meal-picker': 'External Meal', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'budget-dashboard': 'Budget', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'swipe': 'Pick a Meal', 'swipe-setup': 'Swipe Setup', 'swipe-confirm': 'Meal Selected', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient' };
+  if (state.currentView === 'home' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals' || state.currentView === 'recipe-view') return '';
+  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'Home', 'my-plates': 'My Plates', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient' };
   const pageTitle = pageTitles[state.currentView] || 'Yummy';
   const expiringItems = getExpiringItems(); const expiringCount = expiringItems.length;
   // Main nav pages don't get a back arrow (they're reachable from bottom nav)
-  const mainNavPages = ['recipes', 'my-meals', 'kitchen', 'grocery-list'];
+  const mainNavPages = ['home', 'recipes', 'kitchen', 'grocery-list'];
   const isMainNavPage = mainNavPages.includes(state.currentView);
-  const backTarget = state.currentView === 'food-log-detail' || state.currentView === 'my-plates' ? 'my-meals' : state.currentView === 'kitchen-detail' ? 'kitchen' : state.currentView === 'batch-edit' || state.currentView === 'batch-view' ? 'recipes' : 'home';
+  const backTarget = state.currentView === 'food-log-detail' || state.currentView === 'my-plates' ? 'home' : state.currentView === 'kitchen-detail' ? 'kitchen' : state.currentView === 'batch-edit' || state.currentView === 'batch-view' ? 'recipes' : 'home';
   const directNavViews = ['batch-view', 'batch-edit'];
   const useDirectNav = directNavViews.includes(state.currentView);
   const backButton = isMainNavPage ? '' : `<button onclick="${useDirectNav ? `navigateTo('${backTarget}')` : `if(window.history.length>1){window.history.back();}else{navigateTo('${backTarget}');}`}" style="color: ${CONFIG.text_color}; background: none; border: none; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; padding: 0;"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg></button>`;
@@ -3474,8 +3368,7 @@ function renderNav() {
 function renderBottomNav() {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
   const navItems = [
-    { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html'] },
-    { id: 'my-meals', label: 'My Meals', href: '/my-meals.html', pages: ['my-meals.html'] },
+    { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html', 'my-meals.html'] },
     { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'] },
     { id: 'kitchen', label: 'Kitchen', href: '/kitchen.html', pages: ['kitchen.html', 'kitchen-detail.html'] },
     { id: 'grocery', label: 'Grocery', href: '/grocery.html', pages: ['grocery.html'] }
@@ -3506,14 +3399,15 @@ function renderBottomNav() {
 // ============================================================
 function renderDesktopSidebar() {
   const currentPage = window.location.pathname.split('/').pop() || 'index.html';
-  const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+  const sidebarPref = localStorage.getItem('sidebarCollapsed');
+  const collapsed = sidebarPref === null ? true : sidebarPref === 'true';
   const sidebarItems = [
-    { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>' },
-    { id: 'my-meals', label: 'My Meals', href: '/my-meals.html', pages: ['my-meals.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>' },
+    { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html', 'my-meals.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>' },
     { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>' },
+    { id: 'saved', label: 'Saved', href: '/saved.html', pages: ['saved.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>' },
+    { id: 'plates', label: 'Plates', href: '/plates.html', pages: ['plates.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>' },
     { id: 'kitchen', label: 'Kitchen', href: '/kitchen.html', pages: ['kitchen.html', 'kitchen-detail.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>' },
     { id: 'grocery', label: 'Grocery', href: '/grocery.html', pages: ['grocery.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>' },
-    { id: 'budget', label: 'Budget', href: '#', pages: [], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>', action: 'navigateTo("budget-dashboard")' },
     { id: 'settings', label: 'Settings', href: '#', pages: [], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>', action: 'showSettingsMenu && showSettingsMenu()' }
   ];
 
@@ -3538,18 +3432,24 @@ function renderDesktopSidebar() {
     </nav>
     <div class="sidebar-footer">
       <button onclick="toggleSidebarCollapse()" class="sidebar-collapse-btn" title="${collapsed ? 'Expand sidebar' : 'Collapse sidebar'}">
-        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        ${collapsed
+          ? '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>'
+          : '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>'
+        }
       </button>
     </div>
   </aside>`;
 }
 
 function getAppShellClass() {
-  return 'app-shell' + (localStorage.getItem('sidebarCollapsed') === 'true' ? ' sidebar-collapsed' : '');
+  const sidebarPref = localStorage.getItem('sidebarCollapsed');
+  const collapsed = sidebarPref === null ? true : sidebarPref === 'true';
+  return 'app-shell' + (collapsed ? ' sidebar-collapsed' : '');
 }
 
 function toggleSidebarCollapse() {
-  const collapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+  const sidebarPref = localStorage.getItem('sidebarCollapsed');
+  const collapsed = sidebarPref === null ? true : sidebarPref === 'true';
   const newState = !collapsed;
   localStorage.setItem('sidebarCollapsed', String(newState));
   const sidebar = document.querySelector('.desktop-sidebar');
@@ -3566,17 +3466,22 @@ function toggleSidebarCollapse() {
 // ============================================================
 function showMoreMenu() {
   const menuItems = [
-    { id: 'inventory', icon: '\ud83d\udce6', label: 'Pantry' },
-    { id: 'budget-dashboard', icon: '\ud83d\udcb0', label: 'Budget' },
-    { id: 'swipe-setup', icon: '\ud83c\udccf', label: 'Swipe Options' },
-    { id: 'settings', icon: '\u2699\ufe0f', label: 'Settings', action: 'showSettingsMenu && showSettingsMenu()' },
+    { id: 'saved', icon: '', label: 'Saved', href: '/saved.html', iconSvg: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>' },
+    { id: 'plates-page', icon: '', label: 'Plates', href: '/plates.html', iconSvg: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>' },
+    { id: 'my-plates', icon: '', label: 'My Plates', iconSvg: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>' },
+    { id: 'manage-videos', icon: '', label: 'Manage Videos', href: '/admin.html', iconSvg: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>' },
+    { id: 'settings', icon: '', label: 'Settings', action: 'showSettingsMenu && showSettingsMenu()', iconSvg: '<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>' },
   ];
   document.getElementById('moreMenuOverlay')?.remove();
   const isDesktop = window.innerWidth >= 768;
   const popupStyle = isDesktop
     ? `position: fixed; left: 230px; bottom: 60px; background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.3); min-width: 180px;`
     : `position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); min-width: 180px;`;
-  const menuHtml = `<div id="moreMenuOverlay" onclick="closeMoreMenu()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 70;"><div onclick="event.stopPropagation()" style="${popupStyle}">${menuItems.map(item => `<button onclick="${item.action ? item.action : `navigateTo('${item.id}')`}; closeMoreMenu();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: none; background: transparent; cursor: pointer; border-radius: 10px; text-align: left;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'"><span style="font-size: 18px;">${item.icon}</span><span style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 500;">${item.label}</span></button>`).join('')}</div></div>`;
+  const menuHtml = `<div id="moreMenuOverlay" onclick="closeMoreMenu()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 70;"><div onclick="event.stopPropagation()" style="${popupStyle}">${menuItems.map(item => {
+    const onclick = item.href ? `window.location.href='${item.href}'` : (item.action ? item.action : `navigateTo('${item.id}')`);
+    const iconHtml = item.iconSvg ? `<span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;color:${CONFIG.text_muted};">${item.iconSvg}</span>` : `<span style="font-size: 18px;">${item.icon}</span>`;
+    return `<button onclick="${onclick}; closeMoreMenu();" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 14px; border: none; background: transparent; cursor: pointer; border-radius: 10px; text-align: left;" onmouseover="this.style.background='rgba(255,255,255,0.08)'" onmouseout="this.style.background='transparent'">${iconHtml}<span style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 500;">${item.label}</span></button>`;
+  }).join('')}</div></div>`;
   document.body.insertAdjacentHTML('beforeend', menuHtml);
 }
 
@@ -3591,11 +3496,11 @@ function showWhatCanICook() {
 
 // Export/Import
 function exportData() {
-  const data = { recipes: state.recipes, inventory: state.inventory, mealDays: state.mealDays, ingredientKnowledge: state.ingredientKnowledge, budgetExpenses: state.budgetExpenses, swipeSettings: state.swipeSettings, weeklyBudgets: state.weeklyBudgets, frequentItems: state.frequentItems, seasoningBlends: state.seasoningBlends, freestyleMeals: state.freestyleMeals };
+  const data = { recipes: state.recipes, inventory: state.inventory, mealDays: state.mealDays, ingredientKnowledge: state.ingredientKnowledge, swipeSettings: state.swipeSettings, frequentItems: state.frequentItems, seasoningBlends: state.seasoningBlends, freestyleMeals: state.freestyleMeals };
   const dataStr = JSON.stringify(data, null, 2);
   const dataBlob = new Blob([dataStr], { type: 'application/json' });
   const url = URL.createObjectURL(dataBlob);
-  const link = document.createElement('a'); link.href = url; link.download = `meal-planner-backup-${new Date().toISOString().split('T')[0]}.json`; link.click();
+  const link = document.createElement('a'); link.href = url; link.download = `meal-planner-backup-${getToday()}.json`; link.click();
   URL.revokeObjectURL(url); showToast('Data exported successfully!', 'success');
 }
 
@@ -3614,9 +3519,7 @@ function importData() {
       if (data.inventory) state.inventory = data.inventory;
       if (data.mealDays) state.mealDays = data.mealDays;
       if (data.ingredientKnowledge) state.ingredientKnowledge = data.ingredientKnowledge;
-      if (data.budgetExpenses) state.budgetExpenses = data.budgetExpenses;
       if (data.swipeSettings) state.swipeSettings = data.swipeSettings;
-      if (data.weeklyBudgets) state.weeklyBudgets = data.weeklyBudgets;
       if (data.frequentItems) state.frequentItems = data.frequentItems;
       if (data.seasoningBlends) state.seasoningBlends = data.seasoningBlends;
       if (data.freestyleMeals) state.freestyleMeals = data.freestyleMeals;
@@ -3632,32 +3535,25 @@ function importData() {
 
 function showLoginModal() {
   openModal(`
-    <div style="color: ${CONFIG.text_color};">
-      <h2 class="text-2xl font-bold mb-4">Welcome to Yummy</h2>
-      <p class="mb-4">Sign in to sync your recipes across all your devices</p>
-
-      <div class="mb-4">
-        <label class="block mb-2 font-semibold">Email:</label>
-        <input type="email" id="loginEmail" class="w-full px-3 py-2 border rounded" style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border-color: ${CONFIG.divider_color};" placeholder="your@email.com" />
+    <div style="color: ${CONFIG.text_color}; max-width: 360px; margin: 0 auto; padding: 24px 24px 20px;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <div style="font-size: 28px; margin-bottom: 6px;">🍽️</div>
+        <div style="font-size: 18px; font-weight: 700; color: ${CONFIG.text_color};">Yummy</div>
+        <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-top: 4px;">Sign in to sync your data</div>
       </div>
-
-      <div class="mb-4">
-        <label class="block mb-2 font-semibold">Password:</label>
-        <input type="password" id="loginPassword" class="w-full px-3 py-2 border rounded" style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border-color: ${CONFIG.divider_color};" placeholder="••••••••" />
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 13px; color: ${CONFIG.text_muted}; display: block; margin-bottom: 4px;">Email</label>
+        <input type="email" id="loginEmail" placeholder="your@email.com"
+          style="width: 100%; height: 44px; padding: 0 12px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid ${CONFIG.divider_color}; border-radius: 8px; box-sizing: border-box;" />
       </div>
-
-      <div class="flex gap-2 justify-end">
-        <button onclick="handleLogin()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
-          Sign In
-        </button>
-        <button onclick="handleSignup()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.success_color}; color: white;">
-          Sign Up
-        </button>
+      <div style="margin-bottom: 16px;">
+        <label style="font-size: 13px; color: ${CONFIG.text_muted}; display: block; margin-bottom: 4px;">Password</label>
+        <input type="password" id="loginPassword" placeholder="••••••••"
+          style="width: 100%; height: 44px; padding: 0 12px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid ${CONFIG.divider_color}; border-radius: 8px; box-sizing: border-box;" />
       </div>
-
-      <div class="mt-4 text-sm text-center" style="color: ${CONFIG.text_muted};">
-        Your data will be synced to the cloud
-      </div>
+      <button onclick="handleLogin()" style="width: 100%; height: 44px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 8px;">Sign In</button>
+      <button onclick="handleSignup()" style="width: 100%; height: 44px; background: transparent; color: ${CONFIG.text_muted}; border: 1px solid ${CONFIG.divider_color}; border-radius: 8px; font-size: 14px; cursor: pointer;">Create Account</button>
+      <div style="text-align: center; margin-top: 12px; font-size: 12px; color: ${CONFIG.text_tertiary};">Data syncs to the cloud when signed in</div>
     </div>
   `);
 }
@@ -3671,36 +3567,11 @@ async function handleLogin() {
     return;
   }
 
-  const { data, error } = await window.supabaseClient.auth.signInWithPassword({
-    email: email,
-    password: password
-  });
-
-  if (error) {
-    showError('Login failed: ' + error.message);
-    return;
-  }
-
+  // localStorage-only mode — just cache email and close
+  localStorage.setItem('yummy_auth_user_email', email);
+  localStorage.setItem('yummy_isLoggedIn', 'true');
   closeModal();
-  showToast('Logged in successfully!', 'success');
-
-  // Cache auth state in localStorage so other pages don't show login popup
-  const user = data.user;
-  if (user) {
-    localStorage.setItem('yummy_auth_user_id', user.id);
-    localStorage.setItem('yummy_auth_user_email', user.email);
-    localStorage.setItem('yummy_isLoggedIn', 'true');
-  }
-
-  // Migrate localStorage data to Supabase if any
-  await migrateLocalStorageToSupabase();
-
-  // Load data and render
-  await loadDataFromSupabase();
-  if (user) {
-    subscribeToChanges(user.id);
-    updateUserIndicator(user.email);
-  }
+  showToast('Signed in locally', 'success');
   if (typeof render === 'function') render();
 }
 
@@ -3713,32 +3584,20 @@ async function handleSignup() {
     return;
   }
 
-  if (password.length < 6) {
-    showError('Password must be at least 6 characters');
-    return;
-  }
-
-  const { data, error } = await window.supabaseClient.auth.signUp({
-    email: email,
-    password: password
-  });
-
-  if (error) {
-    showError('Signup failed: ' + error.message);
-    return;
-  }
-
+  // localStorage-only mode — just cache email and close
+  localStorage.setItem('yummy_auth_user_email', email);
+  localStorage.setItem('yummy_isLoggedIn', 'true');
   closeModal();
-  showToast('Account created! Check your email to verify.', 'success');
-  showLoginModal();
+  showToast('Account created locally', 'success');
+  if (typeof render === 'function') render();
 }
 
 async function handleLogout() {
-  // Clear all cached auth and user data from localStorage
   clearAuthCache();
-  // Also clear cached app data so next login starts fresh
   localStorage.removeItem('meal_planner_data_v1');
-  await window.supabaseClient.auth.signOut();
+  if (window.supabaseClient) {
+    try { await window.supabaseClient.auth.signOut(); } catch(e) {}
+  }
   showToast('Logged out', 'success');
   location.reload();
 }
@@ -3859,9 +3718,6 @@ function applySupabaseData(data) {
   state.mealSelections = data.filter(d => d.id && d.id.startsWith('mealSel_'));
   state.groceryItems = data.filter(d => d.ingredientKey);
   state.mealOptions = data.filter(d => d.id && d.id.startsWith('mealOption_'));
-  state.budgetExpenses = data.filter(d => d.id && d.id.startsWith('expense_'));
-  state.weekBudgets = data.filter(d => d.id && d.id.startsWith('weekBudget_'));
-  loadWeeklyBudgets(data);
   state.freestyleMeals = data.filter(d => d.id && d.id.startsWith('freestyle_'));
   state.recordingNeeds = data.filter(d => d.id && d.id.startsWith('recording_'));
   state.seasoningBlends = data.filter(d => d.id && d.id.startsWith('blend_'));
@@ -3869,25 +3725,24 @@ function applySupabaseData(data) {
   state.mealLogs = data.filter(d => d.id && d.id.startsWith('meallog_'));
 
   // Load mealDays (last 90 days)
-  const todayDate = new Date().toISOString().split('T')[0];
+  const todayDate = getToday();
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - 90);
-  const cutoff = cutoffDate.toISOString().split('T')[0];
-  const mealSlotDefault = () => ({ status: 'none', plannedRecipeId: null, selectedAt: null, actualType: null, actualRecipeId: null, takeoutInfo: null, remixInfo: null, photoUrl: null, loggedAt: null });
+  const cutoff = _localDateStr(cutoffDate);
   const mealDayRecords = data.filter(d => d.id && d.id.startsWith('todayMeals_') && d.date >= cutoff);
   state.mealDays = {};
   mealDayRecords.forEach(record => {
     if (record.meals) {
       const day = { date: record.date, meals: record.meals };
       ['breakfast', 'lunch', 'dinner'].forEach(m => {
-        if (!day.meals[m]) day.meals[m] = mealSlotDefault();
+        if (!day.meals[m]) day.meals[m] = freshMealSlot();
       });
       if (!Array.isArray(day.meals.snacks)) day.meals.snacks = [];
       state.mealDays[record.date] = day;
     }
   });
   if (!state.mealDays[todayDate]) {
-    state.mealDays[todayDate] = { date: todayDate, meals: { breakfast: mealSlotDefault(), lunch: mealSlotDefault(), dinner: mealSlotDefault(), snacks: [] } };
+    state.mealDays[todayDate] = { date: todayDate, meals: { breakfast: freshMealSlot(), lunch: freshMealSlot(), dinner: freshMealSlot(), snacks: [] } };
   }
 
   state.dataLoaded = true;
@@ -3923,6 +3778,7 @@ async function clearAllData() {
   for (let i = 0; i < localStorage.length; i++) { const key = localStorage.key(i); if (key.startsWith('yummy_')) keysToRemove.push(key); }
   keysToRemove.forEach(key => localStorage.removeItem(key));
   localStorage.removeItem(FOOD_LOG_KEY); localStorage.removeItem(GROCERY_KEY); localStorage.removeItem(SAVED_RECIPES_KEY);
+  localStorage.removeItem('weeklyBudgetsBackup');
   // Also clear Supabase data
   if (window.supabaseClient) {
     try {
@@ -3992,82 +3848,41 @@ function getExternalMealType(name) {
 // ============================================================
 
 async function showSettingsMenu() {
-  // Use cached email to avoid network call when opening settings
-  let userEmail = localStorage.getItem('yummy_auth_user_email') || 'Not logged in';
-  if (userEmail === 'Not logged in' && window.supabaseClient) {
-    try {
-      const { data: { session } } = await window.supabaseClient.auth.getSession();
-      userEmail = session?.user?.email || 'Not logged in';
-    } catch (e) { console.error('Auth check failed:', e); }
-  }
+  const userEmail = localStorage.getItem('yummy_auth_user_email') || 'Not logged in';
+
+  const settingRow = (onclick, icon, label, desc, color) => `
+    <button onclick="${onclick}" style="display: flex; align-items: center; gap: 12px; width: 100%; height: 44px; padding: 0 12px; border: none; background: transparent; cursor: pointer; border-radius: 8px; text-align: left;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">
+      <span style="font-size: 16px; width: 20px; text-align: center;">${icon}</span>
+      <span style="flex: 1; font-size: 14px; color: ${color || CONFIG.text_color}; font-weight: 500;">${label}</span>
+      ${desc ? `<span style="font-size: 13px; color: ${CONFIG.text_tertiary};">${desc}</span>` : ''}
+      <svg width="14" height="14" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+    </button>`;
 
   openModal(`
-    <div style="color: ${CONFIG.text_color};">
-      <h2 class="text-2xl font-bold mb-4">Settings & Data Management</h2>
+    <div style="color: ${CONFIG.text_color}; max-width: 400px; margin: 0 auto; padding: 12px;">
+      <div style="font-size: 16px; font-weight: 700; margin-bottom: 4px;">Settings</div>
+      <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: 12px;">${userEmail}</div>
 
-      <div class="mb-4 p-3 rounded" style="background: ${CONFIG.primary_subtle};">
-        <div class="text-sm font-semibold">Logged in as:</div>
-        <div class="text-lg">${userEmail}</div>
+      <div style="border-top: 1px solid ${CONFIG.divider_color}; padding-top: 4px;">
+        ${settingRow("exportData(); closeModal();", "📥", "Export Data", "Ctrl+E")}
+        ${settingRow("closeModal(); showImportModal();", "📤", "Import Data", "Ctrl+I")}
+        ${settingRow("closeModal(); syncAllIngredientImages();", "🔄", "Sync Images", "")}
+        ${settingRow("closeModal(); showKeyboardShortcuts();", "⌨️", "Keyboard Shortcuts", "")}
+        ${settingRow("window.location.href='admin.html'", "🎬", "Manage Videos", "")}
       </div>
 
-      <div class="space-y-3">
-        <button onclick="exportData(); closeModal();"
-                class="w-full p-4 rounded text-left button-hover" style="background: ${CONFIG.primary_subtle};">
-          <div class="font-semibold text-lg">📥 Export Data</div>
-          <div class="text-sm" style="color: ${CONFIG.text_muted};">Download a backup of all your data</div>
-          <div class="text-xs mt-1" style="color: ${CONFIG.text_muted};">Keyboard: <span class="kbd">Ctrl+E</span></div>
-        </button>
-
-        <button onclick="closeModal(); showImportModal();"
-                class="w-full p-4 rounded text-left button-hover" style="background: rgba(50,215,75,0.1);">
-          <div class="font-semibold text-lg">📤 Import Data</div>
-          <div class="text-sm" style="color: ${CONFIG.text_muted};">Restore from a backup file</div>
-          <div class="text-xs mt-1" style="color: ${CONFIG.text_muted};">Keyboard: <span class="kbd">Ctrl+I</span></div>
-        </button>
-
-        <button onclick="closeModal(); showKeyboardShortcuts();"
-                class="w-full p-4 rounded text-left button-hover" style="background: ${CONFIG.primary_subtle};">
-          <div class="font-semibold text-lg">⌨️ Keyboard Shortcuts</div>
-          <div class="text-sm" style="color: ${CONFIG.text_muted};">View all available shortcuts</div>
-        </button>
-
-        <button onclick="closeModal(); showClearDataModal();"
-                class="w-full p-4 rounded text-left button-hover" style="background: rgba(255,69,58,0.1);">
-          <div class="font-semibold text-lg" style="color: ${CONFIG.danger_color};">🗑️ Clear All Data</div>
-          <div class="text-sm" style="color: ${CONFIG.danger_color};">Permanently delete everything</div>
-        </button>
-      <button onclick="closeModal(); syncAllIngredientImages();"
-                class="w-full p-4 rounded text-left button-hover" style="background: rgba(50,215,75,0.1);">
-          <div class="font-semibold text-lg">🔄 Sync Images to Library</div>
-          <div class="text-sm" style="color: ${CONFIG.text_muted};">Add all preset ingredients (with photos) to your ingredient library</div>
-        </button>
-
-        <a href="admin.html" onclick="closeModal();"
-                class="w-full p-4 rounded text-left button-hover block" style="background: ${CONFIG.primary_subtle}; text-decoration: none; color: inherit;">
-          <div class="font-semibold text-lg" style="color: ${CONFIG.text_color};">🎬 Manage Recipe Videos</div>
-          <div class="text-sm" style="color: ${CONFIG.text_muted};">Assign video clips to recipes and manage plate video order</div>
-        </a>
-      </div>
-     <div class="mt-6 p-4 rounded" style="background: ${CONFIG.surface_color};">
-        <div class="text-sm" style="color: ${CONFIG.text_color};">
-          <div class="font-semibold mb-2">📊 Current Data:</div>
-          <div>Recipes: ${state.recipes.length}</div>
-          <div>Meal Plans: ${state.planData.length}</div>
-          <div>Grocery Items: ${state.groceryItems.length}</div>
+      <div style="border-top: 1px solid ${CONFIG.divider_color}; margin-top: 4px; padding-top: 4px;">
+        <div style="display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px;">
+          <span style="font-size: 13px; color: ${CONFIG.text_tertiary};">${state.recipes.length} recipes · ${state.planData.length} plans · ${state.groceryItems.length} grocery</span>
         </div>
       </div>
 
-      <button onclick="closeModal(); handleLogout();"
-              class="w-full p-4 rounded text-left mt-3 button-hover" style="background: rgba(255,69,58,0.1);">
-        <div class="font-semibold text-lg" style="color: ${CONFIG.danger_color};">🚪 Logout</div>
-        <div class="text-sm" style="color: ${CONFIG.danger_color};">Sign out of your account</div>
-      </button>
-
-      <div class="flex gap-2 justify-end mt-6">
-        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
-          Close
-        </button>
+      <div style="border-top: 1px solid ${CONFIG.divider_color}; margin-top: 4px; padding-top: 4px;">
+        ${settingRow("closeModal(); showClearDataModal();", "🗑️", "Clear All Data", "", CONFIG.danger_color)}
+        ${settingRow("closeModal(); handleLogout();", "🚪", "Logout", "", CONFIG.danger_color)}
       </div>
+
+      <button onclick="closeModal()" style="width: 100%; height: 40px; margin-top: 8px; background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_muted}; border: none; border-radius: 8px; font-size: 13px; cursor: pointer;">Close</button>
     </div>
   `);
 }
@@ -4116,43 +3931,11 @@ function showKeyboardShortcuts() {
  `);
 }
 
-// ============================================================
-// SECTION 21b: WEEKLY BUDGETS
-// ============================================================
-
-async function saveWeeklyBudgets() {
-  const dataToSave = {
-    id: 'weeklyBudgets',
-    type: 'weeklyBudgets',
-    budgets: state.weeklyBudgets,
-    updatedAt: Date.now()
-  };
-  console.log('Calling saveWeeklyBudgets:', state.weeklyBudgets);
-
-  try {
-    // Try create first — fails if record already exists
-    const createResult = await storage.create(dataToSave);
-    if (!createResult?.isOk) {
-      // Record exists, update it
-      await storage.update(dataToSave);
-    }
-    console.log('Weekly budgets saved successfully');
-  } catch (e) {
-    console.error('Failed to save weekly budgets:', e);
-  }
-
-  // Also save to localStorage as backup
-  try {
-    localStorage.setItem('weeklyBudgetsBackup', JSON.stringify(state.weeklyBudgets));
-  } catch (e) {
-    console.error('localStorage backup failed:', e);
-  }
-}
 
 function changeWeek(direction) {
-  const date = new Date(state.currentWeekStartDate);
+  const date = new Date(state.currentWeekStartDate + 'T12:00:00');
   date.setDate(date.getDate() + (direction * 7));
-  state.currentWeekStartDate = date.toISOString().split('T')[0];
+  state.currentWeekStartDate = _localDateStr(date);
   render();
 }
 
@@ -5067,17 +4850,17 @@ async function toggleFreezeItem(itemId) {
   item.isFrozen = !item.isFrozen;
 
   if (item.isFrozen) {
-    item.frozenDate = new Date().toISOString().split('T')[0];
+    item.frozenDate = getToday();
     // Extend expiration by 90 days when freezing
     const newExpiry = new Date();
     newExpiry.setDate(newExpiry.getDate() + 90);
-    item.expirationDate = newExpiry.toISOString().split('T')[0];
+    item.expirationDate = _localDateStr(newExpiry);
     showToast(`${item.name} moved to freezer`, 'success');
   } else {
     // When thawing, set expiration to 2-3 days from now
     const newExpiry = new Date();
     newExpiry.setDate(newExpiry.getDate() + 3);
-    item.expirationDate = newExpiry.toISOString().split('T')[0];
+    item.expirationDate = _localDateStr(newExpiry);
     showToast(`${item.name} thawed - use within 3 days`, 'info');
   }
 
@@ -5149,7 +4932,7 @@ async function confirmAddIngredientToInventory(ingredientName) {
     quantity: quantity,
     unit: unit,
     expirationDate: expiration || null,
-    purchaseDate: new Date().toISOString().split('T')[0],
+    purchaseDate: getToday(),
     image_url: getIngredientImage(ingredientName) || ''
   };
 

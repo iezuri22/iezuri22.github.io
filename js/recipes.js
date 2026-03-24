@@ -590,7 +590,7 @@ function openNewFreestyle() {
 
   state.freestyleForm = {
     id: null,
-    date: localDate.toISOString().split('T')[0],
+    date: _localDateStr(localDate),
     image_url: '',
     narrative: '',
     notes: '',
@@ -1489,8 +1489,6 @@ function renderRecipeFilterPills() {
   const primaryPill = state.recipePrimaryFilter || 'all';
   const primaryFilters = [
     { id: 'all', label: 'All' },
-    { id: 'saved', label: 'Saved' },
-    { id: 'plates', label: 'Plates' },
     { id: 'Breakfast', label: 'Breakfast' },
     { id: 'Lunch', label: 'Lunch' },
     { id: 'Dinner', label: 'Dinner' },
@@ -1660,10 +1658,7 @@ function renderRecipes() {
 
   // Apply primary filter
   const primaryFilter = state.recipePrimaryFilter || 'all';
-  const showPlatesOnly = primaryFilter === 'plates';
-  if (primaryFilter === 'saved') {
-    list = list.filter(r => isRecipeSaved(r.__backendId || r.id));
-  } else if (['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(primaryFilter)) {
+  if (['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(primaryFilter)) {
     list = list.filter(r => (r.category || '') === primaryFilter);
   }
   // 'all' shows everything
@@ -1672,8 +1667,6 @@ function renderRecipes() {
   let batchList = state.batchRecipes || [];
   if (['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(primaryFilter)) {
     batchList = batchList.filter(b => capitalize(b.mealType || '') === primaryFilter);
-  } else if (primaryFilter === 'saved') {
-    batchList = []; // Batch recipes don't have a saved/bookmark state
   }
   if (state.searchTerm) {
     const sl = state.searchTerm.toLowerCase();
@@ -1749,33 +1742,24 @@ function renderRecipes() {
       <!-- Filter pills -->
       ${renderRecipeFilterPills()}
 
-      <!-- Build a Plate button -->
-      ${!showPlatesOnly ? '' : `
-        <div style="padding:8px 12px;">
-          <button onclick="openNewBatchRecipe()" style="width:100%; padding:10px; background:${CONFIG.surface_elevated}; color:${CONFIG.primary_action_color}; border:1px solid rgba(232,93,93,0.2); border-radius:10px; font-size:13px; font-weight:600; cursor:pointer;">
-            + Build a Plate
-          </button>
-        </div>
-      `}
-
       <!-- Results -->
-      ${(showPlatesOnly ? batchList.length === 0 : list.length === 0 && batchList.length === 0) ? `
+      ${(list.length === 0 && batchList.length === 0) ? `
         <div style="padding: 48px 12px; text-align: center;">
           <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">
-            ${state.searchTerm ? 'No matches found' : (showPlatesOnly ? 'No plates yet' : 'No recipes yet')}
+            ${state.searchTerm ? 'No matches found' : 'No recipes yet'}
           </div>
           <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-bottom: 12px;">
-            ${state.searchTerm ? 'Try a different search' : (showPlatesOnly ? 'Build your first plate!' : 'Add your first recipe!')}
+            ${state.searchTerm ? 'Try a different search' : 'Add your first recipe!'}
           </div>
           ${!state.searchTerm ? `
-            <button onclick="${showPlatesOnly ? 'openNewBatchRecipe()' : 'openNewRecipe()'}" style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
-              ${showPlatesOnly ? '+ Build a Plate' : '+ Add Recipe'}
+            <button onclick="openNewRecipe()" style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
+              + Add Recipe
             </button>
           ` : ''}
         </div>
       ` : `
         <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
-          ${!showPlatesOnly ? '' : ''}${batchList.map(b => {
+          ${batchList.map(b => {
             const bImg = getBatchCoverPhoto(b);
             return `
             <div style="position:relative; cursor:pointer; overflow:hidden; border-radius:8px;" onclick="openBatchRecipeView('${b.id}')">
@@ -1799,7 +1783,7 @@ function renderRecipes() {
                 <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">${esc(b.name)}</div>
               </div>
             </div>`;
-          }).join('')}${showPlatesOnly ? '' : list.map(r => {
+          }).join('')}${list.map(r => {
             const id = r.__backendId || r.id;
             const img = recipeThumb(r);
             const saved = isRecipeSaved(id);
@@ -2261,6 +2245,18 @@ ${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; 
               <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
               View original recipe &rarr;
             </a>
+          </div>
+        ` : ''}
+
+        ${!r.isTip ? `
+          <div class="mt-6">
+            <button onclick="showAddToMealsModal('${recipeId}')"
+              style="width:100%; height:44px; display:flex; align-items:center; justify-content:center; gap:8px;
+              background:${CONFIG.primary_action_color}; border:none; border-radius:12px;
+              color:white; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;">
+              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+              Add to My Meals
+            </button>
           </div>
         ` : ''}
       </div>

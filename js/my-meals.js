@@ -141,7 +141,7 @@ function navigateMyMealsDate(direction) {
   if (!state.myMealsDate) state.myMealsDate = getToday();
   const d = new Date(state.myMealsDate + 'T12:00:00');
   d.setDate(d.getDate() + direction);
-  state.myMealsDate = d.toISOString().split('T')[0];
+  state.myMealsDate = _localDateStr(d);
   render();
 }
 
@@ -260,17 +260,6 @@ function showMealActionSheet(mealType, dateStr, swapLogId) {
       <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${dateLabel}</div>
 
       <div style="display: flex; flex-direction: column; gap: 8px;">
-        <button onclick="closeModal(); startSwipeForSlot('${mealType}', '${dateStr}'${isSwap ? `, '${swapLogId}'` : ''})"
-          style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 14px;">
-          <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(232,93,93,0.12); display: flex; align-items: center; justify-content: center;">
-            <svg width="22" height="22" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6h.008M6 18h.008M18 6h.008M18 18h.008M3 6a3 3 0 013-3h1.5a.75.75 0 01.75.75v1.5a.75.75 0 01-.75.75H6a3 3 0 00-3 3V6zm0 12a3 3 0 003 3h1.5a.75.75 0 00.75-.75v-1.5a.75.75 0 00-.75-.75H6a3 3 0 01-3-3v3zm18-12a3 3 0 00-3-3h-1.5a.75.75 0 00-.75.75v1.5c0 .414.336.75.75.75H18a3 3 0 013 3V6zm0 12a3 3 0 01-3 3h-1.5a.75.75 0 01-.75-.75v-1.5c0-.414.336-.75.75-.75H18a3 3 0 003-3v3z"/></svg>
-          </div>
-          <div style="text-align: left;">
-            <div style="font-weight: 600;">Swipe for it</div>
-            <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Browse recipes by swiping</div>
-          </div>
-        </button>
-
         <button onclick="closeModal(); showRecipePickerForSlot('${mealType}', '${dateStr}'${isSwap ? `; window._swapLogIdForPicker = '${swapLogId}'` : ''})"
           style="width: 100%; padding: 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; gap: 14px;">
           <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(232,93,93,0.12); display: flex; align-items: center; justify-content: center;">
@@ -1053,7 +1042,7 @@ function setAsCoverPhoto(logId, coverKey) {
 // ============================================================
 function showQuickLogModal() {
   const mealType = detectMealType ? detectMealType() : 'dinner';
-  const dateStr = (state.currentView === 'my-meals' && state.myMealsDate) ? state.myMealsDate : getToday();
+  const dateStr = ((state.currentView === 'my-meals' || state.currentView === 'home') && state.myMealsDate) ? state.myMealsDate : getToday();
   showMealActionSheet(mealType, dateStr);
 }
 
@@ -1320,55 +1309,62 @@ function submitEditMeal() {
 
 // ============================================================
 // PAGE RENDER & INIT
+// On my-meals.html, this file provides render() and init().
+// On index.html, home.js provides render() and init() and uses
+// the rendering functions above (renderMyMeals, etc.) directly.
 // ============================================================
 
-const VIEW_RENDERERS = {
-  'my-meals': renderMyMeals,
-  'food-log-detail': renderFoodLogDetail,
-  'my-plates': renderMyPlates
-};
+(function() {
+  // Only auto-init on my-meals.html — on index.html, home.js handles init
+  if (!window.location.pathname.includes('my-meals')) return;
 
-function render() {
-  const app = document.getElementById('app');
-  if (!app) return;
+  var MY_MEALS_VIEW_RENDERERS = {
+    'my-meals': renderMyMeals,
+    'home': renderMyMeals,
+    'food-log-detail': renderFoodLogDetail,
+    'my-plates': renderMyPlates
+  };
 
-  const renderer = VIEW_RENDERERS[state.currentView];
-  let content;
-  if (renderer) {
-    content = renderer();
-  } else {
-    content = renderMyMeals();
-    state.currentView = 'my-meals';
+  window.render = function() {
+    var app = document.getElementById('app');
+    if (!app) return;
+
+    var renderer = MY_MEALS_VIEW_RENDERERS[state.currentView];
+    var content;
+    if (renderer) {
+      content = renderer();
+    } else {
+      content = renderMyMeals();
+      state.currentView = 'my-meals';
+    }
+
+    app.innerHTML = '<div class="' + getAppShellClass() + '" style="background: ' + CONFIG.background_color + '; min-height: 100dvh; padding-bottom: 56px;">'
+      + renderDesktopSidebar()
+      + renderNav()
+      + '<div class="desktop-content-area">'
+      + renderDesktopPageTitle()
+      + content
+      + '</div>'
+      + renderBottomNav()
+      + '</div>';
+
+    if (state.currentView === 'my-meals' || state.currentView === 'home') {
+      initMyMealsSwipeGestures();
+    }
+  };
+
+  function init() {
+    loadAllState();
+    var targetView = sessionStorage.getItem('yummy_target_view');
+    if (targetView && MY_MEALS_VIEW_RENDERERS[targetView]) {
+      sessionStorage.removeItem('yummy_target_view');
+      state.currentView = targetView;
+    } else {
+      state.currentView = 'my-meals';
+    }
+    setupKeyboardShortcuts();
+    window.render();
   }
 
-  app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
-      ${renderDesktopSidebar()}
-      ${renderNav()}
-      <div class="desktop-content-area">
-        ${renderDesktopPageTitle()}
-        ${content}
-      </div>
-      ${renderBottomNav()}
-    </div>
-  `;
-
-  if (state.currentView === 'my-meals') {
-    initMyMealsSwipeGestures();
-  }
-}
-
-function init() {
-  loadAllState();
-  const targetView = sessionStorage.getItem('yummy_target_view');
-  if (targetView && VIEW_RENDERERS[targetView]) {
-    sessionStorage.removeItem('yummy_target_view');
-    state.currentView = targetView;
-  } else {
-    state.currentView = 'my-meals';
-  }
-  setupKeyboardShortcuts();
-  render();
-}
-
-init();
+  init();
+})();

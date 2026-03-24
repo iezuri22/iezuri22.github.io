@@ -494,8 +494,37 @@ function renderKitchen() {
       </div>
     `;
   }
+  const activeTab = state.kitchenActiveTab || 'ingredients';
+  const inventoryCount = (state.inventory || []).length;
+  const tabsHtml = `
+    <div style="display: flex; gap: 4px; padding: 8px 12px; background: ${CONFIG.background_color};">
+      <button onclick="state.kitchenActiveTab = 'ingredients'; render();"
+        style="flex: 1; padding: 8px 0; border-radius: 20px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; font-family: ${CONFIG.font_family};
+        background: ${activeTab === 'ingredients' ? CONFIG.primary_action_color : CONFIG.surface_color};
+        color: ${activeTab === 'ingredients' ? 'white' : CONFIG.text_muted};">
+        Ingredients
+      </button>
+      <button onclick="state.kitchenActiveTab = 'inventory'; render();"
+        style="flex: 1; padding: 8px 0; border-radius: 20px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; font-family: ${CONFIG.font_family};
+        background: ${activeTab === 'inventory' ? CONFIG.primary_action_color : CONFIG.surface_color};
+        color: ${activeTab === 'inventory' ? 'white' : CONFIG.text_muted};">
+        My Inventory${inventoryCount > 0 ? ' (' + inventoryCount + ')' : ''}
+      </button>
+    </div>
+  `;
+
+  if (activeTab === 'inventory') {
+    return `
+      <div style="padding: 0; flex: 1;">
+        ${tabsHtml}
+        ${renderInventory()}
+      </div>
+    `;
+  }
+
   return `
     <div style="padding: 0; flex: 1;">
+      ${tabsHtml}
       <div class="kitchen-sticky-search" style="padding: 8px 12px; background: ${CONFIG.background_color};">
         <div style="display: flex; gap: 8px; align-items: center;">
           <div style="position: relative; flex: 1;">
@@ -935,7 +964,7 @@ function renderKitchenDetail() {
 
   const log = getFoodLog();
   const now = new Date();
-  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  const monthStart = _localDateStr(new Date(now.getFullYear(), now.getMonth(), 1));
   const monthEntries = log.filter(e => {
     if (e.dateCooked.split('T')[0] < monthStart) return false;
     const ings = (e.ingredients || []).map(i => i.toLowerCase());
@@ -2131,7 +2160,7 @@ async function useInventoryItem(id) {
         unit: item.unit,
         image_url: item.image_url,
         purchaseDate: item.purchaseDate,
-        usedDate: new Date().toISOString().split('T')[0],
+        usedDate: getToday(),
         originalId: item.id
       };
 
@@ -2290,7 +2319,7 @@ async function toggleFrozen(id) {
     try {
       const updated = { ...item, isFrozen: !item.isFrozen };
       if (item.isFrozen && !updated.isFrozen) {
-        updated.expirationDate = suggestExpirationDate(item.name, item.category, new Date().toISOString().split('T')[0]);
+        updated.expirationDate = suggestExpirationDate(item.name, item.category, getToday());
       }
       await storage.update(updated);
       showToast(updated.isFrozen ? 'Item frozen' : 'Item unfrozen', 'success');
@@ -2798,7 +2827,7 @@ function editUnit(itemId, unitIdx) {
 function setUnitExpDays(days) {
     const date = new Date();
     date.setDate(date.getDate() + days);
-    document.getElementById('editUnitExp').value = date.toISOString().split('T')[0];
+    document.getElementById('editUnitExp').value = _localDateStr(date);
   }
 
 async function saveUnitEdit(itemId, unitIdx) {
@@ -2834,7 +2863,7 @@ async function addUnitToItem(itemId) {
       expirationDate: item.expirationDate,
       isFrozen: false,
       verified: false,
-      purchaseDate: new Date().toISOString().split('T')[0]
+      purchaseDate: getToday()
     });
 
     item.quantity = item.units.length;
@@ -2911,7 +2940,7 @@ function showVerifyItemModal(itemId) {
     const item = state.inventory.find(i => i.id === itemId);
     if (!item) return;
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = getToday();
 
     openModal(`
       <div style="color: ${CONFIG.text_color};">
@@ -2972,7 +3001,7 @@ function showVerifyItemModal(itemId) {
 function setVerifyExpDays(days) {
     const date = new Date();
     date.setDate(date.getDate() + days);
-    document.getElementById('verifyExpDate').value = date.toISOString().split('T')[0];
+    document.getElementById('verifyExpDate').value = _localDateStr(date);
   }
 
 async function saveVerifiedItem(itemId) {
@@ -2991,7 +3020,7 @@ async function saveVerifiedItem(itemId) {
   }
 
 function showAddInventoryModal() {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getToday();
     const prefill = state.prefillInventoryItem || {};
     state.prefillInventoryItem = null;
 
@@ -3114,7 +3143,7 @@ function showAddInventoryModal() {
         expDate.setDate(expDate.getDate() + prefill.defaultExpirationDays);
         const expInput = document.getElementById('inventoryExpiration');
         if (expInput) {
-          expInput.value = expDate.toISOString().split('T')[0];
+          expInput.value = _localDateStr(expDate);
         }
       }
       updateSuggestedExpiration();
@@ -3131,7 +3160,7 @@ async function quickAddFrequentItem(name, category) {
         name: name,
         category: category,
         quantity: 1,
-        purchaseDate: new Date().toISOString().split('T')[0]
+        purchaseDate: getToday()
       });
       showToast(`${name} added to inventory!`, 'success');
     } catch (e) {
@@ -3224,457 +3253,6 @@ async function saveManualInventoryItem() {
       render();
     }
   }
-
-// ===== GROUP 6: BUDGET =====
-
-function budgetGetWeekStart(dateStr) {
-    const date = new Date(dateStr + 'T00:00:00');
-    const day = date.getDay();
-    const diff = date.getDate() - day;
-    date.setDate(diff);
-    return date.toISOString().split('T')[0];
-  }
-
-function budgetGetWeekEnd(weekStartStr) {
-    const date = new Date(weekStartStr + 'T00:00:00');
-    date.setDate(date.getDate() + 6);
-    return date.toISOString().split('T')[0];
-  }
-
-function budgetGetWeekLabel(weekStartStr) {
-    const today = getToday();
-    const thisWeekStart = budgetGetWeekStart(today);
-    const lastWeek = new Date(thisWeekStart + 'T00:00:00');
-    lastWeek.setDate(lastWeek.getDate() - 7);
-    const lastWeekStart = lastWeek.toISOString().split('T')[0];
-    const nextWeek = new Date(thisWeekStart + 'T00:00:00');
-    nextWeek.setDate(nextWeek.getDate() + 7);
-    const nextWeekStart = nextWeek.toISOString().split('T')[0];
-
-    if (weekStartStr === thisWeekStart) return 'This Week';
-    if (weekStartStr === lastWeekStart) return 'Last Week';
-    if (weekStartStr === nextWeekStart) return 'Next Week';
-    return 'Week of ' + budgetFormatShortDate(weekStartStr);
-  }
-
-function budgetFormatShortDate(dateStr) {
-    const d = new Date(dateStr + 'T00:00:00');
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  }
-
-function budgetFormatDateRange(startStr, endStr) {
-    const start = new Date(startStr + 'T00:00:00');
-    const end = new Date(endStr + 'T00:00:00');
-    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
-    const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
-    if (startMonth === endMonth) {
-      return `${startMonth} ${start.getDate()} - ${end.getDate()}`;
-    }
-    return `${startMonth} ${start.getDate()} - ${endMonth} ${end.getDate()}`;
-  }
-
-function budgetPrevWeek() {
-    const current = new Date((state.budgetWeekStart || budgetGetWeekStart(getToday())) + 'T00:00:00');
-    current.setDate(current.getDate() - 7);
-    state.budgetWeekStart = current.toISOString().split('T')[0];
-    render();
-  }
-
-function budgetNextWeek() {
-    const current = new Date((state.budgetWeekStart || budgetGetWeekStart(getToday())) + 'T00:00:00');
-    current.setDate(current.getDate() + 7);
-    state.budgetWeekStart = current.toISOString().split('T')[0];
-    render();
-  }
-
-function budgetGetExpensesForWeek(weekStartStr) {
-    const weekStart = new Date(weekStartStr + 'T00:00:00');
-    const weekEnd = new Date(weekStartStr + 'T00:00:00');
-    weekEnd.setDate(weekEnd.getDate() + 7);
-    const weekEndStr = weekEnd.toISOString().split('T')[0];
-    return (state.budgetExpenses || [])
-      .filter(e => e.date >= weekStartStr && e.date < weekEndStr)
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-  }
-
-function getExpenseIcon(category) {
-    const icons = { grocery: '\ud83d\uded2', takeout: '\ud83e\udd61', coffee: '\u2615', other: '\ud83d\udcdd' };
-    return icons[category] || icons.other;
-  }
-
-function formatExpenseDate(dateStr) {
-    const d = new Date(dateStr + 'T00:00:00');
-    const today = new Date(getToday() + 'T00:00:00');
-    const diff = Math.round((today - d) / (1000 * 60 * 60 * 24));
-    if (diff === 0) return 'Today';
-    if (diff === 1) return 'Yesterday';
-    return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-  }
-
-function renderBudget() {
-    console.log('Rendering budget, weeklyBudgets:', state.weeklyBudgets);
-    const weekStart = state.budgetWeekStart || budgetGetWeekStart(getToday());
-    const weekEnd = budgetGetWeekEnd(weekStart);
-    const weekLabel = budgetGetWeekLabel(weekStart);
-    const budget = state.weeklyBudgets?.[weekStart] || 0;
-    const expenses = budgetGetExpensesForWeek(weekStart);
-    const totalSpent = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const hasBudget = budget > 0;
-    const percentSpent = hasBudget ? Math.min((totalSpent / budget) * 100, 100) : 0;
-    const remaining = budget - totalSpent;
-    const isOverBudget = remaining < 0;
-
-    return `
-      <div class="budget-page">
-        <header class="budget-header">
-          <button class="nav-arrow" onclick="budgetPrevWeek()">&lsaquo;</button>
-          <div class="week-display">
-            <span class="week-label">${weekLabel}</span>
-            <span class="week-dates">${budgetFormatDateRange(weekStart, weekEnd)}</span>
-          </div>
-          <button class="nav-arrow" onclick="budgetNextWeek()">&rsaquo;</button>
-        </header>
-
-        <section class="budget-summary">
-          ${hasBudget ? `
-            <div class="budget-ring">
-              <svg viewBox="0 0 120 120">
-                <circle cx="60" cy="60" r="54" class="ring-bg" />
-                <circle cx="60" cy="60" r="54" class="ring-progress ${isOverBudget ? 'over' : ''}"
-                        style="stroke-dasharray: ${percentSpent * 3.39} 339" />
-              </svg>
-              <div class="ring-center">
-                <span class="spent-amount">$${totalSpent.toFixed(0)}</span>
-                <span class="budget-amount">of $${budget}</span>
-              </div>
-            </div>
-            <div class="budget-status ${isOverBudget ? 'over' : ''}">
-              ${isOverBudget
-                ? '$' + Math.abs(remaining).toFixed(0) + ' over budget'
-                : '$' + remaining.toFixed(0) + ' remaining'}
-            </div>
-            <button class="edit-budget-link" onclick="editWeeklyBudget('${weekStart}')">
-              Edit budget
-            </button>
-          ` : `
-            <div class="no-budget">
-              <p class="no-budget-text">No budget set for this week</p>
-              <button class="set-budget-btn" onclick="editWeeklyBudget('${weekStart}')">
-                Set Weekly Budget
-              </button>
-            </div>
-            ${totalSpent > 0 ? `
-              <div class="spent-anyway">
-                <span>Spent this week: $${totalSpent.toFixed(2)}</span>
-              </div>
-            ` : ''}
-          `}
-        </section>
-
-        <section class="expenses-section">
-          <div class="budget-section-header">
-            <h2>Expenses</h2>
-            <div class="section-actions">
-              <button class="scan-btn" onclick="openReceiptScanner()">\ud83d\udcf7 Scan</button>
-              <button class="add-btn" onclick="openAddExpenseModal()">+ Add</button>
-            </div>
-          </div>
-
-          ${expenses.length > 0 ? `
-            <div class="expenses-list">
-              ${expenses.map(expense => `
-                <div class="expense-row" onclick="viewExpense('${expense.id}')">
-                  <span class="expense-icon">${getExpenseIcon(expense.category || expense.type)}</span>
-                  <div class="expense-details">
-                    <span class="expense-name">${expense.name || expense.note || expense.category || expense.type || 'Expense'}</span>
-                    <span class="expense-date">${formatExpenseDate(expense.date)}</span>
-                  </div>
-                  <span class="expense-amount">$${expense.amount.toFixed(2)}</span>
-                </div>
-              `).join('')}
-            </div>
-          ` : `
-            <div class="no-expenses">
-              <p>No expenses yet</p>
-              <button class="add-first-btn" onclick="openAddExpenseModal()">Add your first expense</button>
-            </div>
-          `}
-        </section>
-      </div>
-    `;
-  }
-
-function viewExpense(expenseId) {
-    editExpense(expenseId);
-  }
-
-function openAddExpenseModal() {
-    state.selectedCategory = 'grocery';
-    openModal(`
-      <div style="color: ${CONFIG.text_color};">
-        <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 16px;">Add Expense</h3>
-
-        <div style="margin-bottom: 12px;">
-          <input type="text" id="expenseName" placeholder="What did you buy?"
-            style="width: 100%; padding: 14px 16px; background: ${CONFIG.surface_elevated}; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 15px; box-sizing: border-box;" autofocus />
-        </div>
-
-        <div class="budget-amount-field" style="margin-bottom: 12px;">
-          <span class="currency">$</span>
-          <input type="number" id="expenseAmount" placeholder="0.00" step="0.01" />
-        </div>
-
-        <div class="category-grid">
-          <button class="cat-btn active" data-cat="grocery" onclick="selectExpenseCat(this, 'grocery')">\ud83d\uded2 Grocery</button>
-          <button class="cat-btn" data-cat="takeout" onclick="selectExpenseCat(this, 'takeout')">\ud83e\udd61 Takeout</button>
-          <button class="cat-btn" data-cat="coffee" onclick="selectExpenseCat(this, 'coffee')">\u2615 Coffee</button>
-          <button class="cat-btn" data-cat="other" onclick="selectExpenseCat(this, 'other')">\ud83d\udcdd Other</button>
-        </div>
-
-        <button onclick="saveNewExpense()"
-          style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 8px;">
-          Add
-        </button>
-        <button onclick="closeModal()"
-          style="width: 100%; padding: 10px; background: transparent; color: ${CONFIG.text_muted}; border: none; font-size: 14px; cursor: pointer;">
-          Cancel
-        </button>
-      </div>
-    `);
-  }
-
-function selectExpenseCat(btn, category) {
-    state.selectedCategory = category;
-    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-  }
-
-async function saveNewExpense() {
-    const name = document.getElementById('expenseName')?.value.trim();
-    const amount = parseFloat(document.getElementById('expenseAmount')?.value);
-    const category = state.selectedCategory || 'other';
-
-    if (!name) {
-      showToast('Enter what you bought');
-      return;
-    }
-    if (!amount || amount <= 0) {
-      showToast('Enter amount');
-      return;
-    }
-
-    const typeMap = { grocery: 'grocery', takeout: 'takeout', coffee: 'takeout', other: 'grocery' };
-    const expense = {
-      id: 'expense_' + Date.now(),
-      type: typeMap[category] || 'grocery',
-      category: category,
-      name: name,
-      amount: amount,
-      date: getToday(),
-      createdAt: Date.now()
-    };
-
-    try {
-      await storage.create(expense);
-      if (!state.budgetExpenses) state.budgetExpenses = [];
-      state.budgetExpenses.push(expense);
-      closeModal();
-      state.selectedCategory = null;
-      showToast('Added!', 'success');
-      render();
-    } catch (e) {
-      console.error('Failed to save expense:', e);
-      showToast('Failed to save expense');
-    }
-  }
-
-function editExpense(expenseId) {
-    const expense = state.budgetExpenses.find(e => e.id === expenseId);
-    if (!expense) return;
-
-    openModal(`
-      <div style="color: ${CONFIG.text_color};">
-        <h2 class="text-2xl font-bold mb-4">${expense.type === 'grocery' ? '\ud83d\uded2' : '\ud83c\udf54'} Edit Expense</h2>
-
-        <div class="mb-4">
-          <label class="block mb-2 font-semibold">Amount:</label>
-          <div class="flex items-center gap-2">
-            <span class="text-xl">$</span>
-            <input type="number" id="editExpenseAmount" value="${expense.amount}"
-                   class="flex-1 px-3 py-2 border rounded"
-                   min="0" step="0.01" />
-          </div>
-        </div>
-
-        <div class="mb-4">
-          <label class="block mb-2 font-semibold">Date:</label>
-          <input type="date" id="editExpenseDate" value="${expense.date}"
-                 class="w-full px-3 py-2 border rounded" />
-        </div>
-
-        <div class="mb-4">
-          <label class="block mb-2 font-semibold">Store/Restaurant (optional):</label>
-          <input type="text" id="editExpenseNote" value="${expense.note || ''}"
-                 class="w-full px-3 py-2 border rounded"
-                 placeholder="${expense.type === 'grocery' ? 'e.g., Whole Foods' : 'e.g., Chipotle'}" />
-        </div>
-
-        <div class="flex gap-2 justify-end">
-          <button onclick="showManageExpensesModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
-            Cancel
-          </button>
-          <button onclick="updateExpense('${expenseId}')"
-                  class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.success_color}; color: white;">
-            Save Changes
-          </button>
-        </div>
-      </div>
-    `);
-  }
-
-async function updateExpense(expenseId) {
-    const expense = state.budgetExpenses.find(e => e.id === expenseId);
-    if (!expense) return;
-
-    const amount = parseFloat(document.getElementById('editExpenseAmount').value);
-    const date = document.getElementById('editExpenseDate').value;
-    const note = document.getElementById('editExpenseNote').value.trim();
-
-    if (isNaN(amount) || amount <= 0) {
-      showError('Please enter a valid amount');
-      return;
-    }
-
-    if (!date) {
-      showError('Please select a date');
-      return;
-    }
-
-    state.isLoading = true;
-    closeModal();
-    render();
-
-    try {
-      const updatedExpense = {
-        ...expense,
-        amount: amount,
-        date: date,
-        note: note
-      };
-
-      await storage.update(updatedExpense);
-      showToast('Expense updated!', 'success');
-      if (typeof showManageExpensesModal === 'function') showManageExpensesModal();
-    } catch (e) {
-      console.error(e);
-      showError('Failed to update expense');
-    } finally {
-      state.isLoading = false;
-      render();
-    }
-  }
-
-function editWeeklyBudget(weekStart) {
-    const currentBudget = state.weeklyBudgets?.[weekStart] || 0;
-    const weekLabel = budgetGetWeekLabel(weekStart);
-
-    openModal(`
-      <div style="color: ${CONFIG.text_color};">
-        <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px; text-align: center;">Set Budget</h3>
-        <p style="font-size: 13px; color: ${CONFIG.text_muted}; margin: 0 0 8px 0; text-align: center;">${weekLabel}</p>
-
-        <div class="budget-input-wrapper">
-          <span class="currency-symbol">$</span>
-          <input type="number" id="budgetAmount" class="budget-input"
-                 value="${currentBudget || ''}" placeholder="0" autofocus />
-        </div>
-
-        <div class="quick-amounts">
-          <button onclick="document.getElementById('budgetAmount').value=100">$100</button>
-          <button onclick="document.getElementById('budgetAmount').value=150">$150</button>
-          <button onclick="document.getElementById('budgetAmount').value=200">$200</button>
-          <button onclick="document.getElementById('budgetAmount').value=250">$250</button>
-        </div>
-
-        <button onclick="saveWeeklyBudget('${weekStart}')"
-          style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: 8px;">
-          Save
-        </button>
-        <button onclick="closeModal()"
-          style="width: 100%; padding: 10px; background: transparent; color: ${CONFIG.text_muted}; border: none; font-size: 14px; cursor: pointer;">
-          Cancel
-        </button>
-      </div>
-    `);
-  }
-
-async function saveWeeklyBudget(weekStart) {
-    const amount = parseFloat(document.getElementById('budgetAmount').value) || 0;
-    if (!state.weeklyBudgets) state.weeklyBudgets = {};
-    state.weeklyBudgets[weekStart] = amount;
-    await saveWeeklyBudgets();
-    closeModal();
-    showToast(amount > 0 ? 'Budget set!' : 'Budget cleared', 'success');
-    render();
-  }
-
-async function saveWeeklyBudgets() {
-    const dataToSave = {
-      id: 'weeklyBudgets',
-      type: 'weeklyBudgets',
-      budgets: state.weeklyBudgets,
-      updatedAt: Date.now()
-    };
-    try {
-      const createResult = await storage.create(dataToSave);
-      if (!createResult?.isOk) {
-        await storage.update(dataToSave);
-      }
-    } catch (e) {
-      console.error('Failed to save weekly budgets:', e);
-    }
-    try {
-      localStorage.setItem('weeklyBudgetsBackup', JSON.stringify(state.weeklyBudgets));
-    } catch (e) {
-      console.error('localStorage backup failed:', e);
-    }
-  }
-
-async function loadWeeklyBudgets(data) {
-    try {
-      const backup = localStorage.getItem('weeklyBudgetsBackup');
-      if (backup) {
-        state.weeklyBudgets = JSON.parse(backup);
-      }
-    } catch (e) {
-      console.error('localStorage load failed:', e);
-    }
-
-    const budgetData = data.find(item => item.type === 'weeklyBudgets' || item.id === 'weeklyBudgets');
-    if (budgetData?.budgets) {
-      state.weeklyBudgets = budgetData.budgets;
-    } else {
-      const oldBudgets = data.filter(d => d.id && d.id.startsWith('weekBudget_'));
-      if (oldBudgets.length > 0) {
-        state.weeklyBudgets = {};
-        oldBudgets.forEach(b => {
-          if (b.weekStart) {
-            state.weeklyBudgets[b.weekStart] = (b.grocery || 0) + (b.takeout || 0);
-          }
-        });
-      }
-    }
-
-    if (!state.weeklyBudgets) state.weeklyBudgets = {};
-  }
-
-function showBudgetModal() {
-    const weekStart = state.budgetWeekStart || budgetGetWeekStart(getToday());
-    editWeeklyBudget(weekStart);
-  }
-function saveBudget() { /* replaced by saveWeeklyBudget */ }
-function showAddExpenseModal() { openAddExpenseModal(); }
-function saveExpense() { /* replaced by saveNewExpense */ }
 
 // ===== GROUP 4: INGREDIENT LIBRARY =====
 
@@ -3994,6 +3572,23 @@ function renderIngredientDetailHeader(name, knowledge, img, displayName, inInven
   }
 
 function renderIngredientDetailCooking(name, knowledge) {
+    const methods = knowledge.cookingMethods || [];
+
+    // Group methods by cutType
+    const groups = {};
+    methods.forEach((method, idx) => {
+      const groupKey = (method.cutType || '').trim() || 'General';
+      if (!groups[groupKey]) groups[groupKey] = [];
+      groups[groupKey].push({ ...method, _idx: idx });
+    });
+
+    // Sort: "General" first, then alphabetical
+    const groupKeys = Object.keys(groups).sort((a, b) => {
+      if (a === 'General') return -1;
+      if (b === 'General') return 1;
+      return a.localeCompare(b);
+    });
+
     return `
       <div class="rounded-xl mb-4" style="background:${CONFIG.surface_color}; box-shadow: ${CONFIG.shadow};">
         <div class="p-4" style="border-bottom: 1px solid rgba(255,255,255,0.06);">
@@ -4006,24 +3601,36 @@ function renderIngredientDetailCooking(name, knowledge) {
           </div>
         </div>
         <div class="p-4">
-          ${knowledge.cookingMethods && knowledge.cookingMethods.length > 0 ? `
-            <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
-              ${knowledge.cookingMethods.map((method, idx) => `
-                <div class="flex-shrink-0 p-3 rounded-lg" style="background:${CONFIG.background_color}; min-width: 160px; max-width: 200px;">
-                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                    <div style="color:${CONFIG.warning_color}; font-size:1.5rem;">\ud83d\udd25</div>
-                    <div style="color:${CONFIG.text_color}; font-weight:600; font-size: 15px;">${esc(method.method)}</div>
-                  </div>
-                  <div style="color:${CONFIG.text_color}; font-size: 14px; font-weight: 500; margin-bottom: 4px;">
-                    ${method.temp ? esc(method.temp) : ''}${method.temp && method.time ? ' \u2022 ' : ''}${esc(method.time)}
-                  </div>
-                  ${method.notes ? `<div style="color:${CONFIG.text_muted}; font-size: 12px; margin-bottom: 8px;">${esc(method.notes)}</div>` : ''}
-                  <button onclick="event.stopPropagation(); deleteCookingMethod('${esc(name)}', ${idx})"
-                    style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: none; border-radius: 4px; color: ${CONFIG.danger_color}; cursor: pointer; font-size: ${CONFIG.type_micro};">\ud83d\uddd1\ufe0f Remove</button>
+          ${methods.length > 0 ? groupKeys.map(groupKey => `
+            <div style="margin-bottom: 16px;">
+              ${groupKeys.length > 1 || groupKey !== 'General' ? `
+                <div style="color:${CONFIG.primary_action_color}; font-size:13px; font-weight:600; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                  ${esc(groupKey)}
                 </div>
-              `).join('')}
+              ` : ''}
+              <div style="display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; -webkit-overflow-scrolling: touch;">
+                ${groups[groupKey].map(method => `
+                  <div class="flex-shrink-0 p-3 rounded-lg" style="background:${CONFIG.background_color}; min-width: 160px; max-width: 220px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                      <div style="color:${CONFIG.warning_color}; font-size:1.5rem;">\ud83d\udd25</div>
+                      <div style="color:${CONFIG.text_color}; font-weight:600; font-size: 15px;">${esc(method.method)}</div>
+                    </div>
+                    ${method.cutType ? `<div style="color:${CONFIG.primary_action_color}; font-size:12px; font-weight:600; margin-bottom:4px;">${esc(method.cutType)}</div>` : ''}
+                    <div style="color:${CONFIG.text_color}; font-size: 14px; font-weight: 500; margin-bottom: 4px;">
+                      ${method.temp ? esc(method.temp) : ''}${method.temp && method.time ? ' \u2022 ' : ''}${esc(method.time)}
+                    </div>
+                    ${method.notes ? `<div style="color:${CONFIG.text_muted}; font-size: 12px; margin-bottom: 8px;">${esc(method.notes)}</div>` : ''}
+                    <div style="display:flex; gap:6px;">
+                      <button onclick="event.stopPropagation(); editCookingMethod('${esc(name)}', ${method._idx})"
+                        style="padding: 4px 8px; background: rgba(255,255,255,0.08); border: none; border-radius: 4px; color: ${CONFIG.text_muted}; cursor: pointer; font-size: ${CONFIG.type_micro};">✏️ Edit</button>
+                      <button onclick="event.stopPropagation(); deleteCookingMethod('${esc(name)}', ${method._idx})"
+                        style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: none; border-radius: 4px; color: ${CONFIG.danger_color}; cursor: pointer; font-size: ${CONFIG.type_micro};">\ud83d\uddd1\ufe0f Remove</button>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
             </div>
-          ` : `<div class="text-center p-6" style="color:${CONFIG.text_muted};">No cooking times added yet</div>`}
+          `).join('') : `<div class="text-center p-6" style="color:${CONFIG.text_muted};">No cooking times added yet</div>`}
         </div>
       </div>
     `;
@@ -4803,6 +4410,9 @@ function addCookingMethod(name) {
     openModal(`
       <div style="color: ${CONFIG.text_color};">
         <h2 class="text-xl font-bold mb-4">\ud83d\udd25 Add Cooking Method</h2>
+        <div class="mb-4"><label class="block mb-2 font-semibold">Cut or type (optional):</label>
+          <input type="text" id="newMethodCutType" class="w-full px-3 py-2 border rounded" placeholder="e.g., Drumsticks, Thighs, Ground" />
+        </div>
         <div class="mb-4"><label class="block mb-2 font-semibold">Method:</label>
           <select id="newMethodType" class="w-full px-3 py-2 border rounded">${COOKING_METHODS.map(m => `<option value="${m}">${m}</option>`).join('')}</select>
         </div>
@@ -4812,6 +4422,7 @@ function addCookingMethod(name) {
         </div>
         <div class="mb-4"><label class="block mb-2 font-semibold">Notes (optional):</label><input type="text" id="newMethodNotes" class="w-full px-3 py-2 border rounded" placeholder="e.g., flip halfway, until golden" /></div>
         <input type="hidden" id="methodIngName" value="${esc(name)}" />
+        <input type="hidden" id="methodEditIndex" value="-1" />
         <div class="flex gap-2 justify-end">
           <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button>
           <button onclick="saveCookingMethod()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.success_color}; color: white;">Add</button>
@@ -4822,21 +4433,61 @@ function addCookingMethod(name) {
 
 async function saveCookingMethod() {
     const name = document.getElementById('methodIngName').value;
-    const method = { method: document.getElementById('newMethodType').value, temp: document.getElementById('newMethodTemp').value.trim(), time: document.getElementById('newMethodTime').value.trim(), notes: document.getElementById('newMethodNotes').value.trim() };
+    const editIndex = parseInt(document.getElementById('methodEditIndex').value);
+    const cutType = document.getElementById('newMethodCutType').value.trim();
+    const method = {
+      method: document.getElementById('newMethodType').value,
+      temp: document.getElementById('newMethodTemp').value.trim(),
+      time: document.getElementById('newMethodTime').value.trim(),
+      notes: document.getElementById('newMethodNotes').value.trim(),
+      cutType: cutType || ''
+    };
     if (!method.time) { showError('Please enter a cooking time'); return; }
     let knowledge = getIngredientKnowledge(name);
     if (!knowledge) { knowledge = createDefaultIngredientKnowledge(name); }
     knowledge.cookingMethods = knowledge.cookingMethods || [];
-    knowledge.cookingMethods.push(method);
+    if (editIndex >= 0 && editIndex < knowledge.cookingMethods.length) {
+      knowledge.cookingMethods[editIndex] = method;
+    } else {
+      knowledge.cookingMethods.push(method);
+    }
     saveIngredientKnowledge(knowledge);
     closeModal();
-    showToast('Cooking method added!', 'success');
+    showToast(editIndex >= 0 ? 'Cooking method updated!' : 'Cooking method added!', 'success');
     requestAnimationFrame(() => render());
   }
 
 async function deleteCookingMethod(name, index) {
     const knowledge = getIngredientKnowledge(name);
     if (knowledge && knowledge.cookingMethods) { knowledge.cookingMethods.splice(index, 1); await saveIngredientKnowledge(knowledge); render(); }
+  }
+
+  function editCookingMethod(name, index) {
+    const knowledge = getIngredientKnowledge(name);
+    if (!knowledge || !knowledge.cookingMethods || !knowledge.cookingMethods[index]) return;
+    const m = knowledge.cookingMethods[index];
+    openModal(`
+      <div style="color: ${CONFIG.text_color};">
+        <h2 class="text-xl font-bold mb-4">\ud83d\udd25 Edit Cooking Method</h2>
+        <div class="mb-4"><label class="block mb-2 font-semibold">Cut or type (optional):</label>
+          <input type="text" id="newMethodCutType" class="w-full px-3 py-2 border rounded" placeholder="e.g., Drumsticks, Thighs, Ground" value="${esc(m.cutType || '')}" />
+        </div>
+        <div class="mb-4"><label class="block mb-2 font-semibold">Method:</label>
+          <select id="newMethodType" class="w-full px-3 py-2 border rounded">${COOKING_METHODS.map(cm => `<option value="${cm}" ${cm === m.method ? 'selected' : ''}>${cm}</option>`).join('')}</select>
+        </div>
+        <div class="grid grid-cols-2 gap-4 mb-4">
+          <div><label class="block mb-2 font-semibold">Temperature:</label><input type="text" id="newMethodTemp" class="w-full px-3 py-2 border rounded" placeholder="e.g., 400\u00b0F, Med-Hi" value="${esc(m.temp || '')}" /></div>
+          <div><label class="block mb-2 font-semibold">Time:</label><input type="text" id="newMethodTime" class="w-full px-3 py-2 border rounded" placeholder="e.g., 15-20 min" value="${esc(m.time || '')}" /></div>
+        </div>
+        <div class="mb-4"><label class="block mb-2 font-semibold">Notes (optional):</label><input type="text" id="newMethodNotes" class="w-full px-3 py-2 border rounded" placeholder="e.g., flip halfway, until golden" value="${esc(m.notes || '')}" /></div>
+        <input type="hidden" id="methodIngName" value="${esc(name)}" />
+        <input type="hidden" id="methodEditIndex" value="${index}" />
+        <div class="flex gap-2 justify-end">
+          <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button>
+          <button onclick="saveCookingMethod()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.success_color}; color: white;">Save</button>
+        </div>
+      </div>
+    `);
   }
 
 function addTechnique(name) {
@@ -4984,19 +4635,21 @@ const VIEW_RENDERERS = {
   'kitchen': renderKitchen,
   'kitchen-detail': renderKitchenDetail,
   'kitchen-ingredient-meals': renderKitchenIngredientMeals,
-  'inventory': renderInventory,
-  'budget-dashboard': renderBudget,
-  'ingredient-detail': renderIngredientDetail,
-  'ingredients': renderIngredientLibrary
+  'ingredient-detail': renderIngredientDetail
 };
 
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
 
+  if (state.currentView === 'inventory') {
+    state.kitchenActiveTab = 'inventory';
+    state.currentView = 'kitchen';
+  }
   if (state.currentView === 'ingredients') {
+    state.kitchenActiveTab = 'inventory';
     state.pantryTab = 'ingredients';
-    state.currentView = 'inventory';
+    state.currentView = 'kitchen';
   }
 
   const renderer = VIEW_RENDERERS[state.currentView];
@@ -5023,91 +4676,6 @@ function render() {
   `;
 
   if (state.currentView === 'kitchen') initKitchenCardSwipeGestures();
-}
-
-// ============================================================
-// MISSING FUNCTIONS (extracted from index.original.html)
-// ============================================================
-
-async function deleteExpense(expenseId) {
-  const expense = state.budgetExpenses.find(e => e.id === expenseId);
-  if (!expense) return;
-
-  state.isLoading = true;
-  render();
-
-  try {
-    await storage.delete(expense);
-    showToast('Expense deleted', 'success');
-  } catch (e) {
-    console.error(e);
-    showError('Failed to delete expense');
-  } finally {
-    state.isLoading = false;
-    render();
-  }
-}
-
-function getWeekExpenses(weekStartDate) {
-  return {
-    grocery: 0, takeout: 0, total: 0, expenses: [],
-    budget: state.weeklyBudgets?.[weekStartDate] || 0,
-    groceryBudget: 0, takeoutBudget: 0
-  };
-}
-
-function showManageExpensesModal() {
-  const expenses = state.budgetExpenses.sort((a, b) => {
-    const dateDiff = new Date(b.date) - new Date(a.date);
-    if (dateDiff !== 0) return dateDiff;
-    return new Date(b.createdAt || b.created_at || 0) - new Date(a.createdAt || a.created_at || 0);
-  });
-
-  openModal(`
-    <div style="color: ${CONFIG.text_color};">
-      <h2 class="text-2xl font-bold mb-4">💰 Manage Expenses</h2>
-
-      ${expenses.length === 0 ? `
-        <div class="p-8 text-center" style="color: ${CONFIG.text_muted};">
-          No expenses logged yet
-        </div>
-      ` : `
-        <div class="max-h-96 overflow-y-auto space-y-2">
-          ${expenses.map(exp => {
-            const [y,m,d] = exp.date.split('-');
-            const formattedDate = m + '/' + d + '/' + y;
-            return `
-            <div class="flex items-center justify-between p-3 rounded" style="background: ${CONFIG.surface_color};">
-              <div class="flex items-center gap-3 flex-1">
-                <span style="font-size:1.5rem;">${exp.type === 'grocery' ? '🛒' : '🍔'}</span>
-                <div>
-                  <div class="font-semibold">$${exp.amount.toFixed(2)}</div>
-                  <div class="text-sm" style="color: ${CONFIG.text_muted};">${formattedDate}</div>
-                  <div class="text-sm" style="color: ${CONFIG.text_muted};">${exp.note || ''}</div>
-                </div>
-              </div>
-              <div class="flex gap-2">
-                <button onclick="editExpense('${exp.id}')"
-                        class="px-3 py-1 rounded button-hover text-sm" style="background: ${CONFIG.primary_action_color}; color: white;">
-                  Edit
-                </button>
-                <button onclick="if(confirm('Delete this expense?')) deleteExpense('${exp.id}')"
-                        class="px-3 py-1 rounded button-hover text-sm" style="background: ${CONFIG.danger_color}; color: white;">
-                  Delete
-                </button>
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      `}
-
-      <div class="flex gap-2 justify-end mt-4">
-        <button onclick="closeModal()" class="px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">
-          Close
-        </button>
-      </div>
-    </div>
-  `);
 }
 
 function showSplitInventoryItem(itemId) {
@@ -5177,11 +4745,11 @@ async function confirmSplitInventoryItem(itemId) {
       id: `inv_${Date.now()}_freeze_${i}_${Math.random().toString(36).slice(2)}`,
       quantity: 1,
       isFrozen: true,
-      frozenDate: new Date().toISOString().split('T')[0],
+      frozenDate: getToday(),
       expirationDate: (() => {
         const d = new Date();
         d.setDate(d.getDate() + 90);
-        return d.toISOString().split('T')[0];
+        return _localDateStr(d);
       })()
     });
   }
@@ -5217,7 +4785,12 @@ function init() {
   loadAllState();
   loadCustomIngredientImages();
   const targetView = sessionStorage.getItem('yummy_target_view');
-  if (targetView && VIEW_RENDERERS[targetView]) {
+  if (targetView === 'inventory' || targetView === 'ingredients') {
+    sessionStorage.removeItem('yummy_target_view');
+    state.kitchenActiveTab = 'inventory';
+    if (targetView === 'ingredients') state.pantryTab = 'ingredients';
+    state.currentView = 'kitchen';
+  } else if (targetView && VIEW_RENDERERS[targetView]) {
     sessionStorage.removeItem('yummy_target_view');
     state.currentView = targetView;
   } else {

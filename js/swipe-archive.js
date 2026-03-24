@@ -1,0 +1,1386 @@
+// ============================================================
+// SWIPE/TINDER FEATURE - ARCHIVED
+// This code was the tinder-style card swiping feature on the home page.
+// Archived on 2026-03-23. Can be restored by uncommenting and
+// re-integrating into home.js.
+// ============================================================
+
+/*
+function renderSwipeTab() {
+  const dateStr = state.viewingDate;
+  const mealType = state.swipeMealType || detectMealType();
+  if (!state.swipeMealType) state.swipeMealType = mealType;
+
+  if (!state.swipeDeck || state.swipeDeck.length === 0) {
+    state.swipeDeck = state.swipeSettings.setupCompleted
+      ? buildSwipeDeckFiltered(state.swipeMealType)
+      : buildSwipeDeck(state.swipeMealType);
+    state.swipeIndex = 0;
+  }
+
+  const deck = state.swipeDeck;
+  const idx = state.swipeIndex;
+
+  if (!deck || deck.length === 0) {
+    const hasRecipes = state.recipes.filter(r => !r.isDraft && !r.isTip).length > 0;
+    return `
+      <div style="padding: 32px 12px; text-align: center;">
+        <div style="font-size: 36px; margin-bottom: ${CONFIG.space_md};">🍽️</div>
+        <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: ${CONFIG.space_sm};">${hasRecipes ? 'No recipes selected' : 'No Recipes Available'}</div>
+        <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: ${CONFIG.space_lg};">${hasRecipes ? 'Tap below to choose which recipes appear in your swipe deck.' : 'Add some recipes first, then set up your meals.'}</div>
+        <button onclick="navigateTo('${hasRecipes ? 'swipe-setup' : 'recipes'}')" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+          ${hasRecipes ? 'Set Up Your Meals' : 'Go to Recipes'}
+        </button>
+      </div>
+    `;
+  }
+
+  const recipe = deck[idx];
+  const img = recipeThumb(recipe);
+  const ings = recipeIngList(recipe);
+  const ingCount = ings.length;
+  const category = recipe.category || 'Other';
+  const nextRecipe = idx + 1 < deck.length ? deck[idx + 1] : null;
+  const nextImg = nextRecipe ? recipeThumb(nextRecipe) : '';
+  const dayData = getDayData(dateStr);
+  const isFutureDay = isFutureDate(dateStr);
+  const mealLabel = capitalize(mealType);
+
+  return `
+    <div style="padding: 0 12px; flex: 1; min-height: 0; display: flex; flex-direction: column;">
+      <div style="text-align: center; margin-bottom: 4px; flex-shrink: 0;">
+        <div style="font-size: 12px; font-weight: 400; color: rgba(255,255,255,0.6);">What's for</div>
+        <div style="font-size: 15px; font-weight: 600; color: #ffffff;">${mealLabel}</div>
+      </div>
+
+      <div style="display: flex; gap: 6px; justify-content: center; margin-bottom: 4px; flex-shrink: 0;">
+        ${['breakfast', 'lunch', 'dinner'].map(mt => {
+          const active = mt === state.swipeMealType;
+          const alreadySelected = dayData.meals[mt].status !== 'none';
+          return `
+            <button onclick="state.swipeMealType='${mt}'; state.swipeDeck=state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered('${mt}') : buildSwipeDeck('${mt}'); state.swipeIndex=0; render(); setTimeout(initSwipeGestures, 100);"
+              style="padding: 6px 12px; border-radius: 20px; border: 1px solid ${active ? 'rgba(232, 93, 93, 0.4)' : 'rgba(255,255,255,0.15)'}; background: ${active ? 'rgba(232, 93, 93, 0.15)' : 'transparent'}; color: ${active ? '#e85d5d' : 'rgba(255,255,255,0.6)'}; font-size: 13px; font-weight: ${active ? '600' : '400'}; cursor: pointer; transition: all 0.2s ease; position: relative;">
+              ${capitalize(mt)}
+              ${alreadySelected ? `<span style="position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; background: ${CONFIG.success_color}; border-radius: 50%;"></span>` : ''}
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      <div style="display:flex; gap:6px; justify-content:center; margin-bottom:8px; flex-shrink: 0;">
+        ${renderSwipeEffortPills()}
+      </div>
+
+      <div class="swipe-container">
+        ${nextRecipe ? `
+          <div style="position: absolute; top: 4px; left: 28px; right: 28px; bottom: 4px; background: ${CONFIG.surface_color}; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.2); overflow: hidden; transform: scale(0.97); opacity: 0.6;">
+            ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #1a1a24, #242432); padding:16px;"><span style="color:#f5f5f7;font-size:16px;font-weight:600;text-align:center;">${esc(nextRecipe.title)}</span></div>`}
+          </div>
+        ` : ''}
+
+        <div class="swipe-card entering" data-active="true">
+          <div class="swipe-tint like"></div>
+          <div class="swipe-tint nope"></div>
+          <div class="swipe-overlay like">SMASH</div>
+          <div class="swipe-overlay nope">PASS</div>
+          ${img ? `<img class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="card-image-placeholder" style="display:none;"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
+          ${typeof recipeHasVideo === 'function' && recipeHasVideo(recipe.__backendId || recipe.id) ? `<div style="position:absolute; top:12px; left:12px; z-index:3; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;"><svg width="12" height="12" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg></div>` : ''}
+          <div class="card-body">
+            <div class="card-title">${esc(recipe.title)}</div>
+            <div class="card-meta">
+              <span>${esc(category)}</span>
+              ${ingCount > 0 ? `<span>${ingCount} ingredients</span>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: center; gap: 12px; padding: 8px 0; flex-shrink: 0;">
+        <button id="swipe-btn-nope" onclick="handleHomeSwipeLeft()" class="card-press" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(255, 69, 58, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #ff453a; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent;">
+          ✕
+        </button>
+        <button onclick="openRecipeView('${recipe.__backendId || recipe.id}'); state.viewingFromSwipe = true;" class="card-press" style="width: 36px; height: 36px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.15); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; color: rgba(255,255,255,0.6); transition: all 0.2s ease; -webkit-tap-highlight-color: transparent;">
+          👁️
+        </button>
+        <button id="swipe-btn-like" onclick="handleHomeSwipeRight()" class="card-press" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(50, 215, 75, 0.3); background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #32d74b; transition: all 0.2s ease; -webkit-tap-highlight-color: transparent;">
+          ♥
+        </button>
+      </div>
+
+      <div class="swipe-hint-arrows" style="flex-shrink: 0; padding-bottom: 4px;">
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Pass</span>
+        <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Smash →</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderSwipeEffortPills() {
+  const effortFilter = state.swipeEffortFilter || 'all';
+  const pills = [
+    { id: 'all', label: 'All', color: null },
+    { id: 'lazy', label: 'Lazy', color: EFFORT_LEVELS.lazy },
+    { id: 'moderate', label: 'Moderate', color: EFFORT_LEVELS.moderate },
+    { id: 'timely', label: 'Timely', color: EFFORT_LEVELS.timely }
+  ];
+  return pills.map(p => {
+    const active = effortFilter === p.id;
+    const border = active ? (p.color ? p.color.border : 'rgba(232,93,93,0.4)') : 'rgba(255,255,255,0.1)';
+    const bg = active ? (p.color ? p.color.bg : 'rgba(232,93,93,0.15)') : 'transparent';
+    const txt = active ? (p.color ? p.color.color : '#e85d5d') : 'rgba(255,255,255,0.5)';
+    return `<button onclick="state.swipeEffortFilter='${p.id}'; state.swipeDeck=state.swipeSettings?.setupCompleted ? buildSwipeDeckFiltered(state.swipeMealType) : buildSwipeDeck(state.swipeMealType); state.swipeIndex=0; render(); setTimeout(initSwipeGestures, 100);"
+      style="padding:4px 10px; border-radius:14px; border:1px solid ${border}; background:${bg}; color:${txt}; font-size:11px; font-weight:${active ? '600' : '400'}; cursor:pointer;">${p.label}</button>`;
+  }).join('');
+}
+
+function renderSwipeSetupPrompt() {
+  return `
+    <div style="text-align: center; padding-top: ${CONFIG.space_2xl};">
+      <div style="width: 64px; height: 64px; background: ${CONFIG.primary_subtle}; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin: 0 auto ${CONFIG.space_md};">
+        <svg width="32" height="32" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.429 9.75L2.25 12l4.179 2.25m0-4.5l5.571 3 5.571-3m-11.142 0L2.25 7.5 12 2.25l9.75 5.25-4.179 2.25m0 0L12 12.75 6.429 9.75m11.142 0l4.179 2.25-9.75 5.25-9.75-5.25 4.179-2.25"/></svg>
+      </div>
+      <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_header}; font-weight: ${CONFIG.type_header_weight}; margin-bottom: ${CONFIG.space_xs};">Set Up Your Meals</div>
+      <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; max-width: 260px; margin: 0 auto ${CONFIG.space_lg};">Pick which recipes appear for each meal type to start swiping.</div>
+      <button onclick="navigateTo('swipe-setup')" style="padding: 14px 32px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+        Get Started
+      </button>
+    </div>
+  `;
+}
+
+function renderSwipeSetup() {
+  const recipes = state.recipes.filter(r => !r.isDraft && !r.isTip);
+
+  if (recipes.length === 0) {
+    return `
+      <div style="background: ${CONFIG.background_color}; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px;">
+        <div style="width: 80px; height: 80px; background: ${CONFIG.surface_color}; border-radius: 20px; display: flex; align-items: center; justify-content: center; margin-bottom: 24px;">
+          <svg width="40" height="40" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+        </div>
+        <div style="color: ${CONFIG.text_color}; font-size: 20px; font-weight: 700; margin-bottom: 8px;">You need recipes first!</div>
+        <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_body}; text-align: center; margin-bottom: 32px; max-width: 280px;">Add some recipes, then come back to set up your swipe options.</div>
+        <button onclick="navigateTo('recipes')" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 14px 32px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+          Add Recipes
+        </button>
+      </div>
+    `;
+  }
+
+  const hasAnySelections = ['breakfast', 'lunch', 'dinner', 'snack'].some(m => state.swipeSettings[m].length > 0);
+  let showDefaults = false;
+  if (!hasAnySelections && !state.swipeSettings.setupCompleted) {
+    const defaults = getSmartDefaults();
+    state.swipeSettings.breakfast = defaults.breakfast;
+    state.swipeSettings.lunch = defaults.lunch;
+    state.swipeSettings.dinner = defaults.dinner;
+    state.swipeSettings.snack = defaults.snack;
+    showDefaults = true;
+  }
+
+  const mealSections = [
+    { key: 'breakfast', label: 'Breakfast', emoji: '🌅' },
+    { key: 'lunch', label: 'Lunch', emoji: '☀️' },
+    { key: 'dinner', label: 'Dinner', emoji: '🌙' },
+    { key: 'snack', label: 'Snacks', emoji: '🍿' }
+  ];
+
+  return `
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding-bottom: 56px;">
+      <div style="padding: ${CONFIG.space_md} 8px 8px;">
+        ${state.swipeSettings.setupCompleted ? `
+          <button onclick="navigateTo('swipe')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 20px; cursor: pointer; margin-bottom: 4px;">←</button>
+        ` : ''}
+        <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_title}; font-weight: ${CONFIG.type_title_weight}; letter-spacing: ${CONFIG.type_title_tracking};">
+          Set Up Your Meals
+        </div>
+        <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_body}; margin-top: 2px;">
+          Choose which recipes appear when you swipe
+        </div>
+        ${showDefaults ? `
+          <div style="background: rgba(232,93,93,0.1); border-radius: 10px; padding: 8px 12px; margin-top: 8px;">
+            <span style="color: ${CONFIG.primary_action_color}; font-size: ${CONFIG.type_caption}; font-weight: 500;">We picked some defaults. Adjust as needed.</span>
+          </div>
+        ` : ''}
+      </div>
+
+      <div style="padding: 0 8px;">
+        <div style="margin-bottom: 8px;">
+          <input type="text" placeholder="Search recipes..."
+            value="${esc(state.swipeSetupSearchTerm || '')}"
+            oninput="state.swipeSetupSearchTerm = this.value; if(state.swipeSetupExpandedSection) renderSwipeSetupSection(state.swipeSetupExpandedSection);"
+            style="width: 100%; padding: 10px 12px; border-radius: 10px; font-size: ${CONFIG.type_body}; box-sizing: border-box; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: none;" />
+          <div style="display: flex; gap: 6px; margin-top: 6px; overflow-x: auto;">
+            ${[
+              { key: 'all', label: 'All' },
+              { key: 'favorites', label: 'Favorites' },
+              { key: 'remixed', label: 'Remixed' },
+              { key: 'quick', label: 'Quick <30min' },
+              { key: 'have-ingredients', label: 'Have Ingredients' }
+            ].map(f => `
+              <button onclick="state.swipeSetupFilter = '${f.key}'; if(state.swipeSetupExpandedSection) renderSwipeSetupSection(state.swipeSetupExpandedSection); else render();"
+                style="padding: 6px 14px; border-radius: 20px; border: 1px solid ${state.swipeSetupFilter === f.key ? CONFIG.primary_action_color : 'rgba(255,255,255,0.1)'}; background: ${state.swipeSetupFilter === f.key ? CONFIG.primary_action_color : 'transparent'}; color: ${state.swipeSetupFilter === f.key ? 'white' : CONFIG.text_muted}; font-size: 12px; font-weight: 500; cursor: pointer; white-space: nowrap; flex-shrink: 0;">
+                ${f.label}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+
+        ${mealSections.map(section => {
+          const count = state.swipeSettings[section.key].length;
+          const isExpanded = state.swipeSetupExpandedSection === section.key;
+
+          return `
+            <div style="margin-bottom: 8px;">
+              <button onclick="toggleSwipeSetupSection('${section.key}')"
+                style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: ${CONFIG.surface_color}; border-radius: ${isExpanded ? '12px 12px 0 0' : '12px'}; border: none; cursor: pointer;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="font-size: 18px;">${section.emoji}</span>
+                  <span style="color: ${CONFIG.text_color}; font-size: 15px; font-weight: 600;">${section.label}</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="color: ${count > 0 ? CONFIG.text_muted : CONFIG.warning_color}; font-size: 13px;">${count} recipe${count !== 1 ? 's' : ''}</span>
+                  <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="2" viewBox="0 0 24 24" style="transform: rotate(${isExpanded ? '180' : '0'}deg); transition: transform 0.2s;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
+                  </svg>
+                </div>
+              </button>
+              ${isExpanded ? `
+                <div id="swipe-setup-${section.key}" style="background: ${CONFIG.surface_color}; padding: 6px 8px 8px; border-radius: 0 0 12px 12px;">
+                </div>
+              ` : ''}
+              ${count === 0 && !isExpanded ? `
+                <div style="padding: 4px 16px; color: ${CONFIG.warning_color}; font-size: 12px;">No recipes selected for ${section.label.toLowerCase()}</div>
+              ` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+
+      <div style="position: fixed; bottom: 0; left: 0; right: 0; padding: 16px; background: linear-gradient(transparent, ${CONFIG.background_color} 30%); z-index: 30;">
+        <button onclick="completeSwipeSetup()"
+          style="width: 100%; padding: 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 14px; font-size: 17px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 16px rgba(232,93,93,0.3);">
+          ${state.swipeSettings.setupCompleted ? 'Save Changes' : 'Done'}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderSwipeSetupSection(mealType) {
+  const container = document.getElementById(`swipe-setup-${mealType}`);
+  if (!container) return;
+  const recipes = getFilteredSetupRecipes();
+  const selected = state.swipeSettings[mealType] || [];
+
+  container.innerHTML = `
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+      <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">${selected.length} selected</span>
+      <div style="display: flex; gap: 12px;">
+        <button onclick="selectAllSwipeRecipes('${mealType}')" style="background: none; border: none; color: ${CONFIG.primary_action_color}; font-size: ${CONFIG.type_caption}; cursor: pointer;">Select all</button>
+        <button onclick="deselectAllSwipeRecipes('${mealType}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; cursor: pointer;">Clear</button>
+      </div>
+    </div>
+    <div class="recipe-select-grid">
+      ${recipes.map(r => {
+        const id = r.__backendId || r.id;
+        const isSelected = selected.includes(id);
+        const img = recipeThumb(r);
+        return `
+          <div onclick="toggleSwipeSetupRecipe('${mealType}', '${id}')" style="cursor: pointer;">
+            <div class="rs-thumb" style="border: 2px solid ${isSelected ? CONFIG.primary_action_color : 'transparent'}; transition: border-color 0.2s; background: ${CONFIG.surface_elevated};">
+              <div style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;">
+                <svg width="22" height="22" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-12.75H6A2.25 2.25 0 003.75 6v12a2.25 2.25 0 002.25 2.25h12A2.25 2.25 0 0020.25 18V6A2.25 2.25 0 0018 3.75"/></svg>
+              </div>
+              ${img ? `<img loading="lazy" src="${esc(img)}" style="position: relative;" onerror="this.style.display='none'" />` : ''}
+              ${isSelected ? `<div style="position: absolute; top: 3px; right: 3px; width: 18px; height: 18px; background: ${CONFIG.primary_action_color}; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.4);">
+                <svg width="10" height="10" fill="none" stroke="white" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
+              </div>` : ''}
+              ${r._isRemix ? `<div style="position: absolute; top: 3px; left: 3px; background: rgba(232,93,93,0.9); color: white; font-size: 7px; font-weight: 700; padding: 1px 3px; border-radius: 3px; letter-spacing: 0.3px; text-transform: uppercase;">Remix</div>` : ''}
+            </div>
+            <div class="rs-name">${esc(r.title)}</div>
+          </div>
+        `;
+      }).join('')}
+      ${recipes.length === 0 ? `<div style="grid-column: 1 / -1; text-align: center; padding: 20px; color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">No recipes match your filters</div>` : ''}
+    </div>
+  `;
+}
+
+function renderSwipeConfirm() {
+  const sel = state.currentMealSelection;
+  if (!sel) return renderSwipe();
+
+  const recipe = getRecipeById(sel.recipeId);
+  if (!recipe) return renderSwipe();
+
+  const img = recipeThumb(recipe);
+  const mealEmoji = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍿' }[sel.mealType] || '🍽️';
+  const mealLabel = capitalize(sel.mealType);
+  const ings = recipeIngList(recipe);
+
+  return `
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding: 20px; padding-bottom: 56px;">
+      <div class="max-w-md mx-auto confirm-pop">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <div style="font-size: 48px; margin-bottom: 8px;">🎉</div>
+          <div style="font-size: 20px; font-weight: 700; color: ${CONFIG.text_color};">Great Choice!</div>
+          <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-top: 4px;">Added to your ${mealLabel} plan</div>
+        </div>
+
+        <div style="background: ${CONFIG.surface_color}; border-radius: 20px; overflow: hidden; box-shadow: ${CONFIG.shadow}; margin-bottom: 20px;">
+          ${img ? `<img loading="lazy" src="${esc(img)}" style="width: 100%; height: 200px; object-fit: cover;" />` : `<div style="height: 200px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1a1a24, #242432);"><span style="color:#f5f5f7;font-size:24px;font-weight:700;text-align:center;padding:24px;">${esc(recipe.title)}</span></div>`}
+          <div style="padding: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <span style="font-size: 18px;">${mealEmoji}</span>
+              <span style="background: ${CONFIG.primary_action_color}; color: white; padding: 2px 10px; border-radius: 12px; font-size: ${CONFIG.type_micro}; font-weight: ${CONFIG.type_micro_weight};">${mealLabel}</span>
+            </div>
+            <div style="font-size: 20px; font-weight: 700; color: ${CONFIG.text_color}; margin-bottom: 8px;">${esc(recipe.title)}</div>
+            ${ings.length > 0 ? `
+              <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption};">
+                ${ings.slice(0, 5).map(i => esc(i.name)).join(', ')}${ings.length > 5 ? ` +${ings.length - 5} more` : ''}
+              </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button onclick="openRecipeView('${recipe.__backendId || recipe.id}')" style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            View Full Recipe
+          </button>
+          <button onclick="startSwipe('${sel.mealType}')" style="width: 100%; padding: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; font-size: 15px; font-weight: 500; cursor: pointer;">
+            Pick Another
+          </button>
+          <button onclick="navigateTo('swipe')" style="width: 100%; padding: 14px; background: transparent; color: ${CONFIG.text_muted}; border: none; border-radius: 12px; font-size: 14px; cursor: pointer;">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSwipeHome() {
+  if (!state.swipeSettings.setupCompleted) {
+    return renderSwipeSetup();
+  }
+  if (hasSelectedMealForCurrentSlot()) {
+    return renderAlreadySelected();
+  }
+  return renderSwipeCards_legacy();
+}
+
+function initSwipeGestures() {
+  setTimeout(() => {
+    const card = document.querySelector('.swipe-card[data-active="true"]');
+    if (!card) return;
+
+    let startX = 0, startY = 0, currentX = 0, isDragging = false;
+    const cardWidth = card.offsetWidth || 300;
+    const appearThreshold = cardWidth * 0.30;
+    const commitThreshold = cardWidth * 0.60;
+
+    const likeBtn = document.getElementById('swipe-btn-like');
+    const nopeBtn = document.getElementById('swipe-btn-nope');
+
+    const onStart = (x, y) => {
+      startX = x;
+      startY = y;
+      currentX = 0;
+      isDragging = true;
+      card.classList.add('dragging');
+      card.style.transition = 'none';
+    };
+
+    const onMove = (x) => {
+      if (!isDragging) return;
+      currentX = x - startX;
+      const rotation = currentX * 0.08;
+      card.style.transform = `translateX(${currentX}px) rotate(${rotation}deg)`;
+
+      const absDrag = Math.abs(currentX);
+      const likeOverlay = card.querySelector('.swipe-overlay.like');
+      const nopeOverlay = card.querySelector('.swipe-overlay.nope');
+      const likeTint = card.querySelector('.swipe-tint.like');
+      const nopeTint = card.querySelector('.swipe-tint.nope');
+
+      // Calculate opacity: 0 at 30%, 1 at 60%
+      const progress = Math.max(0, Math.min((absDrag - appearThreshold) / (commitThreshold - appearThreshold), 1));
+
+      if (currentX > 0) {
+        if (likeOverlay) likeOverlay.style.opacity = progress;
+        if (nopeOverlay) nopeOverlay.style.opacity = 0;
+        if (likeTint) likeTint.style.opacity = progress * 0.7;
+        if (nopeTint) nopeTint.style.opacity = 0;
+        if (likeBtn && absDrag > commitThreshold) { likeBtn.classList.add('swipe-btn-glow-green'); } else if (likeBtn) { likeBtn.classList.remove('swipe-btn-glow-green'); }
+        if (nopeBtn) nopeBtn.classList.remove('swipe-btn-glow-red');
+      } else {
+        if (nopeOverlay) nopeOverlay.style.opacity = progress;
+        if (likeOverlay) likeOverlay.style.opacity = 0;
+        if (nopeTint) nopeTint.style.opacity = progress * 0.7;
+        if (likeTint) likeTint.style.opacity = 0;
+        if (nopeBtn && absDrag > commitThreshold) { nopeBtn.classList.add('swipe-btn-glow-red'); } else if (nopeBtn) { nopeBtn.classList.remove('swipe-btn-glow-red'); }
+        if (likeBtn) likeBtn.classList.remove('swipe-btn-glow-green');
+      }
+    };
+
+    const onEnd = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      card.classList.remove('dragging');
+      if (likeBtn) likeBtn.classList.remove('swipe-btn-glow-green');
+      if (nopeBtn) nopeBtn.classList.remove('swipe-btn-glow-red');
+
+      if (currentX > commitThreshold) {
+        state.currentView === 'home' ? handleHomeSwipeRight() : handleSwipeRight();
+      } else if (currentX < -commitThreshold) {
+        state.currentView === 'home' ? handleHomeSwipeLeft() : handleSwipeLeft();
+      } else {
+        card.style.transition = 'transform 0.3s ease';
+        card.style.transform = 'translateX(0) rotate(0deg)';
+        const likeOverlay = card.querySelector('.swipe-overlay.like');
+        const nopeOverlay = card.querySelector('.swipe-overlay.nope');
+        const likeTint = card.querySelector('.swipe-tint.like');
+        const nopeTint = card.querySelector('.swipe-tint.nope');
+        if (likeOverlay) likeOverlay.style.opacity = 0;
+        if (nopeOverlay) nopeOverlay.style.opacity = 0;
+        if (likeTint) likeTint.style.opacity = 0;
+        if (nopeTint) nopeTint.style.opacity = 0;
+      }
+    };
+
+    card.addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      onStart(t.clientX, t.clientY);
+    }, { passive: true });
+
+    card.addEventListener('touchmove', (e) => {
+      const t = e.touches[0];
+      onMove(t.clientX);
+    }, { passive: true });
+
+    card.addEventListener('touchend', onEnd);
+
+    card.addEventListener('mousedown', (e) => {
+      onStart(e.clientX, e.clientY);
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      onMove(e.clientX);
+    });
+
+    document.addEventListener('mouseup', onEnd);
+  }, 50);
+}
+
+function handleHomeSwipeLeft() {
+  const deck = state.swipeDeck;
+  const idx = state.swipeIndex;
+  if (idx >= deck.length) return;
+  const card = document.querySelector('.swipe-card[data-active="true"]');
+  const advance = () => {
+    state.swipeIndex++;
+    if (state.swipeIndex >= deck.length) {
+      state.swipeIndex = 0;
+    }
+    render();
+    setTimeout(initSwipeGestures, 100);
+  };
+  if (card) {
+    // Flash the PASS overlay and red tint before flying off
+    const nopeOverlay = card.querySelector('.swipe-overlay.nope');
+    const nopeTint = card.querySelector('.swipe-tint.nope');
+    if (nopeOverlay) nopeOverlay.style.opacity = 1;
+    if (nopeTint) nopeTint.style.opacity = 0.7;
+    card.classList.add('fly-left');
+    setTimeout(advance, 300);
+  } else {
+    advance();
+  }
+}
+
+function handleHomeSwipeRight() {
+  const deck = state.swipeDeck;
+  const idx = state.swipeIndex;
+  if (idx >= deck.length) return;
+  const recipe = deck[idx];
+  const card = document.querySelector('.swipe-card[data-active="true"]');
+  const doLog = () => {
+    const dateStr = state.viewingDate || getToday();
+    const mealType = state.swipeMealType || detectMealType();
+    const ings = recipe._isBatchRecipe ? [] : recipeIngList(recipe);
+    const newName = recipe.title || recipe.name || 'Recipe';
+    const batchId = recipe._isBatchRecipe ? recipe._batchId : null;
+
+    if (state._swapTargetLogId) {
+      const oldLog = getFoodLog().find(e => e.id === state._swapTargetLogId);
+      const oldName = oldLog ? oldLog.recipeName : 'old meal';
+      deleteFoodLogEntry(state._swapTargetLogId);
+      const entry = addFoodLogEntry({
+        recipeId: recipe.__backendId || recipe.id,
+        recipeName: newName,
+        image: recipeThumb(recipe),
+        ingredients: ings.map(i => i.name),
+        category: recipe.category || 'Other',
+        mealType: state._swapMealType || mealType,
+        dateStr: state._swapDateStr || dateStr,
+        status: 'planned',
+        batchId: batchId
+      });
+      showToast(`Swapped! ${oldName} → ${newName}`, 'success');
+      state._swapTargetLogId = null;
+      state._swapMealType = null;
+      state._swapDateStr = null;
+      state._returnToFoodLog = true;
+      state._lastLoggedEntryId = entry.id;
+    } else {
+      const entry = addFoodLogEntry({
+        recipeId: recipe.__backendId || recipe.id,
+        recipeName: newName,
+        image: recipeThumb(recipe),
+        ingredients: ings.map(i => i.name),
+        category: recipe.category || 'Other',
+        mealType: mealType,
+        dateStr: dateStr,
+        status: 'planned',
+        batchId: batchId
+      });
+      const dateLabel = getFoodLogDateLabel(dateStr);
+      const mealLabel = capitalize(mealType);
+      showToast(`Added to ${mealLabel} on ${dateLabel}`, 'success');
+      state._lastLoggedEntryId = entry.id;
+    }
+
+    state.swipeIndex++;
+    if (state.swipeIndex >= deck.length) {
+      state.swipeIndex = 0;
+    }
+
+    if (state._returnToFoodLog) {
+      state._returnToFoodLog = false;
+      navigateTo('my-meals');
+      return;
+    }
+    render();
+    setTimeout(initSwipeGestures, 100);
+  };
+  if (card) {
+    // Flash the SMASH overlay and green tint before flying off
+    const likeOverlay = card.querySelector('.swipe-overlay.like');
+    const likeTint = card.querySelector('.swipe-tint.like');
+    if (likeOverlay) likeOverlay.style.opacity = 1;
+    if (likeTint) likeTint.style.opacity = 0.7;
+    card.classList.add('fly-right');
+    setTimeout(doLog, 300);
+  } else {
+    doLog();
+  }
+}
+
+async function confirmHomeSwipeSelection(recipeId) {
+  const meal = state.swipeContext.mealType || state.swipeMealType || state.todaySwipeMealSlot;
+  const dateStr = state.swipeContext.forDate || state.viewingDate;
+  if (!meal) return;
+
+  const dayData = getDayData(dateStr);
+  dayData.meals[meal].status = 'selected';
+  dayData.meals[meal].plannedRecipeId = recipeId;
+  dayData.meals[meal].selectedAt = Date.now();
+
+  let plan = state.planData.find(p => p.date === dateStr);
+  if (!plan) {
+    plan = { id: `plan_${dateStr}`, type: 'plan', date: dateStr, breakfast: [], lunch: [], dinner: [] };
+    state.planData.push(plan);
+  }
+  if (!Array.isArray(plan[meal])) plan[meal] = [];
+  if (!plan[meal].includes(recipeId)) plan[meal].push(recipeId);
+
+  state.ignoreRealtimeUntil = Date.now() + 3000;
+  await Promise.all([
+    storage.update(plan).then(r => { if (!r?.isOk) return storage.create(plan); }),
+    saveMealDay(dateStr)
+  ]);
+
+  state.todaySwipeMealSlot = null;
+  showToast(`${capitalize(meal)} picked!`, 'success');
+  render();
+}
+
+function buildSwipeDeck(mealType) {
+  const recipes = state.recipes.filter(r => !r.isDraft && !r.isTip);
+  if (recipes.length === 0) return [];
+
+  const scored = recipes.map(recipe => {
+    let score = 0;
+    const cat = (recipe.category || '').toLowerCase();
+
+    if (mealType === 'breakfast' && cat === 'breakfast') score += 10;
+    if (mealType === 'lunch' && (cat === 'lunch' || cat === 'dinner')) score += 10;
+    if (mealType === 'dinner' && (cat === 'dinner' || cat === 'lunch')) score += 10;
+    if (mealType === 'snack' && (cat === 'snack' || cat === 'dessert')) score += 10;
+
+    const ings = recipeIngList(recipe);
+    const expiringNames = state.inventory
+      .filter(i => {
+        if (!i.expiration_date) return false;
+        const d = new Date(i.expiration_date);
+        const threeDays = new Date();
+        threeDays.setDate(threeDays.getDate() + 3);
+        return d <= threeDays && d >= new Date();
+      })
+      .map(i => i.name.toLowerCase());
+
+    ings.forEach(ing => {
+      if (expiringNames.some(n => n.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(n))) {
+        score += 5;
+      }
+    });
+
+    const wantToUseNames = state.inventory.filter(i => i.wantToUse).map(i => i.name.toLowerCase());
+    ings.forEach(ing => {
+      if (wantToUseNames.some(n => n.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(n))) {
+        score += 3;
+      }
+    });
+
+    score += Math.random() * 4;
+    return { recipe, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  let result = scored.map(s => s.recipe);
+  // Apply effort filter if set
+  if (state.swipeEffortFilter && state.swipeEffortFilter !== 'all') {
+    result = result.filter(r => getRecipeEffort(r.__backendId || r.id) === state.swipeEffortFilter);
+  }
+  return _injectBatchRecipesIntoDeck(result, mealType);
+}
+
+function buildSwipeDeckFiltered(mealType) {
+  const allowedIds = state.swipeSettings[mealType] || [];
+  if (allowedIds.length === 0) return buildSwipeDeck(mealType);
+
+  const resolvedIds = new Set();
+  allowedIds.forEach(id => {
+    if (id.startsWith('remix_')) {
+      const baseId = id.replace(/^remix_\d+_/, '');
+      if (baseId) resolvedIds.add(baseId);
+    } else {
+      resolvedIds.add(id);
+    }
+  });
+
+  const recipes = state.recipes.filter(r => {
+    if (r.isDraft || r.isTip) return false;
+    const id = r.__backendId || r.id;
+    return resolvedIds.has(id);
+  });
+
+  if (recipes.length === 0) return buildSwipeDeck(mealType);
+
+  const scored = recipes.map(recipe => {
+    let score = 0;
+    const ings = recipeIngList(recipe);
+    const expiringNames = state.inventory
+      .filter(i => {
+        if (!i.expiration_date) return false;
+        const d = new Date(i.expiration_date);
+        const threeDays = new Date();
+        threeDays.setDate(threeDays.getDate() + 3);
+        return d <= threeDays && d >= new Date();
+      })
+      .map(i => i.name.toLowerCase());
+
+    ings.forEach(ing => {
+      if (expiringNames.some(n => n.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(n))) {
+        score += 5;
+      }
+    });
+
+    const wantToUseNames = state.inventory.filter(i => i.wantToUse).map(i => i.name.toLowerCase());
+    ings.forEach(ing => {
+      if (wantToUseNames.some(n => n.includes(ing.name.toLowerCase()) || ing.name.toLowerCase().includes(n))) {
+        score += 3;
+      }
+    });
+
+    score += Math.random() * 4;
+    return { recipe, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  let result = scored.map(s => s.recipe);
+  // Apply effort filter if set
+  if (state.swipeEffortFilter && state.swipeEffortFilter !== 'all') {
+    result = result.filter(r => getRecipeEffort(r.__backendId || r.id) === state.swipeEffortFilter);
+  }
+  return _injectBatchRecipesIntoDeck(result, mealType);
+}
+
+function renderExternalMealPicker() {
+  const types = state.externalMealTypes.map(t =>
+    typeof t === 'string' ? { name: t, emoji: '🍽️' } : t
+  );
+
+  return `
+    <div class="p-6 max-w-4xl mx-auto">
+      <div class="flex items-center justify-between mb-6 mobile-stack gap-3">
+        <h2 style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_title}; font-weight: ${CONFIG.type_title_weight}; letter-spacing: ${CONFIG.type_title_tracking}; font-family: ${CONFIG.font_family}, sans-serif;" class="font-bold">
+          External Meal for ${formatDateDisplay(state.selectedDayForRecipe)} - ${state.selectedMealForRecipe}
+        </h2>
+        <button type="button" onclick="navigateTo('home'); state.selectedDayForRecipe=null; state.selectedMealForRecipe=null;"
+          style="background: ${CONFIG.secondary_action_color}; color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px;"
+          class="px-4 py-2 rounded button-hover">
+          Cancel
+        </button>
+      </div>
+
+      <div class="grid md:grid-cols-2 gap-3">
+        ${types.map(type => `
+          <button type="button"
+                  onclick="handleExternalMealSelect('${esc(type.name)}')"
+                  style="background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size * 1.1}px;"
+                  class="p-6 rounded card-hover text-left flex items-center gap-3">
+            <span style="font-size: 2rem;">${type.emoji || '🍽️'}</span>
+            <span class="font-semibold">${esc(type.name)}</span>
+          </button>
+        `).join('')}
+      </div>
+
+      <div class="mt-6">
+        <button type="button" onclick="showManageExternalMealTypes()"
+          style="background: ${CONFIG.primary_action_color}; color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px;"
+          class="px-4 py-2 rounded button-hover">
+          ⚙️ Manage External Meal Types
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// --- Additional swipe-related functions ---
+
+function goToSwipe(mealType) {
+  state.homeTab = 'swipe';
+  state.swipeMealType = mealType;
+  state.todaySwipeMealSlot = mealType;
+  state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(mealType) : buildSwipeDeck(mealType);
+  state.swipeIndex = 0;
+  render();
+}
+
+function onSwipeExit() {
+  if (state._returnToFoodLog) {
+    state._returnToFoodLog = false;
+    state._swapTargetLogId = null;
+    state._swapMealType = null;
+    state._swapDateStr = null;
+    navigateTo('my-meals');
+    return;
+  }
+  state.todaySwipeMealSlot = null;
+  render();
+}
+
+function renderHomeSwipeCards(meal) {
+  const mealLabel = capitalize(meal);
+  const deck = state.swipeDeck;
+  const idx = state.swipeIndex;
+
+  if (!deck || deck.length === 0) {
+    return emptyState(
+      '🍽',
+      `No recipes for ${mealLabel}. Add recipes or update your swipe settings.`,
+      'Add Recipes',
+      "navigateTo('recipes')"
+    );
+  }
+
+  const recipe = deck[idx];
+  const img = recipeThumb(recipe);
+  const ings = recipeIngList(recipe);
+  const category = recipe.category || 'Other';
+  const nextRecipe = idx + 1 < deck.length ? deck[idx + 1] : null;
+  const nextImg = nextRecipe ? recipeThumb(nextRecipe) : '';
+
+  return `
+    <div style="text-align: center; margin-bottom: ${CONFIG.space_md}; margin-top: ${CONFIG.space_sm};">
+      <div style="font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.6);">What's for</div>
+      <div style="font-size: 20px; font-weight: 600; color: #ffffff;">${mealLabel}</div>
+    </div>
+
+    <div class="swipe-container">
+      ${nextRecipe ? `
+        <div style="position: absolute; width: 280px; max-width: 80vw; background: ${CONFIG.surface_color}; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); overflow: hidden; transform: scale(0.95) translateY(10px);">
+          <div style="height: 240px; background: rgba(255,255,255,0.05);">
+            ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #1a1a24, #242432); padding:16px;"><span style="color:#f5f5f7;font-size:14px;font-weight:600;text-align:center;opacity:0.6;">${esc(nextRecipe.title)}</span></div>`}
+          </div>
+          <div style="padding: 16px;"><div style="font-size: 16px; font-weight: 600; color: ${CONFIG.text_muted};">${esc(nextRecipe.title)}</div></div>
+        </div>
+      ` : ''}
+
+      <div class="swipe-card entering" data-active="true">
+        <div class="swipe-overlay like">Cook!</div>
+        <div class="swipe-overlay nope">Skip</div>
+        ${img ? `<img loading="lazy" class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" />` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
+        ${recipe._isBatchRecipe ? `<div style="position:absolute; top:12px; right:12px; width:28px; height:28px; border-radius:7px; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:5;">
+          <svg width="16" height="16" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>
+        </div>` : ''}
+        <div class="card-body">
+          <div class="card-title">${esc(recipe.title)}</div>
+          <div class="card-meta">
+            <span>${esc(category)}</span>
+            ${recipe._isBatchRecipe ? `<span>Plate</span>` : (ings.length > 0 ? `<span>${ings.length} ingredients</span>` : '')}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: center; gap: 24px; padding: 16px 0;">
+      <button onclick="handleHomeSwipeLeft()" style="width: 56px; height: 56px; border-radius: 50%; border: 2px solid ${CONFIG.danger_color}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+        ✕
+      </button>
+      <button onclick="openRecipeView('${recipe.__backendId || recipe.id}'); state.viewingFromSwipe = true;" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid ${CONFIG.text_muted}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px;">
+        👁
+      </button>
+      <button onclick="handleHomeSwipeRight()" style="width: 56px; height: 56px; border-radius: 50%; border: 2px solid ${CONFIG.success_color}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+        &#9829;
+      </button>
+    </div>
+
+    <div class="swipe-hint-arrows">
+      <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Skip</span>
+      <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
+      <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Cook! →</span>
+    </div>
+
+    <div style="text-align: center; margin-top: ${CONFIG.space_md};">
+      <button onclick="skipMealSlot('${meal}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; cursor: pointer; text-decoration: underline;">Skip ${mealLabel}</button>
+    </div>
+  `;
+}
+
+function startSwipe(mealType) {
+  const mt = mealType || detectMealType();
+  state.homeTab = 'swipe';
+  state.todaySwipeMealSlot = mt;
+  state.swipeMealType = mt;
+  state.swipeDate = state.viewingDate;
+  state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(mt) : buildSwipeDeck(mt);
+  state.swipeIndex = 0;
+  state.currentMealSelection = null;
+  navigateTo('home');
+}
+
+async function confirmSwipeSelection(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+
+  state.currentMealSelection = {
+    date: state.swipeDate || getToday(),
+    mealType: state.swipeMealType || detectMealType(),
+    recipeId: recipeId,
+    selectedAt: Date.now(),
+    photoTaken: false,
+    logged: false
+  };
+
+  const today = state.currentMealSelection.date;
+  let plan = state.planData.find(p => p.date === today);
+  if (!plan) {
+    plan = { id: `plan_${today}`, type: 'plan', date: today, breakfast: [], lunch: [], dinner: [] };
+    state.planData.push(plan);
+  }
+
+  const mealKey = state.currentMealSelection.mealType;
+  if (mealKey !== 'snack') {
+    if (!Array.isArray(plan[mealKey])) plan[mealKey] = [];
+    if (!plan[mealKey].includes(recipeId)) {
+      plan[mealKey].push(recipeId);
+    }
+    await storage.update(plan);
+  }
+
+  const log = createMealLog(recipeId);
+  if (log) {
+    await storage.create(log);
+  }
+
+  navigateTo('swipe-confirm');
+}
+
+function handleSwipeRight() {
+  const deck = state.swipeDeck;
+  const idx = state.swipeIndex;
+  if (idx >= deck.length) return;
+
+  const recipe = deck[idx];
+  const card = document.querySelector('.swipe-card[data-active="true"]');
+  if (card) {
+    const likeOverlay = card.querySelector('.swipe-overlay.like');
+    const likeTint = card.querySelector('.swipe-tint.like');
+    if (likeOverlay) likeOverlay.style.opacity = 1;
+    if (likeTint) likeTint.style.opacity = 0.7;
+    card.classList.add('fly-right');
+    setTimeout(() => {
+      confirmSwipeSelection(recipe.__backendId || recipe.id);
+    }, 300);
+  } else {
+    confirmSwipeSelection(recipe.__backendId || recipe.id);
+  }
+}
+
+function handleSwipeLeft() {
+  const deck = state.swipeDeck;
+  const idx = state.swipeIndex;
+  if (idx >= deck.length) return;
+
+  const reshuffleDeck = () => {
+    return state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(state.swipeMealType) : buildSwipeDeck(state.swipeMealType);
+  };
+
+  const card = document.querySelector('.swipe-card[data-active="true"]');
+  if (card) {
+    const nopeOverlay = card.querySelector('.swipe-overlay.nope');
+    const nopeTint = card.querySelector('.swipe-tint.nope');
+    if (nopeOverlay) nopeOverlay.style.opacity = 1;
+    if (nopeTint) nopeTint.style.opacity = 0.7;
+    card.classList.add('fly-left');
+    setTimeout(() => {
+      state.swipeIndex++;
+      if (state.swipeIndex >= deck.length) {
+        state.swipeDeck = reshuffleDeck();
+        state.swipeIndex = 0;
+      }
+      render();
+    }, 300);
+  } else {
+    state.swipeIndex++;
+    if (state.swipeIndex >= deck.length) {
+      state.swipeDeck = reshuffleDeck();
+      state.swipeIndex = 0;
+    }
+    render();
+  }
+}
+
+function initDateSwipeGestures() {
+  setTimeout(() => {
+    const zone = document.getElementById('home-date-swipe-zone');
+    if (!zone) return;
+    if (zone._dateSwipeAttached) return;
+    zone._dateSwipeAttached = true;
+
+    let startX = 0, startY = 0, isDragging = false, isHorizontal = null;
+    const threshold = 150;
+
+    zone.addEventListener('touchstart', (e) => {
+      if (e.target.closest('.swipe-card')) return;
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      isDragging = true;
+      isHorizontal = null;
+    }, { passive: true });
+
+    zone.addEventListener('touchmove', (e) => {
+      if (!isDragging) return;
+      const dx = e.touches[0].clientX - startX;
+      const dy = e.touches[0].clientY - startY;
+      if (isHorizontal === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+        isHorizontal = Math.abs(dx) > Math.abs(dy);
+      }
+    }, { passive: true });
+
+    zone.addEventListener('touchend', (e) => {
+      if (!isDragging || !isHorizontal) { isDragging = false; return; }
+      isDragging = false;
+      const dx = e.changedTouches[0].clientX - startX;
+      if (dx > threshold) {
+        goToPreviousDay();
+      } else if (dx < -threshold) {
+        goToNextDay();
+      }
+    });
+  }, 100);
+}
+
+function renderSwipe() {
+  const mealType = state.swipeMealType || detectMealType();
+  const mealLabel = capitalize(mealType);
+  const deck = state.swipeDeck;
+  const idx = state.swipeIndex;
+
+  if (!deck || deck.length === 0) {
+    return `
+      <div style="background: ${CONFIG.background_color}; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px;">
+        <div style="font-size: 64px; margin-bottom: 16px;">🍽️</div>
+        <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: 8px;">No Recipes Yet</div>
+        <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: 24px; text-align: center;">Add some recipes first, then come back to swipe!</div>
+        <button onclick="navigateTo('recipes')" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+          Go to Recipes
+        </button>
+      </div>
+    `;
+  }
+
+  const recipe = deck[idx];
+  const img = recipeThumb(recipe);
+  const ings = recipeIngList(recipe);
+  const ingCount = ings.length;
+  const category = recipe.category || 'Other';
+  const nextRecipe = idx + 1 < deck.length ? deck[idx + 1] : null;
+  const nextImg = nextRecipe ? recipeThumb(nextRecipe) : '';
+
+  return `
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding-bottom: 56px;">
+      <div style="padding: 16px 20px 8px; display: flex; align-items: center; justify-content: space-between;">
+        <div style="width: 36px;"></div>
+        <div style="text-align: center;">
+          <div style="font-size: 14px; font-weight: 400; color: rgba(255,255,255,0.6);">What's for</div>
+          <div style="font-size: 20px; font-weight: 600; color: #ffffff;">${mealLabel}</div>
+        </div>
+        <button onclick="navigateTo('swipe-setup')" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; padding: 6px;" title="Swipe Settings">
+          <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        </button>
+      </div>
+
+      <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 12px;">
+        ${['breakfast', 'lunch', 'dinner', 'snack'].map(mt => {
+          const active = mt === mealType;
+          return `
+            <button onclick="state.swipeMealType='${mt}'; state.swipeDeck=buildSwipeDeckFiltered('${mt}'); state.swipeIndex=0; render(); setTimeout(initSwipeGestures, 100);"
+              style="padding: 6px 12px; border-radius: 20px; border: 1px solid ${active ? 'rgba(232, 93, 93, 0.4)' : 'rgba(255,255,255,0.15)'}; background: ${active ? 'rgba(232, 93, 93, 0.15)' : 'transparent'}; color: ${active ? '#e85d5d' : 'rgba(255,255,255,0.6)'}; font-size: 13px; font-weight: ${active ? '600' : '400'}; cursor: pointer; transition: all 0.2s ease;">
+              ${capitalize(mt)}
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      <div style="display:flex; gap:8px; justify-content:center; margin-bottom:12px;">
+        ${renderSwipeEffortPills()}
+      </div>
+
+      <div class="swipe-container">
+        ${nextRecipe ? `
+          <div style="position: absolute; width: 280px; max-width: 80vw; height: auto; background: ${CONFIG.surface_color}; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); overflow: hidden; transform: scale(0.95) translateY(10px);">
+            <div style="height: 240px; background: rgba(255,255,255,0.05);">
+              ${nextImg ? `<img loading="lazy" src="${esc(nextImg)}" style="width:100%; height:100%; object-fit:cover; opacity:0.6;" />` : `<div style="height:100%; display:flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #1a1a24, #242432); padding:16px;"><span style="color:#f5f5f7;font-size:14px;font-weight:600;text-align:center;opacity:0.6;">${esc(nextRecipe.title)}</span></div>`}
+            </div>
+            <div style="padding: 16px;">
+              <div style="font-size: 16px; font-weight: 600; color: ${CONFIG.text_muted};">${esc(nextRecipe.title)}</div>
+            </div>
+          </div>
+        ` : ''}
+
+        <div class="swipe-card entering" data-active="true">
+          <div class="swipe-tint like"></div>
+          <div class="swipe-tint nope"></div>
+          <div class="swipe-overlay like">SMASH</div>
+          <div class="swipe-overlay nope">PASS</div>
+          ${img ? `<img class="card-image" src="${esc(img)}" alt="${esc(recipe.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="card-image-placeholder" style="display:none;"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>` : `<div class="card-image-placeholder"><span style="color:#f5f5f7;font-size:20px;font-weight:700;text-align:center;padding:24px;line-height:1.3;">${esc(recipe.title)}</span></div>`}
+          ${typeof recipeHasVideo === 'function' && recipeHasVideo(recipe.__backendId || recipe.id) ? `<div style="position:absolute; top:12px; left:12px; z-index:3; width:28px; height:28px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;"><svg width="12" height="12" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg></div>` : ''}
+          <div class="card-body">
+            <div class="card-title">${esc(recipe.title)}</div>
+            <div class="card-meta">
+              <span>${esc(category)}</span>
+              ${ingCount > 0 ? `<span>${ingCount} ingredients</span>` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: flex; align-items: center; justify-content: center; gap: 24px; padding: 16px 0;">
+        <button id="swipe-btn-nope" onclick="handleSwipeLeft()" style="width: 56px; height: 56px; border-radius: 50%; border: 2px solid ${CONFIG.danger_color}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+          ✕
+        </button>
+        <button onclick="openRecipeView('${recipe.__backendId || recipe.id}'); state.viewingFromSwipe = true;" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid ${CONFIG.text_muted}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+          👁️
+        </button>
+        <button id="swipe-btn-like" onclick="handleSwipeRight()" style="width: 56px; height: 56px; border-radius: 50%; border: 2px solid ${CONFIG.success_color}; background: ${CONFIG.surface_elevated}; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3);">
+          ♥
+        </button>
+      </div>
+
+      <div class="swipe-hint-arrows">
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.danger_color};">← Pass</span>
+        <span style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_micro};">${idx + 1} / ${deck.length}</span>
+        <span class="swipe-hint-arrow" style="color: ${CONFIG.success_color};">Smash →</span>
+      </div>
+    </div>
+  `;
+}
+
+function showSwipeMealPicker() {
+  openModal(`
+    <div style="color: ${CONFIG.text_color};">
+      <h3 class="text-lg font-bold mb-4">Choose Meal Type</h3>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        ${['breakfast', 'lunch', 'dinner', 'snack'].map(mt => {
+          const e = { breakfast: '🌅', lunch: '☀️', dinner: '🌙', snack: '🍿' }[mt];
+          return `
+            <button onclick="closeModal(); startSwipe('${mt}');" style="padding: 14px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; cursor: pointer; text-align: left; font-size: 16px;">
+              ${e} ${capitalize(mt)}
+            </button>
+          `;
+        }).join('')}
+      </div>
+      <button onclick="closeModal()" class="mt-4 w-full px-4 py-2 rounded button-hover" style="background: ${CONFIG.surface_elevated}; color: ${CONFIG.text_color};">Cancel</button>
+    </div>
+  `);
+}
+
+// --- Swipe setup helper functions ---
+
+let swipeSetupCurrentPage = 0;
+
+function getSmartDefaults() {
+  const recipes = state.recipes.filter(r => !r.isDraft && !r.isTip);
+  const defaults = { breakfast: [], lunch: [], dinner: [], snack: [] };
+  const breakfastKeywords = ['breakfast', 'pancake', 'waffle', 'omelette', 'omelet', 'eggs', 'cereal', 'toast', 'smoothie', 'muffin', 'bacon', 'french toast', 'granola'];
+  const snackKeywords = ['snack', 'appetizer', 'dip', 'chips', 'cookie', 'brownie', 'trail mix', 'popcorn', 'bar', 'bites'];
+  const dinnerKeywords = ['dinner', 'steak', 'roast', 'casserole', 'stew', 'chili', 'lasagna', 'pot roast'];
+
+  recipes.forEach(r => {
+    const id = r.__backendId || r.id;
+    const cat = (r.category || '').toLowerCase();
+    const title = (r.title || '').toLowerCase();
+
+    if (cat === 'breakfast' || breakfastKeywords.some(k => title.includes(k))) defaults.breakfast.push(id);
+    if (cat === 'snack' || cat === 'dessert' || snackKeywords.some(k => title.includes(k))) defaults.snack.push(id);
+    if (cat === 'dinner' || dinnerKeywords.some(k => title.includes(k))) defaults.dinner.push(id);
+    if (cat === 'lunch' || cat === 'dinner' || cat === 'other') defaults.lunch.push(id);
+  });
+
+  ['breakfast', 'lunch', 'dinner', 'snack'].forEach(meal => {
+    if (defaults[meal].length === 0) {
+      defaults[meal] = recipes.map(r => r.__backendId || r.id);
+    }
+  });
+
+  return defaults;
+}
+
+function toggleSwipeSetupRecipe(mealType, recipeId) {
+  const list = state.swipeSettings[mealType];
+  const idx = list.indexOf(recipeId);
+  if (idx > -1) list.splice(idx, 1);
+  else list.push(recipeId);
+  renderSwipeSetupSection(mealType);
+}
+
+function selectAllSwipeRecipes(mealType) {
+  const recipes = getFilteredSetupRecipes();
+  state.swipeSettings[mealType] = recipes.map(r => r.__backendId || r.id);
+  renderSwipeSetupSection(mealType);
+}
+
+function deselectAllSwipeRecipes(mealType) {
+  state.swipeSettings[mealType] = [];
+  renderSwipeSetupSection(mealType);
+}
+
+function getRemixRecipes() {
+  const remixes = [];
+  const seen = new Set();
+  for (const [dateStr, dayData] of Object.entries(state.mealDays || {})) {
+    for (const [mealType, meal] of Object.entries(dayData.meals || {})) {
+      if (meal.actualType === 'remix' && meal.remixInfo && meal.remixInfo.baseRecipeId) {
+        const key = `${meal.remixInfo.baseRecipeId}__${(meal.remixInfo.modifications || '').trim().toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const baseRecipe = getRecipeById(meal.remixInfo.baseRecipeId);
+        if (!baseRecipe) continue;
+        const remixId = `remix_${remixes.length}_${meal.remixInfo.baseRecipeId}`;
+        remixes.push({
+          ...baseRecipe,
+          id: remixId,
+          __backendId: remixId,
+          title: baseRecipe.title + ' (Remix)',
+          _isRemix: true,
+          _remixModifications: meal.remixInfo.modifications,
+          _baseRecipeId: meal.remixInfo.baseRecipeId
+        });
+      }
+    }
+  }
+  return remixes;
+}
+
+function getFilteredSetupRecipes() {
+  let recipes = state.recipes.filter(r => !r.isDraft && !r.isTip);
+  recipes = [...recipes, ...getRemixRecipes()];
+  const term = normalizeString(state.swipeSetupSearchTerm);
+  if (term) {
+    recipes = recipes.filter(r => (r.title || '').toLowerCase().includes(term));
+  }
+  const filter = state.swipeSetupFilter || 'all';
+  if (filter === 'favorites') {
+    recipes = recipes.filter(r => r.isFavorite);
+  } else if (filter === 'remixed') {
+    recipes = recipes.filter(r => r._isRemix);
+  } else if (filter === 'quick') {
+    recipes = recipes.filter(r => {
+      const time = parseInt(r.prepTime) || 0 + parseInt(r.cookTime) || 0;
+      return time > 0 && time <= 30;
+    });
+  } else if (filter === 'have-ingredients') {
+    const invNames = state.inventory.map(i => i.name.toLowerCase());
+    recipes = recipes.filter(r => {
+      const ings = recipeIngList(r);
+      if (ings.length === 0) return false;
+      const matched = ings.filter(i => invNames.some(n => n.includes(i.name.toLowerCase()) || i.name.toLowerCase().includes(n)));
+      return matched.length / ings.length >= 0.5;
+    });
+  }
+  return recipes;
+}
+
+function toggleSwipeSetupSection(mealType) {
+  state.swipeSetupExpandedSection = state.swipeSetupExpandedSection === mealType ? null : mealType;
+  render();
+}
+
+async function completeSwipeSetup() {
+  try {
+    state.swipeSettings.setupCompleted = true;
+    // Save to localStorage immediately as primary persistence
+    saveToLS('swipeSettings', state.swipeSettings);
+    // Also try Supabase sync (non-blocking)
+    saveSwipeSettings().catch(e => console.warn('Supabase swipe settings sync failed:', e));
+    showToast('Swipe settings saved!', 'success');
+    startSwipe();
+  } catch (e) {
+    console.error('completeSwipeSetup error:', e);
+    // Even if something fails, ensure settings are saved and we navigate
+    saveToLS('swipeSettings', state.swipeSettings);
+    showToast('Settings saved!', 'success');
+    startSwipe();
+  }
+}
+
+// --- Legacy swipe helper functions ---
+
+function createMealLog(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return null;
+
+  return {
+    id: `meallog_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    type: 'mealLog',
+    date: state.swipeDate || getToday(),
+    mealType: state.swipeMealType || detectMealType(),
+    plannedRecipeId: recipeId,
+    plannedAt: Date.now(),
+    actualType: null,
+    actualRecipeId: null,
+    takeoutInfo: null,
+    remixInfo: null,
+    photoBase64: null,
+    loggedAt: null,
+    rating: null,
+    notes: null
+  };
+}
+
+function hasSelectedMealForCurrentSlot() {
+  if (!state.currentMealSelection) return false;
+  const today = getToday();
+  const currentMeal = getMealType();
+  return state.currentMealSelection.date === today &&
+         state.currentMealSelection.mealType === currentMeal;
+}
+
+function hasPendingMealToLog() {
+  if (!state.currentMealSelection) return false;
+  const today = getToday();
+  return state.currentMealSelection.date === today &&
+         state.currentMealSelection.status === 'selected' &&
+         !state.currentMealSelection.loggedAt;
+}
+
+function renderAlreadySelected() {
+  const sel = state.currentMealSelection;
+  if (!sel) return renderSwipeCards_legacy();
+
+  const recipe = getRecipeById(sel.recipeId);
+  if (!recipe) return renderSwipeCards_legacy();
+
+  const img = recipeThumb(recipe);
+  const mealLabel = capitalize(sel.mealType);
+
+  return `
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding: 20px; padding-bottom: 56px;">
+      <div style="max-width: 400px; margin: 0 auto;">
+        <div style="text-align: center; padding-top: ${CONFIG.space_2xl}; margin-bottom: ${CONFIG.space_lg};">
+          <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; margin-bottom: ${CONFIG.space_xs};">You picked for ${mealLabel}</div>
+          <div style="color: ${CONFIG.text_color}; font-size: 22px; font-weight: 700;">${esc(recipe.title)}</div>
+        </div>
+
+        <div style="border-radius: 20px; overflow: hidden; margin-bottom: ${CONFIG.space_lg}; box-shadow: 0 8px 30px rgba(0,0,0,0.3);">
+          ${img ? `<img loading="lazy" src="${esc(img)}" style="width: 100%; height: 280px; object-fit: cover;" />` : `<div style="height: 280px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #1a1a24, #242432);"><span style="color:#f5f5f7;font-size:28px;font-weight:700;text-align:center;padding:24px;">${esc(recipe.title)}</span></div>`}
+        </div>
+
+        <div style="display: flex; gap: 12px; margin-bottom: ${CONFIG.space_md};">
+          <button onclick="state.currentMealSelection = null; startSwipe('${sel.mealType}')"
+            style="flex: 1; padding: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: none; border-radius: 12px; font-size: 15px; font-weight: 500; cursor: pointer;">
+            Change my mind
+          </button>
+          <button onclick="openRecipeView('${recipe.__backendId || recipe.id}')"
+            style="flex: 1; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+            View Recipe
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSwipeCards_legacy() {
+  const mealType = state.swipeMealType || getMealType();
+  if (!state.swipeMealType) state.swipeMealType = mealType;
+  if (!state.swipeDeck || state.swipeDeck.length === 0) {
+    state.swipeDate = getToday();
+    state.swipeDeck = buildSwipeDeckFiltered(state.swipeMealType);
+    state.swipeIndex = 0;
+  }
+  return renderSwipe();
+}
+
+function _injectBatchRecipesIntoDeck(result, mealType) {
+  const batchRecipes = (state.batchRecipes || []).filter(b => {
+    const bt = (b.mealType || '').toLowerCase();
+    return bt === mealType;
+  }).map(b => ({
+    id: b.id,
+    __backendId: b.id,
+    title: b.name,
+    category: capitalize(b.mealType),
+    image_url: getBatchCoverPhoto(b),
+    _isBatchRecipe: true,
+    _batchId: b.id,
+    ingredientsRows: []
+  }));
+  batchRecipes.forEach(br => {
+    const insertAt = Math.floor(Math.random() * (result.length + 1));
+    result.splice(insertAt, 0, br);
+  });
+  return result;
+}
+
+function skipMealSlot(meal) {
+  logMealAsSkipped(meal);
+  state.todaySwipeMealSlot = null;
+  showToast(`${capitalize(meal)} skipped`);
+}
+
+function getMealType() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 10) return 'breakfast';
+  if (hour >= 10 && hour < 14) return 'lunch';
+  if (hour >= 14 && hour < 17) return 'snack';
+  if (hour >= 17 && hour < 21) return 'dinner';
+  if (hour >= 21) return 'dinner';
+  return 'breakfast';
+}
+*/

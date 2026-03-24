@@ -138,41 +138,10 @@ function renderHomeSearchResults() {
 // MAIN HOME RENDERER
 // ============================================================
 function renderHome() {
-  ensureTodayDateCurrent();
-  if (isToday(state.viewingDate)) checkMealAutoTransitions();
-
-  const viewDate = state.viewingDate;
-  const isTodayView = isToday(viewDate);
-
-  // Setup gate (only for today, and only after data has loaded from storage)
-  if (isTodayView && state.dataLoaded && !state.swipeSettings.setupCompleted) {
-    return renderSwipeSetupPrompt();
-  }
-
-  // Calendar picker overlay
-  const calendarOverlay = state.calendarPickerOpen ? renderDatePicker() : '';
-
-  const cookAgainHtml = renderCookAgainRow();
-
-  return `
-    <div id="home-date-swipe-zone" style="background: ${CONFIG.background_color}; flex: 1; display: flex; flex-direction: column; overflow: hidden;">
-      ${renderHomeHeader(viewDate)}
-      <div class="mobile-only-sections" style="flex-shrink: 0;">${cookAgainHtml}</div>
-      <div class="desktop-home-layout">
-        <div class="desktop-home-main">
-          ${renderSwipeTab()}
-        </div>
-        <div class="desktop-home-sidebar">
-          ${cookAgainHtml}
-        </div>
-      </div>
-    </div>
-    ${calendarOverlay}
-    <!-- Floating Quick Log Button -->
-    <button onclick="showQuickLogModal()" class="card-press" style="position: fixed; bottom: 68px; right: 16px; width: 48px; height: 48px; border-radius: 50%; background: ${CONFIG.primary_action_color}; border: none; color: white; font-size: 24px; cursor: pointer; z-index: 45; box-shadow: 0 2px 8px rgba(232,93,93,0.3); display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease; -webkit-tap-highlight-color: transparent;">
-      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-    </button>
-  `;
+  // Home page IS the meal planner now — delegate to renderMyMeals from my-meals.js
+  // Initialize myMealsDate if not set (sync with viewingDate)
+  if (!state.myMealsDate) state.myMealsDate = getToday();
+  return renderMyMeals();
 }
 
 // ============================================================
@@ -334,14 +303,14 @@ function renderSwipeTab() {
 function goToPreviousDay() {
   const current = new Date(state.viewingDate + 'T12:00:00');
   current.setDate(current.getDate() - 1);
-  state.viewingDate = current.toISOString().split('T')[0];
+  state.viewingDate = _localDateStr(current);
   render();
 }
 
 function goToNextDay() {
   const current = new Date(state.viewingDate + 'T12:00:00');
   current.setDate(current.getDate() + 1);
-  state.viewingDate = current.toISOString().split('T')[0];
+  state.viewingDate = _localDateStr(current);
   render();
 }
 
@@ -793,7 +762,7 @@ function renderDatePicker() {
             <div style="display: grid; grid-template-columns: repeat(7, 1fr);">
               ${week.map(day => {
                 if (!day) return `<span style="aspect-ratio: 1;"></span>`;
-                const dateStr = day.toISOString().split('T')[0];
+                const dateStr = _localDateStr(day);
                 const isSelected = dateStr === state.viewingDate;
                 const isTodayDate = dateStr === today;
                 const hasMeals = hasMealsOnDate(dateStr);
@@ -1604,7 +1573,7 @@ function createMealLog(recipeId) {
   return {
     id: `meallog_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     type: 'mealLog',
-    date: state.swipeDate || new Date().toISOString().split('T')[0],
+    date: state.swipeDate || getToday(),
     mealType: state.swipeMealType || detectMealType(),
     plannedRecipeId: recipeId,
     plannedAt: Date.now(),
@@ -1624,7 +1593,7 @@ async function confirmSwipeSelection(recipeId) {
   if (!recipe) return;
 
   state.currentMealSelection = {
-    date: state.swipeDate || new Date().toISOString().split('T')[0],
+    date: state.swipeDate || getToday(),
     mealType: state.swipeMealType || detectMealType(),
     recipeId: recipeId,
     selectedAt: Date.now(),
@@ -2426,7 +2395,7 @@ function getMealType() {
 
 function hasSelectedMealForCurrentSlot() {
   if (!state.currentMealSelection) return false;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getToday();
   const currentMeal = getMealType();
   return state.currentMealSelection.date === today &&
          state.currentMealSelection.mealType === currentMeal;
@@ -2434,7 +2403,7 @@ function hasSelectedMealForCurrentSlot() {
 
 function hasPendingMealToLog() {
   if (!state.currentMealSelection) return false;
-  const today = new Date().toISOString().split('T')[0];
+  const today = getToday();
   return state.currentMealSelection.date === today &&
          state.currentMealSelection.status === 'selected' &&
          !state.currentMealSelection.loggedAt;
@@ -2481,7 +2450,7 @@ function renderSwipeCards_legacy() {
   const mealType = state.swipeMealType || getMealType();
   if (!state.swipeMealType) state.swipeMealType = mealType;
   if (!state.swipeDeck || state.swipeDeck.length === 0) {
-    state.swipeDate = new Date().toISOString().split('T')[0];
+    state.swipeDate = getToday();
     state.swipeDeck = buildSwipeDeckFiltered(state.swipeMealType);
     state.swipeIndex = 0;
   }
@@ -2537,10 +2506,9 @@ function renderExternalMealPicker() {
 // ============================================================
 const VIEW_RENDERERS = {
   'home': renderHome,
-  'swipe': renderSwipeHome,
-  'swipe-setup': renderSwipeSetup,
-  'swipe-confirm': renderSwipeConfirm,
-  'external-meal-picker': renderExternalMealPicker
+  'my-meals': renderHome,
+  'food-log-detail': typeof renderFoodLogDetail === 'function' ? renderFoodLogDetail : renderHome,
+  'my-plates': typeof renderMyPlates === 'function' ? renderMyPlates : renderHome
 };
 
 function render() {
@@ -2562,7 +2530,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: ${state.currentView !== 'swipe-setup' ? '56px' : '0'};">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">
@@ -2571,18 +2539,13 @@ function render() {
       </div>
       ${typeof renderClaudeReceiptModal === 'function' ? renderClaudeReceiptModal() : ''}
       ${typeof renderReceiptScannerModal === 'function' ? renderReceiptScannerModal() : ''}
-      ${state.currentView === 'swipe-setup' ? '' : renderBottomNav()}
+      ${renderBottomNav()}
     </div>
   `;
 
-  if (state.currentView === 'swipe' || (state.currentView === 'home' && state.homeTab === 'swipe')) {
-    initSwipeGestures();
-  }
-  if (state.currentView === 'home' || state.currentView === 'swipe') {
-    initDateSwipeGestures();
-  }
-  if (state.currentView === 'swipe-setup' && state.swipeSetupExpandedSection) {
-    setTimeout(() => renderSwipeSetupSection(state.swipeSetupExpandedSection), 0);
+  // Initialize date swipe gestures for the meal planner
+  if (state.currentView === 'home' || state.currentView === 'my-meals') {
+    if (typeof initMyMealsSwipeGestures === 'function') initMyMealsSwipeGestures();
   }
 }
 
@@ -2596,37 +2559,10 @@ function init() {
     state.currentView = 'home';
   }
 
-  // Restore swap-for-slot state from cross-page navigation (My Meals → Home swipe)
-  const swipeSlotData = sessionStorage.getItem('yummy_swipe_slot');
-  if (swipeSlotData) {
-    try {
-      const slot = JSON.parse(swipeSlotData);
-      sessionStorage.removeItem('yummy_swipe_slot');
-      state.viewingDate = slot.dateStr;
-      state.homeTab = 'swipe';
-      state.swipeMealType = slot.mealType;
-      state.todaySwipeMealSlot = slot.mealType;
-      if (slot.swapLogId) {
-        state._swapTargetLogId = slot.swapLogId;
-        state._swapMealType = slot.mealType;
-        state._swapDateStr = slot.dateStr;
-      }
-      state._returnToFoodLog = !!slot.returnToFoodLog;
-      state.swipeDeck = state.swipeSettings.setupCompleted ? buildSwipeDeckFiltered(slot.mealType) : buildSwipeDeck(slot.mealType);
-      state.swipeIndex = 0;
-    } catch (e) {
-      console.error('Failed to restore swipe slot state:', e);
-      sessionStorage.removeItem('yummy_swipe_slot');
-    }
-  }
+  // Initialize myMealsDate for the meal planner
+  if (!state.myMealsDate) state.myMealsDate = getToday();
 
   checkExpirationNotifications();
-  setInterval(() => {
-    if (state.currentView === 'home' && isToday(state.viewingDate)) {
-      const changed = checkMealAutoTransitions();
-      if (changed) render();
-    }
-  }, 60000);
   setupKeyboardShortcuts();
   render();
 }
