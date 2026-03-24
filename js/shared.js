@@ -1073,6 +1073,17 @@ function setIngredientPhoto(name, url) {
   saveIngredientPhotos();
 }
 
+function removeIngredientPhoto(name) {
+  if (!name) return;
+  const key = name.toLowerCase().trim();
+  delete ingredientPhotos[key];
+  // Also remove fuzzy matches
+  for (const k of Object.keys(ingredientPhotos)) {
+    if (key.includes(k) || k.includes(key)) delete ingredientPhotos[k];
+  }
+  saveIngredientPhotos();
+}
+
 function getIngredientPhotoFromLibrary(name) {
   if (!name) return null;
   const key = name.toLowerCase().trim();
@@ -1086,6 +1097,54 @@ function getIngredientPhotoFromLibrary(name) {
 
 // Load on startup
 loadIngredientPhotos();
+
+/**
+ * Opens a photo expand overlay showing an enlarged view of a grocery item photo.
+ * @param {string} photoUrl - The photo URL to display
+ * @param {string} ingredientName - The ingredient name to display below the photo
+ */
+function openPhotoExpandOverlay(photoUrl, ingredientName) {
+  const existing = document.getElementById('photoExpandOverlay');
+  if (existing) existing.remove();
+
+  const escapedName = ingredientName.replace(/'/g, "\\'");
+
+  const overlay = document.createElement('div');
+  overlay.id = 'photoExpandOverlay';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:2000;background:rgba(0,0,0,0.9);display:flex;align-items:center;justify-content:center;flex-direction:column;animation:photoExpandFadeIn 200ms ease-out;';
+  overlay.onclick = function(e) { if (e.target === overlay) closePhotoExpandOverlay(); };
+
+  overlay.innerHTML = `
+    <style>
+      @keyframes photoExpandFadeIn { from { opacity: 0; } to { opacity: 1; } }
+      @media (min-width: 768px) { #photoExpandImg { max-width: 500px !important; } }
+    </style>
+    <button onclick="closePhotoExpandOverlay()" style="position:absolute;top:16px;right:16px;width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:white;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:1;">&times;</button>
+    <img id="photoExpandImg" src="${esc(photoUrl)}" style="max-width:300px;max-height:60vh;border-radius:12px;object-fit:contain;box-shadow:0 8px 32px rgba(0,0,0,0.5);" />
+    <div style="color:white;font-size:16px;margin-top:16px;font-family:${CONFIG.font_family};text-align:center;">${esc(ingredientName)}</div>
+    <button onclick="closePhotoExpandOverlay();openPhotoSearch('${escapedName}',function(url){setIngredientPhoto('${escapedName}',url);render();})"
+      style="margin-top:20px;padding:10px 24px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;font-family:${CONFIG.font_family};">
+      Change photo
+    </button>
+    <button onclick="_removePhotoAndClose('${escapedName}')"
+      style="margin-top:10px;padding:8px 20px;background:none;border:none;color:${CONFIG.danger_color || '#ff6b6b'};font-size:13px;cursor:pointer;font-family:${CONFIG.font_family};">
+      Remove photo
+    </button>
+  `;
+
+  document.body.appendChild(overlay);
+}
+
+function closePhotoExpandOverlay() {
+  const overlay = document.getElementById('photoExpandOverlay');
+  if (overlay) overlay.remove();
+}
+
+function _removePhotoAndClose(ingredientName) {
+  removeIngredientPhoto(ingredientName);
+  closePhotoExpandOverlay();
+  if (typeof render === 'function') render();
+}
 
 function getIngredientImage(ingredientName, category) {
   if (!ingredientName) return null;
@@ -1972,34 +2031,67 @@ function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) re
 window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
 
 function showAddFromMealModal() {
-  console.log('[grocery] showAddFromMealModal called — total recipes:', state.recipes?.length);
+  console.log('[grocery] showAddFromMealModal called — total recipes:', state.recipes?.length, 'mealDays:', Object.keys(state.mealDays || {}).length, 'foodLog:', getFoodLog()?.length);
   window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
 
-  // Build full recipe list once (all recipes with ingredients)
   const savedIds = new Set(getSavedRecipes());
   const allItems = [];
   const seen = new Set();
 
-  state.recipes.filter(r => !r.isDraft && !r.isTip && recipeIngList(r).length > 0).forEach(r => {
+  // Helper to add a recipe to the list
+  function addRecipeItem(r, mealCategory) {
     const id = r.id || r.__backendId;
     if (!id || seen.has(id)) return;
     seen.add(id);
     const effort = getRecipeEffort(id);
-    const cat = (r.category || '').toLowerCase();
+    const cat = (mealCategory || r.category || '').toLowerCase();
     allItems.push({
       recipeId: id,
       name: r.title || '',
       image: r.image_url || '',
-      category: r.category || '',
+      category: mealCategory || r.category || '',
       catLower: cat,
       effort: effort,
       isSaved: savedIds.has(id),
       ingredients: recipeIngList(r).map(i => (i.name || '').toLowerCase())
     });
+  }
+
+  // 1. All non-draft recipes (removed ingredientsRows requirement — show all recipes)
+  state.recipes.filter(r => !r.isDraft && !r.isTip).forEach(r => addRecipeItem(r));
+
+  // 2. Recipes from planned meals (mealDays) — catches meals the user has planned
+  Object.values(state.mealDays || {}).forEach(day => {
+    if (!day || !day.meals) return;
+    ['breakfast', 'lunch', 'dinner'].forEach(mealType => {
+      const meal = day.meals[mealType];
+      if (!meal) return;
+      const rid = meal.plannedRecipeId || meal.actualRecipeId;
+      if (!rid || seen.has(rid)) return;
+      const recipe = getRecipeById(rid);
+      if (recipe) addRecipeItem(recipe, mealType);
+    });
+  });
+
+  // 3. Recipes from food log (frequently cooked)
+  try {
+    const log = getFoodLog();
+    log.forEach(entry => {
+      if (!entry.recipeId || seen.has(entry.recipeId)) return;
+      const recipe = getRecipeById(entry.recipeId);
+      if (recipe) addRecipeItem(recipe);
+    });
+  } catch (e) { console.error('[grocery] Error reading food log:', e); }
+
+  // 4. Recipes from meal options (swipe picks)
+  (state.mealOptions || []).forEach(option => {
+    if (!option.recipeId || seen.has(option.recipeId)) return;
+    const recipe = getRecipeById(option.recipeId);
+    if (recipe) addRecipeItem(recipe, option.category);
   });
 
   window._mealPickerAllItems = allItems;
-  console.log('[grocery] showAddFromMealModal — recipes with ingredients:', allItems.length);
+  console.log('[grocery] showAddFromMealModal — total meals found:', allItems.length, '(recipes:', state.recipes?.length, ', with ingredients:', allItems.filter(i => i.ingredients.length > 0).length, ')');
 
   const modalHtml = `<div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
     <h2 style="font-size:17px;font-weight:600;margin-bottom:12px;">Add from a meal</h2>
@@ -2098,13 +2190,15 @@ function _renderMealPickerResults() {
       ? `<span style="font-size:10px;padding:2px 7px;background:rgba(255,255,255,0.06);color:${CONFIG.text_muted};border-radius:8px;white-space:nowrap;">${esc(item.category)}</span>`
       : '';
     const effortPill = renderEffortPill(item.effort, 'sm');
+    const ingCount = item.ingredients.length;
+    const ingLabel = ingCount > 0 ? `${ingCount} ingredient${ingCount !== 1 ? 's' : ''}` : 'No ingredients listed';
 
     return `<div onclick="showMealIngredientPicker('${esc(item.recipeId)}')"
       style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:10px;cursor:pointer;margin-bottom:4px;background:${CONFIG.surface_color};-webkit-tap-highlight-color:transparent;" class="card-press">
       ${imgHtml}
       <div style="flex:1;min-width:0;">
         <div style="font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:3px;">${esc(item.name)}</div>
-        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${catPill}${effortPill}</div>
+        <div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap;">${catPill}${effortPill}<span style="font-size:10px;color:${CONFIG.text_tertiary};">${ingLabel}</span></div>
       </div>
     </div>`;
   }).join('');
@@ -2155,6 +2249,7 @@ let _photoSearchState = {
   selectedIdx: -1,
   selectedUrl: '',
   loading: false,
+  error: null,
   callback: null,
   debounceTimer: null
 };
@@ -2172,6 +2267,7 @@ function openPhotoSearch(defaultQuery, callback) {
     selectedIdx: -1,
     selectedUrl: '',
     loading: !!defaultQuery,
+    error: null,
     callback: callback || null,
     debounceTimer: null
   };
@@ -2289,6 +2385,12 @@ function _renderPhotoSearchResults() {
     </div>`;
   }
 
+  if (s.error) {
+    return `<div style="text-align:center;padding:40px 16px;color:${CONFIG.danger_color || '#ff6b6b'};font-size:14px;line-height:1.5;">
+      ${esc(s.error)}<br><span style="color:${CONFIG.text_muted};font-size:12px;margin-top:8px;display:block;">You can still upload your own photo above.</span>
+    </div>`;
+  }
+
   if (s.query && s.results.length === 0) {
     return `<div style="text-align:center;padding:40px 16px;color:${CONFIG.text_muted};font-size:14px;line-height:1.5;">
       No results found.<br>Try a different search or upload your own.
@@ -2373,29 +2475,55 @@ async function _photoSearchFetch(query, source) {
 
   try {
     if (source === 'unsplash') {
+      if (!UNSPLASH_ACCESS_KEY || UNSPLASH_ACCESS_KEY === 'YOUR_UNSPLASH_KEY') {
+        console.error('Unsplash search error: API key not configured. Replace YOUR_UNSPLASH_KEY in js/shared.js with a real Unsplash Access Key from https://unsplash.com/developers');
+        _photoSearchState.results = [];
+        _photoSearchState.error = 'Unsplash API key not configured. Add your key in js/shared.js';
+        _photoSearchState.loading = false;
+        _updatePhotoSearchResults();
+        return;
+      }
       const resp = await fetch(`https://api.unsplash.com/search/photos?query=${encodeURIComponent(query)}&per_page=21&client_id=${UNSPLASH_ACCESS_KEY}`);
-      if (!resp.ok) throw new Error('Unsplash API error');
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        console.error('Unsplash search error:', resp.status, resp.statusText, errText);
+        throw new Error(`Unsplash API error: ${resp.status} ${resp.statusText}`);
+      }
       const data = await resp.json();
       _photoSearchState.results = (data.results || []).map(r => ({
         thumb: r.urls.small,
         full: r.urls.regular
       }));
     } else {
+      if (!SERPER_API_KEY || SERPER_API_KEY === 'YOUR_SERPER_KEY') {
+        console.error('Serper search error: API key not configured. Replace YOUR_SERPER_KEY in js/shared.js');
+        _photoSearchState.results = [];
+        _photoSearchState.error = 'Google search API key not configured. Add your key in js/shared.js';
+        _photoSearchState.loading = false;
+        _updatePhotoSearchResults();
+        return;
+      }
       const resp = await fetch('https://google.serper.dev/images', {
         method: 'POST',
         headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify({ q: query, num: 21 })
       });
-      if (!resp.ok) throw new Error('Serper API error');
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => '');
+        console.error('Serper search error:', resp.status, resp.statusText, errText);
+        throw new Error(`Serper API error: ${resp.status} ${resp.statusText}`);
+      }
       const data = await resp.json();
       _photoSearchState.results = (data.images || []).map(r => ({
         thumb: r.thumbnailUrl,
         full: r.imageUrl
       }));
     }
+    _photoSearchState.error = null;
   } catch (e) {
     console.error('Photo search error:', e);
     _photoSearchState.results = [];
+    _photoSearchState.error = e.message || 'Search failed';
   }
 
   _photoSearchState.loading = false;

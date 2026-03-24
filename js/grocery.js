@@ -499,7 +499,10 @@ function _renderGroceryRow(item, isChecked) {
             ${isChecked ? '<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
           </div>
           ${photosOn ? `
-            <div onclick="event.stopPropagation();openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})"
+            <div onclick="event.stopPropagation();${photo
+                ? `openPhotoExpandOverlay('${esc(photo).replace(/'/g, "\\'")}','${escapedItemName}')`
+                : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})`
+              }"
               style="width:36px;height:36px;border-radius:6px;overflow:hidden;flex-shrink:0;background:${CONFIG.surface_elevated};display:flex;align-items:center;justify-content:center;cursor:pointer;">
               ${photo
                 ? `<img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover;" />`
