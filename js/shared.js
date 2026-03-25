@@ -4,6 +4,10 @@
 // navigation, nav rendering, and all shared functions.
 // ============================================================
 
+const DEBUG_LOG = false;
+function debugLog(...args) { if (DEBUG_LOG) console.log(...args); }
+window.debugLog = debugLog;
+
 // ============================================================
 // STANDALONE WEB APP NAVIGATION INTERCEPTOR
 // Keeps all internal links within the standalone (Add to Home Screen) shell
@@ -36,13 +40,13 @@ if (window.navigator.standalone === true) {
   } catch(e) { console.error('[SAFETY] Cleanup error:', e); }
 
   // Diagnostic: log what's in localStorage right now
-  console.log('[BOOT] localStorage key count:', localStorage.length);
+  debugLog('[BOOT] localStorage key count:', localStorage.length);
   const yummyKeys = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key) yummyKeys.push(key + ': ' + (localStorage[key].length / 1024).toFixed(1) + 'KB');
   }
-  console.log('[BOOT] All localStorage keys:', yummyKeys.join(', ') || '(EMPTY — no data in localStorage!)');
+  debugLog('[BOOT] All localStorage keys:', yummyKeys.join(', ') || '(EMPTY — no data in localStorage!)');
 })();
 
 // ============================================================
@@ -58,19 +62,19 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
   script.onload = () => {
     try {
       window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-      console.log('[BOOT] Supabase loaded successfully');
+      debugLog('[BOOT] Supabase loaded successfully');
       // Once Supabase is loaded, check auth
       checkAuthAndInit();
     } catch (e) {
       console.error('[BOOT] Supabase client creation failed:', e);
       // Fallback: load from localStorage and render
-      loadAllState();
+      if (!state.dataLoaded) loadAllState();
       if (typeof render === 'function') render();
     }
   };
   script.onerror = () => {
     console.error('[BOOT] Supabase script failed to load — falling back to localStorage');
-    loadAllState();
+    if (!state.dataLoaded) loadAllState();
     if (typeof render === 'function') render();
   };
   document.head.appendChild(script);
@@ -80,7 +84,7 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 async function checkAuthAndInit() {
   if (!window.supabaseClient) {
     console.warn('[AUTH] No Supabase client — falling back to localStorage');
-    loadAllState();
+    if (!state.dataLoaded) loadAllState();
     if (typeof render === 'function') render();
     return;
   }
@@ -89,12 +93,12 @@ async function checkAuthAndInit() {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session || !session.user) {
       // No active session — show login
-      console.log('[AUTH] No session found — showing login');
+      debugLog('[AUTH] No session found — showing login');
       showLoginModal();
       return;
     }
     const user = session.user;
-    console.log('[AUTH] Session found for:', user.email);
+    debugLog('[AUTH] Session found for:', user.email);
     // User is logged in — migrate saved/plates then load data from Supabase
     try {
       await migrateSavedAndPlatesToSupabase();
@@ -103,10 +107,10 @@ async function checkAuthAndInit() {
     }
     try {
       await loadDataFromSupabase();
-      console.log('[AUTH] Data loaded from Supabase');
+      debugLog('[AUTH] Data loaded from Supabase');
     } catch (loadErr) {
       console.error('[AUTH] Supabase data load failed, falling back to localStorage:', loadErr);
-      loadAllState();
+      if (!state.dataLoaded) loadAllState();
     }
     try {
       subscribeToChanges(user.id);
@@ -127,7 +131,7 @@ async function checkAuthAndInit() {
       showLoginModal();
     } catch (modalErr) {
       console.error('[AUTH] Login modal also failed — loading from localStorage:', modalErr);
-      loadAllState();
+      if (!state.dataLoaded) loadAllState();
       if (typeof render === 'function') render();
     }
   }
@@ -789,7 +793,16 @@ function loadFromLS(key, defaultVal) {
   }
 }
 
+let _persistTimer = null;
 function persistState() {
+  clearTimeout(_persistTimer);
+  _persistTimer = setTimeout(_doPersistState, 500);
+}
+function persistStateNow() {
+  clearTimeout(_persistTimer);
+  _doPersistState();
+}
+function _doPersistState() {
   saveToLS('recipes', state.recipes);
   saveToLS('inventory', state.inventory);
   saveToLS('planData', state.planData);
@@ -815,7 +828,7 @@ function persistState() {
 }
 
 function loadAllState() {
-  console.log('[loadAllState] Starting data load from localStorage...');
+  debugLog('[loadAllState] Starting data load from localStorage...');
   state.recipes = loadFromLS('recipes', []);
   seedTestVideoClips();
   state.inventory = loadFromLS('inventory', []);
@@ -846,7 +859,7 @@ function loadAllState() {
   const savedRecipes = getSavedRecipes();
   const smartGrocery = getSmartGroceryList();
 
-  console.log('[loadAllState] Data loaded — recipes:', state.recipes.length,
+  debugLog('[loadAllState] Data loaded — recipes:', state.recipes.length,
     '| inventory:', state.inventory.length,
     '| mealDays:', Object.keys(state.mealDays).length,
     '| groceryItems:', state.groceryItems.length,
@@ -893,7 +906,7 @@ function migrateOldGroceryData() {
   })).filter(item => item.name);
   if (migrated.length > 0) {
     saveSmartGroceryList(migrated);
-    console.log('[migrateGroceryData] Migrated ' + migrated.length + ' items from old groceryItems to smartGroceryList_v1');
+    debugLog('[migrateGroceryData] Migrated ' + migrated.length + ' items from old groceryItems to smartGroceryList_v1');
   }
 }
 
@@ -1338,7 +1351,7 @@ async function compressImage(file, maxWidth = 800, quality = 0.7) {
         ctx.drawImage(img, 0, 0, width, height);
         canvas.toBlob((blob) => {
           const compressedFile = new File([blob], file.name, { type: 'image/jpeg', lastModified: Date.now() });
-          console.log(`Compressed: ${(file.size/1024).toFixed(0)}KB -> ${(compressedFile.size/1024).toFixed(0)}KB`);
+          debugLog(`Compressed: ${(file.size/1024).toFixed(0)}KB -> ${(compressedFile.size/1024).toFixed(0)}KB`);
           resolve(compressedFile);
         }, 'image/jpeg', quality);
       };
@@ -1967,7 +1980,7 @@ function addMealToGrocery(recipeId) {
 }
 
 function showMealIngredientPicker(recipeId) {
-  console.log('[grocery] showMealIngredientPicker called — recipeId:', recipeId);
+  debugLog('[grocery] showMealIngredientPicker called — recipeId:', recipeId);
   const recipe = getRecipeById(recipeId);
   if (!recipe) { console.error('[grocery] Recipe not found:', recipeId); showToast('Recipe not found', 'error'); return; }
   const ingredients = recipeIngList(recipe);
@@ -2260,7 +2273,7 @@ function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) re
 window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
 
 function showAddFromMealModal() {
-  console.log('[grocery] showAddFromMealModal called — total recipes:', state.recipes?.length, 'mealDays:', Object.keys(state.mealDays || {}).length, 'foodLog:', getFoodLog()?.length);
+  debugLog('[grocery] showAddFromMealModal called — total recipes:', state.recipes?.length, 'mealDays:', Object.keys(state.mealDays || {}).length, 'foodLog:', getFoodLog()?.length);
   window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
 
   const savedIds = new Set(getSavedRecipes());
@@ -2320,7 +2333,7 @@ function showAddFromMealModal() {
   });
 
   window._mealPickerAllItems = allItems;
-  console.log('[grocery] showAddFromMealModal — total meals found:', allItems.length, '(recipes:', state.recipes?.length, ', with ingredients:', allItems.filter(i => i.ingredients.length > 0).length, ')');
+  debugLog('[grocery] showAddFromMealModal — total meals found:', allItems.length, '(recipes:', state.recipes?.length, ', with ingredients:', allItems.filter(i => i.ingredients.length > 0).length, ')');
 
   const modalHtml = `<div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
     <h2 style="font-size:17px;font-weight:600;margin-bottom:12px;">Add from a meal</h2>
@@ -3217,7 +3230,10 @@ function getBatchVideoSequence(batch) {
   return sequence;
 }
 
+let _videoClipsSeeded = false;
 function seedTestVideoClips() {
+  if (_videoClipsSeeded) return;
+  _videoClipsSeeded = true;
   const testVideoId = '68c030875f569b166db2964f7237d7d9';
   const recipes = state.recipes || [];
   const testClipSets = [
@@ -3287,7 +3303,7 @@ function newBatchComponent(type) {
 }
 
 function saveBatchRecipe(batch) {
-  console.log('[saveBatchRecipe] Called with batch id:', batch.id, 'name:', batch.name);
+  debugLog('[saveBatchRecipe] Called with batch id:', batch.id, 'name:', batch.name);
   // Ensure state.batchRecipes is always an array
   if (!Array.isArray(state.batchRecipes)) {
     console.warn('[saveBatchRecipe] state.batchRecipes was not an array, resetting to []');
@@ -3296,23 +3312,23 @@ function saveBatchRecipe(batch) {
   if (!batch.id) {
     batch.id = 'batch_' + Date.now() + '_' + Math.random().toString(36).slice(2);
     batch.createdAt = new Date().toISOString();
-    console.log('[saveBatchRecipe] New plate, assigned id:', batch.id);
+    debugLog('[saveBatchRecipe] New plate, assigned id:', batch.id);
     state.batchRecipes.push(batch);
   } else {
     const idx = state.batchRecipes.findIndex(b => b.id === batch.id);
-    if (idx >= 0) { state.batchRecipes[idx] = batch; console.log('[saveBatchRecipe] Updated existing at index', idx); }
-    else { state.batchRecipes.push(batch); console.log('[saveBatchRecipe] Appended (id existed but not found in array)'); }
+    if (idx >= 0) { state.batchRecipes[idx] = batch; debugLog('[saveBatchRecipe] Updated existing at index', idx); }
+    else { state.batchRecipes.push(batch); debugLog('[saveBatchRecipe] Appended (id existed but not found in array)'); }
   }
-  console.log('[saveBatchRecipe] state.batchRecipes length:', state.batchRecipes.length);
+  debugLog('[saveBatchRecipe] state.batchRecipes length:', state.batchRecipes.length);
   try {
     persistState();
-    console.log('[saveBatchRecipe] persistState() succeeded');
+    debugLog('[saveBatchRecipe] persistState() succeeded');
   } catch (e) {
     console.error('[saveBatchRecipe] persistState() failed:', e);
     // Try saving just batchRecipes directly as fallback
     try {
       saveToLS('batchRecipes', state.batchRecipes);
-      console.log('[saveBatchRecipe] Fallback saveToLS succeeded');
+      debugLog('[saveBatchRecipe] Fallback saveToLS succeeded');
     } catch (e2) {
       console.error('[saveBatchRecipe] Fallback save also failed:', e2);
       throw e2; // Re-throw so caller knows save failed
@@ -4433,7 +4449,7 @@ async function migrateLocalStorageToSupabase() {
   const localData = localStorage.getItem(STORAGE_KEY);
 
   if (!localData) {
-    console.log('No local data to migrate');
+    debugLog('No local data to migrate');
     return;
   }
 
@@ -4458,7 +4474,7 @@ async function migrateLocalStorageToSupabase() {
 
     showToast(`Migrated ${items.length} items to cloud!`, 'success');
     localStorage.removeItem(STORAGE_KEY);
-    console.log('Migration complete, localStorage cleared');
+    debugLog('Migration complete, localStorage cleared');
   } catch (e) {
     console.error('Migration error:', e);
     showError('Failed to migrate data. Please try again.');
@@ -4478,7 +4494,7 @@ async function migrateSavedAndPlatesToSupabase() {
       const item = { id: 'savedRecipes_list', type: 'savedRecipes', recipeIds: saved };
       await window.supabaseClient.from('meal_planner_data')
         .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
-      console.log('[migrate] Synced', saved.length, 'saved recipe IDs to Supabase');
+      debugLog('[migrate] Synced', saved.length, 'saved recipe IDs to Supabase');
     }
 
     // Migrate batch recipes (plates)
@@ -4489,7 +4505,7 @@ async function migrateSavedAndPlatesToSupabase() {
           .upsert({ id: batch.id, user_id: userId, data: batch }, { onConflict: 'id' });
       }
     }
-    if (batches.length > 0) console.log('[migrate] Synced', batches.length, 'plates to Supabase');
+    if (batches.length > 0) debugLog('[migrate] Synced', batches.length, 'plates to Supabase');
 
     // Migrate food log
     const foodLog = getFoodLog();
@@ -4497,7 +4513,7 @@ async function migrateSavedAndPlatesToSupabase() {
       const item = { id: 'foodLog_list', type: 'foodLog', entries: foodLog };
       await window.supabaseClient.from('meal_planner_data')
         .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
-      console.log('[migrate] Synced', foodLog.length, 'food log entries to Supabase');
+      debugLog('[migrate] Synced', foodLog.length, 'food log entries to Supabase');
     }
 
     // Migrate smart grocery list
@@ -4506,7 +4522,7 @@ async function migrateSavedAndPlatesToSupabase() {
       const item = { id: 'groceryList_list', type: 'groceryList', entries: groceryList };
       await window.supabaseClient.from('meal_planner_data')
         .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
-      console.log('[migrate] Synced', groceryList.length, 'grocery items to Supabase');
+      debugLog('[migrate] Synced', groceryList.length, 'grocery items to Supabase');
     }
 
     // Migrate ingredient photos
@@ -4514,7 +4530,7 @@ async function migrateSavedAndPlatesToSupabase() {
       const item = { id: 'ingredientPhotos_data', type: 'ingredientPhotos', photos: ingredientPhotos };
       await window.supabaseClient.from('meal_planner_data')
         .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
-      console.log('[migrate] Synced', Object.keys(ingredientPhotos).length, 'ingredient photos to Supabase');
+      debugLog('[migrate] Synced', Object.keys(ingredientPhotos).length, 'ingredient photos to Supabase');
     }
 
     // Migrate custom ingredient images
@@ -4522,7 +4538,7 @@ async function migrateSavedAndPlatesToSupabase() {
       const item = { id: 'customImages_data', type: 'customImages', images: customIngredientImages };
       await window.supabaseClient.from('meal_planner_data')
         .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
-      console.log('[migrate] Synced', Object.keys(customIngredientImages).length, 'custom images to Supabase');
+      debugLog('[migrate] Synced', Object.keys(customIngredientImages).length, 'custom images to Supabase');
     }
 
     // Migrate recipe effort levels
@@ -4531,7 +4547,7 @@ async function migrateSavedAndPlatesToSupabase() {
       const item = { id: 'effortLevels_data', type: 'effortLevels', levels: effortLevels };
       await window.supabaseClient.from('meal_planner_data')
         .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
-      console.log('[migrate] Synced', Object.keys(effortLevels).length, 'effort levels to Supabase');
+      debugLog('[migrate] Synced', Object.keys(effortLevels).length, 'effort levels to Supabase');
     }
   } catch (e) { console.error('Migration of saved/plates failed (non-fatal):', e); }
 }
@@ -4574,7 +4590,7 @@ async function loadDataFromSupabase() {
 function applySupabaseData(data) {
   // Skip if we're in the middle of an optimistic update
   if (state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil) {
-    console.log('Skipping realtime update during optimistic period');
+    debugLog('Skipping realtime update during optimistic period');
     return;
   }
 
@@ -4689,22 +4705,23 @@ function applySupabaseData(data) {
   persistState();
 }
 
+let _realtimeDebounceTimer = null;
 function subscribeToChanges(userId) {
   const channel = window.supabaseClient
     .channel('meal_planner_changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'meal_planner_data', filter: `user_id=eq.${userId}` },
       (payload) => {
-        console.log('Real-time change detected:', payload);
-        loadDataFromSupabase().then(() => {
-          if (typeof render === 'function') render();
-        });
+        if (state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil) return;
+        clearTimeout(_realtimeDebounceTimer);
+        _realtimeDebounceTimer = setTimeout(() => {
+          loadDataFromSupabase().then(() => {
+            if (typeof render === 'function') render();
+          });
+        }, 1000);
       }
     )
-    .subscribe((status) => {
-      if (status === 'SUBSCRIBED') console.log('✅ Real-time subscribed');
-      if (status === 'CHANNEL_ERROR') console.log('⚠️ Real-time error - continuing without live sync');
-    });
+    .subscribe();
 }
 
 function showClearDataModal() {
@@ -5597,13 +5614,13 @@ function getRecipeSuggestions(filterTerm = '') {
 
 function filterSuggestions() {
   const filterValue = document.getElementById('suggestionFilter')?.value || '';
-  console.log('Filtering for:', filterValue);
+  debugLog('Filtering for:', filterValue);
 
   const suggestions = getRecipeSuggestions(filterValue);
-  console.log('Found suggestions:', suggestions.length);
+  debugLog('Found suggestions:', suggestions.length);
 
   const container = document.getElementById('suggestionsContainer');
-  console.log('Container found:', !!container);
+  debugLog('Container found:', !!container);
 
   if (container) {
     container.innerHTML = suggestions.length === 0 ? `

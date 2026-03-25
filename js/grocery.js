@@ -1186,10 +1186,10 @@ if (typeof addQuickGroceryItem === 'undefined') {
 }
 
 function init() {
-  console.log('[grocery] init() starting');
+  debugLog('[grocery] init() starting');
   try {
     loadAllState();
-    console.log('[grocery] loadAllState done — recipes:', state.recipes?.length, 'groceryItems:', state.groceryItems?.length, 'smartList:', getSmartGroceryList()?.length);
+    debugLog('[grocery] loadAllState done — recipes:', state.recipes?.length, 'groceryItems:', state.groceryItems?.length, 'smartList:', getSmartGroceryList()?.length);
   } catch (e) {
     console.error('[grocery] loadAllState failed:', e);
   }
@@ -1200,10 +1200,10 @@ function init() {
   } else {
     state.currentView = 'grocery-list';
   }
-  console.log('[grocery] currentView:', state.currentView);
+  debugLog('[grocery] currentView:', state.currentView);
   setupKeyboardShortcuts();
   render();
-  console.log('[grocery] init() done');
+  debugLog('[grocery] init() done');
 }
 
 init();

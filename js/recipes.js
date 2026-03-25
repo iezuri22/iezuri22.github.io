@@ -46,7 +46,7 @@ function openNewTip() {
 }
 
 function openEditRecipe(recipeId) {
-  console.log('[openEditRecipe] Looking for recipe:', recipeId);
+  debugLog('[openEditRecipe] Looking for recipe:', recipeId);
   const r = getRecipeById(recipeId);
   if (!r) {
     console.error('[openEditRecipe] Recipe not found:', recipeId, 'recipes count:', state.recipes.length);
@@ -112,14 +112,14 @@ function goBackFromRecipeView() {
 }
 
 async function saveRecipeForm() {
-  console.log('[saveRecipe] Starting save...');
+  debugLog('[saveRecipe] Starting save...');
   ensureRecipeForm();
 
   const title = (state.recipeForm.title || '').trim();
   const cat = (state.recipeForm.category || '').trim();
   const url = (state.recipeForm.recipe_url || '').trim();
 
-  console.log('[saveRecipe] Form data:', { title, category: cat, id: state.recipeForm.id, ingredientCount: (state.recipeForm.ingredientsRows || []).length });
+  debugLog('[saveRecipe] Form data:', { title, category: cat, id: state.recipeForm.id, ingredientCount: (state.recipeForm.ingredientsRows || []).length });
 
   if (!title) return showError(state.recipeForm.isTip ? 'Tip Title is required.' : 'Recipe Title is required.');
   if (!cat) return showError('Category is required.');
@@ -148,24 +148,24 @@ async function saveRecipeForm() {
     isDraft: state.recipeForm.isDraft || false
   };
 
-  console.log('[saveRecipe] Payload ready:', { id: payload.id, title: payload.title, isEdit });
+  debugLog('[saveRecipe] Payload ready:', { id: payload.id, title: payload.title, isEdit });
 
   try {
     if (payload.id) {
-      console.log('[saveRecipe] Updating existing recipe:', payload.id);
+      debugLog('[saveRecipe] Updating existing recipe:', payload.id);
       const result = await storage.update(payload);
-      console.log('[saveRecipe] Update result:', result);
+      debugLog('[saveRecipe] Update result:', result);
     } else {
       payload.id = `recipe_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      console.log('[saveRecipe] Creating new recipe:', payload.id);
+      debugLog('[saveRecipe] Creating new recipe:', payload.id);
       const result = await storage.create(payload);
-      console.log('[saveRecipe] Create result:', result);
+      debugLog('[saveRecipe] Create result:', result);
     }
     const toastMsg = payload.isTip
       ? (isEdit ? 'Tip updated!' : 'Tip saved!')
       : (isEdit ? 'Recipe updated!' : 'Recipe saved!');
     showToast(toastMsg, 'success');
-    console.log('[saveRecipe] Save complete, navigating away');
+    debugLog('[saveRecipe] Save complete, navigating away');
     closeRecipeEditor();
   } catch (e) {
     console.error('[saveRecipe] Error:', e);
@@ -2029,7 +2029,7 @@ function renderRecipeView() {
   }
 
   // Debug: Log image URL
-  console.log('Recipe image URL:', img);
+  debugLog('Recipe image URL:', img);
 
   const recipeId = r.__backendId || r.id;
   const saved = isRecipeSaved(recipeId);
@@ -2114,7 +2114,7 @@ ${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; 
             <img loading="lazy" src="${img}"
                  alt="${esc(r.title)}"
                  onerror="console.error('Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';"
-                 onload="console.log('Image loaded successfully:', this.src);"
+                 onload=""
                  style="width:100%; max-width:100%; max-height:260px; object-fit:cover; display:block;" />
             <div style="display:none; padding:20px; text-align:center; color:${CONFIG.danger_color}; background:rgba(220,38,38,0.1);">
               Image failed to load<br>
@@ -2708,12 +2708,12 @@ function closeBatchEditor() {
 }
 
 function saveBatchForm() {
-  console.log('[saveBatchForm] Starting save...');
+  debugLog('[saveBatchForm] Starting save...');
   if (!state.batchForm) { console.warn('[saveBatchForm] No batchForm in state'); return; }
   const name = (state.batchForm.name || '').trim();
   if (!name) return showError('Please name your plate.');
-  console.log('[saveBatchForm] Name:', name);
-  console.log('[saveBatchForm] Components:', JSON.stringify(state.batchForm.components.map(c => ({ id: c.id, type: c.type, name: c.name }))));
+  debugLog('[saveBatchForm] Name:', name);
+  debugLog('[saveBatchForm] Components:', JSON.stringify(state.batchForm.components.map(c => ({ id: c.id, type: c.type, name: c.name }))));
   if (state.batchForm.components.length === 0) return showError('Add at least one component.');
 
   try {
@@ -2721,9 +2721,9 @@ function saveBatchForm() {
     state.batchForm.components.forEach((c, i) => c.order = i + 1);
     // Ensure video order is populated
     ensureBatchVideoOrder(state.batchForm);
-    console.log('[saveBatchForm] Calling saveBatchRecipe...');
+    debugLog('[saveBatchForm] Calling saveBatchRecipe...');
     saveBatchRecipe(state.batchForm);
-    console.log('[saveBatchForm] saveBatchRecipe returned successfully');
+    debugLog('[saveBatchForm] saveBatchRecipe returned successfully');
     showToast('Plate saved!', 'success');
     state.batchForm = null;
     navigateTo('recipes');
