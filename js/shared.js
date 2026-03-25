@@ -1236,7 +1236,20 @@ function saveIngredientPhotos() {
 
 function setIngredientPhoto(name, url) {
   if (!name || !url) return;
-  ingredientPhotos[name.toLowerCase().trim()] = url;
+  const key = name.toLowerCase().trim();
+  ingredientPhotos[key] = url;
+  // Also store under simplified versions for fuzzy reuse
+  // e.g. "Boneless Skinless Chicken Breast" → also store "chicken breast", "chicken"
+  const words = key.split(/\s+/);
+  for (let start = 0; start < words.length; start++) {
+    for (let end = start + 1; end <= words.length; end++) {
+      const sub = words.slice(start, end).join(' ');
+      if (sub !== key && sub.length >= 3 && !ingredientPhotos[sub]) {
+        ingredientPhotos[sub] = url;
+      }
+    }
+  }
+  console.log('Saved photo for:', name);
   saveIngredientPhotos();
 }
 
@@ -1252,14 +1265,31 @@ function removeIngredientPhoto(name) {
 }
 
 function getIngredientPhotoFromLibrary(name) {
-  if (!name) return null;
-  const key = name.toLowerCase().trim();
-  if (ingredientPhotos[key]) return ingredientPhotos[key];
-  // Fuzzy match
-  for (const [k, url] of Object.entries(ingredientPhotos)) {
-    if (key.includes(k) || k.includes(key)) return url;
+  return findIngredientPhoto(name);
+}
+
+function findIngredientPhoto(itemName) {
+  if (!itemName) return null;
+  const name = itemName.toLowerCase().trim();
+  const photos = ingredientPhotos;
+  // 1. Exact match
+  if (photos[name]) return photos[name];
+  // 2. Fuzzy match — longest matching key wins
+  let bestMatch = null;
+  let bestLength = 0;
+  for (const key of Object.keys(photos)) {
+    // stored key is contained in the item name
+    if (name.includes(key) && key.length > bestLength) {
+      bestMatch = photos[key];
+      bestLength = key.length;
+    }
+    // item name is contained in stored key
+    if (key.includes(name) && name.length > bestLength) {
+      bestMatch = photos[key];
+      bestLength = name.length;
+    }
   }
-  return null;
+  return bestMatch;
 }
 
 // Load on startup
@@ -2479,14 +2509,7 @@ document.addEventListener('click', (e) => {
 const UNSPLASH_ACCESS_KEY = 'bRX98BNJez65z3Y8QZYmp_HlrIedG2Qi6n6xkaODjCw';
 const SERPER_API_KEY = 'baa03e69b94509f224023258927f66385c2e261a';
 
-// Grocery photo toggle
-function getGroceryPhotoToggle() {
-  return localStorage.getItem('yummy_groceryPhotoToggle') === 'true';
-}
-
-function setGroceryPhotoToggle(val) {
-  localStorage.setItem('yummy_groceryPhotoToggle', val ? 'true' : 'false');
-}
+// Grocery photo toggle removed — photos always shown
 
 // Photo search state
 let _photoSearchState = {
