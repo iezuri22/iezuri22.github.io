@@ -1415,6 +1415,11 @@ function capitalize(str) {
   return str.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
 }
 
+function toTitleCase(str) {
+  if (!str) return '';
+  return str.replace(/\b\w/g, function(char) { return char.toUpperCase(); });
+}
+
 function normalizeString(str) {
   return (str || '').toLowerCase().trim();
 }
@@ -1967,9 +1972,9 @@ function getCategorizedSuggestions() {
 }
 
 function addSuggestedToGrocery(name, category, qty, unit, mealNames) {
-  const list = getSmartGroceryList(); const key = normalizeIngredient(name);
-  const existing = list.find(i => normalizeIngredient(i.name) === key);
-  if (existing) { saveSmartGroceryList(list.filter(i => normalizeIngredient(i.name) !== key)); return false; }
+  const list = getSmartGroceryList(); const nameLower = name.toLowerCase().trim();
+  const existing = list.find(i => i.name.toLowerCase().trim() === nameLower);
+  if (existing) { saveSmartGroceryList(list.filter(i => i.name.toLowerCase().trim() !== nameLower)); return false; }
   list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category: category || 'Other', qty: qty || '', unit: unit || '', checked: false, manual: false, sourceMeals: mealNames || [], addedAt: Date.now() });
   saveSmartGroceryList(list); return true;
 }
@@ -2011,7 +2016,7 @@ function showMealIngredientPicker(recipeId) {
       </div>
       <div style="flex: 1; min-width: 0;">
         <div style="display: flex; align-items: baseline; gap: 6px;">
-          <span style="color: ${CONFIG.text_color}; font-size: 13px;">${esc(capitalize(ing.name))}</span>
+          <span style="color: ${CONFIG.text_color}; font-size: 13px;">${esc(toTitleCase(ing.name))}</span>
           ${qtyLabel ? `<span style="color: ${CONFIG.text_muted}; font-size: 11px;">${esc(qtyLabel)}</span>` : ''}
         </div>
         ${ing.onList ? `<div style="font-size: 10px; color: ${CONFIG.primary_action_color}; margin-top: 1px;">Already on list</div>` : ''}
@@ -2083,9 +2088,9 @@ function submitPickerIngredients() {
   const list = getSmartGroceryList();
   let added = 0;
   selected.forEach(ing => {
-    const key = normalizeIngredient(ing.name);
-    if (!key) return;
-    const existing = list.find(i => normalizeIngredient(i.name) === key);
+    const nameLower = ing.name.toLowerCase().trim();
+    if (!nameLower) return;
+    const existing = list.find(i => i.name.toLowerCase().trim() === nameLower);
     if (existing) {
       if (!existing.sourceMeals.includes(recipe.title)) existing.sourceMeals.push(recipe.title);
     } else {
@@ -2139,7 +2144,7 @@ function showBatchIngredientPicker(batchId) {
         </div>
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:baseline;gap:6px;">
-            <span style="color:${CONFIG.text_color};font-size:13px;">${esc(capitalize(ing.name))}</span>
+            <span style="color:${CONFIG.text_color};font-size:13px;">${esc(toTitleCase(ing.name))}</span>
             ${qtyLabel ? `<span style="color:${CONFIG.text_muted};font-size:11px;">${esc(qtyLabel)}</span>` : ''}
           </div>
           ${ing.onList ? `<div style="font-size:10px;color:${CONFIG.primary_action_color};margin-top:1px;">Already on list</div>` : ''}
@@ -2207,13 +2212,13 @@ function addManualGroceryItemSmart() {
   const input = document.getElementById('groceryManualInput'); if (!input) return;
   const name = input.value.trim(); if (!name) return;
   const list = getSmartGroceryList();
-  if (list.find(i => normalizeIngredient(i.name) === normalizeIngredient(name))) { showToast('Already on your list', 'info'); input.value = ''; return; }
+  if (list.find(i => i.name.toLowerCase().trim() === name.toLowerCase().trim())) { showToast('Already on your list', 'info'); input.value = ''; return; }
   const catInput = document.getElementById('groceryManualCategory');
   const category = (catInput && catInput.value) ? catInput.value : 'Other';
   list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category, qty: '', unit: '', checked: false, manual: true, sourceMeals: [], addedAt: Date.now() });
   saveSmartGroceryList(list); input.value = '';
   if (catInput) catInput.value = 'Other';
-  showToast(`${capitalize(name)} added to ${category}`, 'success');
+  showToast(`${toTitleCase(name)} added to ${category}`, 'success');
   if (typeof render === 'function') render();
   setTimeout(() => { const newInput = document.getElementById('groceryManualInput'); if (newInput) newInput.focus(); }, 50);
 }
@@ -2267,7 +2272,7 @@ function _updateGroceryBadge() {
 }
 
 let _cachedSuggestions = [];
-function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; const added = addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); showToast(added ? `${capitalize(s.name)} added` : `${capitalize(s.name)} removed`, added ? 'success' : 'info'); if (typeof render === 'function') render(); }
+function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; const added = addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); showToast(added ? `${toTitleCase(s.name)} added` : `${toTitleCase(s.name)} removed`, added ? 'success' : 'info'); if (typeof render === 'function') render(); }
 
 // --- Add from a meal: filter state ---
 window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };

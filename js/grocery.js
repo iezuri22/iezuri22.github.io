@@ -68,7 +68,7 @@ function renderGroceryIngredients() {
             function _ingRow(ing) {
               const k = normalizeIngredient(ing.name);
               const chk = keys.includes(k);
-              return '<div data-ingredient-key="' + k + '" onclick="handleIngredientClick(\'' + k + '\', this)" style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:' + (chk ? 'rgba(232,93,93,0.1)' : CONFIG.background_color) + '; border-radius:6px; cursor:pointer; border:1px solid ' + (chk ? CONFIG.primary_action_color : 'transparent') + ';"><div style="width:20px; height:20px; border-radius:4px; border:2px solid ' + (chk ? CONFIG.primary_action_color : CONFIG.text_muted) + '; background:' + (chk ? CONFIG.primary_action_color : 'transparent') + '; display:flex; align-items:center; justify-content:center; color:white; font-size:12px; flex-shrink:0;">' + (chk ? '✓' : '') + '</div><span style="color:' + CONFIG.text_color + '; font-size:13px;">' + esc(ing.qty) + (ing.unit ? ' ' + esc(ing.unit) : '') + ' ' + esc(ing.name) + '</span></div>';
+              return '<div data-ingredient-key="' + k + '" onclick="handleIngredientClick(\'' + k + '\', this)" style="display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:4px; background:' + (chk ? 'rgba(232,93,93,0.1)' : CONFIG.background_color) + '; border-radius:6px; cursor:pointer; border:1px solid ' + (chk ? CONFIG.primary_action_color : 'transparent') + ';"><div style="width:20px; height:20px; border-radius:4px; border:2px solid ' + (chk ? CONFIG.primary_action_color : CONFIG.text_muted) + '; background:' + (chk ? CONFIG.primary_action_color : 'transparent') + '; display:flex; align-items:center; justify-content:center; color:white; font-size:12px; flex-shrink:0;">' + (chk ? '✓' : '') + '</div><span style="color:' + CONFIG.text_color + '; font-size:13px;">' + esc(ing.qty) + (ing.unit ? ' ' + esc(ing.unit) : '') + ' ' + esc(toTitleCase(ing.name)) + '</span></div>';
             }
             let html = '';
             if (uniqueIngs.length > 0) {
@@ -207,14 +207,14 @@ function renderGroceryByMeal(unchecked, checked) {
               ${esc(mealName)}
             </div>
             ${data.ingredients.map(item => {
-              const capitalizedName = capitalize(item.name);
+              const titleName = toTitleCase(item.name);
 
               return `
                 <div style="color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px; ${item.checked ? 'opacity: 0.5; text-decoration: line-through;' : ''}"
                      class="flex items-center justify-between gap-3 p-3 rounded">
                   <label class="flex items-center gap-3 cursor-pointer flex-1">
                     <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleGroceryItem('${normalizeIngredient(item.name)}')">
-                    <span>${capitalizedName}</span>
+                    <span>${titleName}</span>
                   </label>
                   <button type="button" onclick="removeFromGroceryList('${normalizeIngredient(item.name)}')"
                     class="px-2 py-1 rounded button-hover"
@@ -241,14 +241,14 @@ function renderGroceryByMeal(unchecked, checked) {
                     ${esc(group)}
                   </div>
             ${byCategory[group].map(item => {
-              const capitalizedName = capitalize(item.name);
+              const titleName = toTitleCase(item.name);
 
               return `
                 <div style="color: ${CONFIG.text_color}; font-family: ${CONFIG.font_family}, sans-serif; font-size: ${CONFIG.font_size}px; ${item.checked ? 'opacity: 0.5; text-decoration: line-through;' : ''}"
                      class="flex items-center justify-between gap-3 p-3 rounded">
                   <label class="flex items-center gap-3 cursor-pointer flex-1">
                     <input type="checkbox" ${item.checked ? 'checked' : ''} onchange="toggleGroceryItem('${normalizeIngredient(item.name)}')">
-                    <span>${capitalizedName}</span>
+                    <span>${titleName}</span>
                   </label>
                   <button type="button" onclick="removeFromGroceryList('${normalizeIngredient(item.name)}')"
                     class="px-2 py-1 rounded button-hover"
@@ -319,7 +319,7 @@ function renderGroceryList() {
                   style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; min-height: 36px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;"
                   class="card-press">
                   <svg width="14" height="14" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                  ${esc(capitalize(s.name))}
+                  ${esc(toTitleCase(s.name))}
                   <span style="color: ${CONFIG.text_muted}; font-size: 10px;">${sublabelFn(s)}</span>
                 </button>
               `).join('')}
@@ -482,7 +482,7 @@ function renderGroceryList() {
     }
 
 function _renderGroceryRow(item, isChecked) {
-      const name = capitalize(item.name);
+      const name = toTitleCase(item.name);
       const qtyLabel = item.qty ? `${item.qty}${item.unit ? ' ' + item.unit : ''}` : '';
       const sourceLabel = item.sourceMeals && item.sourceMeals.length > 0
         ? item.sourceMeals.join(', ') : '';
