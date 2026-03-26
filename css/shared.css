@@ -1425,10 +1425,11 @@
     }
 
     /* ===== MOBILE BOTTOM NAV CONTENT CLEARANCE ===== */
-    /* Ensure scrollable content clears the fixed bottom nav + safe area */
+    /* Padding must be on the scrollable container, not the flex parent */
     @media (max-width: 767px) {
-      .app-shell {
+      .app-shell > .desktop-content-area {
         padding-bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+        box-sizing: border-box;
       }
     }
 
