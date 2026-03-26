@@ -1424,21 +1424,20 @@
       }
     }
 
-    /* ===== iOS STANDALONE WEB APP (Add to Home Screen) FIX ===== */
-    /* Fixes black gap below bottom nav on iPhones with home indicator (34px).
-       Root cause: in iOS standalone mode, position:fixed bottom:0 stops at the
-       safe-area boundary, and env(safe-area-inset-bottom) may return 0.
-       Fix: paint the html canvas background with the nav color so any gap
-       below the viewport is filled, and remove body bottom padding. */
+    /* ===== MOBILE BOTTOM NAV CONTENT CLEARANCE ===== */
+    /* Ensure scrollable content clears the fixed bottom nav + safe area */
+    @media (max-width: 767px) {
+      .app-shell {
+        padding-bottom: calc(56px + env(safe-area-inset-bottom)) !important;
+      }
+    }
 
+    /* ===== iOS STANDALONE WEB APP (Add to Home Screen) FIX ===== */
+    /* Paint html background with nav color so any gap below viewport is filled */
     html.ios-standalone {
       background-color: #1a1a24;
     }
 
     html.ios-standalone body {
       padding-bottom: 0 !important;
-    }
-
-    html.ios-standalone .app-shell {
-      padding-bottom: 90px;
     }
