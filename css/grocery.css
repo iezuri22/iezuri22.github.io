@@ -1,1 +1,254 @@
 /* Grocery page specific styles */
+
+/* ===== VIEW MODE TOGGLE ===== */
+.grocery-tab-bar {
+  display: flex;
+  gap: 4px;
+  background: var(--bg-elevated);
+  border-radius: 10px;
+  padding: 3px;
+  margin-bottom: 12px;
+}
+
+.grocery-tab {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.2s ease;
+  text-align: center;
+}
+
+.grocery-tab.active {
+  background: var(--accent);
+  color: white;
+}
+
+.grocery-tab:not(.active) {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+/* ===== RECIPE CARDS ===== */
+.grocery-recipe-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-xl);
+  margin-bottom: 8px;
+  overflow: hidden;
+  border: 1px solid var(--border-card);
+}
+
+.grocery-recipe-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.grocery-recipe-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.grocery-recipe-thumb-placeholder {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.grocery-recipe-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.grocery-recipe-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.grocery-recipe-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+.grocery-recipe-remove {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  padding: 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.grocery-recipe-remove:active {
+  background: rgba(255, 69, 58, 0.1);
+  color: var(--accent);
+}
+
+.grocery-recipe-chevron {
+  color: var(--text-tertiary);
+  transition: transform 200ms ease;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.grocery-recipe-card.expanded .grocery-recipe-chevron {
+  transform: rotate(90deg);
+}
+
+.grocery-recipe-items {
+  padding: 0 12px 12px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.grocery-recipe-items .grocery-item-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.grocery-recipe-items .grocery-item-row:last-child {
+  border-bottom: none;
+}
+
+.grocery-item-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--text-tertiary);
+  background: transparent;
+  flex-shrink: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.grocery-item-check.checked {
+  background: var(--accent-green);
+  border-color: var(--accent-green);
+}
+
+.grocery-item-label {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.grocery-item-label.checked {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.grocery-item-qty {
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.grocery-item-delete {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+/* ===== STICKY BOTTOM BAR ===== */
+.grocery-sticky-bar {
+  position: fixed;
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-card);
+  z-index: 35;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.grocery-sticky-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.grocery-sticky-cta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: var(--accent-green);
+  color: white;
+  border: none;
+  border-radius: 100px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  white-space: nowrap;
+}
+
+.grocery-sticky-cta:active {
+  transform: scale(0.97);
+  opacity: 0.9;
+}
+
+/* ===== OTHER ITEMS SECTION ===== */
+.grocery-other-section {
+  margin-top: 8px;
+}
+
+.grocery-other-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+/* ===== DESKTOP ADJUSTMENTS ===== */
+@media (min-width: 768px) {
+  .grocery-sticky-bar {
+    left: 200px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+}

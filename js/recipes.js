@@ -86,6 +86,8 @@ function openRecipeView(id, fromPlan = null, fromStats = false, fromTips = false
   state.viewingFromStats = fromStats; // true if coming from recipe-stats
   state.viewingFromTips = fromTips; // true if coming from tips page
   state.viewingFromMealOptions = fromMealOptions; // true if coming from meal options
+  state.recipeDetailTab = 'ingredients';
+  state.recipeDetailDescExpanded = false;
   state.currentView = 'recipe-view';
   render();
 
@@ -2480,256 +2482,33 @@ Step 3: Add wet ingredients..."
 }
 
 function renderRecipeView() {
-  const r = getRecipeById(state.selectedRecipeViewId);
+  const recipeId = state.selectedRecipeViewId;
+  const r = getRecipeById(recipeId);
   if (!r) return `<div class="p-6" style="color:${CONFIG.text_color};">Recipe not found.</div>`;
 
-  const img = recipeThumb(r);
-  const url = (r.recipe_url || '').trim();
-  const tags = (r.tags || '').trim();
-  const notes = (r.notes || '').trim();
-  const instructions = Array.isArray(r.instructions)
-    ? r.instructions.join('\n')
-    : (r.instructions || '').trim();
-  const sourceLabel = r.sourceType === 'chefiq' ? 'ChefIQ Guided' :
-                        r.sourceType === 'imported' ? 'Imported' :
-                        r.sourceType === 'claude' ? 'Chef Claude' : 'User-Created';
-  let rows = [];
-  if (Array.isArray(r.ingredientsRows) && r.ingredientsRows.length > 0) {
-    rows = r.ingredientsRows;
-  } else if (Array.isArray(r.ingredients) && r.ingredients.length > 0) {
-    // Handle imported recipes with old format
-    rows = r.ingredients.map(ing => ({
-      qty: ing.amount || '',
-      unit: ing.unit || '',
-      name: ing.item || ing.name || '',
-      group: ing.group || 'Other'
-    }));
-  }
-  const grouped = {};
-  rows.forEach(x => {
-    const g = x.group || 'Other';
-    if (!grouped[g]) grouped[g] = [];
-    grouped[g].push(x);
-  });
-  const groupOrder = Object.keys(grouped);
+  const id = r.__backendId || r.id;
 
-  // Parse instructions into steps - group numbered steps with their sub-instructions
-  const instructionSteps = [];
-  if (instructions) {
-    const lines = instructions.split('\n');
-    let currentStep = null;
-
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-
-      // Check if line starts with a number (e.g., "1.", "2.", etc.)
-      if (/^\d+[\.\)]\s*/.test(trimmed)) {
-        if (currentStep) instructionSteps.push(currentStep);
-        currentStep = { header: trimmed, details: [] };
-      } else if (currentStep) {
-        currentStep.details.push(trimmed);
-      } else {
-        // Line without a number and no current step - treat as standalone
-        instructionSteps.push({ header: null, details: [trimmed] });
-      }
-    });
-
-    if (currentStep) instructionSteps.push(currentStep);
-  }
-
-  // Debug: Log image URL
-  debugLog('Recipe image URL:', img);
-
-  const recipeId = r.__backendId || r.id;
-  const saved = isRecipeSaved(recipeId);
-  const externalUrl = url || recipeUrl(r);
-
-  return `
-              <div class="p-6 max-w-5xl mx-auto" style="overflow-x:hidden; max-width:100%; box-sizing:border-box;">
-      <!-- Compact header row -->
-      <nav style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; min-height:36px;">
-        <button type="button" onclick="goBackFromRecipeView()" style="color:${CONFIG.text_color}; background:none; border:none; cursor:pointer; width:32px; height:32px; display:flex; align-items:center; justify-content:center; padding:0;">
-          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+  // Wrap with plan context buttons if viewing from plan
+  let planContextHtml = '';
+  if (state.viewingFromPlan) {
+    planContextHtml = `
+      <div style="display:flex;gap:8px;padding:8px 20px 0;">
+        <button type="button" onclick="openRecipePicker('${state.viewingFromPlan.date}', '${state.viewingFromPlan.meal}')"
+          style="padding:8px 16px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+          Change Recipe
         </button>
-        <span style="color:${CONFIG.text_color}; font-weight:700; font-size:18px; flex:1; text-align:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding:0 8px;">Recipe</span>
-        <div style="display:flex; align-items:center; gap:12px;">
-          ${state.viewingFromPlan ? `
-            <button type="button" onclick="openRecipePicker('${state.viewingFromPlan.date}', '${state.viewingFromPlan.meal}')"
-              style="padding:6px 12px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;">
-              Change
-            </button>
-            <button type="button" onclick="if(confirm('Remove this meal from your plan?')) { removeMealFromPlan('${state.viewingFromPlan.date}', '${state.viewingFromPlan.meal}', '${recipeId}'); state.currentView='weekly-plan'; state.viewingFromPlan=null; }"
-              style="padding:6px 12px; background:${CONFIG.danger_color}; color:white; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;">
-              Remove
-            </button>
-          ` : ''}
-          ${r.isTip ? `
-            <button type="button" onclick="publishTip('${recipeId}')"
-              style="padding:6px 12px; background:${CONFIG.success_color}; color:white; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer;">Convert</button>
-          ` : ''}
-          <button type="button" onclick="openEditRecipe('${recipeId}')" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; width:28px; height:28px; display:flex; align-items:center; justify-content:center; padding:0;" title="Edit recipe">
-            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
-          </button>
-          <button type="button" onclick="toggleSaveRecipe('${recipeId}')" style="background:none; border:none; cursor:pointer; color:${saved ? CONFIG.primary_action_color : CONFIG.text_muted}; width:28px; height:28px; display:flex; align-items:center; justify-content:center; padding:0;" title="${saved ? 'Unsave recipe' : 'Save recipe'}">
-            <svg width="18" height="18" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
-          </button>
-        </div>
-      </nav>
-
-      ${externalUrl ? `
-        <div style="margin-bottom:12px;">
-          <a href="${esc(externalUrl)}" target="_blank" rel="noopener noreferrer" style="display:inline-flex; align-items:center; gap:4px; color:${CONFIG.primary_action_color}; font-size:13px; text-decoration:none; font-weight:500;">
-            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
-            View original recipe &rarr;
-          </a>
-        </div>
-      ` : ''}
-
-      <div class="rounded p-5" style="background:${CONFIG.surface_color};">
-        <div>
-          <div>
-            <div class="font-bold" style="color:${CONFIG.text_color}; font-size: ${CONFIG.type_title}; font-weight: ${CONFIG.type_title_weight}; letter-spacing: ${CONFIG.type_title_tracking};">
-              ${esc(r.title)}
-            </div>
-            <div style="color:${CONFIG.text_color}; opacity:.7;">
-              ${esc(r.category)} - ${sourceLabel}
-            </div>
-            ${r.servings || r.prepTime || r.cookTime || getRecipeEffort(recipeId) ? `
-              <div style="color:${CONFIG.text_color}; opacity:.7; margin-top:4px; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-                ${getRecipeEffort(recipeId) ? renderEffortPill(getRecipeEffort(recipeId)) + '<span>·</span>' : ''}
-                ${r.cookTime ? `<span>Cook: ${r.cookTime}</span>` : ''}
-                ${r.prepTime ? `<span>· Prep: ${r.prepTime}</span>` : ''}
-                ${r.servings ? `<span>· ${r.servings} servings</span>` : ''}
-                ${rows.length > 0 ? `<span>· ${rows.length} ingredients</span>` : ''}
-              </div>
-            ` : ''}
-            <div style="margin-top:10px;">
-              <div style="color:${CONFIG.text_muted}; font-size:12px; margin-bottom:6px;">Effort</div>
-              <div style="display:flex; gap:8px; flex-wrap:nowrap; width:100%; max-width:100%; overflow-x:hidden; box-sizing:border-box;">
-                ${Object.entries(EFFORT_LEVELS).map(([key, e]) => {
-                  const active = getRecipeEffort(recipeId) === key;
-                  return `<button onclick="setRecipeEffort('${recipeId}', ${active ? 'null' : `'${key}'`}); render();"
-                    style="padding:6px 16px; border-radius:20px; border:1px solid ${active ? e.border : 'rgba(255,255,255,0.12)'}; background:${active ? e.bg : 'transparent'}; color:${active ? e.color : CONFIG.text_muted}; font-size:13px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
-                    ${e.label}
-                  </button>`;
-                }).join('')}
-              </div>
-            </div>
-${r.isTip ? `<div style="color:${CONFIG.primary_action_color}; font-weight:600; margin-top:8px;">TIP/NOTE - Not available for meal planning</div>` : ''}          </div>
-        </div>
-
-        ${img ? `
-          <div class="mt-4 rounded overflow-hidden" style="border:1px solid rgba(255,255,255,0.08);">
-            <img loading="lazy" src="${img}"
-                 alt="${esc(r.title)}"
-                 onerror="console.error('Image failed to load:', this.src); this.style.display='none'; this.nextElementSibling.style.display='block';"
-                 onload=""
-                 style="width:100%; max-width:100%; max-height:260px; object-fit:cover; display:block;" />
-            <div style="display:none; padding:20px; text-align:center; color:${CONFIG.danger_color}; background:rgba(220,38,38,0.1);">
-              Image failed to load<br>
-              <small style="font-size:12px; opacity:0.8;">${img}</small>
-            </div>
-          </div>
-        ` : ''}
-
-        ${recipeHasVideo(recipeId) ? `
-          <div class="mt-4">
-            <button type="button" onclick="openVideoOverlay('recipe', '${recipeId}')"
-              style="width:100%; height:44px; display:flex; align-items:center; justify-content:center; gap:8px;
-              background:${CONFIG.surface_color}; border:1px solid rgba(255,255,255,0.12); border-radius:10px;
-              color:${CONFIG.text_color}; font-size:14px; font-weight:600; cursor:pointer;">
-              <svg width="18" height="18" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-              Watch Cooking Video
-            </button>
-          </div>
-        ` : ''}
-
-        ${tags ? `<div class="mt-4" style="color:${CONFIG.text_color}; opacity:.85;">
-          <span class="font-semibold">Tags:</span> ${esc(tags)}
-        </div>` : ''}
-
-        ${groupOrder.length ? `
-          <div class="mt-6 p-3 rounded" style="background:rgba(232, 93, 93, 0.1); border: 1px solid rgba(232, 93, 93, 0.2);">
-            <div class="font-semibold mb-3" style="color:${CONFIG.text_color};">Ingredients</div>
-            ${groupOrder.map(g => `
-              <div class="mb-3">
-                <div class="font-semibold mb-1" style="color:${CONFIG.primary_action_color}; font-size:${CONFIG.font_size * 0.9}px;">${esc(g)}</div>
-                <div class="grid grid-cols-2 gap-1">
-                  ${grouped[g].map(x => {
-                    const qty = (x.qty || '').trim();
-                    const unit = (x.unit || '').trim();
-                    const name = (x.name || '').trim();
-                    const capName = capitalize(name);
-                    return `
-                      <div style="color:${CONFIG.text_color}; font-size:${CONFIG.font_size * 0.85}px; opacity:0.9;">
-                        - ${qty} ${unit} ${capName}
-                      </div>
-                    `;
-                  }).join('')}
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-
-        <div class="mt-6">
-          <div class="font-semibold mb-2" style="color:${CONFIG.text_color};">Step-by-step Instructions</div>
-          ${instructionSteps.length ? `
-          <ol class="space-y-4" style="color:${CONFIG.text_color}; opacity:.9; list-style: none;">
-              ${instructionSteps.map((step) => `
-                <li style="padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${CONFIG.primary_action_color};">
-                  ${step.header ? `
-                    <div style="font-weight: 600; color: ${CONFIG.primary_action_color}; margin-bottom: 4px;">
-                      ${esc(step.header)}
-                    </div>
-                  ` : ''}
-                  ${step.details.map(d => `
-                    <div style="padding-left: ${step.header ? '12px' : '0'}; color: ${CONFIG.text_color};">
-                      ${esc(d)}
-                    </div>
-                  `).join('')}
-                </li>
-              `).join('')}
-            </ol>` : `
-            <div style="color:${CONFIG.text_color}; opacity:.6;">
-              No instructions saved yet. Add them in Edit.
-            </div>`}
-        </div>
-
-        ${notes ? `
-          <div class="mt-6">
-            <div class="font-semibold mb-2" style="color:${CONFIG.text_color};">Notes</div>
-            <div class="rounded p-4" style="background:rgba(255,255,255,0.03); color:${CONFIG.text_color}; white-space:pre-wrap;">
-              ${esc(notes)}
-            </div>
-          </div>` : ''}
-
-        ${externalUrl ? `
-          <div class="mt-6">
-            <a href="${esc(externalUrl)}" target="_blank" rel="noopener noreferrer"
-              style="display:inline-flex; align-items:center; gap:4px;
-              color:${CONFIG.primary_action_color};
-              font-size:13px; font-weight:500; text-decoration:none;">
-              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
-              View original recipe &rarr;
-            </a>
-          </div>
-        ` : ''}
-
-        ${!r.isTip ? `
-          <div class="mt-6">
-            <button onclick="showAddToMealsModal('${recipeId}')"
-              style="width:100%; height:44px; display:flex; align-items:center; justify-content:center; gap:8px;
-              background:${CONFIG.primary_action_color}; border:none; border-radius:12px;
-              color:white; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;">
-              <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
-              Add to My Meals
-            </button>
-          </div>
-        ` : ''}
+        <button type="button" onclick="if(confirm('Remove this meal from your plan?')) { removeMealFromPlan('${state.viewingFromPlan.date}', '${state.viewingFromPlan.meal}', '${id}'); state.currentView='weekly-plan'; state.viewingFromPlan=null; }"
+          style="padding:8px 16px; background:${CONFIG.danger_color}; color:white; border:none; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer;">
+          Remove
+        </button>
       </div>
-    </div>`;
+    `;
+  }
+
+  return planContextHtml + renderRecipeDetailV2(id, {
+    onBack: 'goBackFromRecipeView()',
+    standalone: false
+  });
 }
 
 // ===== VIDEO CAROUSEL =====

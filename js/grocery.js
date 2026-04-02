@@ -265,6 +265,124 @@ function renderGroceryByMeal(unchecked, checked) {
 `;
 }
 
+// ============================================================
+// "BY RECIPE" VIEW - Group grocery items by source recipe (ChefIQ basket style)
+// ============================================================
+
+function findRecipeByTitle(title) {
+  if (!title || !state.recipes) return null;
+  const lower = title.toLowerCase().trim();
+  return state.recipes.find(r => (r.title || '').toLowerCase().trim() === lower);
+}
+
+function toggleGroceryRecipeCard(recipeName) {
+  if (!state.groceryExpandedRecipes) state.groceryExpandedRecipes = new Set();
+  if (state.groceryExpandedRecipes.has(recipeName)) {
+    state.groceryExpandedRecipes.delete(recipeName);
+  } else {
+    state.groceryExpandedRecipes.add(recipeName);
+  }
+  render();
+}
+
+function removeRecipeFromGrocery(recipeName) {
+  if (!confirm('Remove all items from "' + recipeName + '"?')) return;
+  let list = getSmartGroceryList();
+  const toRemove = list.filter(item => item.sourceMeals && item.sourceMeals.length > 0 && item.sourceMeals[0] === recipeName);
+  list = list.filter(item => !(item.sourceMeals && item.sourceMeals.length > 0 && item.sourceMeals[0] === recipeName));
+  saveSmartGroceryList(list);
+  showToast('Removed ' + toRemove.length + ' items from ' + recipeName, 'success');
+  render();
+}
+
+function renderGroceryByRecipe() {
+  const groceryList = getSmartGroceryList();
+  if (!state.groceryExpandedRecipes) state.groceryExpandedRecipes = new Set();
+
+  // Group by sourceMeals[0]
+  const byRecipe = {};
+  const otherItems = [];
+
+  groceryList.forEach(item => {
+    if (!item.sourceMeals || item.sourceMeals.length === 0 || item.manual) {
+      otherItems.push(item);
+    } else {
+      const key = item.sourceMeals[0];
+      if (!byRecipe[key]) byRecipe[key] = [];
+      byRecipe[key].push(item);
+    }
+  });
+
+  let html = '';
+
+  // Render each recipe card
+  Object.entries(byRecipe).forEach(([recipeName, items]) => {
+    const recipe = findRecipeByTitle(recipeName);
+    const thumb = recipe ? recipeThumb(recipe) : '';
+    const servings = recipe && recipe.servings ? recipe.servings + ' servings' : '';
+    const uncheckedCount = items.filter(i => !i.checked).length;
+    const isExpanded = state.groceryExpandedRecipes.has(recipeName);
+    const escapedName = esc(recipeName).replace(/'/g, "\\'");
+
+    html += `
+      <div class="grocery-recipe-card ${isExpanded ? 'expanded' : ''}">
+        <div class="grocery-recipe-header" onclick="toggleGroceryRecipeCard('${escapedName}')">
+          ${thumb ? `<img src="${esc(thumb)}" class="grocery-recipe-thumb" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+            <div class="grocery-recipe-thumb-placeholder" style="display:none;">🍽️</div>` :
+            `<div class="grocery-recipe-thumb-placeholder">🍽️</div>`}
+          <div class="grocery-recipe-info">
+            <div class="grocery-recipe-title">${esc(recipeName)}</div>
+            <div class="grocery-recipe-meta">${uncheckedCount} item${uncheckedCount !== 1 ? 's' : ''}${servings ? ' · ' + servings : ''}</div>
+          </div>
+          <button class="grocery-recipe-remove" onclick="event.stopPropagation();removeRecipeFromGrocery('${escapedName}')" title="Remove all items">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+          </button>
+          <span class="grocery-recipe-chevron">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+          </span>
+        </div>
+        ${isExpanded ? `
+          <div class="grocery-recipe-items">
+            ${items.map(item => _renderGroceryRow(item, item.checked)).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  });
+
+  // Render "Other Items" section
+  if (otherItems.length > 0) {
+    const isExpanded = state.groceryExpandedRecipes.has('__other__');
+    const uncheckedCount = otherItems.filter(i => !i.checked).length;
+
+    html += `
+      <div class="grocery-recipe-card ${isExpanded ? 'expanded' : ''}">
+        <div class="grocery-recipe-header" onclick="toggleGroceryRecipeCard('__other__')">
+          <div class="grocery-recipe-thumb-placeholder">🛒</div>
+          <div class="grocery-recipe-info">
+            <div class="grocery-recipe-title">Other Items</div>
+            <div class="grocery-recipe-meta">${uncheckedCount} item${uncheckedCount !== 1 ? 's' : ''}</div>
+          </div>
+          <span class="grocery-recipe-chevron">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+          </span>
+        </div>
+        ${isExpanded ? `
+          <div class="grocery-recipe-items">
+            ${otherItems.map(item => _renderGroceryRow(item, item.checked)).join('')}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  if (groceryList.length === 0) {
+    html = `<div style="text-align:center;padding:24px 0;color:var(--text-secondary);font-size:13px;">Your grocery list is empty. Add items from a meal or manually.</div>`;
+  }
+
+  return html;
+}
+
 function renderGroceryList() {
       const groceryList = getSmartGroceryList();
       const unchecked = groceryList.filter(item => !item.checked);
@@ -400,6 +518,12 @@ function renderGroceryList() {
           </div>
           <input type="hidden" id="groceryManualCategory" value="Other" />
 
+          <!-- View Mode Toggle -->
+          <div class="grocery-tab-bar">
+            <button class="grocery-tab ${state.groceryViewMode === 'recipe' ? 'active' : ''}" onclick="state.groceryViewMode='recipe';render();">By Recipe</button>
+            <button class="grocery-tab ${state.groceryViewMode === 'category' ? 'active' : ''}" onclick="state.groceryViewMode='category';render();">By Category</button>
+          </div>
+
           <div class="desktop-grocery-layout">
             <div class="desktop-grocery-main">
 
@@ -428,6 +552,8 @@ function renderGroceryList() {
 
           ${emptyMessage}
 
+          ${state.groceryViewMode === 'recipe' ? renderGroceryByRecipe() : `
+          <!-- BY CATEGORY VIEW -->
           <!-- What you'll need (unique ingredients by category) -->
           ${(uniqueUnchecked.length > 0 || uniqueChecked.length > 0) ? `
             <div style="color: ${CONFIG.text_color}; font-size: 13px; font-weight: 600; margin-bottom: 8px;">What you'll need</div>
@@ -457,6 +583,7 @@ function renderGroceryList() {
               </div>
             `).join('');
           })()}
+          `}
 
           <!-- Staples section (collapsed) -->
           ${staplesHtml}
@@ -470,6 +597,25 @@ function renderGroceryList() {
           </div><!-- end desktop-grocery-layout -->
 
         </div>
+
+        <!-- Sticky Bottom Bar -->
+        ${groceryList.length > 0 ? (() => {
+          const recipeNames = new Set();
+          groceryList.forEach(item => {
+            if (item.sourceMeals) item.sourceMeals.forEach(m => recipeNames.add(m));
+          });
+          const recipeCount = recipeNames.size;
+          const itemCount = unchecked.length;
+          return `
+            <div class="grocery-sticky-bar">
+              <span class="grocery-sticky-count">${recipeCount} RECIPE${recipeCount !== 1 ? 'S' : ''}, ${itemCount} ITEM${itemCount !== 1 ? 'S' : ''}</span>
+              <button class="grocery-sticky-cta" onclick="showToast('Delivery integration coming soon!', 'info')">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+                Shop With Walmart
+              </button>
+            </div>
+          `;
+        })() : ''}
       `;
     }
 
@@ -1124,8 +1270,9 @@ function render() {
     </div>`;
   }
 
+  const extraPadding = state.currentView === 'grocery-list' ? '120px' : '56px';
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
+    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: ${extraPadding};">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">

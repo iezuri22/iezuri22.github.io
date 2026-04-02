@@ -573,6 +573,64 @@ function renderEffortPill(level, size) {
 }
 
 // ============================================================
+// RATINGS & COMMENTS (localStorage per-recipe)
+// ============================================================
+const RATINGS_KEY = 'yummy_ratings';
+const COMMENTS_KEY = 'yummy_comments';
+
+function getRecipeRatings(recipeId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}');
+    return all[recipeId] || { userRating: 0, totalRatings: 0, averageRating: 0, distribution: [0,0,0,0,0] };
+  } catch { return { userRating: 0, totalRatings: 0, averageRating: 0, distribution: [0,0,0,0,0] }; }
+}
+
+function saveRecipeRating(recipeId, stars) {
+  const all = JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}');
+  if (!all[recipeId]) {
+    all[recipeId] = { userRating: 0, totalRatings: 0, averageRating: 0, distribution: [0,0,0,0,0] };
+  }
+  const data = all[recipeId];
+  // If user already rated, remove old rating first
+  if (data.userRating > 0) {
+    data.distribution[data.userRating - 1] = Math.max(0, data.distribution[data.userRating - 1] - 1);
+    data.totalRatings = Math.max(0, data.totalRatings - 1);
+  }
+  data.userRating = stars;
+  data.distribution[stars - 1] += 1;
+  data.totalRatings += 1;
+  // Recalculate average
+  const dist = data.distribution;
+  const total = dist.reduce((a, b) => a + b, 0);
+  const sum = dist.reduce((a, b, i) => a + b * (i + 1), 0);
+  data.averageRating = total > 0 ? (sum / total).toFixed(1) : 0;
+  localStorage.setItem(RATINGS_KEY, JSON.stringify(all));
+  return data;
+}
+
+function getRecipeComments(recipeId) {
+  try {
+    const all = JSON.parse(localStorage.getItem(COMMENTS_KEY) || '{}');
+    return all[recipeId] || [];
+  } catch { return []; }
+}
+
+function addRecipeComment(recipeId, text, photoUrl) {
+  const all = JSON.parse(localStorage.getItem(COMMENTS_KEY) || '{}');
+  if (!all[recipeId]) all[recipeId] = [];
+  all[recipeId].unshift({
+    id: Date.now().toString(),
+    username: 'You',
+    text: text,
+    photo: photoUrl || null,
+    timestamp: new Date().toISOString(),
+    likes: 0
+  });
+  localStorage.setItem(COMMENTS_KEY, JSON.stringify(all));
+  return all[recipeId];
+}
+
+// ============================================================
 // SECTION 3: STATE
 // ============================================================
 const state = {
@@ -638,7 +696,7 @@ const state = {
   selectedGroceryDate: null,
   selectedGroceryMeal: null,
   selectedGroceryRecipeId: null,
-  groceryViewMode: 'all',
+  groceryViewMode: 'recipe',
   currentWeekStartDate: (() => {
     const today = new Date();
     const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
@@ -647,6 +705,8 @@ const state = {
   isLoading: false,
   selectedRecipeViewId: null,
   viewingFromPlan: null,
+  recipeDetailTab: 'ingredients',
+  recipeDetailDescExpanded: false,
   scrollPositions: {},
   swipeDeck: [],
   swipeIndex: 0,
@@ -6086,6 +6146,482 @@ function showSuggestionsModal(filterTerm = '') {
       </div>
     </div>
   `);
+}
+
+// ============================================================
+// SECTION 20B: RECIPE DETAIL V2 (ChefIQ-style)
+// ============================================================
+
+function renderRecipeDetailV2(recipeId, opts = {}) {
+  const r = getRecipeById(recipeId);
+  if (!r) return `<div style="padding:40px 20px;text-align:center;color:var(--text-secondary);">
+    <div style="font-size:48px;margin-bottom:16px;">🍽️</div>
+    <div style="font-size:18px;font-weight:600;color:var(--text-primary);margin-bottom:8px;">Recipe not found</div>
+    <div style="margin-bottom:24px;">This recipe may have been removed.</div>
+    <a href="#" onclick="${esc(opts.onBack || 'history.back()')}; return false;" style="color:var(--accent);text-decoration:none;font-weight:600;">Go back</a>
+  </div>`;
+
+  const id = r.__backendId || r.id;
+  const img = recipeThumb(r);
+  const saved = isRecipeSaved(id);
+  const hasVideo = recipeHasVideo(id);
+  const clips = getRecipeVideoClips(id);
+  const externalUrl = (r.recipe_url || '').trim() ? recipeUrl(r) : '';
+  const sourceLabel = r.sourceType === 'chefiq' ? 'ChefIQ Guided' :
+                      r.sourceType === 'imported' ? 'Imported' :
+                      r.sourceType === 'claude' ? 'Chef Claude' : 'User-Created';
+
+  // Parse ingredients
+  let rows = [];
+  if (Array.isArray(r.ingredientsRows) && r.ingredientsRows.length > 0) {
+    rows = r.ingredientsRows;
+  } else if (Array.isArray(r.ingredients) && r.ingredients.length > 0) {
+    rows = r.ingredients.map(ing => ({ qty: ing.amount || '', unit: ing.unit || '', name: ing.item || ing.name || '', group: ing.group || 'Other' }));
+  }
+  const grouped = {};
+  rows.forEach(x => { const g = x.group || 'Other'; if (!grouped[g]) grouped[g] = []; grouped[g].push(x); });
+  const groupOrder = Object.keys(grouped);
+
+  // Parse instructions
+  const rawInstructions = Array.isArray(r.instructions) ? r.instructions.join('\n') : (r.instructions || '').trim();
+  const instructionSteps = [];
+  if (rawInstructions) {
+    const lines = rawInstructions.split('\n');
+    let currentStep = null;
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      if (/^\d+[\.\)]\s*/.test(trimmed)) {
+        if (currentStep) instructionSteps.push(currentStep);
+        currentStep = { header: trimmed, details: [] };
+      } else if (currentStep) {
+        currentStep.details.push(trimmed);
+      } else {
+        instructionSteps.push({ header: null, details: [trimmed] });
+      }
+    });
+    if (currentStep) instructionSteps.push(currentStep);
+  }
+
+  // Parse tags
+  const tagList = Array.isArray(r.tags) ? r.tags : (r.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+
+  // Ratings data
+  const ratingsData = getRecipeRatings(id);
+
+  // Comments data
+  const comments = getRecipeComments(id);
+
+  // Stat pills data
+  const effort = getRecipeEffort(id);
+  const effortLabel = effort ? (EFFORT_LEVELS[effort] ? EFFORT_LEVELS[effort].label : '') : '';
+  const prepTime = (r.prepTime || '').trim();
+  const cookTime = (r.cookTime || '').trim();
+  let totalTime = '';
+  if (prepTime && cookTime) {
+    const pMin = parseInt(prepTime) || 0;
+    const cMin = parseInt(cookTime) || 0;
+    if (pMin + cMin > 0) totalTime = (pMin + cMin) + ' Min';
+  } else if (cookTime) {
+    totalTime = cookTime;
+  }
+  const servings = r.servings ? r.servings + ' Servings' : '';
+  const description = (r.notes || '').trim();
+
+  // Active tab
+  const activeTab = state.recipeDetailTab || 'ingredients';
+
+  // Edit action depends on context
+  const editAction = opts.standalone
+    ? `editRecipeFromDetail('${id}')`
+    : `openEditRecipe('${id}')`;
+
+  // Highlight time mentions in instruction text
+  function highlightTimes(text) {
+    return esc(text).replace(/(\d+\s*(?:min(?:ute)?s?|hrs?|hours?|seconds?))/gi, '<span class="time-highlight">$1</span>');
+  }
+
+  // Find related recipes for "Homemade Ingredient Options"
+  function getRelatedRecipes() {
+    if (!state.recipes || rows.length === 0) return [];
+    const ingNames = new Set(rows.map(x => (x.name || '').toLowerCase().trim()));
+    const related = [];
+    for (const recipe of state.recipes) {
+      if ((recipe.__backendId || recipe.id) === id) continue;
+      if (recipe.isTip) continue;
+      let rRows = [];
+      if (Array.isArray(recipe.ingredientsRows)) rRows = recipe.ingredientsRows;
+      else if (Array.isArray(recipe.ingredients)) rRows = recipe.ingredients.map(i => ({ name: i.item || i.name || '' }));
+      let shared = 0;
+      for (const row of rRows) {
+        if (ingNames.has((row.name || '').toLowerCase().trim())) shared++;
+      }
+      if (shared >= 2 || (r.category && recipe.category === r.category)) {
+        related.push(recipe);
+      }
+      if (related.length >= 6) break;
+    }
+    return related;
+  }
+
+  const relatedRecipes = getRelatedRecipes();
+
+  return `
+    <div style="flex:1;overflow-x:hidden;max-width:100vw;box-sizing:border-box;">
+      <!-- HERO -->
+      <div class="detail-hero">
+        ${hasVideo && clips.length > 0 ? `
+          <img src="${getStreamThumbnail(clips[0].cloudflareVideoId)}" alt="" class="detail-hero-media" onerror="this.style.display='none'">
+          <button class="detail-play-btn" onclick="openVideoOverlay('recipe','${id}')">
+            <svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <div class="detail-progress-bar"><div class="detail-progress-fill" style="width:0%"></div></div>
+          <button class="detail-speaker-btn" onclick="openVideoOverlay('recipe','${id}')">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.114 5.636a9 9 0 010 12.728M16.463 8.288a5.25 5.25 0 010 7.424M6.75 8.25l4.72-4.72a.75.75 0 011.28.53v15.88a.75.75 0 01-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.01 9.01 0 012.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75z"/></svg>
+          </button>
+        ` : img ? `
+          <img src="${esc(img)}" alt="${esc(r.title)}" class="detail-hero-media" onerror="this.parentElement.querySelector('.detail-hero-placeholder').style.display='flex';this.style.display='none';">
+          <div class="detail-hero-placeholder" style="display:none;"><span>${esc(r.title)}</span></div>
+        ` : `
+          <div class="detail-hero-placeholder"><span>${esc(r.title)}</span></div>
+        `}
+        <div class="detail-hero-overlay"></div>
+        <button class="detail-hero-back" onclick="${esc(opts.onBack || 'history.back()')}">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        </button>
+        <button class="detail-hero-edit" onclick="${esc(editAction)}" title="Edit recipe">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10"/></svg>
+        </button>
+      </div>
+
+      <!-- SOCIAL ROW -->
+      <div class="detail-social-row">
+        <div class="detail-rating">
+          <div class="detail-stars">${_renderStars(parseFloat(ratingsData.averageRating) || 0)}</div>
+          <span class="detail-rating-count">${ratingsData.totalRatings || 0}</span>
+        </div>
+        <button class="detail-likes" onclick="toggleSaveRecipe('${id}'); ${opts.standalone ? 'render()' : 'render()'};">
+          <svg width="20" height="20" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" class="heart-icon ${saved ? 'liked' : ''}"><path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/></svg>
+          <span>${saved ? 'Saved' : 'Save'}</span>
+        </button>
+      </div>
+
+      <!-- CTA BUTTON -->
+      ${hasVideo ? `
+        <button class="guided-cooking-btn" onclick="openVideoOverlay('recipe','${id}')">
+          <svg width="20" height="20" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+          ${r.sourceType === 'chefiq' ? 'Resume Guided Cooking' : 'Watch Cooking Video'}
+        </button>
+      ` : ''}
+
+      <!-- SOURCE + TITLE -->
+      <div class="detail-source">${esc(sourceLabel)}${r.category ? ' · ' + esc(r.category) : ''}</div>
+      <h1 class="detail-title">${esc(r.title)}</h1>
+
+      ${externalUrl ? `<a href="${esc(externalUrl)}" target="_blank" rel="noopener noreferrer" class="detail-external-link">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
+        View original recipe &rarr;
+      </a>` : ''}
+
+      <!-- DELIVERY PROMPT CARD -->
+      ${rows.length > 0 ? `
+        <div class="delivery-prompt-card" onclick="showMealIngredientPicker('${id}')">
+          <span class="delivery-icon">🛒</span>
+          <p>Missing ingredients? Tap to add them to your grocery list.</p>
+        </div>
+      ` : ''}
+
+      <!-- STAT PILLS -->
+      ${(effortLabel || prepTime || totalTime || servings) ? `
+        <div class="stat-pills">
+          ${effortLabel ? `<div class="stat-pill"><span class="stat-label">Difficulty</span><span class="stat-value">${esc(effortLabel)}</span></div>` : ''}
+          ${prepTime ? `<div class="stat-pill"><span class="stat-label">Active Time</span><span class="stat-value">${esc(prepTime)}</span></div>` : ''}
+          ${totalTime ? `<div class="stat-pill"><span class="stat-label">Total Time</span><span class="stat-value">${esc(totalTime)}</span></div>` : ''}
+          ${servings ? `<div class="stat-pill"><span class="stat-label">Yield</span><span class="stat-value">${esc(servings)}</span></div>` : ''}
+          ${rows.length > 0 ? `<div class="stat-pill"><span class="stat-label">Ingredients</span><span class="stat-value">${rows.length}</span></div>` : ''}
+        </div>
+      ` : ''}
+
+      <!-- DIET/TAG PILLS -->
+      ${tagList.length > 0 ? `
+        <div class="diet-tags">
+          ${tagList.map(t => `<span class="diet-tag">${esc(t)}</span>`).join('')}
+        </div>
+      ` : ''}
+
+      <!-- DESCRIPTION -->
+      ${description ? `
+        <div class="detail-description ${!state.recipeDetailDescExpanded ? 'truncated' : ''}" id="rd-description-text">
+          ${esc(description)}
+        </div>
+        ${description.length > 120 ? `
+          <div style="padding:0 20px 16px;">
+            <button class="read-more-btn" id="rd-read-more-btn" onclick="toggleRecipeDescription()">
+              ${state.recipeDetailDescExpanded ? 'Read Less' : 'Read More'}
+            </button>
+          </div>
+        ` : ''}
+      ` : ''}
+
+      <!-- EFFORT SELECTOR -->
+      <div style="padding:0 20px 16px;">
+        <div style="color:var(--text-tertiary);font-size:12px;margin-bottom:6px;">Set Effort Level</div>
+        <div style="display:flex;gap:8px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;">
+          ${Object.entries(EFFORT_LEVELS).map(([key, e]) => {
+            const active = effort === key;
+            return `<button onclick="setRecipeEffort('${id}', ${active ? 'null' : `'${key}'`}); render();"
+              style="padding:6px 16px;border-radius:20px;border:1px solid ${active ? e.border : 'rgba(255,255,255,0.12)'};background:${active ? e.bg : 'transparent'};color:${active ? e.color : 'var(--text-tertiary)'};font-size:13px;font-weight:${active ? '600' : '400'};cursor:pointer;white-space:nowrap;font-family:var(--font-sans);">
+              ${e.label}
+            </button>`;
+          }).join('')}
+        </div>
+      </div>
+
+      <!-- TABS -->
+      <div class="detail-tabs">
+        <button class="detail-tab ${activeTab === 'ingredients' ? 'active' : ''}" id="rd-tab-btn-ingredients" onclick="switchRecipeDetailTab('ingredients')">Ingredients</button>
+        <button class="detail-tab ${activeTab === 'instructions' ? 'active' : ''}" id="rd-tab-btn-instructions" onclick="switchRecipeDetailTab('instructions')">Instructions</button>
+      </div>
+
+      <!-- INGREDIENTS PANEL -->
+      <div id="rd-tab-ingredients" style="display:${activeTab === 'ingredients' ? 'block' : 'none'};">
+        ${groupOrder.length ? `
+          <div class="ingredient-list">
+            ${groupOrder.map(g => `
+              ${groupOrder.length > 1 ? `<div class="ingredient-group-label">${esc(g)}</div>` : ''}
+              ${grouped[g].map(x => {
+                const qty = (x.qty || '').trim();
+                const unit = (x.unit || '').trim();
+                const name = (x.name || '').trim();
+                const amount = [qty, unit].filter(Boolean).join(' ');
+                return `<div class="ingredient-row">
+                  <span class="ingredient-name">${esc(capitalize(name))}</span>
+                  ${amount ? `<span class="ingredient-amount">${esc(amount)}</span>` : ''}
+                </div>`;
+              }).join('')}
+            `).join('')}
+          </div>
+          <button class="add-to-basket-btn" onclick="showMealIngredientPicker('${id}')">
+            Add (${rows.length}) To Basket
+          </button>
+        ` : `
+          <div style="padding:40px 20px;text-align:center;color:var(--text-tertiary);">No ingredients listed.</div>
+        `}
+      </div>
+
+      <!-- INSTRUCTIONS PANEL -->
+      <div id="rd-tab-instructions" style="display:${activeTab === 'instructions' ? 'block' : 'none'};">
+        ${instructionSteps.length ? `
+          <div class="instruction-phase">
+            ${instructionSteps.map((step, idx) => `
+              <div class="instruction-step">
+                <div class="step-content">
+                  <div class="step-number">Step ${idx + 1}</div>
+                  <div class="step-text">
+                    ${step.header ? highlightTimes(step.header.replace(/^\d+[\.\)]\s*/, '')) : ''}
+                    ${step.details.map(d => highlightTimes(d)).join('<br>')}
+                  </div>
+                </div>
+                <span class="step-chevron">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+                </span>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <div style="padding:40px 20px;text-align:center;color:var(--text-tertiary);">No instructions available.</div>
+        `}
+      </div>
+
+      <!-- HOMEMADE INGREDIENT OPTIONS -->
+      ${relatedRecipes.length > 0 ? `
+        <div class="homemade-section">
+          <div class="homemade-section-title">Related Recipes</div>
+          <div class="recipe-carousel">
+            ${relatedRecipes.map(rel => {
+              const relId = rel.__backendId || rel.id;
+              const relImg = recipeThumb(rel);
+              const relSource = rel.sourceType === 'chefiq' ? 'ChefIQ' : rel.sourceType === 'imported' ? 'Imported' : rel.sourceType === 'claude' ? 'Chef Claude' : 'User';
+              return `<div class="recipe-carousel-card" onclick="${opts.standalone ? `window.location.href='/recipe-detail.html?id=${relId}'` : `openRecipeView('${relId}')`}">
+                <div class="carousel-card-media">
+                  ${relImg ? `<img src="${esc(relImg)}" alt="${esc(rel.title)}" onerror="this.style.display='none'">` : `<div style="width:100%;height:100%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:32px;color:rgba(255,255,255,0.1);">🍽️</div>`}
+                </div>
+                <div class="carousel-card-info">
+                  <span class="card-source">${esc(relSource)}</span>
+                  <h3 class="card-title">${esc(rel.title)}</h3>
+                </div>
+              </div>`;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      <!-- RATINGS -->
+      <div class="ratings-section" id="rd-ratings-container">
+        ${_renderRatingsSection(id, ratingsData)}
+      </div>
+
+      <!-- COMMENTS -->
+      <div class="comments-section" id="rd-comments-container">
+        ${_renderCommentsSection(id, comments)}
+      </div>
+
+      <!-- ACTION BUTTONS -->
+      ${!r.isTip ? `
+        <div class="detail-actions-row">
+          <button class="detail-action-btn primary" onclick="showAddToMealsModal('${id}')">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+            Add to My Meals
+          </button>
+          <button class="detail-action-btn secondary" onclick="toggleSaveRecipe('${id}'); render();">
+            <svg width="18" height="18" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+            ${saved ? 'Saved' : 'Save'}
+          </button>
+        </div>
+      ` : ''}
+
+      <div style="height:24px;"></div>
+    </div>
+  `;
+}
+
+// Helper: render star icons for a rating value
+function _renderStars(rating) {
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    if (i <= Math.floor(rating)) {
+      html += '<span style="color:var(--accent);">★</span>';
+    } else if (i - rating < 1 && i - rating > 0) {
+      html += '<span style="color:var(--accent);">★</span>'; // half-star as full for simplicity
+    } else {
+      html += '<span style="color:var(--text-tertiary);">★</span>';
+    }
+  }
+  return html;
+}
+
+// Helper: render the ratings section inner HTML
+function _renderRatingsSection(recipeId, data) {
+  const avg = parseFloat(data.averageRating) || 0;
+  const total = data.totalRatings || 0;
+  const userRating = data.userRating || 0;
+  const dist = data.distribution || [0,0,0,0,0];
+  const maxDist = Math.max(...dist, 1);
+
+  return `
+    <div class="ratings-section-title">Ratings</div>
+    <div class="rating-summary">
+      <div><span class="score-number">${avg > 0 ? avg : '—'}</span><span class="score-label"> / 5 Stars</span></div>
+      <span class="rating-count">${total} Rating${total !== 1 ? 's' : ''}</span>
+    </div>
+    <div class="tap-to-rate">
+      <div class="rate-stars">
+        ${[1,2,3,4,5].map(s => `<button class="rate-star ${s <= userRating ? 'filled' : ''}" onclick="rateRecipe('${recipeId}', ${s})">★</button>`).join('')}
+      </div>
+      <span class="tap-to-rate-label">${userRating > 0 ? 'Your rating: ' + userRating + '/5' : 'Tap to rate'}</span>
+    </div>
+    <div class="star-distribution">
+      ${[5,4,3,2,1].map(s => {
+        const count = dist[s - 1] || 0;
+        const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+        return `<div class="star-bar">
+          <span class="star-bar-label">${s} STAR</span>
+          <div class="bar-track"><div class="bar-fill" style="width:${pct}%"></div></div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+// Helper: render comments section inner HTML
+function _renderCommentsSection(recipeId, comments) {
+  function timeAgo(isoStr) {
+    const diff = Date.now() - new Date(isoStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    if (days < 7) return days + 'd ago';
+    return new Date(isoStr).toLocaleDateString();
+  }
+
+  return `
+    <div class="comments-section-title">Comments (${comments.length})</div>
+    ${comments.length > 0 ? comments.map(c => `
+      <div class="comment">
+        <div class="comment-avatar">${(c.username || 'U').charAt(0).toUpperCase()}</div>
+        <div class="comment-body">
+          <div class="comment-header">
+            <span class="comment-username">${esc(c.username || 'User')}</span>
+            <span class="comment-time">${timeAgo(c.timestamp)}</span>
+          </div>
+          <div class="comment-text">${esc(c.text)}</div>
+          ${c.photo ? `<img src="${esc(c.photo)}" class="comment-photo" alt="Comment photo">` : ''}
+          <div class="comment-actions">
+            <button class="comment-action">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.633 10.5c.806 0 1.533-.446 2.031-1.08a9.041 9.041 0 012.861-2.4c.723-.384 1.35-.956 1.653-1.715a4.498 4.498 0 00.322-1.672V3.75a.75.75 0 01.75-.75A2.25 2.25 0 0116.5 5.25c0 .372-.063.734-.163 1.073a5.088 5.088 0 01-.582 1.189l-.13.197c-.155.234-.236.5-.236.775V9.5h4.362a2.25 2.25 0 012.178 2.828l-2.263 8.572a2.25 2.25 0 01-2.178 1.672H6.633z"/></svg>
+              ${c.likes || 0}
+            </button>
+            <button class="comment-action">Reply</button>
+          </div>
+        </div>
+      </div>
+    `).join('') : `
+      <div style="text-align:center;color:var(--text-tertiary);padding:16px 0;">No comments yet. Be the first!</div>
+    `}
+    <div class="comment-input-row">
+      <input type="text" class="comment-input" id="rd-comment-input" placeholder="Add a comment..." onkeydown="if(event.key==='Enter')submitRecipeComment('${recipeId}')">
+      <button class="comment-submit-btn" onclick="submitRecipeComment('${recipeId}')">Post</button>
+    </div>
+  `;
+}
+
+// Interactive functions for recipe detail
+function switchRecipeDetailTab(tab) {
+  const ingPanel = document.getElementById('rd-tab-ingredients');
+  const instrPanel = document.getElementById('rd-tab-instructions');
+  const ingTab = document.getElementById('rd-tab-btn-ingredients');
+  const instrTab = document.getElementById('rd-tab-btn-instructions');
+  if (!ingPanel || !instrPanel) return;
+  if (tab === 'ingredients') {
+    ingPanel.style.display = 'block';
+    instrPanel.style.display = 'none';
+    ingTab && ingTab.classList.add('active');
+    instrTab && instrTab.classList.remove('active');
+  } else {
+    ingPanel.style.display = 'none';
+    instrPanel.style.display = 'block';
+    ingTab && ingTab.classList.remove('active');
+    instrTab && instrTab.classList.add('active');
+  }
+  state.recipeDetailTab = tab;
+}
+
+function rateRecipe(recipeId, stars) {
+  const data = saveRecipeRating(recipeId, stars);
+  const container = document.getElementById('rd-ratings-container');
+  if (container) container.innerHTML = _renderRatingsSection(recipeId, data);
+  showToast('Thanks for rating!', 'success');
+}
+
+function submitRecipeComment(recipeId) {
+  const input = document.getElementById('rd-comment-input');
+  const text = (input ? input.value : '').trim();
+  if (!text) return;
+  const comments = addRecipeComment(recipeId, text, null);
+  const container = document.getElementById('rd-comments-container');
+  if (container) container.innerHTML = _renderCommentsSection(recipeId, comments);
+  showToast('Comment posted!', 'success');
+}
+
+function toggleRecipeDescription() {
+  state.recipeDetailDescExpanded = !state.recipeDetailDescExpanded;
+  const desc = document.getElementById('rd-description-text');
+  const btn = document.getElementById('rd-read-more-btn');
+  if (desc) desc.classList.toggle('truncated');
+  if (btn) btn.textContent = state.recipeDetailDescExpanded ? 'Read Less' : 'Read More';
 }
 
 // SECTION 21: INITIALIZATION
