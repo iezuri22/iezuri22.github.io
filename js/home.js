@@ -9,17 +9,25 @@ function renderCookAgainRow() {
   if (favorites.length === 0) return '';
 
   return `
-    <div style="padding: 0 20px; margin-bottom: 8px;">
-      <div class="section-label" style="margin-bottom: 6px;">Cook Again</div>
-      <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
-        ${favorites.map(entry => `
-          <div onclick="${entry.recipeId ? `goToRecipe('${entry.recipeId}')` : `openFoodLogDetail('${entry.id}')`}" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 52px;">
-            <div style="width: 48px; height: 48px; border-radius: 50%; overflow: hidden; margin: 0 auto 4px; border: 2px solid ${CONFIG.primary_action_color}; background: ${CONFIG.surface_elevated};">
-              ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:4px;"><span style="font-size:9px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.1;">${esc((entry.recipeName||'').substring(0,12))}</span></div>`}
-            </div>
-            <div style="font-size: 11px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(entry.recipeName)}</div>
-          </div>
-        `).join('')}
+    <div class="home-section">
+      <div class="home-section-label">Cook Again</div>
+      <div class="cook-again-row">
+        ${favorites.map(entry => {
+          const img = entry.photo || entry.image;
+          const name = entry.recipeName || '';
+          return `
+            <div class="cook-again-item" onclick="${entry.recipeId ? `goToRecipe('${entry.recipeId}')` : `openFoodLogDetail('${entry.id}')`}">
+              <div class="cook-again-avatar">
+                <div class="cook-again-avatar-inner">
+                  ${img
+                    ? `<img src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.parentElement.innerHTML='<div class=\\'cook-again-avatar-placeholder\\' style=\\'background:${getPlaceholderGradient({title:name}).replace(/'/g, "\\\\'")}\\'>'+''+'</div>';" />`
+                    : `<div class="cook-again-avatar-placeholder" style="background:${getPlaceholderGradient({title:name})}">${esc(name.substring(0,8))}</div>`
+                  }
+                </div>
+              </div>
+              <div class="cook-again-name">${esc(name)}</div>
+            </div>`;
+        }).join('')}
       </div>
     </div>
   `;
@@ -187,19 +195,24 @@ function getQuickRecipes() {
   }).slice(0, 12);
 }
 
-function getRecentRecipes() {
-  return (state.recipes || []).filter(r => !r.isDraft && !r.isTip)
-    .slice()
-    .sort((a, b) => {
-      const aTime = a.createdAt || a.__backendId || a.id || 0;
-      const bTime = b.createdAt || b.__backendId || b.id || 0;
-      return String(bTime).localeCompare(String(aTime));
-    })
-    .slice(0, 12);
-}
-
 function getDinnerRecipes() {
   return (state.recipes || []).filter(r => !r.isDraft && !r.isTip && r.category === 'Dinner').slice(0, 12);
+}
+
+function getPlaceholderGradient(recipe) {
+  const name = (recipe && (recipe.name || recipe.title)) || '';
+  const hash = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const gradients = [
+    'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+    'linear-gradient(135deg, #2d1b3d 0%, #1a1a2e 50%, #16213e 100%)',
+    'linear-gradient(135deg, #0f3460 0%, #1a1a2e 50%, #16213e 100%)',
+    'linear-gradient(135deg, #1b2838 0%, #203a43 50%, #2c5364 100%)',
+    'linear-gradient(135deg, #232526 0%, #414345 50%, #232526 100%)',
+    'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)',
+    'linear-gradient(135deg, #373b44 0%, #4286f4 100%)',
+    'linear-gradient(135deg, #134e5e 0%, #71b280 100%)',
+  ];
+  return gradients[hash % gradients.length];
 }
 
 function suggestDinner() {
@@ -254,21 +267,24 @@ function renderHeroCard(recipe) {
   if (!recipe) return '';
   const id = recipe.__backendId || recipe.id;
   const img = recipeThumb(recipe);
-  const hasVid = recipeHasVideo(id);
+  const hasVid = typeof recipeHasVideo === 'function' && recipeHasVideo(id);
   const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
 
   return `
-    <div class="hero-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} onclick="goToRecipe('${id}')" style="margin: 12px 20px 16px;">
-      <div class="hero-card-media">
-        ${img ? `<img src="${esc(img)}" class="video-card-thumb" loading="lazy" />` : `<div style="width:100%; height:100%; background: var(--bg-card);"></div>`}
-        ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
-        ${hasVid ? `<div class="video-live-dot" style="bottom:auto; top:12px; right:12px;"><div class="video-live-dot-inner"></div></div>` : ''}
-      </div>
-      <div class="hero-card-overlay">
-        <div>
-          <span class="hero-card-source">Featured</span>
-          <h2 class="hero-card-title">${esc(recipe.title)}</h2>
-          <div class="hero-card-meta">
+    <div class="home-section">
+      <div class="home-spotlight ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} onclick="goToRecipe('${id}')">
+        <div class="home-spotlight-media">
+          ${img
+            ? `<img src="${esc(img)}" class="video-card-thumb" loading="lazy" />`
+            : `<div style="width:100%; height:100%; background: ${getPlaceholderGradient(recipe)};"></div>`
+          }
+          ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
+          ${hasVid ? `<div class="video-live-dot" style="bottom:auto; top:12px; right:12px;"><div class="video-live-dot-inner"></div></div>` : ''}
+        </div>
+        <div class="home-spotlight-overlay">
+          <span class="home-spotlight-label">Tonight's Pick</span>
+          <h2 class="home-spotlight-title">${esc(recipe.title)}</h2>
+          <div class="home-spotlight-meta">
             ${recipe.cookTime ? `<span style="display:flex; align-items:center; gap:3px;"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> ${esc(recipe.cookTime)}</span>` : ''}
             ${recipe.category ? `<span>${esc(recipe.category)}</span>` : ''}
           </div>
@@ -282,18 +298,17 @@ function renderCarouselCard(recipe) {
   const id = recipe.__backendId || recipe.id;
   const img = recipeThumb(recipe);
   return `
-    <div class="recipe-carousel-card" style="width: 150px;" onclick="goToRecipe('${id}')">
-      <div class="carousel-card-media" style="aspect-ratio: 1;">
+    <div class="recipe-carousel-card" onclick="goToRecipe('${id}')">
+      <div class="carousel-card-media">
         ${img ? `
-          <img loading="lazy" src="${esc(img)}" />
+          <img loading="lazy" src="${esc(img)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+          <div style="display:none;width:100%;height:100%;background:${getPlaceholderGradient(recipe)};align-items:center;justify-content:center;"></div>
         ` : `
-          <div style="width:100%; height:100%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; padding: 10px;">
-            <span style="color: var(--text-secondary); font-size: 12px; font-weight: 600; text-align: center;">${esc(recipe.title)}</span>
-          </div>
+          <div style="width:100%; height:100%; background: ${getPlaceholderGradient(recipe)};"></div>
         `}
       </div>
-      <div class="carousel-card-info" style="padding: 8px 10px;">
-        <h3 class="card-title" style="font-size: 13px; font-weight: 600;">${esc(recipe.title)}</h3>
+      <div class="carousel-card-info">
+        <h3 class="card-title">${esc(recipe.title)}</h3>
         ${recipe.category ? `<div class="card-meta" style="margin-top: 2px;">${esc(recipe.category)}</div>` : ''}
       </div>
     </div>
@@ -323,6 +338,215 @@ function renderRecipeCarousel(title, subtitle, recipes) {
 }
 
 // ============================================================
+// MEAL PLAN TIMELINE (replaces renderMyMeals on home page)
+// ============================================================
+function renderMealPlanTimeline() {
+  if (!state.myMealsDate) state.myMealsDate = getToday();
+  const dateStr = state.myMealsDate;
+  const dateLabel = typeof getFoodLogDateLabel === 'function' ? getFoodLogDateLabel(dateStr) : dateStr;
+  const todayStr = getToday();
+  const showTodayBtn = dateStr !== todayStr;
+
+  const log = getFoodLog();
+  const dayEntries = log.filter(e => e.dateCooked && e.dateCooked.split('T')[0] === dateStr);
+  const mealSlots = ['breakfast', 'lunch', 'dinner', 'snack'];
+
+  const cards = mealSlots.map(slot => {
+    const slotEntries = dayEntries.filter(e => e.mealType === slot);
+
+    if (slot === 'snack') {
+      if (slotEntries.length === 0) {
+        return `
+          <div class="meal-timeline-card empty" onclick="openAddMealForSlot('snack', '${dateStr}')">
+            <div class="meal-timeline-image-placeholder"></div>
+            <div class="meal-timeline-info">
+              <div class="meal-timeline-type">Snack</div>
+              <p class="meal-timeline-name" style="color: var(--text-tertiary);">Add snack</p>
+            </div>
+          </div>`;
+      }
+      return slotEntries.map(entry => {
+        const recipe = entry.recipeId ? getRecipeById(entry.recipeId) : null;
+        const img = entry.photo || entry.myPhoto || (recipe ? recipeThumb(recipe) : null);
+        const name = entry.recipeName || (recipe ? recipe.title : 'Snack');
+        return `
+          <div class="meal-timeline-card" onclick="openFoodLogDetail('${entry.id}')">
+            ${img
+              ? `<img class="meal-timeline-image" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="meal-timeline-image-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
+              : `<div class="meal-timeline-image-placeholder" style="background:${getPlaceholderGradient({title:name})}"></div>`
+            }
+            <div class="meal-timeline-info">
+              <div class="meal-timeline-type">Snack</div>
+              <p class="meal-timeline-name">${esc(name)}</p>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    if (slotEntries.length === 0) {
+      return `
+        <div class="meal-timeline-card empty" onclick="openAddMealForSlot('${slot}', '${dateStr}')">
+          <div class="meal-timeline-image-placeholder"></div>
+          <div class="meal-timeline-info">
+            <div class="meal-timeline-type">${capitalize(slot)}</div>
+            <p class="meal-timeline-name" style="color: var(--text-tertiary);">Add meal</p>
+          </div>
+        </div>`;
+    }
+
+    const entry = slotEntries[0];
+    const recipe = entry.recipeId ? getRecipeById(entry.recipeId) : null;
+    const img = entry.photo || entry.myPhoto || (recipe ? recipeThumb(recipe) : null);
+    const name = entry.recipeName || (recipe ? recipe.title : capitalize(slot));
+
+    return `
+      <div class="meal-timeline-card" onclick="openFoodLogDetail('${entry.id}')">
+        ${img
+          ? `<img class="meal-timeline-image" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="meal-timeline-image-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
+          : `<div class="meal-timeline-image-placeholder" style="background:${getPlaceholderGradient({title:name})}"></div>`
+        }
+        <div class="meal-timeline-info">
+          <div class="meal-timeline-type">${capitalize(slot)}</div>
+          <p class="meal-timeline-name">${esc(name)}</p>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `
+    <div class="home-section" id="home-meals-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">Today's Meals</h2>
+      </div>
+      <div class="meal-timeline-date-nav">
+        <button class="meal-timeline-date-btn" onclick="navigateMyMealsDate(-1)">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        </button>
+        <div class="meal-timeline-date-label">
+          <div class="meal-timeline-date-label-text">${esc(dateLabel)}</div>
+          ${showTodayBtn ? `<button onclick="state.myMealsDate = getToday(); render();" style="font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; margin-top: 2px; font-weight: 600;">Jump to Today</button>` : ''}
+        </div>
+        <button class="meal-timeline-date-btn" onclick="navigateMyMealsDate(1)">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+        </button>
+      </div>
+      <div class="meal-timeline">
+        ${cards}
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// QUICK & EASY LIST CARDS (vertical stack, not carousel)
+// ============================================================
+function renderQuickEasyList(recipes) {
+  if (!recipes || recipes.length === 0) return '';
+  const limited = recipes.slice(0, 3);
+  return `
+    <div class="home-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">Quick & Easy</h2>
+        <button class="see-all-btn" onclick="window.location.href='recipes.html'">See all</button>
+      </div>
+      <div class="quick-easy-list">
+        ${limited.map(r => {
+          const id = r.__backendId || r.id;
+          const img = recipeThumb(r);
+          return `
+            <div class="quick-easy-card" onclick="goToRecipe('${id}')">
+              ${img
+                ? `<img class="quick-easy-thumb" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="quick-easy-thumb-placeholder" style="display:none;background:${getPlaceholderGradient(r)}"></div>`
+                : `<div class="quick-easy-thumb-placeholder" style="background:${getPlaceholderGradient(r)}"></div>`
+              }
+              <div class="quick-easy-info">
+                <h3 class="quick-easy-name">${esc(r.title)}</h3>
+                <div class="quick-easy-meta">${r.cookTime ? esc(r.cookTime) : '30 min'}${r.category ? ' · ' + esc(r.category) : ''}</div>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// DINNER CAROUSEL WITH SCROLL ARROWS
+// ============================================================
+function renderDinnerCarousel(recipes) {
+  if (!recipes || recipes.length === 0) return '';
+  return `
+    <div class="home-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">Dinner Ideas</h2>
+        <button class="see-all-btn" onclick="window.location.href='recipes.html'">See all</button>
+      </div>
+      <div class="carousel-wrapper">
+        <button class="carousel-scroll-btn left" aria-label="Scroll left" onclick="document.getElementById('dinner-carousel').scrollBy({left:-260,behavior:'smooth'})">&#8249;</button>
+        <div class="recipe-carousel home-carousel" id="dinner-carousel">
+          ${recipes.map((r, i) => `
+            <div style="scroll-snap-align: start; opacity: 0; animation: cardFadeIn 0.35s ease forwards; animation-delay: ${i * 0.05}s;">
+              ${renderCarouselCard(r)}
+            </div>
+          `).join('')}
+        </div>
+        <button class="carousel-scroll-btn right" aria-label="Scroll right" onclick="document.getElementById('dinner-carousel').scrollBy({left:260,behavior:'smooth'})">&#8250;</button>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// SAVED RECIPES PEEK CARDS (fanned deck)
+// ============================================================
+function renderSavedPeekCards() {
+  const savedIds = typeof getSavedRecipes === 'function' ? getSavedRecipes() : [];
+  if (savedIds.length === 0) return '';
+
+  const recipes = savedIds.slice(0, 3).map(id => getRecipeById(id)).filter(Boolean);
+  if (recipes.length === 0) return '';
+
+  return `
+    <div class="home-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title editorial">Your Saved Recipes</h2>
+        <button class="see-all-btn" onclick="window.location.href='saved.html'">See all</button>
+      </div>
+      <div class="saved-peek">
+        ${recipes.map((r, i) => {
+          const id = r.__backendId || r.id;
+          const img = recipeThumb(r);
+          return `
+            <div class="saved-peek-card" onclick="goToRecipe('${id}')">
+              ${img
+                ? `<img src="${esc(img)}" loading="lazy" onerror="this.style.background='${getPlaceholderGradient(r).replace(/'/g, "\\'")}';this.style.aspectRatio='3/4';" />`
+                : `<div style="width:100%;aspect-ratio:3/4;background:${getPlaceholderGradient(r)};"></div>`
+              }
+              <div class="peek-name">${esc(r.title)}</div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// FADE-IN OBSERVER FOR HOME SECTIONS
+// ============================================================
+function initHomeFadeObserver() {
+  const sections = document.querySelectorAll('.home-section');
+  if (sections.length === 0) return;
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('visible');
+        obs.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.1 });
+  sections.forEach(s => obs.observe(s));
+}
+
+// ============================================================
 // MAIN HOME RENDERER
 // ============================================================
 function renderHome() {
@@ -331,32 +555,23 @@ function renderHome() {
   const greeting = getTimeGreeting();
   const heroRecipe = getFeaturedRecipe();
   const quickRecipes = getQuickRecipes();
-  const recentRecipes = getRecentRecipes();
   const dinnerRecipes = getDinnerRecipes();
 
-  const hasDiscoveryContent = heroRecipe || quickRecipes.length > 0 || recentRecipes.length > 0 || dinnerRecipes.length > 0;
+  const hasDiscoveryContent = heroRecipe || quickRecipes.length > 0 || dinnerRecipes.length > 0;
 
   if (!hasDiscoveryContent) {
-    // No recipes yet — fall back to just meal planner
     return renderMyMeals();
   }
 
   return `
     ${renderHomeGreeting(greeting)}
     ${renderQuickActionsStrip()}
-    ${renderCookAgainRow()}
     ${renderHeroCard(heroRecipe)}
-    ${quickRecipes.length > 0 ? renderRecipeCarousel('Quick & Easy', '30 minutes or less', quickRecipes) : ''}
-    ${recentRecipes.length > 0 ? renderRecipeCarousel('Recently Added', null, recentRecipes) : ''}
-    ${dinnerRecipes.length > 0 ? renderRecipeCarousel('Dinner Ideas', null, dinnerRecipes) : ''}
-    <div id="home-meals-section" style="padding: 8px 20px 4px;">
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-        <div style="flex: 1; height: 1px; background: ${CONFIG.divider_color};"></div>
-        <div class="section-label" style="font-size: 13px; font-weight: 700;">My Meals</div>
-        <div style="flex: 1; height: 1px; background: ${CONFIG.divider_color};"></div>
-      </div>
-    </div>
-    ${renderMyMeals()}
+    ${renderCookAgainRow()}
+    ${renderMealPlanTimeline()}
+    ${renderQuickEasyList(quickRecipes)}
+    ${renderDinnerCarousel(dinnerRecipes)}
+    ${renderSavedPeekCards()}
   `;
 }
 
@@ -2761,7 +2976,10 @@ function render() {
   // Initialize date swipe gestures for the meal planner
   if (state.currentView === 'home' || state.currentView === 'my-meals') {
     if (typeof initMyMealsSwipeGestures === 'function') initMyMealsSwipeGestures();
-    setTimeout(() => { if (typeof initVideoPreviewObserver === 'function') initVideoPreviewObserver(); }, 50);
+    setTimeout(() => {
+      if (typeof initVideoPreviewObserver === 'function') initVideoPreviewObserver();
+      if (typeof initHomeFadeObserver === 'function') initHomeFadeObserver();
+    }, 50);
   }
 }
 
