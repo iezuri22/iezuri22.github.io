@@ -11,7 +11,8 @@
 // ============================================================
 
 // Page-local state
-let savedActiveTab = 'recipes'; // 'recipes', 'plates', or 'journal'
+// Saved Recipes & Plates have moved to the Recipes feed — this page is now the Cooking Journal
+let savedActiveTab = 'journal'; // Now always 'journal'
 let savedSearchTerm = '';
 let savedPrimaryFilter = 'all';
 
@@ -977,23 +978,14 @@ function setAsCoverPhoto(logId, coverKey) {
 loadAllState();
 setupKeyboardShortcuts();
 
-// Check if navigated here with tab hint
-(function() {
-  const hint = sessionStorage.getItem('savedPageTab');
-  if (hint === 'journal') {
-    savedActiveTab = 'journal';
-    sessionStorage.removeItem('savedPageTab');
-  } else if (hint === 'plates') {
-    savedActiveTab = 'plates';
-    sessionStorage.removeItem('savedPageTab');
-  }
-})();
+// Clear any stale tab hints from old navigation
+sessionStorage.removeItem('savedPageTab');
 
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
 
-  // If plate detail is open, render that instead
+  // If plate detail is open, render that instead (still supported via deep links)
   if (plateDetailId) {
     app.innerHTML = `
       <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
@@ -1008,22 +1000,18 @@ function render() {
     return;
   }
 
-  const pageTitles = { 'recipes': 'Saved', 'plates': 'Saved', 'journal': 'Saved' };
-  const pageTitle = pageTitles[savedActiveTab] || 'Saved';
-
   app.innerHTML = `
     <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
       ${renderDesktopSidebar()}
       <div class="desktop-content-area">
         <div class="desktop-page-title-bar" style="display: none; padding-bottom: 24px;">
-          <h1 style="font-size: 28px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">${pageTitle}</h1>
+          <h1 style="font-size: 28px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">Cooking Journal</h1>
         </div>
         <!-- Mobile title -->
         <div class="mobile-only-sections" style="padding: 12px 12px 0;">
-          <h1 style="font-size: 20px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">${pageTitle}</h1>
+          <h1 style="font-size: 20px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">Cooking Journal</h1>
         </div>
-        ${renderSavedTabs()}
-        ${savedActiveTab === 'journal' ? renderCookingJournal() : savedActiveTab === 'plates' ? renderPlatesTab() : renderSavedRecipes()}
+        ${renderCookingJournal()}
       </div>
       ${renderBottomNav()}
     </div>

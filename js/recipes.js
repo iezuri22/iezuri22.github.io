@@ -1497,7 +1497,7 @@ function renderRecipeFilterPills() {
 
   const primaryRow = primaryFilters.map(f => {
     const active = primaryPill === f.id;
-    return `<button onclick="state.recipePrimaryFilter = '${f.id}'; render();"
+    return `<button onclick="state.recipePrimaryFilter = '${f.id}'; state.feedCategoryFilter = null; state.feedSeeAllSection = null; state.feedAllRecipesPage = 1; render();"
       style="flex-shrink:0; padding:8px 16px; border-radius:20px; border:none;
       background:${active ? CONFIG.primary_action_color : 'transparent'};
       color:${active ? 'white' : CONFIG.text_muted};
@@ -1530,7 +1530,7 @@ function renderRecipeFilterPills() {
       <span style="font-size:10px; color:${CONFIG.text_tertiary}; align-self:center; margin-right:2px;">Source:</span>
       ${sourceOptions.map(s => {
         const active = !!sourcesToggles[s.id];
-        return `<button onclick="if(!state.recipeSourceToggles) state.recipeSourceToggles = {}; state.recipeSourceToggles['${s.id}'] = !state.recipeSourceToggles['${s.id}']; render();"
+        return `<button onclick="if(!state.recipeSourceToggles) state.recipeSourceToggles = {}; state.recipeSourceToggles['${s.id}'] = !state.recipeSourceToggles['${s.id}']; state.feedCategoryFilter = null; state.feedSeeAllSection = null; state.feedAllRecipesPage = 1; render();"
           style="flex-shrink:0; padding:4px 10px; border-radius:12px;
           border:1px solid ${active ? 'rgba(232,93,93,0.3)' : 'rgba(255,255,255,0.08)'};
           background:${active ? 'rgba(232,93,93,0.1)' : 'transparent'};
@@ -1544,7 +1544,7 @@ function renderRecipeFilterPills() {
         const active = !!effortToggles[e.id];
         const effortDef = EFFORT_LEVELS[e.id];
         const clr = effortDef ? effortDef.color : CONFIG.text_tertiary;
-        return `<button onclick="if(!state.recipeEffortToggles) state.recipeEffortToggles = {}; state.recipeEffortToggles['${e.id}'] = !state.recipeEffortToggles['${e.id}']; render();"
+        return `<button onclick="if(!state.recipeEffortToggles) state.recipeEffortToggles = {}; state.recipeEffortToggles['${e.id}'] = !state.recipeEffortToggles['${e.id}']; state.feedCategoryFilter = null; state.feedSeeAllSection = null; state.feedAllRecipesPage = 1; render();"
           style="flex-shrink:0; padding:4px 10px; border-radius:12px;
           border:1px solid ${active ? (effortDef ? effortDef.border : 'rgba(255,255,255,0.15)') : 'rgba(255,255,255,0.08)'};
           background:${active ? (effortDef ? effortDef.bg : 'rgba(255,255,255,0.05)') : 'transparent'};
@@ -1647,8 +1647,529 @@ function showRecipeMoreFilters() {
   openModal(content);
 }
 
+// ============================================================
+// SECTION: FEED DATA HELPERS
+// ============================================================
+
+function pickFeaturedRecipe(list) {
+  if (!list || list.length === 0) return null;
+  // If we already picked one this session and it's still in the list, reuse it
+  if (state.feedHeroRecipeId) {
+    const cached = list.find(r => (r.__backendId || r.id) === state.feedHeroRecipeId);
+    if (cached) return cached;
+  }
+  // Prefer recipes with video clips + image
+  const withVideo = list.filter(r => {
+    const id = r.__backendId || r.id;
+    return recipeThumb(r) && recipeHasVideo(id);
+  });
+  // Fallback to recipes with images
+  const withImage = list.filter(r => recipeThumb(r));
+  const pool = withVideo.length > 0 ? withVideo : (withImage.length > 0 ? withImage : list);
+  // Weekly rotation seed for consistent pick
+  const weekSeed = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
+  const pick = pool[weekSeed % pool.length];
+  state.feedHeroRecipeId = pick.__backendId || pick.id;
+  return pick;
+}
+
+function getFeedNewRecipes(list, excludeId) {
+  // Newest = last in array (most recently added)
+  return [...list].reverse().filter(r => (r.__backendId || r.id) !== excludeId).slice(0, 8);
+}
+
+function getFeedQuickRecipes(list) {
+  return list.filter(r => {
+    const time = parseInt(r.cookTime || '999');
+    const id = r.__backendId || r.id;
+    const effort = getRecipeEffort(id);
+    return time <= 30 || effort === 'lazy';
+  }).slice(0, 8);
+}
+
+function getFeedFreestyleRecipes(list) {
+  return list.filter(r => r.sourceType === 'user').slice(0, 6);
+}
+
+function getFeedFavorites(list) {
+  const savedIds = getSavedRecipes();
+  return list.filter(r => savedIds.includes(r.__backendId || r.id)).slice(0, 8);
+}
+
+function getFeedBudgetRecipes(list) {
+  return list.filter(r => {
+    const ings = recipeIngList(r);
+    return ings.length > 0 && ings.length < 8;
+  }).slice(0, 8);
+}
+
+function getFeedDinnerRecipes(list) {
+  return list.filter(r => (r.category || '').toLowerCase() === 'dinner').slice(0, 8);
+}
+
+// ============================================================
+// SECTION: FEED RENDERING HELPERS
+// ============================================================
+
+function renderFeedSearchBar() {
+  return `
+    <div style="padding: 8px 12px 0;">
+      <div style="position:relative;">
+        <input id="recipesPageSearchInput" type="text" placeholder="Search recipes or ingredients..."
+          value="${esc(state.searchTerm || '')}"
+          oninput="handleRecipesPageSearch(this.value)"
+          style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
+          background:${CONFIG.surface_color}; color:${CONFIG.text_color};
+          border:1px solid rgba(255,255,255,0.08); border-radius:10px;
+          font-size:14px; font-family:${CONFIG.font_family};" />
+        ${state.searchTerm ? `
+          <button onclick="state.searchTerm=''; render(); setTimeout(() => { const i = document.getElementById('recipesPageSearchInput'); if(i) i.focus(); }, 0);"
+            style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+            background:rgba(255,255,255,0.1); border:none; border-radius:50%;
+            width:20px; height:20px; display:flex; align-items:center; justify-content:center;
+            color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        ` : `
+          <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          </div>
+        `}
+      </div>
+    </div>
+  `;
+}
+
+function renderFeedEmptyState(isSearch) {
+  return `
+    <div style="padding: 48px 12px; text-align: center;">
+      <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">
+        ${isSearch ? 'No matches found' : 'No recipes yet'}
+      </div>
+      <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-bottom: 12px;">
+        ${isSearch ? 'Try a different search' : 'Add your first recipe!'}
+      </div>
+      ${!isSearch ? `
+        <button onclick="openNewRecipe()" style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
+          + Add Recipe
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderHeroSection(recipe) {
+  if (!recipe) return '';
+  const id = recipe.__backendId || recipe.id;
+  const img = recipeThumb(recipe);
+  const hasVid = recipeHasVideo(id);
+  const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
+  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : 'EZ Cooking';
+
+  return `
+    <div class="feed-section featured-section">
+      <h2 class="feed-section-title editorial">Recipe of the Week</h2>
+      <div class="hero-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
+        <div class="hero-card-media">
+          ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy">` :
+            `<div style="width:100%;height:100%;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;">
+              <span style="color:${CONFIG.text_color};font-size:18px;font-weight:600;">${esc(recipe.title)}</span>
+            </div>`}
+          ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
+        </div>
+        <div class="hero-card-overlay">
+          <div class="hero-card-info">
+            <span class="hero-card-source">${esc(sourceLabel)}</span>
+            <h3 class="hero-card-title">${esc(recipe.title)}</h3>
+            <div class="hero-card-meta">
+              ${recipe.cookTime ? `<span>⏱ ${esc(recipe.cookTime)}</span>` : ''}
+              ${recipe.category ? `<span>· ${esc(recipe.category)}</span>` : ''}
+            </div>
+          </div>
+          <button class="card-overflow-btn" onclick="event.stopPropagation(); showEffortContextMenu(event, '${esc(id)}', '${esc(recipe.title).replace(/'/g, "\\'")}');">•••</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCategoryCircles() {
+  const categories = [
+    { id: 'Breakfast', emoji: '🍳', label: 'Breakfast' },
+    { id: 'Lunch', emoji: '🥪', label: 'Lunch' },
+    { id: 'Dinner', emoji: '🍽️', label: 'Dinner' },
+    { id: 'Vegetables', emoji: '🥬', label: 'Veggies' },
+    { id: 'Appetizer', emoji: '🧀', label: 'Appetizer' },
+    { id: 'Snack', emoji: '🍪', label: 'Snack' }
+  ];
+
+  return `
+    <div class="feed-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">I'm in the Mood for...</h2>
+      </div>
+      <div class="category-carousel">
+        ${categories.map(c => `
+          <button class="category-circle ${state.feedCategoryFilter === c.id ? 'active' : ''}"
+            onclick="state.feedCategoryFilter = (state.feedCategoryFilter === '${c.id}' ? null : '${c.id}'); state.recipePrimaryFilter = 'all'; state.feedSeeAllSection = null; state.feedAllRecipesPage = 1; render();">
+            <div class="circle-icon">${c.emoji}</div>
+            <span class="circle-label">${c.label}</span>
+          </button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderCarouselCard(recipe) {
+  const id = recipe.__backendId || recipe.id;
+  const img = recipeThumb(recipe);
+  const hasVid = recipeHasVideo(id);
+  const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
+  const saved = isRecipeSaved(id);
+  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : (recipe.sourceType === 'claude' ? 'Claude' : 'EZ Cooking');
+
+  return `
+    <div class="recipe-carousel-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
+      <div class="carousel-card-media">
+        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy">` :
+          `<div style="width:100%;height:100%;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;padding:12px;">
+            <span style="color:${CONFIG.text_color};font-size:13px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(recipe.title)}</span>
+          </div>`}
+        ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
+        <div class="card-like-pill">
+          <span class="heart ${saved ? 'liked' : ''}">♥</span>
+        </div>
+        <button class="card-overflow-btn" onclick="event.stopPropagation(); showEffortContextMenu(event, '${esc(id)}', '${esc(recipe.title).replace(/'/g, "\\'")}');">•••</button>
+        ${previewVideoId ? `<div class="video-live-dot"><div class="video-live-dot-inner"></div></div>` : ''}
+        ${recipe.cookTime ? `<div class="cook-time-pill"><svg width="11" height="11" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${esc(recipe.cookTime)}</div>` : ''}
+      </div>
+      <div class="carousel-card-info">
+        <span class="card-source">${esc(sourceLabel)}</span>
+        <h3 class="card-title">${esc(recipe.title)}</h3>
+        <div class="card-meta">
+          ${recipe.cookTime ? `<span>⏱ ${esc(recipe.cookTime)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderLargeCard(recipe) {
+  const id = recipe.__backendId || recipe.id;
+  const img = recipeThumb(recipe);
+  const saved = isRecipeSaved(id);
+
+  return `
+    <div class="large-carousel-card" data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
+      <div class="large-card-media">
+        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" loading="lazy">` :
+          `<div style="width:100%;height:100%;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;">
+            <span style="color:${CONFIG.text_color};font-size:16px;font-weight:600;">${esc(recipe.title)}</span>
+          </div>`}
+        <div class="large-card-overlay">
+          ${recipe.cookTime ? `<div class="card-time-pill">⏱ ${esc(recipe.cookTime)}</div>` : '<div></div>'}
+          <div class="card-like-pill"><span class="heart ${saved ? 'liked' : ''}">♥</span></div>
+          <div class="large-card-info">
+            <h3 class="large-card-title">${esc(recipe.title)}</h3>
+            <button class="card-overflow-btn" onclick="event.stopPropagation(); showEffortContextMenu(event, '${esc(id)}', '${esc(recipe.title).replace(/'/g, "\\'")}');">•••</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCarouselSection(sectionKey, title, recipes) {
+  if (!recipes || recipes.length === 0) return '';
+  return `
+    <div class="feed-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">${esc(title)}</h2>
+        <button class="see-all-btn" onclick="state.feedSeeAllSection = '${sectionKey}'; render();">See all</button>
+      </div>
+      <div class="recipe-carousel">
+        ${recipes.map(r => renderCarouselCard(r)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderLargeCarouselSection(title, recipes) {
+  if (!recipes || recipes.length === 0) return '';
+  return `
+    <div class="feed-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">${esc(title)}</h2>
+        <button class="see-all-btn" onclick="state.feedSeeAllSection = 'freestyle'; render();">See all</button>
+      </div>
+      <div class="recipe-carousel large-carousel">
+        ${recipes.map(r => renderLargeCard(r)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderAllRecipesGrid(list) {
+  if (!list || list.length === 0) return '';
+  const perPage = 10;
+  const page = state.feedAllRecipesPage || 1;
+  const visible = list.slice(0, page * perPage);
+  const hasMore = visible.length < list.length;
+
+  return `
+    <div class="feed-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">All Recipes</h2>
+      </div>
+      <div class="all-recipes-grid">
+        ${visible.map(r => renderCarouselCard(r)).join('')}
+      </div>
+      ${hasMore ? `
+        <button class="load-more-btn" onclick="state.feedAllRecipesPage = ${page + 1}; render();">
+          Load More (${list.length - visible.length} remaining)
+        </button>
+      ` : ''}
+    </div>
+  `;
+}
+
+function renderSearchResultsGrid(list) {
+  return `
+    <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 8px;">
+      ${list.map((r, idx) => {
+        const id = r.__backendId || r.id;
+        const img = recipeThumb(r);
+        const saved = isRecipeSaved(id);
+        const effort = getRecipeEffort(id);
+        const hasVid = recipeHasVideo(id);
+        const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
+        return `
+        <div class="${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} style="position: relative; cursor: pointer; overflow: hidden; border-radius: 12px; background:${CONFIG.background_color}; opacity:0; animation: cardFadeIn 0.3s ease forwards; animation-delay: ${idx * 0.04}s;" oncontextmenu="event.preventDefault(); showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}');" ontouchstart="this._longPressTimer = setTimeout(() => { this._didLongPress = true; showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}'); }, 500);" ontouchend="clearTimeout(this._longPressTimer); if(this._didLongPress) { event.preventDefault(); this._didLongPress = false; }" ontouchmove="clearTimeout(this._longPressTimer);">
+          <div onclick="if(this.parentElement._didLongPress) return; openRecipeView('${id}')">
+            ${img ? `
+              <div style="aspect-ratio:4/5; width:100%; overflow:hidden; position:relative; background:#0d0d0d;">
+                <img loading="lazy" src="${esc(img)}" class="video-card-thumb" style="width:100%; height:100%; object-fit:cover; transition: opacity 0.35s ease;" />
+                ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
+              </div>
+            ` : `
+              <div style="aspect-ratio:4/5; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
+                <span style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
+              </div>
+            `}
+          </div>
+          ${effort ? `<div style="position:absolute; top:6px; left:6px; z-index:2;">${renderEffortPill(effort, 'sm')}</div>` : ''}
+          ${hasVid && !previewVideoId ? `<div style="position:absolute; top:${effort ? '30px' : '6px'}; left:6px; z-index:2; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
+          </div>` : ''}
+          ${previewVideoId ? `<div class="video-live-dot"><div class="video-live-dot-inner"></div></div>` : ''}
+          ${r.cookTime ? `<div class="cook-time-pill"><svg width="11" height="11" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${esc(r.cookTime)}</div>` : ''}
+          <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}')"
+            style="position: absolute; top: 6px; right: 6px; z-index: 4; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+            <svg width="13" height="13" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+          </button>
+          <div style="padding:8px 10px; background:${CONFIG.background_color};" onclick="openRecipeView('${id}')">
+            <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
+              ${esc(r.title)}
+            </div>
+            ${r.category ? `<div style="color:${CONFIG.text_muted}; font-size:11px; margin-top:2px;">${esc(r.category)}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+function getSeeAllRecipes(sectionKey, list) {
+  switch (sectionKey) {
+    case 'new': return [...list].reverse();
+    case 'quick': return list.filter(r => {
+      const time = parseInt(r.cookTime || '999');
+      const id = r.__backendId || r.id;
+      return time <= 30 || getRecipeEffort(id) === 'lazy';
+    });
+    case 'freestyle': return list.filter(r => r.sourceType === 'user');
+    case 'favorites': {
+      const savedIds = getSavedRecipes();
+      return list.filter(r => savedIds.includes(r.__backendId || r.id));
+    }
+    case 'budget': return list.filter(r => {
+      const ings = recipeIngList(r);
+      return ings.length > 0 && ings.length < 8;
+    });
+    case 'dinner': return list.filter(r => (r.category || '').toLowerCase() === 'dinner');
+    case 'saved': {
+      const savedIds = getSavedRecipes();
+      const reversed = [...savedIds].reverse();
+      return reversed.map(id => list.find(r => (r.__backendId || r.id) === id)).filter(Boolean);
+    }
+    case 'plates': return []; // Plates are handled separately
+    default: return list;
+  }
+}
+
+function getFeedSavedRecipes(list) {
+  const savedIds = getSavedRecipes();
+  // Most recently saved first (last in array = most recent)
+  const reversed = [...savedIds].reverse();
+  return reversed.map(id => list.find(r => (r.__backendId || r.id) === id)).filter(Boolean).slice(0, 8);
+}
+
+function renderSavedCarouselCard(recipe) {
+  const id = recipe.__backendId || recipe.id;
+  const img = recipeThumb(recipe);
+  const hasVid = recipeHasVideo(id);
+  const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
+  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : (recipe.sourceType === 'claude' ? 'Claude' : 'EZ Cooking');
+
+  return `
+    <div class="recipe-carousel-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
+      <div class="carousel-card-media">
+        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy">` :
+          `<div style="width:100%;height:100%;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;padding:12px;">
+            <span style="color:${CONFIG.text_color};font-size:13px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(recipe.title)}</span>
+          </div>`}
+        ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
+        <div class="card-like-pill">
+          <span class="heart liked">♥</span>
+        </div>
+        <button class="card-overflow-btn" onclick="event.stopPropagation(); showEffortContextMenu(event, '${esc(id)}', '${esc(recipe.title).replace(/'/g, "\\'")}');">•••</button>
+        ${previewVideoId ? `<div class="video-live-dot"><div class="video-live-dot-inner"></div></div>` : ''}
+        ${recipe.cookTime ? `<div class="cook-time-pill"><svg width="11" height="11" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${esc(recipe.cookTime)}</div>` : ''}
+      </div>
+      <div class="carousel-card-info">
+        <span class="card-source">${esc(sourceLabel)}</span>
+        <h3 class="card-title">${esc(recipe.title)}</h3>
+        <div class="card-meta">
+          ${recipe.cookTime ? `<span>⏱ ${esc(recipe.cookTime)}</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSavedRecipesSection(savedRecipes) {
+  if (!savedRecipes || savedRecipes.length === 0) return '';
+  return `
+    <div class="feed-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">Saved Recipes</h2>
+        <button class="see-all-btn" onclick="state.feedSeeAllSection = 'saved'; render();">See all</button>
+      </div>
+      <div class="recipe-carousel">
+        ${savedRecipes.map(r => renderSavedCarouselCard(r)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderPlateCard(plate) {
+  const comps = plate.components || [];
+  // Get up to 4 recipe photos for collage
+  const photos = [];
+  for (const comp of comps) {
+    if (photos.length >= 4) break;
+    if (comp.type === 'recipe' && comp.recipeId) {
+      const r = getRecipeById(comp.recipeId);
+      if (r) { const t = recipeThumb(r); if (t) { photos.push(t); continue; } }
+    }
+    if (comp.photo) photos.push(comp.photo);
+  }
+  // Fallback to cover photo
+  if (photos.length === 0) {
+    const cover = getBatchCoverPhoto(plate);
+    if (cover) photos.push(cover);
+  }
+
+  const collageClass = photos.length === 1 ? 'single' : (photos.length === 2 ? 'double' : (photos.length === 3 ? 'triple' : ''));
+
+  return `
+    <div class="plate-carousel-card" data-plate-id="${esc(plate.id)}" onclick="navigateTo('batch-view'); state.selectedBatchViewId = '${esc(plate.id)}';">
+      <div class="plate-collage ${collageClass}">
+        ${photos.length > 0 ? photos.map(p => `<img src="${esc(p)}" alt="" loading="lazy">`).join('') :
+          `<div style="grid-column:1/-1;grid-row:1/-1;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;">
+            <span style="color:${CONFIG.text_muted};font-size:24px;">🍽️</span>
+          </div>`}
+      </div>
+      <div class="plate-card-info">
+        <h3 class="plate-card-name">${esc(plate.name || 'Untitled Plate')}</h3>
+        <div class="plate-card-count">${comps.length} recipe${comps.length !== 1 ? 's' : ''}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderPlatesCarouselSection(plates) {
+  if (!plates || plates.length === 0) return '';
+  return `
+    <div class="feed-section">
+      <div class="feed-section-header">
+        <h2 class="feed-section-title caps">Your Plates</h2>
+        <button class="see-all-btn" onclick="state.feedSeeAllSection = 'plates'; render();">See all</button>
+      </div>
+      <div class="recipe-carousel">
+        ${plates.map(p => renderPlateCard(p)).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function getSeeAllTitle(sectionKey) {
+  const titles = { new: 'New Recipes', quick: 'Quick & Easy', freestyle: 'Freestyle Recipes', favorites: 'Community Favorites', budget: 'Budget Friendly', dinner: 'Delicious Dinners', saved: 'Saved Recipes', plates: 'Your Plates' };
+  return titles[sectionKey] || 'Recipes';
+}
+
+function renderFeedSeeAllGrid(sectionKey, baseList) {
+  const title = getSeeAllTitle(sectionKey);
+  const backHeader = `
+    <div class="see-all-back-header">
+      <button class="see-all-back-btn" onclick="state.feedSeeAllSection = null; render();">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        Back
+      </button>
+      <h2 class="see-all-section-title">${esc(title)}</h2>
+    </div>
+  `;
+
+  // Special case: plates grid
+  if (sectionKey === 'plates') {
+    const plates = state.batchRecipes || [];
+    return `${backHeader}
+      ${plates.length === 0 ? renderFeedEmptyState(false) : `
+        <div class="all-recipes-grid">
+          ${plates.map(p => renderPlateCard(p)).join('')}
+        </div>
+      `}
+    `;
+  }
+
+  // Special case: saved recipes use the saved card (bookmark filled)
+  if (sectionKey === 'saved') {
+    const sectionRecipes = getSeeAllRecipes(sectionKey, baseList);
+    return `${backHeader}
+      ${sectionRecipes.length === 0 ? renderFeedEmptyState(false) : `
+        <div class="all-recipes-grid">
+          ${sectionRecipes.map(r => renderSavedCarouselCard(r)).join('')}
+        </div>
+      `}
+    `;
+  }
+
+  const sectionRecipes = getSeeAllRecipes(sectionKey, baseList);
+  return `${backHeader}
+    ${sectionRecipes.length === 0 ? renderFeedEmptyState(false) : `
+      <div class="all-recipes-grid">
+        ${sectionRecipes.map(r => renderCarouselCard(r)).join('')}
+      </div>
+    `}
+  `;
+}
+
 function renderRecipes() {
   if (!state.recipes || !Array.isArray(state.recipes)) return renderSkeleton('card-grid');
+
+  // Initialize feed state defaults
+  if (state.feedAllRecipesPage === undefined) state.feedAllRecipesPage = 1;
 
   // Build the full recipe list (all sources, no tabs)
   let list = state.recipes.filter(r => !r.isDraft && !r.isTip);
@@ -1658,7 +2179,6 @@ function renderRecipes() {
   if (['Breakfast', 'Lunch', 'Dinner', 'Snack'].includes(primaryFilter)) {
     list = list.filter(r => (r.category || '') === primaryFilter);
   }
-  // 'all' shows everything
 
   // Apply secondary source toggles (if any active, filter to those sources)
   const sourcesToggles = state.recipeSourceToggles || {};
@@ -1678,105 +2198,76 @@ function renderRecipes() {
     });
   }
 
-  // Apply search (name + ingredients)
+  // Apply category circle filter
+  if (state.feedCategoryFilter) {
+    list = list.filter(r => (r.category || '') === state.feedCategoryFilter);
+  }
+
+  // --- MODE 1: Search active — flat grid ---
   if (state.searchTerm) {
     const searchLower = state.searchTerm.toLowerCase();
-    list = list.filter(r => {
+    const searchList = list.filter(r => {
       if ((r.title || '').toLowerCase().includes(searchLower)) return true;
       const ingredients = recipeIngList(r);
       return ingredients.some(ing => (ing.name || '').toLowerCase().includes(searchLower));
     });
+
+    return `
+      <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
+        ${renderFeedSearchBar()}
+        ${renderRecipeFilterPills()}
+        ${searchList.length === 0 ? renderFeedEmptyState(true) : renderSearchResultsGrid(searchList)}
+      </div>
+    `;
   }
 
-  return `
-    <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
-      <!-- Search bar -->
-      <div style="padding: 8px 12px 0;">
-        <div style="position:relative;">
-          <input id="recipesPageSearchInput" type="text" placeholder="Search recipes or ingredients..."
-            value="${esc(state.searchTerm || '')}"
-            oninput="handleRecipesPageSearch(this.value)"
-            style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
-            background:${CONFIG.surface_color}; color:${CONFIG.text_color};
-            border:1px solid rgba(255,255,255,0.08); border-radius:10px;
-            font-size:14px; font-family:${CONFIG.font_family};" />
-          ${state.searchTerm ? `
-            <button onclick="state.searchTerm=''; render(); setTimeout(() => { const i = document.getElementById('recipesPageSearchInput'); if(i) i.focus(); }, 0);"
-              style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
-              background:rgba(255,255,255,0.1); border:none; border-radius:50%;
-              width:20px; height:20px; display:flex; align-items:center; justify-content:center;
-              color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-            </button>
-          ` : `
-            <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-            </div>
-          `}
-        </div>
+  // --- MODE 2: "See All" active — full grid for one section ---
+  if (state.feedSeeAllSection) {
+    return `
+      <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
+        ${renderFeedSearchBar()}
+        ${renderFeedSeeAllGrid(state.feedSeeAllSection, list)}
       </div>
+    `;
+  }
 
-      <!-- Filter pills -->
+  // --- MODE 3: Normal feed ---
+  if (list.length === 0) {
+    return `
+      <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
+        ${renderFeedSearchBar()}
+        ${renderRecipeFilterPills()}
+        ${renderFeedEmptyState(false)}
+      </div>
+    `;
+  }
+
+  const hero = pickFeaturedRecipe(list);
+  const heroId = hero ? (hero.__backendId || hero.id) : null;
+  const newRecipes = getFeedNewRecipes(list, heroId);
+  const quickRecipes = getFeedQuickRecipes(list);
+  const freestyleRecipes = getFeedFreestyleRecipes(list);
+  const favorites = getFeedFavorites(list);
+  const budgetRecipes = getFeedBudgetRecipes(list);
+  const dinnerRecipes = getFeedDinnerRecipes(list);
+  const savedRecipes = getFeedSavedRecipes(list);
+  const plates = (state.batchRecipes || []).slice(0, 8);
+
+  return `
+    <div class="recipes-feed" style="padding: 0; max-width: 100%; overflow-x: hidden;">
+      ${renderFeedSearchBar()}
       ${renderRecipeFilterPills()}
-
-      <!-- Results -->
-      ${list.length === 0 ? `
-        <div style="padding: 48px 12px; text-align: center;">
-          <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">
-            ${state.searchTerm ? 'No matches found' : 'No recipes yet'}
-          </div>
-          <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-bottom: 12px;">
-            ${state.searchTerm ? 'Try a different search' : 'Add your first recipe!'}
-          </div>
-          ${!state.searchTerm ? `
-            <button onclick="openNewRecipe()" style="padding: 8px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 12px;">
-              + Add Recipe
-            </button>
-          ` : ''}
-        </div>
-      ` : `
-        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 8px;">
-          ${list.map((r, idx) => {
-            const id = r.__backendId || r.id;
-            const img = recipeThumb(r);
-            const saved = isRecipeSaved(id);
-            const effort = getRecipeEffort(id);
-            const hasVid = recipeHasVideo(id);
-            const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
-            return `
-            <div class="${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} style="position: relative; cursor: pointer; overflow: hidden; border-radius: 12px; background:${CONFIG.background_color}; opacity:0; animation: cardFadeIn 0.3s ease forwards; animation-delay: ${idx * 0.04}s;" oncontextmenu="event.preventDefault(); showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}');" ontouchstart="this._longPressTimer = setTimeout(() => { this._didLongPress = true; showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}'); }, 500);" ontouchend="clearTimeout(this._longPressTimer); if(this._didLongPress) { event.preventDefault(); this._didLongPress = false; }" ontouchmove="clearTimeout(this._longPressTimer);">
-              <div onclick="if(this.parentElement._didLongPress) return; openRecipeView('${id}')">
-                ${img ? `
-                  <div style="aspect-ratio:4/5; width:100%; overflow:hidden; position:relative; background:#0d0d0d;">
-                    <img loading="lazy" src="${esc(img)}" class="video-card-thumb" style="width:100%; height:100%; object-fit:cover; transition: opacity 0.35s ease;" />
-                    ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
-                  </div>
-                ` : `
-                  <div style="aspect-ratio:4/5; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
-                    <span style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
-                  </div>
-                `}
-              </div>
-              ${effort ? `<div style="position:absolute; top:6px; left:6px; z-index:2;">${renderEffortPill(effort, 'sm')}</div>` : ''}
-              ${hasVid && !previewVideoId ? `<div style="position:absolute; top:${effort ? '30px' : '6px'}; left:6px; z-index:2; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
-                <svg width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
-              </div>` : ''}
-              ${previewVideoId ? `<div class="video-live-dot"><div class="video-live-dot-inner"></div></div>` : ''}
-              ${r.cookTime ? `<div class="cook-time-pill"><svg width="11" height="11" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${esc(r.cookTime)}</div>` : ''}
-              <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}')"
-                style="position: absolute; top: 6px; right: 6px; z-index: 4; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
-                <svg width="13" height="13" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
-              </button>
-              <div style="padding:8px 10px; background:${CONFIG.background_color};" onclick="openRecipeView('${id}')">
-                <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
-                  ${esc(r.title)}
-                </div>
-                ${r.category ? `<div style="color:${CONFIG.text_muted}; font-size:11px; margin-top:2px;">${esc(r.category)}</div>` : ''}
-              </div>
-            </div>`;
-          }).join('')}
-        </div>
-      `}
+      ${renderHeroSection(hero)}
+      ${renderCategoryCircles()}
+      ${renderCarouselSection('new', 'New Recipes', newRecipes)}
+      ${renderCarouselSection('quick', 'Quick & Easy', quickRecipes)}
+      ${renderLargeCarouselSection('Freestyle Recipes', freestyleRecipes)}
+      ${renderCarouselSection('favorites', 'Community Favorites', favorites)}
+      ${renderCarouselSection('budget', 'Budget Friendly', budgetRecipes)}
+      ${renderCarouselSection('dinner', 'Delicious Dinners', dinnerRecipes)}
+      ${renderSavedRecipesSection(savedRecipes)}
+      ${renderPlatesCarouselSection(plates)}
+      ${renderAllRecipesGrid(list)}
     </div>
   `;
 }
@@ -3754,6 +4245,7 @@ let recipesPageSearchTimeout = null;
 
 function handleRecipesPageSearch(value) {
   state.searchTerm = value;
+  state.feedSeeAllSection = null; // Exit see-all when searching
 
   if (recipesPageSearchTimeout) clearTimeout(recipesPageSearchTimeout);
 
