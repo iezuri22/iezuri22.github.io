@@ -2026,14 +2026,14 @@ function renderSavedCarouselCard(recipe) {
     <div class="recipe-carousel-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
       <div class="carousel-card-media">
         ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy">` :
-          `<div style="width:100%;height:100%;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;padding:12px;">
-            <span style="color:${CONFIG.text_color};font-size:13px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(recipe.title)}</span>
+          `<div style="width:100%;height:100%;background:var(--bg-card);display:flex;align-items:center;justify-content:center;padding:12px;">
+            <span style="color:var(--text-primary);font-size:13px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(recipe.title)}</span>
           </div>`}
         ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
         <div class="card-like-pill">
-          <span class="heart liked">♥</span>
+          <span class="heart liked">\u2665</span>
         </div>
-        <button class="card-overflow-btn" onclick="event.stopPropagation(); showEffortContextMenu(event, '${esc(id)}', '${esc(recipe.title).replace(/'/g, "\\'")}');">•••</button>
+        <div class="saved-bookmark-badge">\u{1F516}</div>
         ${previewVideoId ? `<div class="video-live-dot"><div class="video-live-dot-inner"></div></div>` : ''}
         ${recipe.cookTime ? `<div class="cook-time-pill"><svg width="11" height="11" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${esc(recipe.cookTime)}</div>` : ''}
       </div>
@@ -2041,7 +2041,7 @@ function renderSavedCarouselCard(recipe) {
         <span class="card-source">${esc(sourceLabel)}</span>
         <h3 class="card-title">${esc(recipe.title)}</h3>
         <div class="card-meta">
-          ${recipe.cookTime ? `<span>⏱ ${esc(recipe.cookTime)}</span>` : ''}
+          ${recipe.cookTime ? `<span>\u23F1 ${esc(recipe.cookTime)}</span>` : ''}
         </div>
       </div>
     </div>
@@ -2049,14 +2049,27 @@ function renderSavedCarouselCard(recipe) {
 }
 
 function renderSavedRecipesSection(savedRecipes) {
-  if (!savedRecipes || savedRecipes.length === 0) return '';
+  if (!savedRecipes || savedRecipes.length === 0) {
+    return `
+      <div class="feed-section saved-section">
+        <h2 class="feed-section-title editorial">\u{1F516} Your Saved Recipes</h2>
+        <div class="empty-saved-card">
+          <p class="empty-saved-title">Start your collection</p>
+          <p class="empty-saved-subtitle">Tap the bookmark on any recipe to save it here</p>
+        </div>
+      </div>
+    `;
+  }
   return `
-    <div class="feed-section">
+    <div class="feed-section saved-section">
       <div class="feed-section-header">
-        <h2 class="feed-section-title caps">Saved Recipes</h2>
+        <div>
+          <h2 class="feed-section-title editorial" style="padding:0; margin-bottom:4px;">\u{1F516} Your Saved Recipes</h2>
+          <div style="font-size:13px; color:var(--text-secondary); padding-left: 0;">${savedRecipes.length} recipe${savedRecipes.length !== 1 ? 's' : ''} saved</div>
+        </div>
         <button class="see-all-btn" onclick="state.feedSeeAllSection = 'saved'; render();">See all</button>
       </div>
-      <div class="recipe-carousel">
+      <div class="recipe-carousel saved-carousel">
         ${savedRecipes.map(r => renderSavedCarouselCard(r)).join('')}
       </div>
     </div>
@@ -2259,14 +2272,14 @@ function renderRecipes() {
       ${renderRecipeFilterPills()}
       ${renderHeroSection(hero)}
       ${renderCategoryCircles()}
+      ${renderSavedRecipesSection(savedRecipes)}
+      ${renderPlatesCarouselSection(plates)}
       ${renderCarouselSection('new', 'New Recipes', newRecipes)}
       ${renderCarouselSection('quick', 'Quick & Easy', quickRecipes)}
       ${renderLargeCarouselSection('Freestyle Recipes', freestyleRecipes)}
       ${renderCarouselSection('favorites', 'Community Favorites', favorites)}
       ${renderCarouselSection('budget', 'Budget Friendly', budgetRecipes)}
       ${renderCarouselSection('dinner', 'Delicious Dinners', dinnerRecipes)}
-      ${renderSavedRecipesSection(savedRecipes)}
-      ${renderPlatesCarouselSection(plates)}
       ${renderAllRecipesGrid(list)}
     </div>
   `;

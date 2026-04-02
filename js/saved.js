@@ -81,12 +81,10 @@ function renderSavedTabs() {
     { id: 'journal', label: 'Cooking Journal' }
   ];
   return `
-    <div style="display: flex; gap: 4px; padding: 8px 12px; background: ${CONFIG.background_color};">
+    <div class="tab-bar">
       ${tabs.map(t => `
         <button onclick="setSavedTab('${t.id}')"
-          style="flex: 1; padding: 8px 0; border-radius: 20px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; font-family: ${CONFIG.font_family};
-          background: ${savedActiveTab === t.id ? CONFIG.primary_action_color : CONFIG.surface_color};
-          color: ${savedActiveTab === t.id ? 'white' : CONFIG.text_muted};">
+          class="tab-bar-item ${savedActiveTab === t.id ? 'active' : ''}">
           ${t.label}
         </button>
       `).join('')}
@@ -140,43 +138,35 @@ function renderSavedRecipes() {
   const filterRow = filters.map(f => {
     const active = savedPrimaryFilter === f.id;
     return `<button onclick="setSavedFilter('${f.id}')"
-      style="flex-shrink:0; padding:8px 16px; border-radius:20px; border:none;
-      background:${active ? CONFIG.primary_action_color : 'transparent'};
-      color:${active ? 'white' : CONFIG.text_muted};
-      font-size:13px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">
+      class="filter-pill ${active ? 'active' : ''}">
       ${f.label}</button>`;
   }).join('');
 
   return `
     <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
       <!-- Search bar -->
-      <div style="padding: 8px 12px 0;">
-        <div style="position:relative;">
+      <div class="search-bar-container">
+        <div class="search-bar">
+          <div class="search-icon">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          </div>
           <input id="savedSearchInput" type="text" placeholder="Search saved recipes..."
             value="${esc(savedSearchTerm)}"
-            oninput="handleSavedSearch(this.value)"
-            style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
-            background:${CONFIG.surface_color}; color:${CONFIG.text_color};
-            border:1px solid rgba(255,255,255,0.08); border-radius:10px;
-            font-size:14px; font-family:${CONFIG.font_family};" />
+            oninput="handleSavedSearch(this.value)" />
           ${savedSearchTerm ? `
             <button onclick="savedSearchTerm=''; render(); setTimeout(() => { const i = document.getElementById('savedSearchInput'); if(i) i.focus(); }, 0);"
-              style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
-              background:rgba(255,255,255,0.1); border:none; border-radius:50%;
+              class="search-clear"
+              style="background:rgba(255,255,255,0.1); border:none; border-radius:50%;
               width:20px; height:20px; display:flex; align-items:center; justify-content:center;
-              color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
+              color:var(--text-secondary); cursor:pointer; padding:0;">
               <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
-          ` : `
-            <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-            </div>
-          `}
+          ` : ''}
         </div>
       </div>
 
       <!-- Filter pills -->
-      <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 12px 6px; -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+      <div class="filter-pill-row">
         ${filterRow}
       </div>
 
@@ -194,31 +184,31 @@ function renderSavedRecipes() {
           </div>
         </div>
       ` : `
-        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
+        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 4px 20px;">
           ${list.map(r => {
             const id = r.__backendId || r.id;
             const img = recipeThumb(r);
             const effort = getRecipeEffort(id);
             return `
-            <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 8px;">
+            <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: var(--radius-lg);">
               <div onclick="openRecipeView('${id}')">
                 ${img ? `
                   <div style="aspect-ratio:1; width:100%; overflow:hidden;">
                     <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
                   </div>
                 ` : `
-                  <div style="aspect-ratio:1; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
-                    <span style="color:${CONFIG.text_color}; font-size:12px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
+                  <div style="aspect-ratio:1; width:100%; background:var(--bg-card); display:flex; align-items:center; justify-content:center; padding:12px;">
+                    <span style="color:var(--text-primary); font-size:12px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
                   </div>
                 `}
               </div>
               ${effort ? `<div style="position:absolute; top:4px; left:4px; z-index:2;">${renderEffortPill(effort, 'sm')}</div>` : ''}
               <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}'); render();"
-                style="position: absolute; top: 4px; right: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${CONFIG.primary_action_color}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                style="position: absolute; top: 4px; right: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: var(--accent); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
                 <svg width="12" height="12" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
               </button>
-              <div style="padding:6px; background:${CONFIG.background_color};" onclick="openRecipeView('${id}')">
-                <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
+              <div style="padding:6px 8px; background:var(--bg-app);" onclick="openRecipeView('${id}')">
+                <div style="color:var(--text-primary); font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
                   ${esc(r.title)}
                 </div>
               </div>
@@ -490,50 +480,42 @@ function renderPlatesTab() {
   const filterRow = filters.map(f => {
     const active = platesPrimaryFilter === f.id;
     return `<button onclick="setPlatesFilter('${f.id}')"
-      style="flex-shrink:0; padding:8px 16px; border-radius:20px; border:none;
-      background:${active ? CONFIG.primary_action_color : 'transparent'};
-      color:${active ? 'white' : CONFIG.text_muted};
-      font-size:13px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">
+      class="filter-pill ${active ? 'active' : ''}">
       ${f.label}</button>`;
   }).join('');
 
   return `
     <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
       <!-- Search bar -->
-      <div style="padding: 8px 12px 0;">
-        <div style="position:relative;">
+      <div class="search-bar-container">
+        <div class="search-bar">
+          <div class="search-icon">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          </div>
           <input id="platesSearchInput" type="text" placeholder="Search plates..."
             value="${esc(platesSearchTerm)}"
-            oninput="handlePlatesSearch(this.value)"
-            style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
-            background:${CONFIG.surface_color}; color:${CONFIG.text_color};
-            border:1px solid rgba(255,255,255,0.08); border-radius:10px;
-            font-size:14px; font-family:${CONFIG.font_family};" />
+            oninput="handlePlatesSearch(this.value)" />
           ${platesSearchTerm ? `
             <button onclick="platesSearchTerm=''; render(); setTimeout(() => { const i = document.getElementById('platesSearchInput'); if(i) i.focus(); }, 0);"
-              style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
-              background:rgba(255,255,255,0.1); border:none; border-radius:50%;
+              class="search-clear"
+              style="background:rgba(255,255,255,0.1); border:none; border-radius:50%;
               width:20px; height:20px; display:flex; align-items:center; justify-content:center;
-              color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
+              color:var(--text-secondary); cursor:pointer; padding:0;">
               <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
-          ` : `
-            <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
-              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-            </div>
-          `}
+          ` : ''}
         </div>
       </div>
 
       <!-- Filter pills -->
-      <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 12px 6px; -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+      <div class="filter-pill-row">
         ${filterRow}
       </div>
 
       <!-- + Build a Plate button -->
-      <div style="padding: 4px 12px 8px;">
+      <div style="padding: 4px 20px 8px;">
         <button onclick="openNewBatchRecipe()"
-          style="width: 100%; padding: 10px; background: ${CONFIG.surface_elevated}; color: ${CONFIG.primary_action_color}; border: 1px solid rgba(232,93,93,0.2); border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;">
+          style="width: 100%; padding: 10px; background: var(--bg-elevated); color: var(--accent); border: 1px solid rgba(232,93,93,0.2); border-radius: var(--radius-md); font-size: 13px; font-weight: 600; cursor: pointer; font-family: var(--font-sans);">
           + Build a Plate
         </button>
       </div>
@@ -557,19 +539,19 @@ function renderPlatesTab() {
           ` : ''}
         </div>
       ` : `
-        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
+        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 4px 20px;">
           ${list.map(b => {
             const bImg = getBatchCoverPhoto(b);
             const compCount = (b.components || []).length;
             return `
-            <div style="position:relative; cursor:pointer; overflow:hidden; border-radius:8px;" onclick="openBatchRecipeView('${b.id}')">
+            <div style="position:relative; cursor:pointer; overflow:hidden; border-radius:var(--radius-lg);" onclick="openBatchRecipeView('${b.id}')" class="card-press">
               ${bImg ? `
                 <div style="aspect-ratio:1; width:100%; overflow:hidden;">
                   <img loading="lazy" src="${esc(bImg)}" style="width:100%; height:100%; object-fit:cover;" />
                 </div>
               ` : `
-                <div style="aspect-ratio:1; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
-                  <span style="color:${CONFIG.text_color}; font-size:12px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(b.name)}</span>
+                <div style="aspect-ratio:1; width:100%; background:var(--bg-card); display:flex; align-items:center; justify-content:center; padding:12px;">
+                  <span style="color:var(--text-primary); font-size:12px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(b.name)}</span>
                 </div>
               `}
               <!-- Stacked cards badge -->
@@ -578,9 +560,9 @@ function renderPlatesTab() {
                   <svg width="14" height="14" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 003.75 9v.878m0 0c.235-.083.487-.128.75-.128h10.5m3.75.128A2.25 2.25 0 0120.25 9v.878m0 0A2.25 2.25 0 0118 12H6a2.25 2.25 0 01-2.25-2.122"/></svg>
                 </div>
               </div>
-              <div style="padding:6px; background:${CONFIG.background_color};">
-                <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">${esc(b.name)}</div>
-                <div style="color:${CONFIG.text_muted}; font-size:10px; margin-top:2px;">${compCount} recipe${compCount !== 1 ? 's' : ''}</div>
+              <div style="padding:6px 8px; background:var(--bg-app);">
+                <div style="color:var(--text-primary); font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">${esc(b.name)}</div>
+                <div style="color:var(--text-secondary); font-size:10px; margin-top:2px;">${compCount} recipe${compCount !== 1 ? 's' : ''}</div>
               </div>
             </div>`;
           }).join('')}
@@ -613,10 +595,7 @@ function renderCookingJournal() {
   const filterRow = filters.map(f => {
     const active = journalFilterMealType === f.id;
     return `<button onclick="setJournalFilter('${f.id}')"
-      style="flex-shrink:0; padding:8px 16px; border-radius:20px; border:none;
-      background:${active ? CONFIG.primary_action_color : 'transparent'};
-      color:${active ? 'white' : CONFIG.text_muted};
-      font-size:13px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">
+      class="filter-pill ${active ? 'active' : ''}">
       ${f.label}</button>`;
   }).join('');
 
@@ -633,33 +612,28 @@ function renderCookingJournal() {
 
   const searchAndFilters = `
     <!-- Search bar -->
-    <div style="padding: 8px 12px 0;">
-      <div style="position:relative;">
+    <div class="search-bar-container">
+      <div class="search-bar">
+        <div class="search-icon">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+        </div>
         <input id="journalSearchInput" type="text" placeholder="Search photos..."
           value="${esc(journalSearchTerm)}"
-          oninput="handleJournalSearch(this.value)"
-          style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
-          background:${CONFIG.surface_color}; color:${CONFIG.text_color};
-          border:1px solid rgba(255,255,255,0.08); border-radius:10px;
-          font-size:14px; font-family:${CONFIG.font_family};" />
+          oninput="handleJournalSearch(this.value)" />
         ${journalSearchTerm ? `
           <button onclick="journalSearchTerm=''; render(); setTimeout(() => { const i = document.getElementById('journalSearchInput'); if(i) i.focus(); }, 0);"
-            style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
-            background:rgba(255,255,255,0.1); border:none; border-radius:50%;
+            class="search-clear"
+            style="background:rgba(255,255,255,0.1); border:none; border-radius:50%;
             width:20px; height:20px; display:flex; align-items:center; justify-content:center;
-            color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
+            color:var(--text-secondary); cursor:pointer; padding:0;">
             <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
           </button>
-        ` : `
-          <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-          </div>
-        `}
+        ` : ''}
       </div>
     </div>
 
     <!-- Filter pills -->
-    <div style="display:flex; gap:6px; overflow-x:auto; padding:8px 12px 6px; -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+    <div class="filter-pill-row">
       ${filterRow}
     </div>
   `;
@@ -706,17 +680,17 @@ function renderCookingJournal() {
         const photos = dateGroups[date];
         const label = getFoodLogDateLabel(date);
         return `
-          <div style="padding: 16px 12px 0;">
-            <div style="font-size: 14px; font-weight: 700; color: ${CONFIG.text_color}; margin-bottom: 8px;">${label}</div>
+          <div style="padding: 16px 20px 0;">
+            <div style="font-size: 14px; font-weight: 700; color: var(--text-primary); margin-bottom: 8px;">${label}</div>
           </div>
-          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 0 4px;">
+          <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 0 20px;">
             ${photos.map(p => `
-              <div data-journal-id="${p.id}" style="position: relative; cursor: pointer; overflow: hidden; border-radius: 8px;" onclick="showJournalFullscreen('${p.id}')">
+              <div data-journal-id="${p.id}" style="position: relative; cursor: pointer; overflow: hidden; border-radius: var(--radius-lg);" onclick="showJournalFullscreen('${p.id}')" class="card-press">
                 <div style="aspect-ratio:1; width:100%; overflow:hidden;">
                   <img loading="lazy" src="${esc(p.photo)}" style="width:100%; height:100%; object-fit:cover;" />
                 </div>
-                <div style="padding:6px; background:${CONFIG.background_color};">
-                  <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:700; -webkit-line-clamp:1; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
+                <div style="padding:6px 8px; background:var(--bg-app);">
+                  <div style="color:var(--text-primary); font-size:13px; font-weight:600; -webkit-line-clamp:1; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
                     ${esc(p.recipeName)}
                   </div>
                 </div>

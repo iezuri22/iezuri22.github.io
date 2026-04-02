@@ -9,8 +9,8 @@ function renderCookAgainRow() {
   if (favorites.length === 0) return '';
 
   return `
-    <div style="padding: 0 12px; margin-bottom: 8px;">
-      <div style="font-size: ${CONFIG.type_caption}; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Cook Again</div>
+    <div style="padding: 0 20px; margin-bottom: 8px;">
+      <div class="section-label" style="margin-bottom: 6px;">Cook Again</div>
       <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
         ${favorites.map(entry => `
           <div onclick="${entry.recipeId ? `goToRecipe('${entry.recipeId}')` : `openFoodLogDetail('${entry.id}')`}" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 52px;">
@@ -239,9 +239,9 @@ function renderQuickActionsStrip() {
   ];
 
   return `
-    <div style="display: flex; gap: 8px; padding: 12px 16px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
+    <div style="display: flex; gap: 8px; padding: 12px 20px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
       ${actions.map(a => `
-        <button onclick="${a.action}" style="flex-shrink: 0; display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; color: ${CONFIG.text_color}; font-size: 13px; font-weight: 500; white-space: nowrap; transition: transform 0.15s ease, background 0.15s ease;" ontouchstart="this.style.transform='scale(0.95)'; this.style.background='rgba(255,255,255,0.1)'" ontouchend="this.style.transform=''; this.style.background=''">
+        <button onclick="${a.action}" style="flex-shrink: 0; display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 100px; cursor: pointer; color: ${CONFIG.text_color}; font-size: 13px; font-weight: 500; white-space: nowrap; font-family: var(--font-sans); transition: transform 0.15s ease, background 0.15s ease;" ontouchstart="this.style.transform='scale(0.95)'; this.style.background='var(--bg-elevated)'" ontouchend="this.style.transform=''; this.style.background=''">
           <span style="display:flex; align-items:center; color:${CONFIG.primary_action_color};">${a.icon}</span>
           ${a.label}
         </button>
@@ -258,22 +258,21 @@ function renderHeroCard(recipe) {
   const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
 
   return `
-    <div class="hero-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} onclick="goToRecipe('${id}')" style="position:relative; margin: 12px 16px 16px; border-radius: 16px; overflow: hidden; cursor: pointer; transition: transform 0.2s ease;" ontouchstart="this.style.transform='scale(0.98)'" ontouchend="this.style.transform=''">
-      <div style="position: relative; width: 100%; aspect-ratio: 16/9; background: #0d0d0d;">
-        ${img ? `<img src="${esc(img)}" class="video-card-thumb" style="width:100%; height:100%; object-fit:cover; transition: opacity 0.4s ease;" />` : `<div style="width:100%; height:100%; background: ${CONFIG.surface_color};"></div>`}
+    <div class="hero-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} onclick="goToRecipe('${id}')" style="margin: 12px 20px 16px;">
+      <div class="hero-card-media">
+        ${img ? `<img src="${esc(img)}" class="video-card-thumb" loading="lazy" />` : `<div style="width:100%; height:100%; background: var(--bg-card);"></div>`}
         ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
-        <!-- Gradient overlay -->
-        <div style="position:absolute; bottom:0; left:0; right:0; height:70%; background: linear-gradient(transparent, rgba(0,0,0,0.85)); pointer-events: none;"></div>
         ${hasVid ? `<div class="video-live-dot" style="bottom:auto; top:12px; right:12px;"><div class="video-live-dot-inner"></div></div>` : ''}
       </div>
-      <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 16px 16px 14px;">
-        <div style="display:inline-block; padding: 3px 8px; background: rgba(232,93,93,0.9); border-radius: 4px; font-size: 10px; font-weight: 700; color: white; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Featured</div>
-        <div style="font-size: 22px; font-weight: 700; color: white; line-height: 1.2; margin-bottom: 6px; text-shadow: 0 1px 3px rgba(0,0,0,0.3);">${esc(recipe.title)}</div>
-        <div style="display: flex; gap: 14px; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
-          ${recipe.cookTime ? `<span style="display:flex; align-items:center; gap:3px;"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> ${esc(recipe.cookTime)}</span>` : ''}
-          ${recipe.category ? `<span>${esc(recipe.category)}</span>` : ''}
+      <div class="hero-card-overlay">
+        <div>
+          <span class="hero-card-source">Featured</span>
+          <h2 class="hero-card-title">${esc(recipe.title)}</h2>
+          <div class="hero-card-meta">
+            ${recipe.cookTime ? `<span style="display:flex; align-items:center; gap:3px;"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> ${esc(recipe.cookTime)}</span>` : ''}
+            ${recipe.category ? `<span>${esc(recipe.category)}</span>` : ''}
+          </div>
         </div>
-        <div style="display:inline-block; padding: 10px 20px; background: white; border-radius: 10px; font-size: 14px; font-weight: 600; color: #1a1a1a;">Start Cooking →</div>
       </div>
     </div>
   `;
@@ -283,19 +282,19 @@ function renderCarouselCard(recipe) {
   const id = recipe.__backendId || recipe.id;
   const img = recipeThumb(recipe);
   return `
-    <div style="flex-shrink: 0; width: 150px; cursor: pointer; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_color}; transition: transform 0.15s ease;" onclick="goToRecipe('${id}')" ontouchstart="this.style.transform='scale(0.97)'" ontouchend="this.style.transform=''">
-      ${img ? `
-        <div style="aspect-ratio: 1; width: 100%; overflow: hidden; background: #0d0d0d;">
-          <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
-        </div>
-      ` : `
-        <div style="aspect-ratio: 1; width: 100%; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; padding: 10px;">
-          <span style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-align: center;">${esc(recipe.title)}</span>
-        </div>
-      `}
-      <div style="padding: 8px 10px;">
-        <div style="color: ${CONFIG.text_color}; font-size: 13px; font-weight: 600; -webkit-line-clamp: 2; -webkit-box-orient: vertical; display: -webkit-box; overflow: hidden; line-height: 1.3;">${esc(recipe.title)}</div>
-        ${recipe.category ? `<div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-top: 2px;">${esc(recipe.category)}</div>` : ''}
+    <div class="recipe-carousel-card" style="width: 150px;" onclick="goToRecipe('${id}')">
+      <div class="carousel-card-media" style="aspect-ratio: 1;">
+        ${img ? `
+          <img loading="lazy" src="${esc(img)}" />
+        ` : `
+          <div style="width:100%; height:100%; background: var(--bg-elevated); display: flex; align-items: center; justify-content: center; padding: 10px;">
+            <span style="color: var(--text-secondary); font-size: 12px; font-weight: 600; text-align: center;">${esc(recipe.title)}</span>
+          </div>
+        `}
+      </div>
+      <div class="carousel-card-info" style="padding: 8px 10px;">
+        <h3 class="card-title" style="font-size: 13px; font-weight: 600;">${esc(recipe.title)}</h3>
+        ${recipe.category ? `<div class="card-meta" style="margin-top: 2px;">${esc(recipe.category)}</div>` : ''}
       </div>
     </div>
   `;
@@ -304,15 +303,15 @@ function renderCarouselCard(recipe) {
 function renderRecipeCarousel(title, subtitle, recipes) {
   if (!recipes || recipes.length === 0) return '';
   return `
-    <div style="margin-bottom: 20px;">
-      <div style="padding: 0 16px; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;">
+    <div class="feed-section">
+      <div class="feed-section-header">
         <div>
-          <div style="font-size: 14px; font-weight: 800; color: ${CONFIG.text_color}; text-transform: uppercase; letter-spacing: 0.5px;">${title}</div>
-          ${subtitle ? `<div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">${subtitle}</div>` : ''}
+          <h2 class="feed-section-title caps">${title}</h2>
+          ${subtitle ? `<div style="font-size: 12px; color: var(--text-secondary); margin-top: 2px;">${subtitle}</div>` : ''}
         </div>
-        <button onclick="window.location.href='recipes.html'" style="background: none; border: none; font-size: 13px; font-weight: 500; color: ${CONFIG.text_muted}; cursor: pointer;">See all</button>
+        <button class="see-all-btn" onclick="window.location.href='recipes.html'">See all</button>
       </div>
-      <div class="home-carousel" style="display: flex; gap: 10px; padding: 0 16px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
+      <div class="recipe-carousel home-carousel">
         ${recipes.map((r, i) => `
           <div style="scroll-snap-align: start; opacity: 0; animation: cardFadeIn 0.35s ease forwards; animation-delay: ${i * 0.05}s;">
             ${renderCarouselCard(r)}
@@ -350,10 +349,10 @@ function renderHome() {
     ${quickRecipes.length > 0 ? renderRecipeCarousel('Quick & Easy', '30 minutes or less', quickRecipes) : ''}
     ${recentRecipes.length > 0 ? renderRecipeCarousel('Recently Added', null, recentRecipes) : ''}
     ${dinnerRecipes.length > 0 ? renderRecipeCarousel('Dinner Ideas', null, dinnerRecipes) : ''}
-    <div id="home-meals-section" style="padding: 8px 16px 4px;">
+    <div id="home-meals-section" style="padding: 8px 20px 4px;">
       <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
         <div style="flex: 1; height: 1px; background: ${CONFIG.divider_color};"></div>
-        <div style="font-size: 13px; font-weight: 700; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px;">My Meals</div>
+        <div class="section-label" style="font-size: 13px; font-weight: 700;">My Meals</div>
         <div style="flex: 1; height: 1px; background: ${CONFIG.divider_color};"></div>
       </div>
     </div>

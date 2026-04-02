@@ -333,22 +333,22 @@ function renderKitchenIngredientCard(item, catName) {
   const hasPhoto = !!photo;
   const escapedName = esc(item.name).replace(/'/g, "\\'");
   return `
-    <div class="kitchen-card-swipe-container" data-ingredient="${esc(item.name)}" style="position:relative;overflow:hidden;border-radius:10px;">
+    <div class="kitchen-card-swipe-container" data-ingredient="${esc(item.name)}" style="position:relative;overflow:hidden;border-radius:var(--radius-lg);">
       <div class="kitchen-card-content card-press" onclick="openKitchenIngredient('${escapedName}')"
-        style="cursor:pointer;border-radius:10px;overflow:hidden;background:${CONFIG.surface_color};box-shadow:0 2px 8px rgba(0,0,0,0.3);position:relative;z-index:1;transition:transform 0.2s ease;">
+        style="cursor:pointer;border-radius:var(--radius-lg);overflow:hidden;background:var(--bg-card);box-shadow:0 2px 8px rgba(0,0,0,0.3);position:relative;z-index:1;transition:transform 0.2s ease;">
         <div style="width:100%;aspect-ratio:1;overflow:hidden;display:flex;align-items:center;justify-content:center;${hasPhoto ? '' : 'background:' + gradient + ';'}">
           ${hasPhoto
             ? `<img loading="lazy" src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover;" />`
-            : `<span style="font-size:20px;font-weight:700;color:#f5f5f7;text-align:center;padding:12px;line-height:1.2;word-break:break-word;">${esc(item.name)}</span>`
+            : `<span style="font-size:20px;font-weight:700;color:var(--text-primary);text-align:center;padding:12px;line-height:1.2;word-break:break-word;">${esc(item.name)}</span>`
           }
         </div>
-        <div style="padding:4px 6px;">
-          <div style="font-size:12px;font-weight:600;color:${CONFIG.text_color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(item.name)}</div>
-          <div style="font-size:10px;color:${CONFIG.text_muted};margin-top:2px;">${count} recipe${count !== 1 ? 's' : ''}</div>
+        <div style="padding:6px 8px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(item.name)}</div>
+          <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">${count} recipe${count !== 1 ? 's' : ''}</div>
         </div>
       </div>
       <div class="kitchen-card-delete-btn" onclick="event.stopPropagation();confirmDeleteKitchenIngredient('${escapedName}')"
-        style="position:absolute;right:0;top:0;bottom:0;width:70px;background:#e53e3e;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:600;cursor:pointer;border-radius:0 12px 12px 0;z-index:0;font-family:${CONFIG.font_family};">
+        style="position:absolute;right:0;top:0;bottom:0;width:70px;background:#e53e3e;display:flex;align-items:center;justify-content:center;color:white;font-size:13px;font-weight:600;cursor:pointer;border-radius:0 var(--radius-lg) var(--radius-lg) 0;z-index:0;font-family:var(--font-sans);">
         Delete
       </div>
     </div>
@@ -481,9 +481,9 @@ function renderKitchen() {
     }
     if (items.length === 0) return;
     categoriesHtml += `
-      <div style="margin-bottom: 12px;">
-        <h3 style="font-size: 15px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 6px;">${catName}</h3>
-        <div class="kitchen-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px;">
+      <div style="margin-bottom: 16px;">
+        <h3 class="section-label" style="margin: 0 0 8px;">${catName}</h3>
+        <div class="kitchen-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
           ${items.map(item => renderKitchenIngredientCard(item, catName)).join('')}
         </div>
       </div>
@@ -502,17 +502,13 @@ function renderKitchen() {
   const activeTab = state.kitchenActiveTab || 'ingredients';
   const inventoryCount = (state.inventory || []).length;
   const tabsHtml = `
-    <div style="display: flex; gap: 4px; padding: 8px 12px; background: ${CONFIG.background_color};">
+    <div class="tab-bar">
       <button onclick="state.kitchenActiveTab = 'ingredients'; render();"
-        style="flex: 1; padding: 8px 0; border-radius: 20px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; font-family: ${CONFIG.font_family};
-        background: ${activeTab === 'ingredients' ? CONFIG.primary_action_color : CONFIG.surface_color};
-        color: ${activeTab === 'ingredients' ? 'white' : CONFIG.text_muted};">
+        class="tab-bar-item ${activeTab === 'ingredients' ? 'active' : ''}">
         Ingredients
       </button>
       <button onclick="state.kitchenActiveTab = 'inventory'; render();"
-        style="flex: 1; padding: 8px 0; border-radius: 20px; border: none; font-size: 13px; font-weight: 600; cursor: pointer; font-family: ${CONFIG.font_family};
-        background: ${activeTab === 'inventory' ? CONFIG.primary_action_color : CONFIG.surface_color};
-        color: ${activeTab === 'inventory' ? 'white' : CONFIG.text_muted};">
+        class="tab-bar-item ${activeTab === 'inventory' ? 'active' : ''}">
         My Inventory${inventoryCount > 0 ? ' (' + inventoryCount + ')' : ''}
       </button>
     </div>
@@ -530,21 +526,22 @@ function renderKitchen() {
   return `
     <div style="padding: 0; flex: 1;">
       ${tabsHtml}
-      <div class="kitchen-sticky-search" style="padding: 8px 12px; background: ${CONFIG.background_color};">
+      <div class="kitchen-sticky-search" style="padding: 8px 20px; background: ${CONFIG.background_color};">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <div style="position: relative; flex: 1;">
-            <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          <div class="search-bar" style="flex: 1;">
+            <div class="search-icon">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            </div>
             <input type="text" id="kitchenSearch" placeholder="Search an ingredient..." value="${esc(searchTerm)}"
-              oninput="state.kitchenSearch = this.value; render();"
-              style="width: 100%; height: 40px; padding: 0 10px 0 34px; border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box; font-family: ${CONFIG.font_family};" />
+              oninput="state.kitchenSearch = this.value; render();" />
           </div>
-          <button onclick="state._showAddIngredientModal=true;state._addIngredientPhoto='';render();" style="height: 40px; padding: 0 12px; border-radius: 10px; border: none; background: ${CONFIG.primary_action_color}; color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: ${CONFIG.font_family}; display: flex; align-items: center; gap: 4px;">
+          <button onclick="state._showAddIngredientModal=true;state._addIngredientPhoto='';render();" style="height: 40px; padding: 0 14px; border-radius: 100px; border: none; background: ${CONFIG.primary_action_color}; color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: var(--font-sans); display: flex; align-items: center; gap: 4px;">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
             Add
           </button>
         </div>
       </div>
-      <div style="padding: 0 12px;">
+      <div style="padding: 0 20px;">
         ${categoriesHtml}
       </div>
     </div>

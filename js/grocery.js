@@ -312,7 +312,7 @@ function renderGroceryList() {
         if (items.length === 0) return '';
         return `
           <div style="margin-bottom: 10px;">
-            <div style="font-size: 11px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">${label}</div>
+            <div class="section-label" style="margin-bottom: 5px;">${label}</div>
             <div style="display: flex; flex-wrap: wrap; gap: 6px;">
               ${items.slice(0, 8).map((s, i) => `
                 <button data-sug-idx="${startIdx + i}" onclick="handleSuggestClick(${startIdx + i})"
@@ -337,7 +337,7 @@ function renderGroceryList() {
       const frequentMeals = getFrequentMeals();
       const frequentMealsHtml = frequentMeals.length > 0 ? `
         <div style="margin-bottom: 12px;">
-          <div style="font-size: 11px; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Things you make often</div>
+          <div class="section-label" style="margin-bottom: 6px;">Things you make often</div>
           ${frequentMeals.slice(0, 6).map(m => {
             const imgHtml = m.image
               ? `<img src="${esc(m.image)}" style="width: 48px; height: 48px; border-radius: 10px; object-fit: cover; flex-shrink: 0;">`
@@ -372,27 +372,30 @@ function renderGroceryList() {
       ` : '';
 
       return `
-        <div style="padding: 0 12px; flex: 1;">
+        <div style="padding: 0 20px; flex: 1;">
 
           <!-- Manual Add Input -->
           <div style="display: flex; gap: 8px; margin-bottom: 6px;">
-            <input type="text" id="groceryManualInput" placeholder="Add an item..."
-              onkeydown="if(event.key==='Enter') addManualGroceryItemSmart();"
-              onfocus="document.getElementById('groceryCategoryRow').style.display='flex';"
-              style="flex: 1; padding: 8px 12px; height: 44px; box-sizing: border-box; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;"
-            />
+            <div class="search-bar" style="flex: 1;">
+              <div class="search-icon">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              </div>
+              <input type="text" id="groceryManualInput" placeholder="Add an item..."
+                onkeydown="if(event.key==='Enter') addManualGroceryItemSmart();"
+                onfocus="document.getElementById('groceryCategoryRow').style.display='flex';"
+              />
+            </div>
             <button onclick="addManualGroceryItemSmart()"
-              style="padding: 8px 14px; height: 44px; box-sizing: border-box; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; min-width: 52px;">
+              style="padding: 8px 14px; height: 40px; box-sizing: border-box; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 100px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; min-width: 52px; font-family: var(--font-sans);">
               Add
             </button>
           </div>
           <!-- Category selector row -->
-          <div id="groceryCategoryRow" style="display: none; flex-wrap: wrap; gap: 4px; margin-bottom: 12px; padding: 2px 0;">
+          <div id="groceryCategoryRow" class="filter-pill-row" style="display: none; flex-wrap: wrap; padding: 2px 0; margin-bottom: 12px;">
             ${GROCERY_CATEGORIES.map(cat => `
               <button onclick="selectGroceryCategory(this, '${esc(cat)}')"
                 data-cat="${esc(cat)}"
-                style="padding: 4px 10px; font-size: 11px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.08); cursor: pointer; white-space: nowrap; color: ${cat === 'Other' ? CONFIG.primary_action_color : CONFIG.text_muted}; background: ${cat === 'Other' ? CONFIG.primary_subtle : CONFIG.surface_color};"
-                class="card-press">${esc(cat)}</button>
+                class="filter-pill ${cat === 'Other' ? 'active' : ''}">${esc(cat)}</button>
             `).join('')}
           </div>
           <input type="hidden" id="groceryManualCategory" value="Other" />
@@ -432,7 +435,7 @@ function renderGroceryList() {
 
           ${sortedCats.map(cat => `
             <div style="margin-bottom: 12px;">
-              <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+              <div class="section-label" style="margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid var(--border-subtle);">
                 ${esc(cat)} (${groupedUnchecked[cat].length})
               </div>
               ${groupedUnchecked[cat].map(item => _renderGroceryRow(item, false)).join('')}
@@ -447,7 +450,7 @@ function renderGroceryList() {
             if (remainingCheckedCats.length === 0) return '';
             return remainingCheckedCats.map(cat => `
               <div style="margin-bottom: 12px;">
-                <div style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid rgba(255,255,255,0.06);">
+                <div class="section-label" style="margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid var(--border-subtle);">
                   ${esc(cat)} (${groupedChecked[cat].length})
                 </div>
                 ${groupedChecked[cat].map(item => _renderGroceryRow(item, true)).join('')}
@@ -481,10 +484,10 @@ function _renderGroceryRow(item, isChecked) {
       return `
         <div data-gro-id="${esc(item.id)}"
              onclick="toggleSmartGroceryItem('${esc(item.id)}')"
-             style="display: flex; align-items: center; gap: 8px; padding: 10px; min-height: 44px; margin-bottom: 2px; background: ${CONFIG.surface_color}; border-radius: 8px; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+             style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; margin-bottom: 2px; background: var(--bg-card); border-radius: var(--radius-lg); cursor: pointer; -webkit-tap-highlight-color: transparent;" class="card-press">
           <div class="gro-checkbox"
-               style="width: 20px; height: 20px; border: 1.5px solid ${isChecked ? CONFIG.primary_action_color : CONFIG.text_muted}; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: ${isChecked ? CONFIG.primary_action_color : 'transparent'}; transition: all 150ms ease;">
-            ${isChecked ? '<svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+               style="width: 24px; height: 24px; border: 1.5px solid ${isChecked ? 'var(--accent-green)' : 'var(--text-secondary)'}; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: ${isChecked ? 'var(--accent-green)' : 'transparent'}; transition: all 150ms ease;">
+            ${isChecked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
           </div>
           ${photo ? `
             <div onclick="event.stopPropagation();openPhotoExpandOverlay('${esc(photo).replace(/'/g, "\\'")}','${escapedItemName}')"
@@ -492,12 +495,12 @@ function _renderGroceryRow(item, isChecked) {
               <img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover;" />
             </div>
           ` : ''}
-          <div class="gro-label" style="flex: 1; min-width: 0; ${isChecked ? 'text-decoration: line-through; opacity: 0.4;' : ''}">
+          <div class="gro-label" style="flex: 1; min-width: 0; ${isChecked ? 'text-decoration: line-through; color: var(--text-secondary); opacity: 0.5;' : ''}">
             <div style="display: flex; align-items: baseline; gap: 6px;">
-              <span style="color: ${CONFIG.text_color}; font-size: 13px;">${esc(name)}</span>
-              ${qtyLabel ? `<span style="color: ${CONFIG.text_muted}; font-size: 11px;">${esc(qtyLabel)}</span>` : ''}
+              <span style="color: ${isChecked ? 'var(--text-secondary)' : 'var(--text-primary)'}; font-size: 13px;">${esc(name)}</span>
+              ${qtyLabel ? `<span style="color: var(--text-secondary); font-size: 11px;">${esc(qtyLabel)}</span>` : ''}
             </div>
-            ${sourceLabel ? `<div style="color: ${CONFIG.text_tertiary}; font-size: 10px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">from ${esc(sourceLabel)}</div>` : ''}
+            ${sourceLabel ? `<div style="color: var(--text-tertiary); font-size: 10px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">from ${esc(sourceLabel)}</div>` : ''}
           </div>
           ${!isChecked ? `
             <button onclick="event.stopPropagation(); removeSmartGroceryItem('${esc(item.id)}')"

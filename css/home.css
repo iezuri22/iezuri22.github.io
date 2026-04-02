@@ -3,9 +3,31 @@
 /* ===== Hero Card ===== */
 .hero-card {
   position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg-card);
 }
 
-.hero-card video {
+.hero-card:active {
+  transform: scale(0.98);
+  transition: transform 0.15s ease;
+}
+
+.hero-card-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+}
+
+.hero-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hero-card-media video {
   position: absolute;
   top: 0;
   left: 0;
@@ -17,13 +39,51 @@
   pointer-events: none;
 }
 
-.hero-card.playing video {
+.hero-card.playing .hero-card-media video {
   opacity: 1;
 }
 
-.hero-card.playing .video-card-thumb {
+.hero-card.playing .hero-card-media img {
   opacity: 0;
   transition: opacity 0.4s ease;
+}
+
+.hero-card-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 20px;
+  background: linear-gradient(transparent 0%, rgba(0,0,0,0.75) 100%);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.hero-card-source {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.hero-card-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  line-height: 1.2;
+}
+
+.hero-card-meta {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 /* ===== Carousel scrollbar hide ===== */

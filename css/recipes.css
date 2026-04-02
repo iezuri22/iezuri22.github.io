@@ -1,21 +1,4 @@
-/* ===== CSS Custom Properties (bridge CONFIG values for CSS-only rules) ===== */
-:root {
-  --bg-primary: #0d0d14;
-  --bg-card: #1a1a24;
-  --bg-elevated: #242432;
-  --text-primary: #f5f5f7;
-  --text-secondary: #8e8e93;
-  --text-tertiary: #5c5c66;
-  --accent: #e85d5d;
-  --accent-green: #00C853;
-  --accent-green-dim: rgba(0, 200, 83, 0.12);
-  --border-card: rgba(255, 255, 255, 0.08);
-  --radius-xl: 16px;
-  --radius-md: 12px;
-  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro', sans-serif;
-}
-
-/* Recipes page specific styles */
+/* Recipes page specific styles (CSS variables now in shared.css) */
 
 /* Batch recipe (Build a Plate) card swipe */
 #batchCardContainer {
@@ -188,58 +171,9 @@
   }
 }
 
-/* ===== FEED SECTIONS ===== */
+/* ===== FEED SECTIONS (base styles now in shared.css) ===== */
 .recipes-feed {
   padding-bottom: 120px;
-}
-
-.feed-section {
-  margin-bottom: 32px;
-}
-
-.feed-section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 0 20px;
-  margin-bottom: 16px;
-}
-
-.feed-section-title {
-  font-size: 16px;
-  font-weight: 800;
-  color: var(--text-primary);
-  margin: 0;
-  font-family: var(--font-sans);
-}
-
-.feed-section-title.caps {
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.feed-section-title.editorial {
-  font-size: 22px;
-  font-weight: 700;
-  text-transform: none;
-  letter-spacing: -0.3px;
-  padding: 0 20px;
-  margin-bottom: 16px;
-}
-
-.see-all-btn {
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0;
-  font-family: var(--font-sans);
-}
-
-.see-all-btn:active {
-  color: var(--accent);
 }
 
 /* ===== HERO CARD (Featured Recipe) ===== */
@@ -384,49 +318,7 @@
   color: var(--accent-green);
 }
 
-/* ===== RECIPE CAROUSEL (Horizontal Scroll) ===== */
-.recipe-carousel {
-  display: flex;
-  gap: 16px;
-  padding: 0 20px;
-  overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  -webkit-overflow-scrolling: touch;
-}
-
-.recipe-carousel::-webkit-scrollbar { display: none; }
-
-/* Standard carousel card */
-.recipe-carousel-card {
-  flex-shrink: 0;
-  width: 220px;
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  overflow: hidden;
-  cursor: pointer;
-  scroll-snap-align: start;
-  transition: transform 0.2s ease;
-}
-
-.recipe-carousel-card:active {
-  transform: scale(0.97);
-}
-
-.carousel-card-media {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  overflow: hidden;
-  background: #0d0d0d;
-}
-
-.carousel-card-media img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+/* ===== RECIPE CAROUSEL (base styles now in shared.css) ===== */
 
 .carousel-card-media video {
   position: absolute;
@@ -497,41 +389,7 @@
   z-index: 3;
 }
 
-/* Card info below the photo */
-.carousel-card-info {
-  padding: 10px 12px 14px;
-}
-
-.card-source {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
-  display: block;
-  margin-bottom: 3px;
-}
-
-.card-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-primary);
-  margin: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  line-height: 1.3;
-}
-
-.card-meta {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
+/* Card info styles now in shared.css */
 
 /* ===== LARGE CAROUSEL (Freestyle Recipes) ===== */
 .large-carousel {
@@ -761,4 +619,52 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   font-family: var(--font-sans);
+}
+
+/* ===== SAVED RECIPES CAROUSEL ===== */
+.saved-carousel .recipe-carousel-card {
+  width: 260px;
+}
+
+.saved-carousel .carousel-card-media {
+  aspect-ratio: 3 / 4;
+}
+
+.saved-bookmark-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  background: var(--accent-green);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--bg-app, #0d0d14);
+  box-shadow: 0 2px 8px rgba(0, 200, 83, 0.3);
+  z-index: 4;
+}
+
+.empty-saved-card {
+  margin: 0 20px;
+  padding: 32px 24px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-card);
+  border-radius: var(--radius-xl);
+  text-align: center;
+}
+
+.empty-saved-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+
+.empty-saved-subtitle {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  margin: 0;
 }
