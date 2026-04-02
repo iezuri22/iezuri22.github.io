@@ -1,1 +1,327 @@
 /* Kitchen page specific styles */
+
+/* ===== PAGE SHELL ===== */
+.kitchen-page {
+  background: var(--bg-app);
+  min-height: 100vh;
+  padding-bottom: 120px;
+  animation: kitchenFadeIn 0.3s ease;
+}
+
+@keyframes kitchenFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* ===== TABS ===== */
+.kitchen-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border-subtle);
+  padding: 0 20px;
+}
+
+.kitchen-tab {
+  flex: 1;
+  padding: 12px 0;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  font-family: var(--font-sans);
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.kitchen-tab.active {
+  color: var(--accent-green);
+  border-bottom-color: var(--accent-green);
+}
+
+/* ===== ACTION BUTTONS ===== */
+.kitchen-actions {
+  display: flex;
+  gap: 10px;
+  padding: 12px 20px;
+}
+
+.kitchen-action-btn {
+  padding: 8px 16px;
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border: none;
+}
+
+.kitchen-action-btn.primary {
+  background: var(--accent-green);
+  color: var(--bg-app);
+}
+
+.kitchen-action-btn.primary:active {
+  transform: scale(0.97);
+}
+
+.kitchen-action-btn.secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-card);
+}
+
+.kitchen-action-btn.secondary:active {
+  background: var(--bg-elevated);
+}
+
+/* ===== SEARCH BAR ===== */
+.kitchen-search {
+  margin: 0 20px 12px;
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: 100px;
+  padding: 10px 16px;
+  gap: 8px;
+}
+
+.kitchen-search input {
+  flex: 1;
+  background: none;
+  border: none;
+  font-size: 14px;
+  color: var(--text-primary);
+  outline: none;
+  font-family: var(--font-sans);
+}
+
+.kitchen-search input::placeholder {
+  color: var(--text-secondary);
+}
+
+.kitchen-search .search-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* ===== FILTER PILLS ===== */
+.kitchen-filters {
+  display: flex;
+  gap: 8px;
+  padding: 0 20px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.kitchen-filters::-webkit-scrollbar { display: none; }
+
+.kitchen-filter-pill {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  border-radius: 100px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--font-sans);
+  transition: all 0.15s ease;
+}
+
+.kitchen-filter-pill.active {
+  background: var(--accent-green);
+  color: var(--bg-app);
+  border-color: var(--accent-green);
+}
+
+/* ===== EMPTY STATE ===== */
+.kitchen-empty-state {
+  margin: 40px 20px;
+  padding: 40px 24px;
+  background: var(--bg-card);
+  border: 1px dashed var(--border-card);
+  border-radius: var(--radius-xl);
+  text-align: center;
+}
+
+.kitchen-empty-state .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.kitchen-empty-state h3 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 8px;
+}
+
+.kitchen-empty-state p {
+  font-size: 14px;
+  color: var(--text-tertiary);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+.kitchen-empty-state .empty-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* ===== INVENTORY GRID ===== */
+.inventory-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 0 20px 120px;
+}
+
+@media (min-width: 768px) {
+  .inventory-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.inventory-card {
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.inventory-card:active {
+  transform: scale(0.97);
+}
+
+.inventory-card.urgent {
+  border: 2px solid #FF4757;
+}
+
+.inventory-card.frozen {
+  border: 2px solid #3b82f6;
+}
+
+.inventory-card-image {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  background: var(--bg-elevated);
+}
+
+.inventory-card-image.no-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  background: var(--bg-card);
+  color: var(--text-secondary);
+}
+
+.inventory-card-info {
+  padding: 8px 10px 10px;
+}
+
+.inventory-card-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin: 0;
+}
+
+.inventory-card-meta {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  margin-top: 3px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.inventory-card-expiry {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.inventory-card-expiry.warning {
+  background: rgba(255, 71, 87, 0.15);
+  color: #FF4757;
+}
+
+.inventory-card-expiry.ok {
+  background: var(--accent-green-dim);
+  color: var(--accent-green);
+}
+
+/* ===== INVENTORY CATEGORY HEADERS ===== */
+.inventory-category-header {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 8px;
+}
+
+/* ===== INVENTORY CATEGORY GROUP ===== */
+.inventory-category-group {
+  margin-bottom: 16px;
+  padding: 0 20px;
+}
+
+/* ===== CARD BADGES ===== */
+.inventory-badge {
+  position: absolute;
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 8px;
+  font-weight: 600;
+  color: white;
+  z-index: 2;
+}
+
+.inventory-badge.use {
+  top: 2px;
+  right: 2px;
+  background: #34d399;
+}
+
+.inventory-badge.frozen {
+  top: 2px;
+  left: 2px;
+  background: #3b82f6;
+}
+
+/* ===== KITCHEN INGREDIENT GRID (Ingredients tab) ===== */
+.kitchen-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+/* ===== KITCHEN STICKY SEARCH ===== */
+.kitchen-sticky-search {
+  padding: 8px 20px;
+  background: var(--bg-app);
+}

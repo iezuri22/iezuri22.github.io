@@ -430,7 +430,7 @@ function renderAddIngredientModal() {
         </div>
         <div style="display:flex;gap:10px;">
           <button onclick="state._showAddIngredientModal=false;render();" style="flex:1;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:none;color:${CONFIG.text_color};font-size:15px;cursor:pointer;font-family:${CONFIG.font_family};">Cancel</button>
-          <button onclick="submitAddIngredient()" style="flex:1;padding:12px;border-radius:10px;border:none;background:${CONFIG.primary_action_color};color:white;font-size:15px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};">Add to Kitchen</button>
+          <button onclick="submitAddIngredient()" style="flex:1;padding:12px;border-radius:10px;border:none;background:var(--accent-green);color:white;font-size:15px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};">Add to Kitchen</button>
         </div>
       </div>
     </div>
@@ -502,13 +502,13 @@ function renderKitchen() {
   const activeTab = state.kitchenActiveTab || 'ingredients';
   const inventoryCount = (state.inventory || []).length;
   const tabsHtml = `
-    <div class="tab-bar">
+    <div class="kitchen-tabs">
       <button onclick="state.kitchenActiveTab = 'ingredients'; render();"
-        class="tab-bar-item ${activeTab === 'ingredients' ? 'active' : ''}">
+        class="kitchen-tab ${activeTab === 'ingredients' ? 'active' : ''}">
         Ingredients
       </button>
       <button onclick="state.kitchenActiveTab = 'inventory'; render();"
-        class="tab-bar-item ${activeTab === 'inventory' ? 'active' : ''}">
+        class="kitchen-tab ${activeTab === 'inventory' ? 'active' : ''}">
         My Inventory${inventoryCount > 0 ? ' (' + inventoryCount + ')' : ''}
       </button>
     </div>
@@ -526,16 +526,16 @@ function renderKitchen() {
   return `
     <div style="padding: 0; flex: 1;">
       ${tabsHtml}
-      <div class="kitchen-sticky-search" style="padding: 8px 20px; background: ${CONFIG.background_color};">
+      <div class="kitchen-sticky-search">
         <div style="display: flex; gap: 8px; align-items: center;">
-          <div class="search-bar" style="flex: 1;">
+          <div class="kitchen-search" style="margin: 0; flex: 1;">
             <div class="search-icon">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
             </div>
             <input type="text" id="kitchenSearch" placeholder="Search an ingredient..." value="${esc(searchTerm)}"
               oninput="state.kitchenSearch = this.value; render();" />
           </div>
-          <button onclick="state._showAddIngredientModal=true;state._addIngredientPhoto='';render();" style="height: 40px; padding: 0 14px; border-radius: 100px; border: none; background: ${CONFIG.primary_action_color}; color: white; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; font-family: var(--font-sans); display: flex; align-items: center; gap: 4px;">
+          <button onclick="state._showAddIngredientModal=true;state._addIngredientPhoto='';render();" class="kitchen-action-btn primary" style="height: 40px; padding: 0 14px;">
             <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
             Add
           </button>
@@ -930,7 +930,7 @@ function renderLinkRecipeModal(ingredientName) {
                     <div style="font-size:14px;font-weight:600;color:${CONFIG.text_color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(r.title)}</div>
                     ${r.cookTime ? `<div style="font-size:12px;color:${CONFIG.text_muted};margin-top:2px;">${esc(r.cookTime)}</div>` : ''}
                   </div>
-                  <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                  <svg width="16" height="16" fill="none" stroke="var(--accent-green)" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
                 </div>
               `;
             }).join('')
@@ -984,13 +984,13 @@ function renderKitchenDetail() {
     if (isEditing(field, idx)) {
       return `
         <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid ${CONFIG.divider_color};">
-          <input id="tip-edit-${field}-${idx}" type="text" value="${esc(text)}" style="flex:1; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveKitchenTipEdit('${esc(name)}','${field}',${idx},this.value)}" />
+          <input id="tip-edit-${field}-${idx}" type="text" value="${esc(text)}" style="flex:1; background: ${CONFIG.background_color}; border: 1px solid var(--accent-green); border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveKitchenTipEdit('${esc(name)}','${field}',${idx},this.value)}" />
           <button onclick="saveKitchenTipEdit('${esc(name)}','${field}',${idx},document.getElementById('tip-edit-${field}-${idx}').value)" style="background: none; border: none; color: ${CONFIG.success_color}; cursor: pointer; padding: 6px; font-size: 16px;">&#10003;</button>
         </div>`;
     }
     return `
       <div style="display: flex; align-items: flex-start; gap: 10px; padding: 8px 0; border-bottom: 1px solid ${CONFIG.divider_color};">
-        <span style="color: ${CONFIG.primary_action_color}; font-size: 14px; flex-shrink: 0; margin-top: 2px;">&#8226;</span>
+        <span style="color: var(--accent-green); font-size: 14px; flex-shrink: 0; margin-top: 2px;">&#8226;</span>
         <span style="font-size: 14px; color: ${CONFIG.text_color}; line-height: 1.4; flex: 1;">${esc(text)}</span>
         <button onclick="startEditKitchenTip('${esc(name)}','${field}',${idx})" style="background: none; border: none; color: ${CONFIG.text_muted}; cursor: pointer; padding: 2px; flex-shrink: 0;">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
@@ -1009,7 +1009,7 @@ function renderKitchenDetail() {
         ${hasItems ? methods.map((m, i) => renderEditableTipItem(m, 'methods', i)).join('') : `<div style="color: ${CONFIG.text_muted}; font-size: 13px; padding: 4px 0;">No methods yet</div>`}
         ${isAdding('methods') ? `
           <div style="display: flex; align-items: flex-start; gap: 8px; padding: 8px 0;">
-            <input id="tip-add-methods" type="text" placeholder="Type your method..." autofocus style="flex:1; background: ${CONFIG.background_color}; border: 1px solid ${CONFIG.primary_action_color}; border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveNewKitchenSectionTip('${esc(name)}','methods',this.value)}" />
+            <input id="tip-add-methods" type="text" placeholder="Type your method..." autofocus style="flex:1; background: ${CONFIG.background_color}; border: 1px solid var(--accent-green); border-radius: 6px; padding: 6px 8px; color: ${CONFIG.text_color}; font-size: 14px; outline: none;" onkeydown="if(event.key==='Enter'){saveNewKitchenSectionTip('${esc(name)}','methods',this.value)}" />
             <button onclick="saveNewKitchenSectionTip('${esc(name)}','methods',document.getElementById('tip-add-methods').value)" style="background: none; border: none; color: ${CONFIG.success_color}; cursor: pointer; padding: 6px; font-size: 16px;">&#10003;</button>
           </div>
         ` : `
@@ -1054,20 +1054,20 @@ function renderKitchenDetail() {
     const arr = Array.isArray(tipsData[field]) ? tipsData[field] : [];
     const editingIdx = modal.editingIdx;
     const addingNew = modal.addingNew;
-    const starSvg = `<svg width="12" height="12" fill="${CONFIG.primary_action_color}" stroke="none" viewBox="0 0 24 24"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg>`;
+    const starSvg = `<svg width="12" height="12" fill="var(--accent-green)" stroke="none" viewBox="0 0 24 24"><path d="M11.48 3.499a.562.562 0 011.04 0l2.125 5.111a.563.563 0 00.475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 00-.182.557l1.285 5.385a.562.562 0 01-.84.61l-4.725-2.885a.563.563 0 00-.586 0L6.982 20.54a.562.562 0 01-.84-.61l1.285-5.386a.562.562 0 00-.182-.557l-4.204-3.602a.563.563 0 01.321-.988l5.518-.442a.563.563 0 00.475-.345L11.48 3.5z"/></svg>`;
     const pencilSvg = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>`;
     const trashSvg = `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>`;
 
     const tipRows = arr.map((tip, i) => {
       if (editingIdx === i) {
-        return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid ${CONFIG.divider_color};"><input id="qtc-edit-input" type="text" value="${esc(tip)}" style="flex:1;background:${CONFIG.background_color};border:1px solid ${CONFIG.primary_action_color};border-radius:8px;padding:8px 10px;color:${CONFIG.text_color};font-size:14px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter'){quickTipCategorySaveEdit('${esc(name)}','${field}',${i})}" /><button onclick="quickTipCategorySaveEdit('${esc(name)}','${field}',${i})" style="background:none;border:none;color:${CONFIG.success_color};cursor:pointer;padding:4px;font-size:16px;">&#10003;</button></div>`;
+        return `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid ${CONFIG.divider_color};"><input id="qtc-edit-input" type="text" value="${esc(tip)}" style="flex:1;background:${CONFIG.background_color};border:1px solid var(--accent-green);border-radius:8px;padding:8px 10px;color:${CONFIG.text_color};font-size:14px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter'){quickTipCategorySaveEdit('${esc(name)}','${field}',${i})}" /><button onclick="quickTipCategorySaveEdit('${esc(name)}','${field}',${i})" style="background:none;border:none;color:${CONFIG.success_color};cursor:pointer;padding:4px;font-size:16px;">&#10003;</button></div>`;
       }
-      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid ${CONFIG.divider_color};"><div onclick="quickTipCategorySetPrimary('${esc(name)}','${field}',${i})" style="cursor:pointer;flex:1;display:flex;align-items:flex-start;gap:8px;">${i === 0 ? `<span style="flex-shrink:0;margin-top:2px;" title="Primary">${starSvg}</span>` : `<span style="flex-shrink:0;width:12px;margin-top:2px;"></span>`}<span style="font-size:14px;color:${CONFIG.text_color};line-height:1.4;">${esc(tip)}</span></div>${i === 0 ? `<span style="font-size:10px;color:${CONFIG.primary_action_color};font-weight:600;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;">Primary</span>` : ''}<button onclick="event.stopPropagation();quickTipCategoryStartEdit(${i})" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:2px;flex-shrink:0;">${pencilSvg}</button><button onclick="event.stopPropagation();quickTipCategoryDelete('${esc(name)}','${field}',${i})" style="background:none;border:none;color:${CONFIG.danger_color};cursor:pointer;padding:2px;flex-shrink:0;">${trashSvg}</button></div>`;
+      return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid ${CONFIG.divider_color};"><div onclick="quickTipCategorySetPrimary('${esc(name)}','${field}',${i})" style="cursor:pointer;flex:1;display:flex;align-items:flex-start;gap:8px;">${i === 0 ? `<span style="flex-shrink:0;margin-top:2px;" title="Primary">${starSvg}</span>` : `<span style="flex-shrink:0;width:12px;margin-top:2px;"></span>`}<span style="font-size:14px;color:${CONFIG.text_color};line-height:1.4;">${esc(tip)}</span></div>${i === 0 ? `<span style="font-size:10px;color:var(--accent-green);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;flex-shrink:0;">Primary</span>` : ''}<button onclick="event.stopPropagation();quickTipCategoryStartEdit(${i})" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:2px;flex-shrink:0;">${pencilSvg}</button><button onclick="event.stopPropagation();quickTipCategoryDelete('${esc(name)}','${field}',${i})" style="background:none;border:none;color:${CONFIG.danger_color};cursor:pointer;padding:2px;flex-shrink:0;">${trashSvg}</button></div>`;
     }).join('');
 
-    const addRow = addingNew ? `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;"><input id="qtc-add-input" type="text" placeholder="Enter a new tip..." style="flex:1;background:${CONFIG.background_color};border:1px solid ${CONFIG.primary_action_color};border-radius:8px;padding:8px 10px;color:${CONFIG.text_color};font-size:14px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter'){quickTipCategorySaveNew('${esc(name)}','${field}')}" /><button onclick="quickTipCategorySaveNew('${esc(name)}','${field}')" style="background:none;border:none;color:${CONFIG.success_color};cursor:pointer;padding:4px;font-size:16px;">&#10003;</button></div>` : `<button onclick="quickTipCategoryStartAdd()" style="width:100%;padding:10px;background:none;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;color:${CONFIG.text_muted};cursor:pointer;font-size:13px;margin-top:8px;font-family:${CONFIG.font_family};">+ Add tip</button>`;
+    const addRow = addingNew ? `<div style="display:flex;align-items:center;gap:8px;padding:10px 0;"><input id="qtc-add-input" type="text" placeholder="Enter a new tip..." style="flex:1;background:${CONFIG.background_color};border:1px solid var(--accent-green);border-radius:8px;padding:8px 10px;color:${CONFIG.text_color};font-size:14px;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter'){quickTipCategorySaveNew('${esc(name)}','${field}')}" /><button onclick="quickTipCategorySaveNew('${esc(name)}','${field}')" style="background:none;border:none;color:${CONFIG.success_color};cursor:pointer;padding:4px;font-size:16px;">&#10003;</button></div>` : `<button onclick="quickTipCategoryStartAdd()" style="width:100%;padding:10px;background:none;border:1px dashed rgba(255,255,255,0.1);border-radius:8px;color:${CONFIG.text_muted};cursor:pointer;font-size:13px;margin-top:8px;font-family:${CONFIG.font_family};">+ Add tip</button>`;
 
-    return `<div onclick="if(event.target===this){closeQuickTipCategoryModal();}" style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center;padding:0;"><div style="background:${CONFIG.surface_elevated};border-radius:16px 16px 0 0;width:100%;max-width:500px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 -4px 32px rgba(0,0,0,0.5);"><div style="padding:20px 20px 0 20px;flex-shrink:0;"><div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 16px auto;"></div><h3 style="font-size:18px;font-weight:700;color:${CONFIG.text_color};margin:0 0 4px 0;">${modalTitle}</h3><div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:12px;">Tap a tip to set it as primary (shown on card)</div></div><div style="padding:0 20px;overflow-y:auto;flex:1;">${arr.length === 0 ? `<div style="color:${CONFIG.text_muted};font-size:14px;padding:16px 0;text-align:center;">No tips yet. Add one below.</div>` : tipRows}${addRow}</div><div style="padding:16px 20px;flex-shrink:0;border-top:1px solid ${CONFIG.divider_color};"><button onclick="closeQuickTipCategoryModal()" style="width:100%;padding:12px;border-radius:10px;border:none;background:${CONFIG.primary_action_color};color:white;font-size:15px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};">Done</button></div></div></div>`;
+    return `<div onclick="if(event.target===this){closeQuickTipCategoryModal();}" style="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,0.7);display:flex;align-items:flex-end;justify-content:center;padding:0;"><div style="background:${CONFIG.surface_elevated};border-radius:16px 16px 0 0;width:100%;max-width:500px;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 -4px 32px rgba(0,0,0,0.5);"><div style="padding:20px 20px 0 20px;flex-shrink:0;"><div style="width:36px;height:4px;background:rgba(255,255,255,0.2);border-radius:2px;margin:0 auto 16px auto;"></div><h3 style="font-size:18px;font-weight:700;color:${CONFIG.text_color};margin:0 0 4px 0;">${modalTitle}</h3><div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:12px;">Tap a tip to set it as primary (shown on card)</div></div><div style="padding:0 20px;overflow-y:auto;flex:1;">${arr.length === 0 ? `<div style="color:${CONFIG.text_muted};font-size:14px;padding:16px 0;text-align:center;">No tips yet. Add one below.</div>` : tipRows}${addRow}</div><div style="padding:16px 20px;flex-shrink:0;border-top:1px solid ${CONFIG.divider_color};"><button onclick="closeQuickTipCategoryModal()" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--accent-green);color:white;font-size:15px;font-weight:600;cursor:pointer;font-family:${CONFIG.font_family};">Done</button></div></div></div>`;
   }
 
   // Quick tips row
@@ -1101,7 +1101,7 @@ function renderKitchenDetail() {
       (!isNew ? '<button onclick="deleteQuickTipFromModal(\'' + esc(name) + '\',\'' + modal.field + '\',' + modal.idx + ')" style="padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:none;color:' + CONFIG.danger_color + ';font-size:14px;cursor:pointer;font-family:' + CONFIG.font_family + ';">Delete</button>' : '') +
       '<div style="flex:1;"></div>' +
       '<button onclick="state._quickTipModal=null;render();" style="padding:10px 16px;border-radius:10px;border:1px solid rgba(255,255,255,0.1);background:none;color:' + CONFIG.text_color + ';font-size:14px;cursor:pointer;font-family:' + CONFIG.font_family + ';">Cancel</button>' +
-      '<button onclick="saveQuickTipFromModal(\'' + esc(name) + '\',\'' + modal.field + '\',' + modal.idx + ',' + isNew + ')" style="padding:10px 16px;border-radius:10px;border:none;background:' + CONFIG.primary_action_color + ';color:white;font-size:14px;font-weight:600;cursor:pointer;font-family:' + CONFIG.font_family + ';">Save</button>' +
+      '<button onclick="saveQuickTipFromModal(\'' + esc(name) + '\',\'' + modal.field + '\',' + modal.idx + ',' + isNew + ')" style="padding:10px 16px;border-radius:10px;border:none;background:var(--accent-green);color:white;font-size:14px;font-weight:600;cursor:pointer;font-family:' + CONFIG.font_family + ';">Save</button>' +
       '</div></div></div>';
   }
 
@@ -1174,12 +1174,12 @@ function renderKitchenDetail() {
                       <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
                     </button>
                     <!-- Bookmark icon top-right -->
-                    <button onclick="event.stopPropagation();toggleSaveRecipe('${esc(id)}')" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:${kSaved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;padding:0;">
+                    <button onclick="event.stopPropagation();toggleSaveRecipe('${esc(id)}')" style="position:absolute;top:4px;right:4px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:${kSaved ? 'var(--accent-green)' : 'rgba(255,255,255,0.7)'};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;padding:0;">
                       <svg width="12" height="12" fill="${kSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
                     </button>
                     ${kUrl ? `
                     <!-- External link icon bottom-right -->
-                    <a href="${esc(kUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="position:absolute;bottom:30px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);border:none;color:${CONFIG.primary_action_color};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;text-decoration:none;">
+                    <a href="${esc(kUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="position:absolute;bottom:30px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);border:none;color:var(--accent-green);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;text-decoration:none;">
                       <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
                     </a>
                     ` : ''}
@@ -1248,7 +1248,7 @@ function renderAllIngredients() {
             oninput="state.ingredientSearchTerm = this.value; _debouncedRender(this, 'ingredientSearch');"
             style="flex:1; padding:10px 12px; border:1px solid rgba(255,255,255,0.1); border-radius:8px; font-size:13px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-sizing:border-box;" />
           <button onclick="showAddIngredientKnowledgeModal()"
-            style="padding:10px 14px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; font-size:11px; cursor:pointer; white-space:nowrap;">
+            style="padding:10px 14px; background:var(--accent-green); color:white; border:none; border-radius:8px; font-size:11px; cursor:pointer; white-space:nowrap;">
             + Add
           </button>
         </div>
@@ -1380,7 +1380,7 @@ function showAddIngredientKnowledgeModal() {
             Cancel
           </button>
           <button onclick="saveNewIngredientKnowledge()"
-            style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            style="flex: 1; padding: 12px; background: var(--accent-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
             Add Ingredient
           </button>
         </div>
@@ -1449,7 +1449,7 @@ function renderMyBlends() {
             ${blends.length} blend${blends.length !== 1 ? 's' : ''}
           </div>
           <button onclick="showAddBlendModal()"
-            style="padding:8px 14px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; font-size:11px; cursor:pointer;">
+            style="padding:8px 14px; background:var(--accent-green); color:white; border:none; border-radius:8px; font-size:11px; cursor:pointer;">
             + New Blend
           </button>
         </div>
@@ -1459,7 +1459,7 @@ function renderMyBlends() {
           ${blendTypes.map(type => `
             <button onclick="state.blendFilterType = '${type}'; render();"
               class="px-2 py-1 rounded"
-              style="background:${filterType === type ? CONFIG.primary_action_color : CONFIG.surface_color}; color:${filterType === type ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
+              style="background:${filterType === type ? 'var(--accent-green)' : CONFIG.surface_color}; color:${filterType === type ? 'white' : CONFIG.text_color}; font-size:10px; border:none;">
               ${type}
             </button>
           `).join('')}
@@ -1475,7 +1475,7 @@ function renderMyBlends() {
               Create custom seasoning mixes, smoothie combos & more
             </div>
             <button onclick="showAddBlendModal()"
-              style="padding:8px 16px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
+              style="padding:8px 16px; background:var(--accent-green); color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
               + Create Blend
             </button>
           </div>
@@ -1559,7 +1559,7 @@ function showBlendDetail(blendId) {
         ${blend.recordingUrl ? `
           <div class="mb-4">
             <a href="${esc(blend.recordingUrl)}" target="_blank"
-               style="display: inline-flex; align-items: center; gap: 8px; color: ${CONFIG.primary_action_color};">
+               style="display: inline-flex; align-items: center; gap: 8px; color: var(--accent-green);">
               🎥 Watch Recording
             </a>
           </div>
@@ -1568,7 +1568,7 @@ function showBlendDetail(blendId) {
         <div class="flex gap-2">
           <button onclick="editBlend('${blend.id}')"
             class="flex-1 py-3 rounded-lg font-medium"
-            style="background: ${CONFIG.primary_action_color}; color: white;">
+            style="background: var(--accent-green); color: white;">
             ✏️ Edit
           </button>
           <button onclick="if(confirm('Delete this blend?')) deleteBlend('${blend.id}')"
@@ -1624,7 +1624,7 @@ function renderBlendEditModal() {
             ${blendTypes.map(type => `
               <button type="button" onclick="state.blendForm.blendType = '${type}'; renderBlendEditModal();"
                 style="padding: 8px 16px; border-radius: 20px; border: none; cursor: pointer; font-size: 14px;
-                       background: ${form.blendType === type ? CONFIG.primary_action_color : CONFIG.background_color};
+                       background: ${form.blendType === type ? 'var(--accent-green)' : CONFIG.background_color};
                        color: ${form.blendType === type ? 'white' : CONFIG.text_color};">
                 ${type === 'Seasoning' ? '🧂' : type === 'Smoothie' ? '🥤' : type === 'Veggie Mix' ? '🥗' : type === 'Marinade' ? '🫗' : '📦'} ${type}
               </button>
@@ -1637,7 +1637,7 @@ function renderBlendEditModal() {
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
             <label style="font-weight: 500;">Ingredients</label>
             <button type="button" onclick="addBlendIngredient()"
-              style="padding: 6px 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 6px; font-size: ${CONFIG.type_caption}; cursor: pointer;">
+              style="padding: 6px 12px; background: var(--accent-green); color: white; border: none; border-radius: 6px; font-size: ${CONFIG.type_caption}; cursor: pointer;">
               + Add
             </button>
           </div>
@@ -1700,7 +1700,7 @@ function renderBlendEditModal() {
             Cancel
           </button>
           <button onclick="saveBlend()"
-            style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            style="flex: 1; padding: 12px; background: var(--accent-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
             Save Blend
           </button>
         </div>
@@ -1753,7 +1753,7 @@ function showBlendIngredientDropdown(idx, searchTerm) {
     dropdown.innerHTML = filtered.map(ing => `
       <div onclick="selectBlendIngredient(${idx}, '${esc(ing.name)}')"
         style="padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: ${CONFIG.text_color};"
-        onmouseover="this.style.background='rgba(232,93,93,0.1)'"
+        onmouseover="this.style.background='rgba(0,200,83,0.1)'"
         onmouseout="this.style.background='transparent'">
         <span>${esc(capitalize(ing.name))}</span>
         <span style="font-size: ${CONFIG.type_micro}; opacity: 0.5;">${ing.source === 'custom' ? 'new' : ing.source === 'pantry' ? 'pantry' : ''}</span>
@@ -1892,40 +1892,27 @@ function renderInventoryItem(item) {
 
     return `
       <div onclick="showInventoryItemDetail('${item.id}')"
-        class="rounded-lg overflow-hidden cursor-pointer"
-        style="background:${CONFIG.surface_color}; border:${isUrgent ? '2px solid ' + CONFIG.danger_color : item.isFrozen ? '2px solid #3b82f6' : '1px solid rgba(255,255,255,0.06)'};">
-        <div style="height:60px; overflow:hidden; background:${CONFIG.background_color}; position:relative;">
+        class="inventory-card ${isUrgent ? 'urgent' : ''} ${item.isFrozen ? 'frozen' : ''}">
+        <div style="height:80px; overflow:hidden; position:relative;">
           ${imgUrl ? `
-            <img loading="lazy" src="${esc(imgUrl)}" style="width:100%; height:100%; object-fit:cover;"
+            <img loading="lazy" src="${esc(imgUrl)}" class="inventory-card-image"
                  onerror="this.style.display='none';" />
           ` : `
-            <div style="height:100%; display:flex; align-items:center; justify-content:center; color:${CONFIG.text_muted}; font-size:11px;">
-              No image
-            </div>
+            <div class="inventory-card-image no-photo">No image</div>
           `}
           ${item.wantToUse ? `
-            <div style="position:absolute; top:2px; right:2px; background:#34d399; color:white; border-radius:3px; padding:1px 4px; font-size:8px;">
-              Use
-            </div>
+            <div class="inventory-badge use">Use</div>
           ` : ''}
           ${item.isFrozen ? `
-            <div style="position:absolute; top:2px; left:2px; background:#3b82f6; color:white; border-radius:3px; padding:1px 4px; font-size:8px;">
-              \u2744
-            </div>
+            <div class="inventory-badge frozen">\u2744</div>
           ` : ''}
         </div>
-        <div style="padding:6px;">
-          <div style="color:${CONFIG.text_color}; font-size:10px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-            ${esc(item.name)}
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:2px;">
-            <span style="color:${CONFIG.text_muted}; font-size:9px;">
-              ${item.quantity || 1}${item.unit ? ' ' + item.unit : ''}
-            </span>
+        <div class="inventory-card-info">
+          <div class="inventory-card-name">${esc(item.name)}</div>
+          <div class="inventory-card-meta">
+            <span>${item.quantity || 1}${item.unit ? ' ' + item.unit : ''}</span>
             ${statusText ? `
-              <span style="color:${statusColor}; font-size:9px; font-weight:500;">
-                ${statusText}
-              </span>
+              <span class="inventory-card-expiry ${isUrgent ? 'warning' : 'ok'}">${statusText}</span>
             ` : ''}
           </div>
         </div>
@@ -1937,11 +1924,11 @@ function renderInventoryCategory(cat, items) {
     if (items.length === 0) return '';
 
     return `
-      <div class="mb-4">
-        <div style="color:${CONFIG.text_muted}; font-size:11px; font-weight:600; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+      <div class="inventory-category-group">
+        <div class="inventory-category-header">
           ${cat} (${items.length})
         </div>
-        <div class="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2">
+        <div class="inventory-grid" style="padding: 0;">
           ${items.map(item => renderInventoryItem(item)).join('')}
         </div>
       </div>
@@ -2008,69 +1995,54 @@ function renderInventory() {
     });
 
     return `
-      <div class="p-3 max-w-4xl mx-auto">
+      <div style="padding: 0; max-width: 64rem; margin: 0 auto;">
         <!-- Action buttons -->
-        <div class="flex items-center justify-between mb-3">
-          <div class="flex gap-1">
-            <button onclick="showAddInventoryModal()"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.primary_action_color}; color:white; font-size:11px; border:none;">
-              + Add
-            </button>
-            <button onclick="showReceiptModal()"
-              class="px-2 py-1 rounded"
-              style="background:${CONFIG.surface_color}; color:${CONFIG.text_color}; font-size:11px; border:none;">
-              Scan
-            </button>
-          </div>
+        <div class="kitchen-actions">
+          <button onclick="showAddInventoryModal()" class="kitchen-action-btn primary">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            Add
+          </button>
+          <button onclick="showReceiptModal()" class="kitchen-action-btn secondary">
+            Scan
+          </button>
         </div>
 
         <!-- Search bar -->
-        <div style="position:relative; margin-bottom: 8px;">
-          <svg width="16" height="16" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%);"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+        <div class="kitchen-search">
+          <div class="search-icon">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          </div>
           <input type="text" id="inventorySearchInput" placeholder="Search inventory..."
             value="${esc(state.inventorySearchTerm || '')}"
-            oninput="state.inventorySearchTerm = this.value; render(); setTimeout(() => { const i = document.getElementById('inventorySearchInput'); if(i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0);"
-            style="width:100%; height:40px; padding:0 10px 0 34px; border:1px solid rgba(255,255,255,0.08); border-radius:10px; font-size:14px; background:${CONFIG.surface_color}; color:${CONFIG.text_color}; box-sizing:border-box; font-family:${CONFIG.font_family};" />
+            oninput="state.inventorySearchTerm = this.value; render(); setTimeout(() => { const i = document.getElementById('inventorySearchInput'); if(i) { i.focus(); i.setSelectionRange(i.value.length, i.value.length); } }, 0);" />
         </div>
 
         <!-- Category filter pills -->
-        <div style="display:flex; gap:6px; overflow-x:auto; margin-bottom:12px; -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+        <div class="kitchen-filters">
           ${categoryFilters.map(f => {
             const active = activeCatFilter === f.id;
             return `<button onclick="state.inventoryCategoryFilter = '${f.id}'; render();"
-              style="flex-shrink:0; padding:8px 16px; border-radius:20px; border:none;
-              background:${active ? CONFIG.primary_action_color : 'transparent'};
-              color:${active ? 'white' : CONFIG.text_muted};
-              font-size:13px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;">
+              class="kitchen-filter-pill ${active ? 'active' : ''}">
               ${f.label}</button>`;
           }).join('')}
         </div>
 
         <!-- Empty State -->
         ${filteredInventory.length === 0 ? `
-          <div class="p-6 rounded-xl text-center" style="background:${CONFIG.surface_color};">
-            <div style="font-size:2rem; margin-bottom:8px;">\ud83d\udce6</div>
-            <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color}; margin-bottom:4px;">
-              ${searchTerm || activeCatFilter !== 'all' ? 'No matches found' : 'Pantry is empty'}
-            </div>
-            <div style="font-size:12px; color:${CONFIG.text_muted}; margin-bottom:12px;">
-              ${searchTerm || activeCatFilter !== 'all' ? 'Try a different search or filter' : 'Add items to get started'}
-            </div>
+          <div class="kitchen-empty-state">
+            <div class="empty-icon">\ud83e\udd58</div>
+            <h3>${searchTerm || activeCatFilter !== 'all' ? 'No matches found' : 'Your pantry is empty'}</h3>
+            <p>${searchTerm || activeCatFilter !== 'all' ? 'Try a different search or filter' : 'Add ingredients to track what you have and discover recipes you can make'}</p>
+            <div class="empty-actions">
             ${!searchTerm && activeCatFilter === 'all' ? `
-              <div style="display:flex; gap:8px; justify-content:center;">
-                <button onclick="showReceiptModal()" style="padding:8px 16px; background:${CONFIG.success_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
-                  Scan Receipt
-                </button>
-                <button onclick="showAddInventoryModal()" style="padding:8px 16px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:8px; cursor:pointer; font-size:12px;">
-                  + Add Item
-                </button>
-              </div>
+              <button onclick="showAddInventoryModal()" class="kitchen-action-btn primary">+ Add Item</button>
+              <button onclick="showReceiptModal()" class="kitchen-action-btn secondary">Scan Receipt</button>
             ` : `
-              <button onclick="state.inventoryCategoryFilter = 'all'; state.inventorySearchTerm = ''; render();" style="padding:8px 16px; background:${CONFIG.surface_color}; color:${CONFIG.primary_action_color}; border:1px solid ${CONFIG.primary_action_color}; border-radius:8px; cursor:pointer; font-size:12px;">
+              <button onclick="state.inventoryCategoryFilter = 'all'; state.inventorySearchTerm = ''; render();" class="kitchen-action-btn secondary">
                 Show All
               </button>
             `}
+            </div>
           </div>
         ` : `
           <!-- Items Grid -->
@@ -2341,7 +2313,7 @@ function showEditInventoryModal(id) {
                    class="w-20 px-2 py-1 border rounded text-center" min="1" />
             <span class="text-sm">days</span>
             <button type="button" onclick="saveDefaultFromModal('${esc(item.name)}')"
-                    class="px-3 py-1 text-sm rounded button-hover" style="background: ${CONFIG.primary_action_color}; color: white;">
+                    class="px-3 py-1 text-sm rounded button-hover" style="background: var(--accent-green); color: white;">
               Save as Default
             </button>
           </div>
@@ -2540,7 +2512,7 @@ function showInventoryItemDetail(itemId) {
         <div style="margin-bottom: 20px;">
           <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
             <div style="font-weight: 600; font-size: 16px;">\ud83d\udce6 Individual Units</div>
-            <button onclick="addUnitToItem('${item.id}')" style="padding: 6px 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
+            <button onclick="addUnitToItem('${item.id}')" style="padding: 6px 12px; background: var(--accent-green); color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
               + Add Unit
             </button>
           </div>
@@ -2613,7 +2585,7 @@ function showInventoryItemDetail(itemId) {
 
         <!-- Actions -->
         <div style="display: flex; flex-direction: column; gap: 8px;">
-          <button onclick="closeModal(); viewIngredientInfo('${esc(item.name)}')" style="width: 100%; padding: 12px; background: linear-gradient(135deg, ${CONFIG.primary_action_color} 0%, #8b5cf6 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+          <button onclick="closeModal(); viewIngredientInfo('${esc(item.name)}')" style="width: 100%; padding: 12px; background: linear-gradient(135deg, var(--accent-green) 0%, #8b5cf6 100%); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
             \ud83e\udd57 View Ingredient Info
           </button>
           <button onclick="closeModal(); showEditInventoryModal('${item.id}')" style="width: 100%; padding: 12px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; cursor: pointer; font-weight: 500;">
@@ -2748,7 +2720,7 @@ function editUnit(itemId, unitIdx) {
           <button onclick="document.getElementById('unitEditOverlay').remove()" style="flex: 1; padding: 10px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
             Cancel
           </button>
-          <button onclick="saveUnitEdit('${itemId}', ${unitIdx})" style="flex: 1; padding: 10px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+          <button onclick="saveUnitEdit('${itemId}', ${unitIdx})" style="flex: 1; padding: 10px; background: var(--accent-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
             Save
           </button>
         </div>
@@ -3221,7 +3193,7 @@ function renderIngredientLibrary() {
             \ud83e\udd57 Ingredients
           </h2>
           <button onclick="showAddIngredientModal()"
-            style="padding: 10px 16px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;">
+            style="padding: 10px 16px; background: var(--accent-green); color: white; border: none; border-radius: 10px; cursor: pointer; font-weight: 600; font-size: 14px;">
             \u2795 Add
           </button>
         </div>
@@ -3237,13 +3209,13 @@ function renderIngredientLibrary() {
           <div class="flex gap-2 flex-wrap">
             <button onclick="state.ingredientCategoryFilter = 'All'; render();"
               class="px-3 py-1 rounded-full text-sm"
-              style="background:${state.ingredientCategoryFilter === 'All' ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.ingredientCategoryFilter === 'All' ? 'white' : CONFIG.text_color};">
+              style="background:${state.ingredientCategoryFilter === 'All' ? 'var(--accent-green)' : CONFIG.background_color}; color:${state.ingredientCategoryFilter === 'All' ? 'white' : CONFIG.text_color};">
               All
             </button>
             ${INGREDIENT_CATEGORIES.map(cat => `
               <button onclick="state.ingredientCategoryFilter = '${cat}'; render();"
                 class="px-3 py-1 rounded-full text-sm"
-                style="background:${state.ingredientCategoryFilter === cat ? CONFIG.primary_action_color : CONFIG.background_color}; color:${state.ingredientCategoryFilter === cat ? 'white' : CONFIG.text_color};">
+                style="background:${state.ingredientCategoryFilter === cat ? 'var(--accent-green)' : CONFIG.background_color}; color:${state.ingredientCategoryFilter === cat ? 'white' : CONFIG.text_color};">
                 ${cat}
               </button>
             `).join('')}
@@ -3274,7 +3246,7 @@ function renderIngredientLibrary() {
                     ${esc(name)}
                   </div>
                   ${hasKnowledge ? `
-                    <div class="text-center" style="color:${CONFIG.primary_action_color}; font-size: ${CONFIG.type_micro};">
+                    <div class="text-center" style="color:var(--accent-green); font-size: ${CONFIG.type_micro};">
                       \u2713 Info saved
                     </div>
                   ` : ''}
@@ -3350,7 +3322,7 @@ function showAddIngredientModal() {
           <button onclick="closeModal()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
             Cancel
           </button>
-          <button onclick="saveNewIngredient()" style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+          <button onclick="saveNewIngredient()" style="flex: 1; padding: 12px; background: var(--accent-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
             Add Ingredient
           </button>
         </div>
@@ -3473,7 +3445,7 @@ function renderIngredientDetailHeader(name, knowledge, img, displayName, inInven
             ${knowledge.favorite ? '\u2b50' : '\u2606'}
           </button>
           <button onclick="editIngredientKnowledge('${esc(name)}')" class="px-3 py-2 rounded-lg"
-            style="background:${CONFIG.primary_action_color}; color:white;">\u270f\ufe0f Edit</button>
+            style="background:var(--accent-green); color:white;">\u270f\ufe0f Edit</button>
           <button onclick="if(confirm('Delete this ingredient?')) deleteIngredientKnowledgeFull('${esc(name)}')"
             class="px-3 py-2 rounded-lg" style="background: rgba(220,38,38,0.1); color: ${CONFIG.danger_color};">\ud83d\uddd1\ufe0f</button>
         </div>
@@ -3530,7 +3502,7 @@ function renderIngredientDetailCooking(name, knowledge) {
             <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">\u23f1\ufe0f Cooking Times</h2>
             <div class="flex gap-2">
               <button onclick="askClaudeForSection('${esc(name)}', 'cooking')" class="px-2 py-1 rounded text-xs" style="background: ${CONFIG.surface_elevated}; color:white;">\ud83e\udd16 Ask Claude</button>
-              <button onclick="addCookingMethod('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:${CONFIG.primary_action_color}; color:white;">+ Add</button>
+              <button onclick="addCookingMethod('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:var(--accent-green); color:white;">+ Add</button>
             </div>
           </div>
         </div>
@@ -3538,7 +3510,7 @@ function renderIngredientDetailCooking(name, knowledge) {
           ${methods.length > 0 ? groupKeys.map(groupKey => `
             <div style="margin-bottom: 16px;">
               ${groupKeys.length > 1 || groupKey !== 'General' ? `
-                <div style="color:${CONFIG.primary_action_color}; font-size:13px; font-weight:600; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
+                <div style="color:var(--accent-green); font-size:13px; font-weight:600; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px;">
                   ${esc(groupKey)}
                 </div>
               ` : ''}
@@ -3549,7 +3521,7 @@ function renderIngredientDetailCooking(name, knowledge) {
                       <div style="color:${CONFIG.warning_color}; font-size:1.5rem;">\ud83d\udd25</div>
                       <div style="color:${CONFIG.text_color}; font-weight:600; font-size: 15px;">${esc(method.method)}</div>
                     </div>
-                    ${method.cutType ? `<div style="color:${CONFIG.primary_action_color}; font-size:12px; font-weight:600; margin-bottom:4px;">${esc(method.cutType)}</div>` : ''}
+                    ${method.cutType ? `<div style="color:var(--accent-green); font-size:12px; font-weight:600; margin-bottom:4px;">${esc(method.cutType)}</div>` : ''}
                     <div style="color:${CONFIG.text_color}; font-size: 14px; font-weight: 500; margin-bottom: 4px;">
                       ${method.temp ? esc(method.temp) : ''}${method.temp && method.time ? ' \u2022 ' : ''}${esc(method.time)}
                     </div>
@@ -3578,7 +3550,7 @@ function renderIngredientDetailTechniques(name, knowledge) {
             <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">\ud83d\udc68\u200d\ud83c\udf73 Techniques</h2>
             <div class="flex gap-2">
               <button onclick="askClaudeForSection('${esc(name)}', 'techniques')" class="px-2 py-1 rounded text-xs" style="background: ${CONFIG.surface_elevated}; color:white;">\ud83e\udd16 Ask Claude</button>
-              <button onclick="addTechnique('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:${CONFIG.primary_action_color}; color:white;">+ Add</button>
+              <button onclick="addTechnique('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:var(--accent-green); color:white;">+ Add</button>
             </div>
           </div>
         </div>
@@ -3591,12 +3563,12 @@ function renderIngredientDetailTechniques(name, knowledge) {
                     <div style="color:${CONFIG.warning_color}; font-size:1.3rem;">\ud83c\udfaf</div>
                     <div style="color:${CONFIG.text_color}; font-weight:600; font-size: 14px;">${esc(tech.result)}</div>
                   </div>
-                  <div style="color:${CONFIG.primary_action_color}; font-weight:500; font-size:13px; margin-bottom: 6px;">${esc(tech.method)}</div>
+                  <div style="color:var(--accent-green); font-weight:500; font-size:13px; margin-bottom: 6px;">${esc(tech.method)}</div>
                   <div style="color:${CONFIG.text_muted}; font-size:12px; line-height: 1.5; max-height: 60px; overflow: hidden; text-overflow: ellipsis;">
                     ${esc(tech.steps).slice(0, 100)}${tech.steps.length > 100 ? '...' : ''}
                   </div>
                   <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.06);">
-                    <button onclick="viewTechniqueDetail('${esc(name)}', ${idx})" style="padding: 4px 8px; background: rgba(232,93,93,0.1); border: none; border-radius: 4px; color: ${CONFIG.primary_action_color}; cursor: pointer; font-size: ${CONFIG.type_micro};">View Full</button>
+                    <button onclick="viewTechniqueDetail('${esc(name)}', ${idx})" style="padding: 4px 8px; background: rgba(0,200,83,0.1); border: none; border-radius: 4px; color: var(--accent-green); cursor: pointer; font-size: ${CONFIG.type_micro};">View Full</button>
                     <button onclick="event.stopPropagation(); deleteTechnique('${esc(name)}', ${idx})" style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: none; border-radius: 4px; color: ${CONFIG.danger_color}; cursor: pointer; font-size: ${CONFIG.type_micro};">\ud83d\uddd1\ufe0f</button>
                   </div>
                 </div>
@@ -3616,7 +3588,7 @@ function renderIngredientDetailPairings(name, knowledge) {
             <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">\ud83e\uddc2 Pairs Well With</h2>
             <div class="flex gap-2">
               <button onclick="askClaudeForSection('${esc(name)}', 'pairings')" class="px-2 py-1 rounded text-xs" style="background: ${CONFIG.surface_elevated}; color:white;">\ud83e\udd16 Ask Claude</button>
-              <button onclick="showAddPairingModal('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:${CONFIG.primary_action_color}; color:white;">+ Add</button>
+              <button onclick="showAddPairingModal('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:var(--accent-green); color:white;">+ Add</button>
             </div>
           </div>
         </div>
@@ -3656,7 +3628,7 @@ function renderIngredientDetailFreezing(name, knowledge) {
             <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">🧊 Freezing Guide</h2>
             <div class="flex gap-2">
               <button onclick="askClaudeForSection('${esc(name)}', 'freezing')" class="px-2 py-1 rounded text-xs" style="background: ${CONFIG.surface_elevated}; color:white;">\ud83e\udd16 Ask Claude</button>
-              <button onclick="editFreezingInfo('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:${CONFIG.primary_action_color}; color:white;">\u270f\ufe0f Edit</button>
+              <button onclick="editFreezingInfo('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:var(--accent-green); color:white;">\u270f\ufe0f Edit</button>
             </div>
           </div>
         </div>
@@ -3691,7 +3663,7 @@ function renderIngredientDetailNotes(name, knowledge) {
             <h2 style="color:${CONFIG.text_color}; font-size:16px; font-weight:600; display: flex; align-items: center; gap: 8px;">\ud83d\udcdd Notes & Tips</h2>
             <div class="flex gap-2">
               <button onclick="askClaudeForSection('${esc(name)}', 'notes')" class="px-2 py-1 rounded text-xs" style="background: ${CONFIG.surface_elevated}; color:white;">\ud83e\udd16 Ask Claude</button>
-              <button onclick="addIngredientNote('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:${CONFIG.primary_action_color}; color:white;">+ Add</button>
+              <button onclick="addIngredientNote('${esc(name)}')" class="px-2 py-1 rounded text-sm" style="background:var(--accent-green); color:white;">+ Add</button>
             </div>
           </div>
         </div>
@@ -3702,7 +3674,7 @@ function renderIngredientDetailNotes(name, knowledge) {
                 <div class="p-3 rounded-lg" style="background:${CONFIG.background_color};">
                   <div style="color:${CONFIG.text_color}; font-size:14px; line-height: 1.6; white-space: pre-wrap;">${esc(note)}</div>
                   <div class="flex justify-end gap-2 mt-2">
-                    <button onclick="editIngredientNote('${esc(name)}', ${idx})" style="padding: 4px 8px; background: rgba(232,93,93,0.1); border: none; border-radius: 4px; color: ${CONFIG.primary_action_color}; cursor: pointer; font-size: 12px;">\u270f\ufe0f Edit</button>
+                    <button onclick="editIngredientNote('${esc(name)}', ${idx})" style="padding: 4px 8px; background: rgba(0,200,83,0.1); border: none; border-radius: 4px; color: var(--accent-green); cursor: pointer; font-size: 12px;">\u270f\ufe0f Edit</button>
                     <button onclick="deleteIngredientNote('${esc(name)}', ${idx})" style="padding: 4px 8px; background: rgba(239,68,68,0.1); border: none; border-radius: 4px; color: ${CONFIG.danger_color}; cursor: pointer; font-size: 12px;">\ud83d\uddd1\ufe0f</button>
                   </div>
                 </div>
@@ -3742,12 +3714,12 @@ function renderIngredientDetailRecipes(name, displayName, relatedRecipes) {
                       <div class="p-2"><div class="truncate" style="color:${CONFIG.text_color}; font-size:12px; font-weight: 500;">${esc(r.title)}</div></div>
                     </div>
                     <!-- Bookmark icon top-right -->
-                    <button onclick="event.stopPropagation();toggleSaveRecipe('${esc(rId)}')" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:${rSaved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;padding:0;">
+                    <button onclick="event.stopPropagation();toggleSaveRecipe('${esc(rId)}')" style="position:absolute;top:4px;right:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:${rSaved ? 'var(--accent-green)' : 'rgba(255,255,255,0.7)'};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;padding:0;">
                       <svg width="11" height="11" fill="${rSaved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
                     </button>
                     ${rUrl ? `
                     <!-- External link icon top-left -->
-                    <a href="${esc(rUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:${CONFIG.primary_action_color};cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;text-decoration:none;">
+                    <a href="${esc(rUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation();" style="position:absolute;top:4px;left:4px;width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.5);backdrop-filter:blur(4px);border:none;color:var(--accent-green);cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;text-decoration:none;">
                       <svg width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
                     </a>
                     ` : ''}
@@ -3853,7 +3825,7 @@ function showAddPairingModal(ingredientName) {
               <div onclick="selectPairingOption('${esc(ingredientName)}', '${esc(ing)}')"
                 class="pairing-option"
                 style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.06);"
-                onmouseover="this.style.background='rgba(232,93,93,0.1)'"
+                onmouseover="this.style.background='rgba(0,200,83,0.1)'"
                 onmouseout="this.style.background='transparent'">
                 ${esc(capitalize(ing))}
               </div>
@@ -3867,7 +3839,7 @@ function showAddPairingModal(ingredientName) {
             <input type="text" id="customPairing" placeholder="e.g., lemon zest"
               style="flex: 1; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 16px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color};" />
             <button onclick="addCustomPairing('${esc(ingredientName)}')"
-              style="padding: 12px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
+              style="padding: 12px 20px; background: var(--accent-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 500;">
               Add
             </button>
           </div>
@@ -3898,7 +3870,7 @@ function filterPairingOptions(searchTerm) {
         <div onclick="selectPairingOption('${state.selectedIngredientId}', '${esc(ing)}')"
           class="pairing-option"
           style="padding: 10px 12px; cursor: pointer; border-bottom: 1px solid rgba(255,255,255,0.06);"
-          onmouseover="this.style.background='rgba(232,93,93,0.1)'"
+          onmouseover="this.style.background='rgba(0,200,83,0.1)'"
           onmouseout="this.style.background='transparent'">
           ${esc(capitalize(ing))}
         </div>
@@ -3999,7 +3971,7 @@ function editFreezingInfo(ingredientName) {
             Cancel
           </button>
           <button onclick="saveFreezingInfo()"
-            style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+            style="flex: 1; padding: 12px; background: var(--accent-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
             Save
           </button>
         </div>
@@ -4069,7 +4041,7 @@ function askClaudeForSection(ingredientName, section) {
 
         <div id="claudeSectionResponse" style="display: none; margin-bottom: 16px;">
           <label style="display: block; margin-bottom: 8px; font-weight: 500;">Claude's response:</label>
-          <div id="claudeSectionResponseText" style="padding: 12px; background: rgba(232,93,93,0.1); border-radius: 8px; font-size: 14px; line-height: 1.6; max-height: 300px; overflow-y: auto;"></div>
+          <div id="claudeSectionResponseText" style="padding: 12px; background: rgba(0,200,83,0.1); border-radius: 8px; font-size: 14px; line-height: 1.6; max-height: 300px; overflow-y: auto;"></div>
         </div>
 
         <input type="hidden" id="claudeSectionName" value="${esc(ingredientName)}" />
@@ -4307,7 +4279,7 @@ function editIngredientKnowledge(name) {
         <input type="hidden" id="editIngId" value="${esc(knowledge.id)}" />
         <div class="flex gap-2 justify-end">
           <button onclick="closeModal()" style="padding: 10px 20px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">Cancel</button>
-          <button onclick="saveEditedIngredientKnowledge()" style="padding: 10px 20px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Save</button>
+          <button onclick="saveEditedIngredientKnowledge()" style="padding: 10px 20px; background: var(--accent-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">Save</button>
         </div>
       </div>
     `);
@@ -4468,7 +4440,7 @@ function viewTechniqueDetail(name, idx) {
           <h2 style="font-size: 20px; font-weight: 700; margin: 0;">${esc(tech.result)}</h2>
         </div>
         <div style="margin-bottom: 16px;">
-          <div style="color: ${CONFIG.primary_action_color}; font-weight: 600; font-size: 15px; margin-bottom: 8px;">${esc(tech.method)}</div>
+          <div style="color: var(--accent-green); font-weight: 600; font-size: 15px; margin-bottom: 8px;">${esc(tech.method)}</div>
           <div style="color: ${CONFIG.text_color}; font-size: 14px; line-height: 1.7; white-space: pre-line; background: ${CONFIG.background_color}; padding: 12px; border-radius: 8px;">${esc(tech.steps)}</div>
         </div>
         <div style="display: flex; gap: 8px;">
@@ -4647,7 +4619,7 @@ function showSplitInventoryItem(itemId) {
         <button onclick="closeModal()" style="flex: 1; padding: 12px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; border: none; border-radius: 8px; cursor: pointer;">
           Cancel
         </button>
-        <button onclick="confirmSplitInventoryItem('${item.id}')" style="flex: 1; padding: 12px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
+        <button onclick="confirmSplitInventoryItem('${item.id}')" style="flex: 1; padding: 12px; background: var(--accent-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600;">
           Split Item
         </button>
       </div>

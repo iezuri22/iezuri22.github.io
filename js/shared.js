@@ -6402,7 +6402,7 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
             `).join('')}
           </div>
           <button class="add-to-basket-btn" onclick="showMealIngredientPicker('${id}')">
-            Add (${rows.length}) To Basket
+            Add (${rows.length}) to Cart
           </button>
         ` : `
           <div style="padding:40px 20px;text-align:center;color:var(--text-tertiary);">No ingredients listed.</div>

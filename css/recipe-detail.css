@@ -4,9 +4,16 @@
 .detail-hero {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 9;
+  max-height: 40vh;
   background: #000;
   overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .detail-hero {
+    max-height: 35vh;
+  }
 }
 
 .detail-hero-media {
@@ -222,12 +229,12 @@
 }
 
 .detail-title {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
   text-align: center;
   padding: 0 20px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
   line-height: 1.2;
 }
 
@@ -272,24 +279,24 @@
   background: var(--bg-card);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-md);
-  padding: 14px 18px;
+  padding: 10px 14px;
   text-align: center;
-  min-width: 100px;
+  min-width: 85px;
 }
 
 .stat-label {
   display: block;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 700;
   color: var(--text-tertiary);
   text-transform: uppercase;
   letter-spacing: 0.8px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .stat-value {
   display: block;
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 500;
   color: var(--text-primary);
 }
@@ -298,15 +305,15 @@
 .diet-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  padding: 0 20px 16px;
+  gap: 6px;
+  padding: 0 20px 12px;
 }
 
 .diet-tag {
-  padding: 6px 14px;
+  padding: 4px 10px;
   border: 1px solid var(--border-card);
   border-radius: 100px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
@@ -314,8 +321,8 @@
 
 /* ===== DESCRIPTION ===== */
 .detail-description {
-  padding: 0 20px 16px;
-  font-size: 15px;
+  padding: 0 20px 12px;
+  font-size: 14px;
   line-height: 1.6;
   color: var(--text-secondary);
 }
@@ -349,11 +356,11 @@
 
 .detail-tab {
   flex: 1;
-  padding: 14px 0;
+  padding: 12px 0;
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
@@ -375,19 +382,19 @@
 }
 
 .ingredient-group-label {
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--accent);
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  padding: 16px 0 8px;
+  padding: 12px 0 6px;
 }
 
 .ingredient-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -396,14 +403,14 @@
 }
 
 .ingredient-name {
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-primary);
   flex: 1;
   padding-right: 16px;
 }
 
 .ingredient-amount {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
   white-space: nowrap;
 }
@@ -446,7 +453,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 0 0 24px;
+  padding: 0 0 16px;
   cursor: pointer;
 }
 
@@ -455,16 +462,16 @@
 }
 
 .step-number {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 6px;
 }
 
 .step-text {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 .step-text .time-highlight {
@@ -497,7 +504,7 @@
 
 /* ===== RATINGS SECTION ===== */
 .ratings-section {
-  padding: 24px 20px;
+  padding: 16px 20px;
 }
 
 .ratings-section-title {
@@ -604,7 +611,7 @@
 
 /* ===== COMMENTS SECTION ===== */
 .comments-section {
-  padding: 24px 20px;
+  padding: 16px 20px;
 }
 
 .comments-section-title {
