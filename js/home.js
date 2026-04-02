@@ -13,7 +13,7 @@ function renderCookAgainRow() {
       <div style="font-size: ${CONFIG.type_caption}; font-weight: 600; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Cook Again</div>
       <div style="display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; -webkit-overflow-scrolling: touch;">
         ${favorites.map(entry => `
-          <div onclick="${entry.recipeId ? `openRecipeView('${entry.recipeId}')` : `openFoodLogDetail('${entry.id}')`}" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 52px;">
+          <div onclick="${entry.recipeId ? `goToRecipe('${entry.recipeId}')` : `openFoodLogDetail('${entry.id}')`}" style="flex-shrink: 0; cursor: pointer; text-align: center; width: 52px;">
             <div style="width: 48px; height: 48px; border-radius: 50%; overflow: hidden; margin: 0 auto 4px; border: 2px solid ${CONFIG.primary_action_color}; background: ${CONFIG.surface_elevated};">
               ${(entry.photo || entry.image) ? `<img src="${esc(entry.photo || entry.image)}" style="width:100%;height:100%;object-fit:cover;" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:4px;"><span style="font-size:9px;font-weight:700;color:${CONFIG.text_muted};text-align:center;line-height:1.1;">${esc((entry.recipeName||'').substring(0,12))}</span></div>`}
             </div>
@@ -113,7 +113,7 @@ function renderHomeSearchResults() {
   container.innerHTML = `
     <div style="margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 12px;">
       ${results.map(item => `
-        <div onclick="${item.type === 'recipe' ? `openRecipeView('${item.id}')` : item.type === 'inventory' ? `showInventoryItemDetail('${item.id}')` : `showIngredientDetail('${item.id}')`}"
+        <div onclick="${item.type === 'recipe' ? `goToRecipe('${item.id}')` : item.type === 'inventory' ? `showInventoryItemDetail('${item.id}')` : `showIngredientDetail('${item.id}')`}"
           style="display: flex; align-items: center; gap: 12px; padding: 10px; border-radius: 10px; cursor: pointer; margin-bottom: 4px;"
           onmouseover="this.style.background='rgba(255,255,255,0.05)'"
           onmouseout="this.style.background='transparent'">
@@ -135,13 +135,230 @@ function renderHomeSearchResults() {
 }
 
 // ============================================================
+// DISCOVERY HOME HELPERS
+// ============================================================
+// Navigate to recipe view from home page (cross-page)
+function goToRecipe(id) {
+  if (typeof openRecipeView === 'function') {
+    openRecipeView(id);
+  } else {
+    sessionStorage.setItem('yummy_target_view', 'recipe-view');
+    sessionStorage.setItem('yummy_selected_recipe', id);
+    window.location.href = 'recipes.html';
+  }
+}
+
+function getTimeGreeting() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return 'Good morning';
+  if (hour >= 12 && hour < 17) return 'Good afternoon';
+  if (hour >= 17 && hour < 22) return 'Good evening';
+  return 'Late night cooking?';
+}
+
+function getTimeIcon() {
+  const hour = new Date().getHours();
+  if (hour >= 5 && hour < 12) return `<svg width="20" height="20" fill="none" stroke="#ffd60a" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>`;
+  if (hour >= 12 && hour < 17) return `<svg width="20" height="20" fill="none" stroke="#ffd60a" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41"/></svg>`;
+  return `<svg width="20" height="20" fill="none" stroke="#8e8e93" stroke-width="1.5" viewBox="0 0 24 24"><path d="M21 12.79A9 9 0 1111.21 3a7 7 0 009.79 9.79z"/></svg>`;
+}
+
+function getFeaturedRecipe() {
+  const recipes = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+  // Prefer recipes with video and an image
+  const withVideo = recipes.filter(r => recipeHasVideo(r.__backendId || r.id) && recipeThumb(r));
+  if (withVideo.length > 0) return withVideo[Math.floor(Math.random() * withVideo.length)];
+  // Fall back to any recipe with an image
+  const withImage = recipes.filter(r => recipeThumb(r));
+  if (withImage.length > 0) return withImage[Math.floor(Math.random() * withImage.length)];
+  return recipes.length > 0 ? recipes[0] : null;
+}
+
+function getQuickRecipes() {
+  return (state.recipes || []).filter(r => {
+    if (r.isDraft || r.isTip) return false;
+    const effort = getRecipeEffort(r.__backendId || r.id);
+    if (effort === 'lazy') return true;
+    if (r.cookTime) {
+      const mins = parseInt(r.cookTime);
+      if (!isNaN(mins) && mins <= 30) return true;
+    }
+    return false;
+  }).slice(0, 12);
+}
+
+function getRecentRecipes() {
+  return (state.recipes || []).filter(r => !r.isDraft && !r.isTip)
+    .slice()
+    .sort((a, b) => {
+      const aTime = a.createdAt || a.__backendId || a.id || 0;
+      const bTime = b.createdAt || b.__backendId || b.id || 0;
+      return String(bTime).localeCompare(String(aTime));
+    })
+    .slice(0, 12);
+}
+
+function getDinnerRecipes() {
+  return (state.recipes || []).filter(r => !r.isDraft && !r.isTip && r.category === 'Dinner').slice(0, 12);
+}
+
+function suggestDinner() {
+  const dinners = (state.recipes || []).filter(r => !r.isDraft && !r.isTip && r.category === 'Dinner');
+  if (dinners.length === 0) {
+    const all = (state.recipes || []).filter(r => !r.isDraft && !r.isTip);
+    if (all.length === 0) return;
+    const pick = all[Math.floor(Math.random() * all.length)];
+    goToRecipe(pick.__backendId || pick.id);
+    return;
+  }
+  const pick = dinners[Math.floor(Math.random() * dinners.length)];
+  goToRecipe(pick.__backendId || pick.id);
+}
+
+// ============================================================
+// DISCOVERY HOME RENDER FUNCTIONS
+// ============================================================
+function renderHomeGreeting(greeting) {
+  return `
+    <div style="padding: 20px 16px 4px; display: flex; align-items: center; gap: 10px;">
+      <div style="display: flex; align-items: center; justify-content: center;">${getTimeIcon()}</div>
+      <div>
+        <div style="font-size: 26px; font-weight: 800; color: ${CONFIG.text_color}; letter-spacing: -0.5px; line-height: 1.1;">${greeting}</div>
+        <div style="font-size: 14px; color: ${CONFIG.text_muted}; margin-top: 2px;">What are we cooking today?</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderQuickActionsStrip() {
+  const actions = [
+    { label: "What's for dinner?", icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>`, action: 'suggestDinner()' },
+    { label: 'Meal Plan', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>`, action: "document.getElementById('home-meals-section')?.scrollIntoView({behavior:'smooth'})" },
+    { label: 'Grocery List', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>`, action: "navigateTo('grocery-list')" },
+    { label: 'Add Recipe', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>`, action: "window.location.href='recipes.html'; sessionStorage.setItem('yummy_target_view','recipe-edit'); sessionStorage.setItem('yummy_new_recipe','1')" }
+  ];
+
+  return `
+    <div style="display: flex; gap: 8px; padding: 12px 16px 4px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
+      ${actions.map(a => `
+        <button onclick="${a.action}" style="flex-shrink: 0; display: flex; align-items: center; gap: 7px; padding: 10px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; cursor: pointer; color: ${CONFIG.text_color}; font-size: 13px; font-weight: 500; white-space: nowrap; transition: transform 0.15s ease, background 0.15s ease;" ontouchstart="this.style.transform='scale(0.95)'; this.style.background='rgba(255,255,255,0.1)'" ontouchend="this.style.transform=''; this.style.background=''">
+          <span style="display:flex; align-items:center; color:${CONFIG.primary_action_color};">${a.icon}</span>
+          ${a.label}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderHeroCard(recipe) {
+  if (!recipe) return '';
+  const id = recipe.__backendId || recipe.id;
+  const img = recipeThumb(recipe);
+  const hasVid = recipeHasVideo(id);
+  const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
+
+  return `
+    <div class="hero-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} onclick="goToRecipe('${id}')" style="position:relative; margin: 12px 16px 16px; border-radius: 16px; overflow: hidden; cursor: pointer; transition: transform 0.2s ease;" ontouchstart="this.style.transform='scale(0.98)'" ontouchend="this.style.transform=''">
+      <div style="position: relative; width: 100%; aspect-ratio: 16/9; background: #0d0d0d;">
+        ${img ? `<img src="${esc(img)}" class="video-card-thumb" style="width:100%; height:100%; object-fit:cover; transition: opacity 0.4s ease;" />` : `<div style="width:100%; height:100%; background: ${CONFIG.surface_color};"></div>`}
+        ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
+        <!-- Gradient overlay -->
+        <div style="position:absolute; bottom:0; left:0; right:0; height:70%; background: linear-gradient(transparent, rgba(0,0,0,0.85)); pointer-events: none;"></div>
+        ${hasVid ? `<div class="video-live-dot" style="bottom:auto; top:12px; right:12px;"><div class="video-live-dot-inner"></div></div>` : ''}
+      </div>
+      <div style="position: absolute; bottom: 0; left: 0; right: 0; padding: 16px 16px 14px;">
+        <div style="display:inline-block; padding: 3px 8px; background: rgba(232,93,93,0.9); border-radius: 4px; font-size: 10px; font-weight: 700; color: white; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Featured</div>
+        <div style="font-size: 22px; font-weight: 700; color: white; line-height: 1.2; margin-bottom: 6px; text-shadow: 0 1px 3px rgba(0,0,0,0.3);">${esc(recipe.title)}</div>
+        <div style="display: flex; gap: 14px; font-size: 13px; color: rgba(255,255,255,0.7); margin-bottom: 12px;">
+          ${recipe.cookTime ? `<span style="display:flex; align-items:center; gap:3px;"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> ${esc(recipe.cookTime)}</span>` : ''}
+          ${recipe.category ? `<span>${esc(recipe.category)}</span>` : ''}
+        </div>
+        <div style="display:inline-block; padding: 10px 20px; background: white; border-radius: 10px; font-size: 14px; font-weight: 600; color: #1a1a1a;">Start Cooking →</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderCarouselCard(recipe) {
+  const id = recipe.__backendId || recipe.id;
+  const img = recipeThumb(recipe);
+  return `
+    <div style="flex-shrink: 0; width: 150px; cursor: pointer; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_color}; transition: transform 0.15s ease;" onclick="goToRecipe('${id}')" ontouchstart="this.style.transform='scale(0.97)'" ontouchend="this.style.transform=''">
+      ${img ? `
+        <div style="aspect-ratio: 1; width: 100%; overflow: hidden; background: #0d0d0d;">
+          <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
+        </div>
+      ` : `
+        <div style="aspect-ratio: 1; width: 100%; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; padding: 10px;">
+          <span style="color: ${CONFIG.text_muted}; font-size: 12px; font-weight: 600; text-align: center;">${esc(recipe.title)}</span>
+        </div>
+      `}
+      <div style="padding: 8px 10px;">
+        <div style="color: ${CONFIG.text_color}; font-size: 13px; font-weight: 600; -webkit-line-clamp: 2; -webkit-box-orient: vertical; display: -webkit-box; overflow: hidden; line-height: 1.3;">${esc(recipe.title)}</div>
+        ${recipe.category ? `<div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-top: 2px;">${esc(recipe.category)}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderRecipeCarousel(title, subtitle, recipes) {
+  if (!recipes || recipes.length === 0) return '';
+  return `
+    <div style="margin-bottom: 20px;">
+      <div style="padding: 0 16px; display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;">
+        <div>
+          <div style="font-size: 14px; font-weight: 800; color: ${CONFIG.text_color}; text-transform: uppercase; letter-spacing: 0.5px;">${title}</div>
+          ${subtitle ? `<div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">${subtitle}</div>` : ''}
+        </div>
+        <button onclick="window.location.href='recipes.html'" style="background: none; border: none; font-size: 13px; font-weight: 500; color: ${CONFIG.text_muted}; cursor: pointer;">See all</button>
+      </div>
+      <div class="home-carousel" style="display: flex; gap: 10px; padding: 0 16px; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
+        ${recipes.map((r, i) => `
+          <div style="scroll-snap-align: start; opacity: 0; animation: cardFadeIn 0.35s ease forwards; animation-delay: ${i * 0.05}s;">
+            ${renderCarouselCard(r)}
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
 // MAIN HOME RENDERER
 // ============================================================
 function renderHome() {
-  // Home page IS the meal planner now — delegate to renderMyMeals from my-meals.js
-  // Initialize myMealsDate if not set (sync with viewingDate)
   if (!state.myMealsDate) state.myMealsDate = getToday();
-  return renderMyMeals();
+
+  const greeting = getTimeGreeting();
+  const heroRecipe = getFeaturedRecipe();
+  const quickRecipes = getQuickRecipes();
+  const recentRecipes = getRecentRecipes();
+  const dinnerRecipes = getDinnerRecipes();
+
+  const hasDiscoveryContent = heroRecipe || quickRecipes.length > 0 || recentRecipes.length > 0 || dinnerRecipes.length > 0;
+
+  if (!hasDiscoveryContent) {
+    // No recipes yet — fall back to just meal planner
+    return renderMyMeals();
+  }
+
+  return `
+    ${renderHomeGreeting(greeting)}
+    ${renderQuickActionsStrip()}
+    ${renderCookAgainRow()}
+    ${renderHeroCard(heroRecipe)}
+    ${quickRecipes.length > 0 ? renderRecipeCarousel('Quick & Easy', '30 minutes or less', quickRecipes) : ''}
+    ${recentRecipes.length > 0 ? renderRecipeCarousel('Recently Added', null, recentRecipes) : ''}
+    ${dinnerRecipes.length > 0 ? renderRecipeCarousel('Dinner Ideas', null, dinnerRecipes) : ''}
+    <div id="home-meals-section" style="padding: 8px 16px 4px;">
+      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+        <div style="flex: 1; height: 1px; background: ${CONFIG.divider_color};"></div>
+        <div style="font-size: 13px; font-weight: 700; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px;">My Meals</div>
+        <div style="flex: 1; height: 1px; background: ${CONFIG.divider_color};"></div>
+      </div>
+    </div>
+    ${renderMyMeals()}
+  `;
 }
 
 // ============================================================
@@ -2545,6 +2762,7 @@ function render() {
   // Initialize date swipe gestures for the meal planner
   if (state.currentView === 'home' || state.currentView === 'my-meals') {
     if (typeof initMyMealsSwipeGestures === 'function') initMyMealsSwipeGestures();
+    setTimeout(() => { if (typeof initVideoPreviewObserver === 'function') initVideoPreviewObserver(); }, 50);
   }
 }
 

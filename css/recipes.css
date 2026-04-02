@@ -41,6 +41,86 @@
   }
 }
 
+/* ===== Video Preview Cards ===== */
+.video-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.video-card video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  pointer-events: none;
+}
+
+.video-card.playing video {
+  opacity: 1;
+}
+
+.video-card.playing .video-card-thumb {
+  opacity: 0;
+  transition: opacity 0.35s ease;
+}
+
+/* Pulsing live indicator */
+.video-live-dot {
+  position: absolute;
+  bottom: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 3;
+}
+
+.video-card.playing .video-live-dot {
+  opacity: 1;
+}
+
+.video-live-dot-inner {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e85d5d;
+  animation: videoLivePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes videoLivePulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.6; }
+}
+
+/* Cook time pill overlay */
+.cook-time-pill {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  z-index: 3;
+}
+
 /* ===== Recipe Edit Form: Mobile Overflow Fix ===== */
 @media (max-width: 767px) {
   /* The .p-6 container for the edit form */

@@ -1648,7 +1648,7 @@ function showRecipeMoreFilters() {
 }
 
 function renderRecipes() {
-  if (!state.recipes || !Array.isArray(state.recipes)) return '<div class="p-3">Loading...</div>';
+  if (!state.recipes || !Array.isArray(state.recipes)) return renderSkeleton('card-grid');
 
   // Build the full recipe list (all sources, no tabs)
   let list = state.recipes.filter(r => !r.isDraft && !r.isTip);
@@ -1735,37 +1735,43 @@ function renderRecipes() {
           ` : ''}
         </div>
       ` : `
-        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px;">
-          ${list.map(r => {
+        <div class="recipes-photo-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; padding: 8px;">
+          ${list.map((r, idx) => {
             const id = r.__backendId || r.id;
             const img = recipeThumb(r);
             const saved = isRecipeSaved(id);
             const effort = getRecipeEffort(id);
+            const hasVid = recipeHasVideo(id);
+            const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
             return `
-            <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 8px;" oncontextmenu="event.preventDefault(); showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}');" ontouchstart="this._longPressTimer = setTimeout(() => { this._didLongPress = true; showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}'); }, 500);" ontouchend="clearTimeout(this._longPressTimer); if(this._didLongPress) { event.preventDefault(); this._didLongPress = false; }" ontouchmove="clearTimeout(this._longPressTimer);">
+            <div class="${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} style="position: relative; cursor: pointer; overflow: hidden; border-radius: 12px; background:${CONFIG.background_color}; opacity:0; animation: cardFadeIn 0.3s ease forwards; animation-delay: ${idx * 0.04}s;" oncontextmenu="event.preventDefault(); showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}');" ontouchstart="this._longPressTimer = setTimeout(() => { this._didLongPress = true; showEffortContextMenu(event, '${id}', '${esc(r.title).replace(/'/g, "\\'")}'); }, 500);" ontouchend="clearTimeout(this._longPressTimer); if(this._didLongPress) { event.preventDefault(); this._didLongPress = false; }" ontouchmove="clearTimeout(this._longPressTimer);">
               <div onclick="if(this.parentElement._didLongPress) return; openRecipeView('${id}')">
                 ${img ? `
-                  <div style="aspect-ratio:1; width:100%; overflow:hidden;">
-                    <img loading="lazy" src="${esc(img)}" style="width:100%; height:100%; object-fit:cover;" />
+                  <div style="aspect-ratio:4/5; width:100%; overflow:hidden; position:relative; background:#0d0d0d;">
+                    <img loading="lazy" src="${esc(img)}" class="video-card-thumb" style="width:100%; height:100%; object-fit:cover; transition: opacity 0.35s ease;" />
+                    ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
                   </div>
                 ` : `
-                  <div style="aspect-ratio:1; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
-                    <span style="color:${CONFIG.text_color}; font-size:12px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
+                  <div style="aspect-ratio:4/5; width:100%; background:${CONFIG.surface_color}; display:flex; align-items:center; justify-content:center; padding:12px;">
+                    <span style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; text-align:center; -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">${esc(r.title)}</span>
                   </div>
                 `}
               </div>
-              ${effort ? `<div style="position:absolute; top:4px; left:4px; z-index:2;">${renderEffortPill(effort, 'sm')}</div>` : ''}
-              ${recipeHasVideo(id) ? `<div style="position:absolute; top:${effort ? '28px' : '4px'}; left:4px; z-index:2; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
+              ${effort ? `<div style="position:absolute; top:6px; left:6px; z-index:2;">${renderEffortPill(effort, 'sm')}</div>` : ''}
+              ${hasVid && !previewVideoId ? `<div style="position:absolute; top:${effort ? '30px' : '6px'}; left:6px; z-index:2; width:22px; height:22px; border-radius:50%; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
                 <svg width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
               </div>` : ''}
+              ${previewVideoId ? `<div class="video-live-dot"><div class="video-live-dot-inner"></div></div>` : ''}
+              ${r.cookTime ? `<div class="cook-time-pill"><svg width="11" height="11" fill="none" stroke="white" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>${esc(r.cookTime)}</div>` : ''}
               <button onclick="event.stopPropagation(); toggleSaveRecipe('${id}')"
-                style="position: absolute; top: 4px; right: 4px; z-index: 2; width: 24px; height: 24px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
-                <svg width="12" height="12" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+                style="position: absolute; top: 6px; right: 6px; z-index: 4; width: 28px; height: 28px; border-radius: 50%; border: none; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); color: ${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.7)'}; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0;">
+                <svg width="13" height="13" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
               </button>
-              <div style="padding:6px; background:${CONFIG.background_color};" onclick="openRecipeView('${id}')">
-                <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
+              <div style="padding:8px 10px; background:${CONFIG.background_color};" onclick="openRecipeView('${id}')">
+                <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:600; -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden; line-height:1.3;">
                   ${esc(r.title)}
                 </div>
+                ${r.category ? `<div style="color:${CONFIG.text_muted}; font-size:11px; margin-top:2px;">${esc(r.category)}</div>` : ''}
               </div>
             </div>`;
           }).join('')}
@@ -3679,6 +3685,9 @@ function render() {
 
   if (state.currentView === 'batch-view') { setTimeout(initBatchCardSwipe, 0); setTimeout(initBatchVideoCarouselSwipe, 100); }
   if (state.currentView === 'recipe-view') setTimeout(initVideoCarouselSwipe, 100);
+  if (state.currentView === 'recipes') {
+    setTimeout(() => { if (typeof initVideoPreviewObserver === 'function') initVideoPreviewObserver(); }, 50);
+  }
 }
 
 function setupKeyboardShortcuts() {
@@ -3720,6 +3729,20 @@ function init() {
   if (targetView && VIEW_RENDERERS[targetView]) {
     sessionStorage.removeItem('yummy_target_view');
     state.currentView = targetView;
+    // If navigating to recipe-view from another page, pick up the selected recipe ID
+    if (targetView === 'recipe-view') {
+      const selectedRecipe = sessionStorage.getItem('yummy_selected_recipe');
+      if (selectedRecipe) {
+        sessionStorage.removeItem('yummy_selected_recipe');
+        state.selectedRecipeViewId = selectedRecipe;
+        state.videoCarouselIndex = 0;
+      }
+    }
+    // If navigating to recipe-edit for a new recipe
+    if (targetView === 'recipe-edit' && sessionStorage.getItem('yummy_new_recipe')) {
+      sessionStorage.removeItem('yummy_new_recipe');
+      state.recipeForm = newRecipeDraft();
+    }
   } else {
     state.currentView = 'recipes';
   }

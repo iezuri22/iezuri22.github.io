@@ -271,6 +271,95 @@
       navigation: auto;
     }
 
+    /* View transition animations */
+    ::view-transition-old(root) {
+      animation: vtFadeOut 120ms ease-out;
+    }
+    ::view-transition-new(root) {
+      animation: vtFadeIn 180ms ease-in;
+    }
+    @keyframes vtFadeOut {
+      to { opacity: 0; }
+    }
+    @keyframes vtFadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Skeleton / shimmer loading */
+    .skeleton-shimmer {
+      background: linear-gradient(90deg, #1a1a24 25%, #2a2a38 50%, #1a1a24 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s ease-in-out infinite;
+      border-radius: 8px;
+    }
+
+    @keyframes shimmer {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
+
+    .skeleton-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      padding: 8px;
+    }
+
+    .skeleton-card {
+      border-radius: 12px;
+      overflow: hidden;
+      background: #0d0d14;
+    }
+
+    .skeleton-card-media {
+      aspect-ratio: 4/5;
+      width: 100%;
+    }
+
+    .skeleton-card-title {
+      height: 16px;
+      width: 75%;
+      margin: 10px;
+    }
+
+    .skeleton-card-meta {
+      height: 12px;
+      width: 45%;
+      margin: 0 10px 10px;
+    }
+
+    .skeleton-hero {
+      aspect-ratio: 16/9;
+      border-radius: 16px;
+      margin: 12px 16px;
+    }
+
+    .skeleton-carousel {
+      display: flex;
+      gap: 10px;
+      padding: 0 16px;
+      overflow: hidden;
+    }
+
+    .skeleton-carousel-item {
+      flex-shrink: 0;
+      width: 150px;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+
+    .skeleton-carousel-media {
+      aspect-ratio: 1;
+      width: 100%;
+    }
+
+    .skeleton-carousel-title {
+      height: 14px;
+      width: 70%;
+      margin: 8px 10px;
+    }
+
     /* ===== RESPONSIVE: Mobile first ===== */
     .mobile-filters { display: block; }
     .recipe-card-desktop { display: none; }
@@ -744,6 +833,11 @@
     @keyframes cardEnter {
       from { transform: scale(0.95); opacity: 0; }
       to { transform: scale(1); opacity: 1; }
+    }
+
+    @keyframes cardFadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
     }
 
     @keyframes flyLeft {

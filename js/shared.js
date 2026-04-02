@@ -1518,6 +1518,19 @@ async function withLoading(fn) {
   finally { state.isLoading = false; if (typeof render === 'function') render(); }
 }
 
+function renderSkeleton(type) {
+  if (type === 'card-grid') {
+    return `<div class="skeleton-grid">${Array(6).fill(`<div class="skeleton-card"><div class="skeleton-card-media skeleton-shimmer"></div><div class="skeleton-card-title skeleton-shimmer"></div><div class="skeleton-card-meta skeleton-shimmer"></div></div>`).join('')}</div>`;
+  }
+  if (type === 'hero') {
+    return `<div class="skeleton-hero skeleton-shimmer"></div>`;
+  }
+  if (type === 'carousel') {
+    return `<div class="skeleton-carousel">${Array(4).fill(`<div class="skeleton-carousel-item"><div class="skeleton-carousel-media skeleton-shimmer"></div><div class="skeleton-carousel-title skeleton-shimmer"></div></div>`).join('')}</div>`;
+  }
+  return '';
+}
+
 function emptyState(icon, message, buttonLabel, buttonAction) {
   return `
     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: ${CONFIG.space_lg} ${CONFIG.space_md}; text-align: center;">
@@ -3164,6 +3177,17 @@ function getStreamThumbnail(videoId) {
   return `https://${CLOUDFLARE_STREAM_SUBDOMAIN}/${videoId}/thumbnails/thumbnail.jpg?time=&height=400`;
 }
 
+function getStreamHLSUrl(videoId) {
+  return `https://${CLOUDFLARE_STREAM_SUBDOMAIN}/${videoId}/manifest/video.m3u8`;
+}
+
+function getRecipePreviewVideoId(recipeId) {
+  const r = getRecipeById(recipeId);
+  if (!r || !Array.isArray(r.videoClips) || r.videoClips.length === 0) return null;
+  const sorted = r.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0));
+  return sorted[0].cloudflareVideoId || null;
+}
+
 function getRecipeVideoClips(recipeId) {
   const r = getRecipeById(recipeId);
   if (!r || !Array.isArray(r.videoClips) || r.videoClips.length === 0) return [];
@@ -4157,9 +4181,15 @@ function navigateTo(view) {
     // Clear viewing flags
     if (view !== 'recipe-view') { state.viewingFromPlan = null; state.viewingFromStats = false; state.viewingFromTips = false; state.viewingFromMealOptions = false; state.viewingFromSwipe = false; state.viewingFromKitchen = false; }
     state.currentView = view;
-    if (typeof render === 'function') render();
-    // Restore scroll
-    setTimeout(() => { const app = document.getElementById('app'); if (app && state.scrollPositions[view] !== undefined) app.scrollTop = state.scrollPositions[view]; else if (app) app.scrollTop = 0; }, 0);
+    if (document.startViewTransition && typeof render === 'function') {
+      document.startViewTransition(() => {
+        render();
+        setTimeout(() => { const app = document.getElementById('app'); if (app && state.scrollPositions[view] !== undefined) app.scrollTop = state.scrollPositions[view]; else if (app) app.scrollTop = 0; }, 0);
+      });
+    } else {
+      if (typeof render === 'function') render();
+      setTimeout(() => { const app = document.getElementById('app'); if (app && state.scrollPositions[view] !== undefined) app.scrollTop = state.scrollPositions[view]; else if (app) app.scrollTop = 0; }, 0);
+    }
   }
 }
 
