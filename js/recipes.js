@@ -1838,7 +1838,7 @@ function renderCarouselCard(recipe) {
           <div class="no-photo" style="display:none;background:${getPlaceholderGradient(recipe)};"></div>` :
           `<div class="no-photo" style="background:${getPlaceholderGradient(recipe)};"></div>`}
         ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
-        <div class="card-like-pill">
+        <div class="card-like-pill" onclick="event.stopPropagation(); toggleSaveRecipe('${esc(id)}')">
           <span class="heart ${saved ? 'liked' : ''}">♥</span>
         </div>
         <button class="card-overflow-btn" onclick="event.stopPropagation(); showEffortContextMenu(event, '${esc(id)}', '${esc(recipe.title).replace(/'/g, "\\'")}');">•••</button>
@@ -1869,7 +1869,7 @@ function renderLargeCard(recipe) {
           `<div class="no-photo" style="background:${getPlaceholderGradient(recipe)};"></div>`}
         <div class="large-card-overlay">
           ${recipe.cookTime ? `<div class="card-time-pill">⏱ ${esc(recipe.cookTime)}</div>` : '<div></div>'}
-          <div class="card-like-pill"><span class="heart ${saved ? 'liked' : ''}">♥</span></div>
+          <div class="card-like-pill" onclick="event.stopPropagation(); toggleSaveRecipe('${esc(id)}')"><span class="heart ${saved ? 'liked' : ''}">♥</span></div>
           <div class="large-card-info">
             <h3 class="large-card-title">${esc(recipe.title)}</h3>
             <button class="card-overflow-btn" onclick="event.stopPropagation(); showEffortContextMenu(event, '${esc(id)}', '${esc(recipe.title).replace(/'/g, "\\'")}');">•••</button>
@@ -2029,7 +2029,7 @@ function renderSavedCarouselCard(recipe) {
           <div class="no-photo" style="display:none;background:${getPlaceholderGradient(recipe)};"></div>` :
           `<div class="no-photo" style="background:${getPlaceholderGradient(recipe)};"></div>`}
         ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
-        <div class="card-like-pill">
+        <div class="card-like-pill" onclick="event.stopPropagation(); toggleSaveRecipe('${esc(id)}')">
           <span class="heart liked">\u2665</span>
         </div>
         <div class="saved-bookmark-badge">\u{1F516}</div>
