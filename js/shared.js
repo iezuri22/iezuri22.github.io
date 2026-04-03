@@ -2560,12 +2560,25 @@ function _renderMealPickerResults() {
 function openModal(content) {
   const modal = document.getElementById('modal');
   const modalContent = document.getElementById('modal-content');
-  if (modal && modalContent) { modalContent.innerHTML = content; modal.style.display = 'flex'; }
+  if (modal && modalContent) {
+    modalContent.innerHTML = content;
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => { modal.classList.add('modal-open'); });
+  }
 }
 
 function closeModal() {
   const modal = document.getElementById('modal');
-  if (modal) modal.style.display = 'none';
+  if (!modal) return;
+  modal.classList.remove('modal-open');
+  const onEnd = () => { modal.style.display = 'none'; modal.removeEventListener('transitionend', onEnd); };
+  const content = document.getElementById('modal-content');
+  if (content && getComputedStyle(content).transitionDuration !== '0s') {
+    content.addEventListener('transitionend', onEnd, { once: true });
+    setTimeout(onEnd, 400); // Fallback if transitionend doesn't fire
+  } else {
+    modal.style.display = 'none';
+  }
 }
 
 // Click outside to close modal
@@ -4271,9 +4284,12 @@ function renderNav() {
   const mainNavPages = ['home', 'recipes', 'kitchen', 'grocery-list'];
   const isMainNavPage = mainNavPages.includes(state.currentView);
   const backTarget = state.currentView === 'food-log-detail' ? 'home' : state.currentView === 'kitchen-detail' ? 'kitchen' : state.currentView === 'batch-edit' || state.currentView === 'batch-view' ? 'recipes' : 'home';
-  const directNavViews = ['batch-view', 'batch-edit'];
+  const directNavViews = ['batch-view', 'batch-edit', 'food-log-detail'];
   const useDirectNav = directNavViews.includes(state.currentView);
-  const backButton = isMainNavPage ? '' : `<button onclick="${useDirectNav ? `navigateTo('${backTarget}')` : `if(window.history.length>1){window.history.back();}else{navigateTo('${backTarget}');}`}" style="color: ${CONFIG.text_color}; background: none; border: none; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; padding: 0;"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg></button>`;
+  const backAction = state.currentView === 'food-log-detail'
+    ? "state.currentView='my-meals'; render();"
+    : useDirectNav ? `navigateTo('${backTarget}')` : `if(window.history.length>1){window.history.back();}else{navigateTo('${backTarget}');}`;
+  const backButton = isMainNavPage ? '' : `<button onclick="${backAction}" style="color: ${CONFIG.text_color}; background: none; border: none; cursor: pointer; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; padding: 0;"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg></button>`;
   return `<nav style="background: ${CONFIG.background_color}; height: 48px; display: flex; align-items: center; padding: 0 12px; position: sticky; top: 0; z-index: 50;"><div style="display: flex; align-items: center; justify-content: space-between; width: 100%;"><div style="display: flex; align-items: center; gap: 8px;">${backButton}<span style="color: ${CONFIG.text_color}; font-weight: 700; font-size: 18px;">${pageTitle}</span></div><div style="display: flex; align-items: center; gap: 2px;">${state.currentView === 'my-meals' ? `<button onclick="navigateTo('my-plates')" style="color: ${CONFIG.text_color}; background: transparent; border: none; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px;" title="Cooking Journal"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg></button>` : ''}<button onclick="showTimerModal()" style="position: relative; color: ${CONFIG.text_color}; background: ${state.activeTimers.length > 0 ? 'rgba(232,93,93,0.15)' : 'transparent'}; border: none; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px;"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>${state.activeTimers.length > 0 ? `<span style="position:absolute; top:2px; right:2px; background:${CONFIG.danger_color}; color:white; font-size:10px; padding:2px 5px; border-radius:10px;">${state.activeTimers.length}</span>` : ''}</button>${expiringCount > 0 ? `<button onclick="navigateTo('inventory')" style="position: relative; color: ${CONFIG.text_color}; background: rgba(232,93,93,0.15); border: none; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 8px;"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0"/></svg><span style="position:absolute; top:2px; right:2px; background:${CONFIG.danger_color}; color:white; font-size:10px; padding:2px 5px; border-radius:10px;">${expiringCount}</span></button>` : ''}</div></div></nav>`;
 }
 

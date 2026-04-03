@@ -256,6 +256,7 @@ function showMealActionSheet(mealType, dateStr, swapLogId) {
 
   openModal(`
     <div style="color: ${CONFIG.text_color};">
+      <div style="width: 36px; height: 4px; border-radius: 2px; background: rgba(255,255,255,0.2); margin: 0 auto 16px;"></div>
       <h3 style="font-size: 18px; font-weight: 700; margin-bottom: 4px;">${title}</h3>
       <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: ${CONFIG.space_lg};">${dateLabel}</div>
 
@@ -361,7 +362,12 @@ function showRecipePickerForSlot(mealType, dateStr) {
     let filtered = allRecipes;
     // Apply category filter
     if (filter === 'saved') {
-      filtered = filtered.filter(r => savedSet.has(r.__backendId || r.id));
+      const savedFiltered = filtered.filter(r => savedSet.has(r.__backendId || r.id));
+      const cats = mealCategoryMap[mealType] || [];
+      const matchingSaved = cats.length > 0
+        ? savedFiltered.filter(r => cats.includes((r.category || '').toLowerCase()))
+        : savedFiltered;
+      filtered = matchingSaved.length > 0 ? matchingSaved : savedFiltered;
     } else if (filter && filter !== 'all') {
       const cats = mealCategoryMap[filter] || [];
       if (cats.length > 0) {
@@ -520,7 +526,12 @@ function submitRecipeSlotLog() {
   closeModal();
   showToast('Meal added!', 'success');
   state._selectedRecipeForLog = null;
-  render();
+  // Use targeted update to avoid full DOM rebuild (prevents video restart / page blink)
+  if (typeof updateMealPlanSection === 'function') {
+    updateMealPlanSection();
+  } else {
+    render();
+  }
 }
 
 function openSwipeForFoodLog(mealType, dateStr) {
@@ -686,109 +697,136 @@ function renderFoodLogDetail() {
   const entry = log.find(e => e.id === logId);
   if (!entry) return '<div style="padding: 24px; color: #8e8e93;">Entry not found.</div>';
 
-  const recipeImage = entry.image; // Stock/recipe photo (auto-populated, not editable)
-  const myPhoto = entry.myPhoto || (entry.photo && entry.photo.startsWith('data:') ? entry.photo : null); // User's personal photo
-  const displayPhoto = myPhoto || recipeImage; // Show user photo first, fall back to recipe photo
-  const timeStr = formatLogTime(entry.dateCooked);
+  const recipeImage = entry.image;
+  const myPhoto = entry.myPhoto || (entry.photo && entry.photo.startsWith('data:') ? entry.photo : null);
   const dateLabel = getFoodLogDateLabel(entry.dateCooked.split('T')[0]);
+  const starRating = entry.starRating || 0;
 
   return `
-    <div style="padding: ${CONFIG.space_md}; padding-bottom: 100px; max-width: 600px; margin: 0 auto;">
-      <!-- Recipe Photo (stock/default - not editable) -->
+    <div style="background: ${CONFIG.background_color}; min-height: 100vh; padding-bottom: 120px; max-width: 600px; margin: 0 auto;">
+      <!-- Hero Recipe Photo -->
       ${recipeImage ? `
-      <div style="margin-bottom: ${CONFIG.space_sm};">
-        <div style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_tertiary}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">Recipe Photo</div>
-        <div style="width: 100%; height: 120px; border-radius: 12px; overflow: hidden; background: ${CONFIG.surface_elevated};">
-          <img src="${esc(recipeImage)}" style="width:100%;height:100%;object-fit:cover; opacity: 0.8;" />
-        </div>
+      <div style="width: 100%; aspect-ratio: 16/9; max-height: 35vh; overflow: hidden; background: ${CONFIG.surface_elevated};">
+        <img src="${esc(recipeImage)}" style="width:100%;height:100%;object-fit:cover;" />
       </div>
       ` : ''}
 
-      <!-- My Photo (user's personal cooking photo) -->
-      <div style="margin-bottom: ${CONFIG.space_md};">
-        <div style="font-size: ${CONFIG.type_micro}; color: ${CONFIG.text_tertiary}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;">My Photo</div>
-        <div style="width: 100%; aspect-ratio: 4/3; border-radius: 16px; overflow: hidden; background: ${CONFIG.surface_elevated}; position: relative;">
-          ${myPhoto ? `<img src="${esc(myPhoto)}" style="width:100%;height:100%;object-fit:cover;" />` : `
-            <div style="width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
-              <svg width="40" height="40" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
-              <span style="font-size: 13px; color: ${CONFIG.text_tertiary};">Add my photo</span>
+      <div style="padding: 0 20px;">
+        <!-- My Photo (compact upload) -->
+        <div style="margin: 16px 0;">
+          ${myPhoto ? `
+            <div style="width: 100%; height: 120px; border-radius: ${CONFIG.border_radius}; overflow: hidden; background: ${CONFIG.surface_elevated}; position: relative;">
+              <img src="${esc(myPhoto)}" style="width:100%;height:100%;object-fit:cover;" />
+              <button onclick="triggerFoodLogPhoto('${logId}')" style="position: absolute; bottom: 8px; right: 8px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border: none; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                Change
+              </button>
+            </div>
+          ` : `
+            <div onclick="triggerFoodLogPhoto('${logId}')" style="width: 100%; height: 120px; border-radius: ${CONFIG.border_radius}; overflow: hidden; background: ${CONFIG.surface_color}; border: 1px dashed rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; cursor: pointer;">
+              <div style="display: flex; align-items: center; gap: 6px; color: ${CONFIG.text_muted}; font-size: 13px;">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                Add my photo
+              </div>
             </div>
           `}
-          <button onclick="triggerFoodLogPhoto('${logId}')" style="position: absolute; bottom: 12px; right: 12px; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); border: none; color: white; padding: 8px 16px; border-radius: 20px; font-size: 13px; cursor: pointer; display: flex; align-items: center; gap: 6px;">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
-            ${myPhoto ? 'Change my photo' : 'Add my photo'}
-          </button>
         </div>
-      </div>
-      <input type="file" id="foodLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleFoodLogPhoto('${logId}', this)" />
+        <input type="file" id="foodLogPhotoInput" accept="image/*" capture="environment" style="display:none;" onchange="handleFoodLogPhoto('${logId}', this)" />
 
-      <!-- Title & meta -->
-      <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px;">
-        <div style="font-size: 22px; font-weight: 700; color: ${CONFIG.text_color}; flex: 1;">${esc(entry.recipeName)}</div>
-        <div style="display: flex; gap: 6px; flex-shrink: 0; margin-left: 8px;">
-          <button onclick="openSwapMeal('${logId}', '${entry.mealType}', '${entry.dateCooked.split('T')[0]}')" title="Swap meal"
-            style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_color}; color: ${CONFIG.text_muted}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
-          </button>
-          <button onclick="showEditMealModal('${logId}')" title="Edit meal"
-            style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); background: ${CONFIG.surface_color}; color: ${CONFIG.text_muted}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
-          </button>
-        </div>
-      </div>
-      <div style="display: flex; align-items: center; gap: 8px; margin-bottom: ${CONFIG.space_lg};">
-        ${entry.mealType ? `<span style="font-size: 12px; padding: 3px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-weight: 500;">${capitalize(entry.mealType)}</span>` : ''}
-        <span style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_tertiary};">${dateLabel}</span>
-        ${entry.status !== 'eaten' ? `<span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(255,255,255,0.08); color: ${CONFIG.text_muted}; font-weight: 600;">Planned</span>` : `<span style="font-size: 11px; padding: 2px 8px; border-radius: 6px; background: rgba(50,215,75,0.15); color: ${CONFIG.success_color}; font-weight: 600;">Cooked</span>`}
-      </div>
-      ${entry.status !== 'eaten' ? `
-        <button onclick="markMealAsCooked('${logId}')"
-          style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; border: none; border-radius: 12px; color: white; font-size: 15px; font-weight: 600; cursor: pointer; margin-bottom: ${CONFIG.space_lg}; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 18a3.75 3.75 0 00.495-7.467 5.99 5.99 0 00-1.925 3.546 5.974 5.974 0 01-2.133-1.001A3.75 3.75 0 0012 18z"/></svg>
-          I made this!
-        </button>
-      ` : ''}
-
-      <!-- Rating -->
-      <div style="margin-bottom: ${CONFIG.space_lg};">
-        <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Would you make this again?</div>
-        <div style="display: flex; gap: 12px;">
-          <button onclick="rateFoodLogEntry('${logId}', true)" style="flex: 1; padding: 14px; border-radius: 12px; border: 2px solid ${entry.wouldMakeAgain === true ? CONFIG.success_color : 'rgba(255,255,255,0.1)'}; background: ${entry.wouldMakeAgain === true ? 'rgba(50,215,75,0.1)' : 'transparent'}; color: ${entry.wouldMakeAgain === true ? CONFIG.success_color : CONFIG.text_muted}; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            👍 Yes!
-          </button>
-          <button onclick="rateFoodLogEntry('${logId}', false)" style="flex: 1; padding: 14px; border-radius: 12px; border: 2px solid ${entry.wouldMakeAgain === false ? CONFIG.danger_color : 'rgba(255,255,255,0.1)'}; background: ${entry.wouldMakeAgain === false ? 'rgba(255,69,58,0.1)' : 'transparent'}; color: ${entry.wouldMakeAgain === false ? CONFIG.danger_color : CONFIG.text_muted}; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            👎 Meh
-          </button>
-        </div>
-      </div>
-
-      <!-- Notes -->
-      <div style="margin-bottom: ${CONFIG.space_lg};">
-        <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;">Notes</div>
-        <textarea id="foodLogNotes" rows="3" placeholder="How was it? Would you make it again?"
-          style="width: 100%; padding: 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; font-size: 15px; background: ${CONFIG.background_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; font-family: ${CONFIG.font_family};"
-          onblur="saveFoodLogNotes('${logId}')">${esc(entry.notes || '')}</textarea>
-      </div>
-
-      <!-- Category & ingredients -->
-      ${entry.category ? `<div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_tertiary}; margin-bottom: 4px;">Category: ${esc(entry.category)}</div>` : ''}
-      ${entry.ingredients && entry.ingredients.length > 0 ? `
-        <div style="margin-top: ${CONFIG.space_sm};">
-          <div style="font-size: ${CONFIG.type_caption}; color: ${CONFIG.text_muted}; margin-bottom: 4px;">Ingredients</div>
-          <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-            ${entry.ingredients.map(ing => `<span style="font-size: 12px; padding: 3px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted};">${esc(ing)}</span>`).join('')}
+        <!-- Title & meta -->
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px;">
+          <div style="font-size: 22px; font-weight: 700; color: ${CONFIG.text_color}; flex: 1;">${esc(entry.recipeName)}</div>
+          <div style="display: flex; gap: 6px; flex-shrink: 0; margin-left: 8px;">
+            <button onclick="openSwapMeal('${logId}', '${entry.mealType}', '${entry.dateCooked.split('T')[0]}')" title="Swap meal"
+              style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: ${CONFIG.surface_color}; color: ${CONFIG.text_muted}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+            </button>
+            <button onclick="showEditMealModal('${logId}')" title="Edit meal"
+              style="width: 36px; height: 36px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.08); background: ${CONFIG.surface_color}; color: ${CONFIG.text_muted}; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487z"/></svg>
+            </button>
           </div>
         </div>
-      ` : ''}
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: ${CONFIG.space_lg};">
+          ${entry.mealType ? `<span style="font-size: 11px; padding: 3px 10px; border-radius: 10px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); color: ${CONFIG.text_muted}; font-weight: 500;">${capitalize(entry.mealType)}</span>` : ''}
+          <span style="font-size: 11px; padding: 3px 10px; border-radius: 10px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); color: ${CONFIG.text_muted}; font-weight: 500;">${dateLabel}</span>
+          ${entry.status !== 'eaten'
+            ? `<span style="font-size: 11px; padding: 3px 10px; border-radius: 10px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08); color: ${CONFIG.text_muted}; font-weight: 600;">Planned</span>`
+            : `<span style="font-size: 11px; padding: 3px 10px; border-radius: 10px; background: rgba(50,215,75,0.12); border: 1px solid rgba(50,215,75,0.2); color: ${CONFIG.success_color}; font-weight: 600;">Cooked</span>`}
+        </div>
 
-      ${entry.recipeId ? `
-        <button onclick="openRecipeView('${entry.recipeId}')" style="width: 100%; margin-top: ${CONFIG.space_lg}; padding: 14px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
-          View Recipe
-        </button>
-      ` : ''}
+        <!-- I Made This button (green) -->
+        ${entry.status !== 'eaten' ? `
+          <button onclick="markMealAsCooked('${logId}')"
+            style="width: 100%; padding: 14px; background: ${CONFIG.success_color}; border: none; border-radius: 12px; color: ${CONFIG.background_color}; font-size: 15px; font-weight: 700; cursor: pointer; margin-bottom: ${CONFIG.space_lg}; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: ${CONFIG.font_family};">
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            I made this!
+          </button>
+        ` : ''}
+
+        <!-- Would you make this again? -->
+        <div style="margin-bottom: ${CONFIG.space_lg};">
+          <div style="font-size: 11px; color: ${CONFIG.text_tertiary}; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 500;">Would you make this again?</div>
+          <div style="display: flex; gap: 12px;">
+            <button onclick="rateFoodLogEntry('${logId}', true)" style="flex: 1; padding: 14px; border-radius: 10px; border: 1px solid ${entry.wouldMakeAgain === true ? CONFIG.success_color : 'rgba(255,255,255,0.08)'}; background: ${entry.wouldMakeAgain === true ? 'rgba(50,215,75,0.1)' : CONFIG.surface_color}; color: ${entry.wouldMakeAgain === true ? CONFIG.success_color : CONFIG.text_color}; font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; font-family: ${CONFIG.font_family}; transition: all 0.15s ease;">
+              Yes!
+            </button>
+            <button onclick="rateFoodLogEntry('${logId}', false)" style="flex: 1; padding: 14px; border-radius: 10px; border: 1px solid ${entry.wouldMakeAgain === false ? CONFIG.text_muted : 'rgba(255,255,255,0.08)'}; background: ${entry.wouldMakeAgain === false ? 'rgba(255,255,255,0.06)' : CONFIG.surface_color}; color: ${entry.wouldMakeAgain === false ? CONFIG.text_color : CONFIG.text_color}; font-size: 14px; font-weight: 500; cursor: pointer; text-align: center; font-family: ${CONFIG.font_family}; transition: all 0.15s ease;">
+              Meh
+            </button>
+          </div>
+        </div>
+
+        <!-- Star Rating -->
+        <div style="margin-bottom: ${CONFIG.space_lg};">
+          <div style="font-size: 11px; color: ${CONFIG.text_tertiary}; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 500;">Rating</div>
+          <div id="meal-star-rating" style="display: flex; gap: 8px;">
+            ${[1,2,3,4,5].map(n => `<button onclick="setStarRating('${logId}', ${n})" style="font-size: 28px; color: ${n <= starRating ? CONFIG.warning_color : CONFIG.text_muted}; cursor: pointer; background: none; border: none; padding: 0; transition: color 0.1s ease; line-height: 1;">&#9733;</button>`).join('')}
+          </div>
+        </div>
+
+        <!-- Notes -->
+        <div style="margin-bottom: ${CONFIG.space_lg};">
+          <div style="font-size: 11px; color: ${CONFIG.text_tertiary}; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 500;">Notes</div>
+          <textarea id="foodLogNotes" rows="3" placeholder="How was it? Any adjustments next time?"
+            style="width: 100%; padding: 14px 16px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; font-size: 14px; background: ${CONFIG.surface_color}; color: ${CONFIG.text_color}; box-sizing: border-box; resize: vertical; min-height: 80px; font-family: ${CONFIG.font_family}; outline: none;"
+            onfocus="this.style.borderColor='${CONFIG.success_color}'" onblur="this.style.borderColor='rgba(255,255,255,0.08)'; saveFoodLogNotes('${logId}')">${esc(entry.notes || '')}</textarea>
+        </div>
+
+        <!-- Category & Ingredients -->
+        ${entry.ingredients && entry.ingredients.length > 0 ? `
+          <div style="margin-bottom: ${CONFIG.space_lg};">
+            <div style="font-size: 11px; color: ${CONFIG.text_tertiary}; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 8px; font-weight: 500;">Ingredients</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
+              ${entry.ingredients.map(ing => `<span style="font-size: 12px; padding: 4px 12px; border-radius: 10px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); color: ${CONFIG.text_muted};">${esc(ing)}</span>`).join('')}
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- View Recipe -->
+        ${entry.recipeId ? `
+          <button onclick="openRecipeView('${entry.recipeId}')" style="width: 100%; padding: 14px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; color: ${CONFIG.text_color}; font-size: 15px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: ${CONFIG.font_family};">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+            View Recipe
+          </button>
+        ` : ''}
+      </div>
     </div>
   `;
+}
+
+function setStarRating(logId, rating) {
+  const entry = getFoodLog().find(e => e.id === logId);
+  if (!entry) return;
+  const newRating = entry.starRating === rating ? 0 : rating;
+  updateFoodLogEntry(logId, { starRating: newRating });
+  // Inline update — only re-render the star container
+  const container = document.getElementById('meal-star-rating');
+  if (container) {
+    container.innerHTML = [1,2,3,4,5].map(n =>
+      `<button onclick="setStarRating('${logId}', ${n})" style="font-size: 28px; color: ${n <= newRating ? CONFIG.warning_color : CONFIG.text_muted}; cursor: pointer; background: none; border: none; padding: 0; transition: color 0.1s ease; line-height: 1;">&#9733;</button>`
+    ).join('');
+  }
 }
 
 function triggerFoodLogPhoto(logId) {

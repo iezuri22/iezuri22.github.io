@@ -436,6 +436,16 @@ function renderMealPlanTimeline() {
   `;
 }
 
+// Targeted update of the meal plan section only (avoids full DOM rebuild / video restart)
+function updateMealPlanSection() {
+  const el = document.getElementById('home-meals-section');
+  if (el) {
+    el.outerHTML = renderMealPlanTimeline();
+  } else {
+    render();
+  }
+}
+
 // ============================================================
 // QUICK & EASY LIST CARDS (vertical stack, not carousel)
 // ============================================================

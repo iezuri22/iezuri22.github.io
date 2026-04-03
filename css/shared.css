@@ -603,6 +603,11 @@
         border-radius: 16px 16px 0 0 !important;
         padding: 16px !important;
         padding-bottom: calc(16px + env(safe-area-inset-bottom)) !important;
+        transform: translateY(100%);
+        transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+      }
+      #modal.modal-open #modal-content {
+        transform: translateY(0);
       }
     }
 
