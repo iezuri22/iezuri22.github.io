@@ -1766,7 +1766,7 @@ function renderHeroSection(recipe) {
   const img = recipeThumb(recipe);
   const hasVid = recipeHasVideo(id);
   const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
-  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : 'EZ Cooking';
+  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : 'PotLuck';
 
   return `
     <div class="feed-section featured-section">
@@ -1829,7 +1829,7 @@ function renderCarouselCard(recipe) {
   const hasVid = recipeHasVideo(id);
   const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
   const saved = isRecipeSaved(id);
-  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : (recipe.sourceType === 'claude' ? 'Claude' : 'EZ Cooking');
+  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : (recipe.sourceType === 'claude' ? 'Claude' : 'PotLuck');
 
   return `
     <div class="recipe-carousel-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
@@ -2022,7 +2022,7 @@ function renderSavedCarouselCard(recipe) {
   const img = recipeThumb(recipe);
   const hasVid = recipeHasVideo(id);
   const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
-  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : (recipe.sourceType === 'claude' ? 'Claude' : 'EZ Cooking');
+  const sourceLabel = recipe.sourceType === 'chefiq' ? 'ChefIQ' : (recipe.sourceType === 'claude' ? 'Claude' : 'PotLuck');
 
   return `
     <div class="recipe-carousel-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
@@ -2130,7 +2130,7 @@ function renderPlatesCarouselSection(plates) {
 }
 
 function getSeeAllTitle(sectionKey) {
-  const titles = { new: 'New Recipes', quick: 'Quick & Easy', freestyle: 'Freestyle Recipes', favorites: 'Community Favorites', budget: 'Budget Friendly', dinner: 'Delicious Dinners', saved: 'Saved Recipes', plates: 'Your Plates' };
+  const titles = { new: 'New Recipes', quick: 'Quick & Easy', freestyle: 'Freestyle Recipes', favorites: 'PotLuck Favorites', budget: 'Budget Friendly', dinner: 'Delicious Dinners', saved: 'Saved Recipes', plates: 'Your Plates' };
   return titles[sectionKey] || 'Recipes';
 }
 
@@ -2279,7 +2279,7 @@ function renderRecipes() {
       ${renderCarouselSection('new', 'New Recipes', newRecipes)}
       ${renderCarouselSection('quick', 'Quick & Easy', quickRecipes)}
       ${renderLargeCarouselSection('Freestyle Recipes', freestyleRecipes)}
-      ${renderCarouselSection('favorites', 'Community Favorites', favorites)}
+      ${renderCarouselSection('favorites', 'PotLuck Favorites', favorites)}
       ${renderCarouselSection('budget', 'Budget Friendly', budgetRecipes)}
       ${renderCarouselSection('dinner', 'Delicious Dinners', dinnerRecipes)}
       ${renderAllRecipesGrid(list)}

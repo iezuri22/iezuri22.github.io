@@ -1,6 +1,6 @@
 // ============================================================
 // HOME PAGE - js/home.js
-// All home-page-specific functions for Yummy app.
+// All home-page-specific functions for PotLuck app.
 // Depends on js/shared.js being loaded first.
 // ============================================================
 

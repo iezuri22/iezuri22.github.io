@@ -1,6 +1,6 @@
 {
-  "name": "EZ Chef",
-  "short_name": "EZ Chef",
+  "name": "PotLuck",
+  "short_name": "PotLuck",
   "start_url": "/index.html",
   "display": "standalone",
   "background_color": "#1a1a24",

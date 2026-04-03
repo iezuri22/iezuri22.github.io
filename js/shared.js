@@ -165,7 +165,7 @@ const CONFIG = {
   gradient_end: "#e85d5d",
   font_family: "-apple-system, BlinkMacSystemFont, 'SF Pro', sans-serif",
   font_size: 15,
-  app_title: "Yummy",
+  app_title: "PotLuck",
   recipes_label: "My Recipes",
   weekly_plan_label: "Meal History",
   grocery_list_label: "Grocery List",
@@ -4271,14 +4271,14 @@ function navigateTo(view) {
 // ============================================================
 function renderDesktopPageTitle() {
   const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home', 'saved': 'Cooking Journal' };
-  const title = pageTitles[state.currentView] || 'Yummy';
+  const title = pageTitles[state.currentView] || 'PotLuck';
   return `<div class="desktop-page-title-bar" style="display: none; padding-bottom: 24px;"><h1 style="font-size: 28px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">${title}</h1></div>`;
 }
 
 function renderNav() {
   if (state.currentView === 'home' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals' || state.currentView === 'recipe-view') return '';
   const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'saved': 'Cooking Journal' };
-  const pageTitle = pageTitles[state.currentView] || 'Yummy';
+  const pageTitle = pageTitles[state.currentView] || 'PotLuck';
   const expiringItems = getExpiringItems(); const expiringCount = expiringItems.length;
   // Main nav pages don't get a back arrow (they're reachable from bottom nav)
   const mainNavPages = ['home', 'recipes', 'kitchen', 'grocery-list'];
@@ -4340,7 +4340,7 @@ function renderDesktopSidebar() {
   return `<aside class="desktop-sidebar ${collapsed ? 'collapsed' : ''}">
     <div class="sidebar-logo">
       <span style="font-size: 24px; ${collapsed ? '' : 'margin-right: 10px;'}">🍽️</span>
-      <span style="font-size: 18px; font-weight: 700; color: ${CONFIG.text_color}; letter-spacing: -0.5px;">Yummy</span>
+      <span style="font-size: 20px; font-weight: 800; color: ${CONFIG.accent_color}; letter-spacing: -0.5px;">PotLuck</span>
     </div>
     <nav class="sidebar-nav">
       ${sidebarItems.map(item => {
@@ -4460,7 +4460,7 @@ function showLoginModal() {
     <div style="color: ${CONFIG.text_color}; max-width: 360px; margin: 0 auto; padding: 24px 24px 20px;">
       <div style="text-align: center; margin-bottom: 20px;">
         <div style="font-size: 28px; margin-bottom: 6px;">🍽️</div>
-        <div style="font-size: 18px; font-weight: 700; color: ${CONFIG.text_color};">Yummy</div>
+        <div style="font-size: 20px; font-weight: 800; color: ${CONFIG.accent_color}; letter-spacing: -0.5px;">PotLuck</div>
         <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-top: 4px;">Sign in to sync your data</div>
       </div>
       <div style="margin-bottom: 12px;">
