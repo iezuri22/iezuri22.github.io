@@ -1834,10 +1834,9 @@ function renderCarouselCard(recipe) {
   return `
     <div class="recipe-carousel-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
       <div class="carousel-card-media">
-        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy">` :
-          `<div style="width:100%;height:100%;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;padding:12px;">
-            <span style="color:${CONFIG.text_color};font-size:13px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(recipe.title)}</span>
-          </div>`}
+        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+          <div class="no-photo" style="display:none;background:${getPlaceholderGradient(recipe)};"></div>` :
+          `<div class="no-photo" style="background:${getPlaceholderGradient(recipe)};"></div>`}
         ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
         <div class="card-like-pill">
           <span class="heart ${saved ? 'liked' : ''}">♥</span>
@@ -1865,10 +1864,9 @@ function renderLargeCard(recipe) {
   return `
     <div class="large-carousel-card" data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
       <div class="large-card-media">
-        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" loading="lazy">` :
-          `<div style="width:100%;height:100%;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;">
-            <span style="color:${CONFIG.text_color};font-size:16px;font-weight:600;">${esc(recipe.title)}</span>
-          </div>`}
+        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+          <div class="no-photo" style="display:none;background:${getPlaceholderGradient(recipe)};"></div>` :
+          `<div class="no-photo" style="background:${getPlaceholderGradient(recipe)};"></div>`}
         <div class="large-card-overlay">
           ${recipe.cookTime ? `<div class="card-time-pill">⏱ ${esc(recipe.cookTime)}</div>` : '<div></div>'}
           <div class="card-like-pill"><span class="heart ${saved ? 'liked' : ''}">♥</span></div>
@@ -2027,10 +2025,9 @@ function renderSavedCarouselCard(recipe) {
   return `
     <div class="recipe-carousel-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''} data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')">
       <div class="carousel-card-media">
-        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy">` :
-          `<div style="width:100%;height:100%;background:var(--bg-card);display:flex;align-items:center;justify-content:center;padding:12px;">
-            <span style="color:var(--text-primary);font-size:13px;font-weight:600;text-align:center;-webkit-line-clamp:3;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden;">${esc(recipe.title)}</span>
-          </div>`}
+        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+          <div class="no-photo" style="display:none;background:${getPlaceholderGradient(recipe)};"></div>` :
+          `<div class="no-photo" style="background:${getPlaceholderGradient(recipe)};"></div>`}
         ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
         <div class="card-like-pill">
           <span class="heart liked">\u2665</span>
@@ -2102,9 +2099,7 @@ function renderPlateCard(plate) {
     <div class="plate-carousel-card" data-plate-id="${esc(plate.id)}" onclick="navigateTo('batch-view'); state.selectedBatchViewId = '${esc(plate.id)}';">
       <div class="plate-collage ${collageClass}">
         ${photos.length > 0 ? photos.map(p => `<img src="${esc(p)}" alt="" loading="lazy">`).join('') :
-          `<div style="grid-column:1/-1;grid-row:1/-1;background:${CONFIG.surface_color};display:flex;align-items:center;justify-content:center;">
-            <span style="color:${CONFIG.text_muted};font-size:24px;">🍽️</span>
-          </div>`}
+          `<div style="grid-column:1/-1;grid-row:1/-1;background:${getPlaceholderGradient({title: plate.name || 'Plate'})};"></div>`}
       </div>
       <div class="plate-card-info">
         <h3 class="plate-card-name">${esc(plate.name || 'Untitled Plate')}</h3>
@@ -3971,6 +3966,9 @@ function render() {
   if (state.currentView === 'recipes') {
     setTimeout(() => { if (typeof initVideoPreviewObserver === 'function') initVideoPreviewObserver(); }, 50);
   }
+
+  // Add scroll buttons to all carousels
+  setTimeout(() => { if (typeof initCarouselScrollButtons === 'function') initCarouselScrollButtons(); }, 100);
 }
 
 function setupKeyboardShortcuts() {

@@ -1812,3 +1812,65 @@
       align-items: center;
       gap: 4px;
     }
+
+    /* ===== CAROUSEL SCROLL BUTTONS ===== */
+    .carousel-wrapper {
+      position: relative;
+    }
+
+    .carousel-scroll-btn {
+      display: none;
+      position: absolute;
+      top: 50%;
+      transform: translateY(-60%);
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--border-card);
+      color: white;
+      font-size: 22px;
+      cursor: pointer;
+      z-index: 10;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.2s ease, background 0.15s ease;
+    }
+
+    .carousel-scroll-btn:hover {
+      background: rgba(0, 0, 0, 0.9);
+    }
+
+    .carousel-scroll-btn:active {
+      transform: translateY(-60%) scale(0.93);
+    }
+
+    .carousel-scroll-btn.left {
+      left: 4px;
+    }
+
+    .carousel-scroll-btn.right {
+      right: 4px;
+    }
+
+    /* Show on desktop hover only */
+    @media (hover: hover) {
+      .carousel-wrapper:hover .carousel-scroll-btn {
+        display: flex;
+      }
+    }
+
+    /* Never show on touch devices — they swipe */
+    @media (hover: none) {
+      .carousel-scroll-btn {
+        display: none !important;
+      }
+    }
+
+    /* ===== NO-PHOTO GRADIENT PLACEHOLDER ===== */
+    .no-photo {
+      width: 100%;
+      height: 100%;
+    }

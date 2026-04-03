@@ -322,39 +322,7 @@
   color: var(--text-tertiary);
 }
 
-/* ===== Dinner Carousel Wrapper with Scroll Arrows ===== */
-.carousel-wrapper {
-  position: relative;
-}
-
-.carousel-scroll-btn {
-  display: none;
-  position: absolute;
-  top: 50%;
-  transform: translateY(-60%);
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--border-card);
-  color: white;
-  font-size: 20px;
-  cursor: pointer;
-  z-index: 10;
-  align-items: center;
-  justify-content: center;
-  transition: opacity 0.2s ease;
-}
-
-.carousel-scroll-btn.left { left: 6px; }
-.carousel-scroll-btn.right { right: 6px; }
-
-@media (hover: hover) {
-  .carousel-wrapper:hover .carousel-scroll-btn {
-    display: flex;
-  }
-}
+/* Carousel scroll buttons are now in shared.css */
 
 /* ===== Saved Recipes Peek Cards ===== */
 .saved-peek {

@@ -21,7 +21,7 @@ function renderCookAgainRow() {
                 <div class="cook-again-avatar-inner">
                   ${img
                     ? `<img src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.parentElement.innerHTML='<div class=\\'cook-again-avatar-placeholder\\' style=\\'background:${getPlaceholderGradient({title:name}).replace(/'/g, "\\\\'")}\\'>'+''+'</div>';" />`
-                    : `<div class="cook-again-avatar-placeholder" style="background:${getPlaceholderGradient({title:name})}">${esc(name.substring(0,8))}</div>`
+                    : `<div class="cook-again-avatar-placeholder" style="background:${getPlaceholderGradient({title:name})}"></div>`
                   }
                 </div>
               </div>
@@ -199,21 +199,7 @@ function getDinnerRecipes() {
   return (state.recipes || []).filter(r => !r.isDraft && !r.isTip && r.category === 'Dinner').slice(0, 12);
 }
 
-function getPlaceholderGradient(recipe) {
-  const name = (recipe && (recipe.name || recipe.title)) || '';
-  const hash = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
-  const gradients = [
-    'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
-    'linear-gradient(135deg, #2d1b3d 0%, #1a1a2e 50%, #16213e 100%)',
-    'linear-gradient(135deg, #0f3460 0%, #1a1a2e 50%, #16213e 100%)',
-    'linear-gradient(135deg, #1b2838 0%, #203a43 50%, #2c5364 100%)',
-    'linear-gradient(135deg, #232526 0%, #414345 50%, #232526 100%)',
-    'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)',
-    'linear-gradient(135deg, #373b44 0%, #4286f4 100%)',
-    'linear-gradient(135deg, #134e5e 0%, #71b280 100%)',
-  ];
-  return gradients[hash % gradients.length];
-}
+// getPlaceholderGradient() is now in shared.js
 
 function suggestDinner() {
   const dinners = (state.recipes || []).filter(r => !r.isDraft && !r.isTip && r.category === 'Dinner');
@@ -480,7 +466,7 @@ function renderQuickEasyList(recipes) {
 }
 
 // ============================================================
-// DINNER CAROUSEL WITH SCROLL ARROWS
+// DINNER CAROUSEL (scroll buttons added dynamically by initCarouselScrollButtons)
 // ============================================================
 function renderDinnerCarousel(recipes) {
   if (!recipes || recipes.length === 0) return '';
@@ -490,16 +476,12 @@ function renderDinnerCarousel(recipes) {
         <h2 class="feed-section-title caps">Dinner Ideas</h2>
         <button class="see-all-btn" onclick="window.location.href='recipes.html'">See all</button>
       </div>
-      <div class="carousel-wrapper">
-        <button class="carousel-scroll-btn left" aria-label="Scroll left" onclick="document.getElementById('dinner-carousel').scrollBy({left:-260,behavior:'smooth'})">&#8249;</button>
-        <div class="recipe-carousel home-carousel" id="dinner-carousel">
-          ${recipes.map((r, i) => `
-            <div style="scroll-snap-align: start; opacity: 0; animation: cardFadeIn 0.35s ease forwards; animation-delay: ${i * 0.05}s;">
-              ${renderCarouselCard(r)}
-            </div>
-          `).join('')}
-        </div>
-        <button class="carousel-scroll-btn right" aria-label="Scroll right" onclick="document.getElementById('dinner-carousel').scrollBy({left:260,behavior:'smooth'})">&#8250;</button>
+      <div class="recipe-carousel home-carousel" id="dinner-carousel">
+        ${recipes.map((r, i) => `
+          <div style="scroll-snap-align: start; opacity: 0; animation: cardFadeIn 0.35s ease forwards; animation-delay: ${i * 0.05}s;">
+            ${renderCarouselCard(r)}
+          </div>
+        `).join('')}
       </div>
     </div>
   `;
@@ -2991,6 +2973,9 @@ function render() {
       if (typeof initHomeFadeObserver === 'function') initHomeFadeObserver();
     }, 50);
   }
+
+  // Add scroll buttons to all carousels
+  setTimeout(() => { if (typeof initCarouselScrollButtons === 'function') initCarouselScrollButtons(); }, 100);
 }
 
 function init() {

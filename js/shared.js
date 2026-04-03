@@ -2009,7 +2009,7 @@ function mapToGroceryCategory(group) {
 }
 
 function getSmartGroceryList() { try { return JSON.parse(localStorage.getItem(GROCERY_KEY) || '[]'); } catch { return []; } }
-function saveSmartGroceryList(list) { localStorage.setItem(GROCERY_KEY, JSON.stringify(list)); syncGroceryListToSupabase(list); }
+function saveSmartGroceryList(list) { localStorage.setItem(GROCERY_KEY, JSON.stringify(list)); state.ignoreRealtimeUntil = Date.now() + 5000; syncGroceryListToSupabase(list); }
 function getGroceryBadgeCount() { return getSmartGroceryList().filter(i => !i.checked).length; }
 
 function getFrequentMeals() {
@@ -2330,7 +2330,7 @@ function toggleSmartGroceryItem(itemId) {
   const list = getSmartGroceryList(); const item = list.find(i => i.id === itemId); if (!item) return;
   item.checked = !item.checked; saveSmartGroceryList(list);
   const row = document.querySelector(`[data-gro-id="${itemId}"]`);
-  if (row) { const cb = row.querySelector('.gro-checkbox'); const label = row.querySelector('.gro-label'); if (item.checked) { if (cb) { cb.style.background = CONFIG.primary_action_color; cb.style.borderColor = CONFIG.primary_action_color; cb.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; } if (label) { label.style.textDecoration = 'line-through'; label.style.opacity = '0.4'; } } else { if (cb) { cb.style.background = 'transparent'; cb.style.borderColor = CONFIG.text_muted; cb.innerHTML = ''; } if (label) { label.style.textDecoration = 'none'; label.style.opacity = '1'; } } }
+  if (row) { const cb = row.querySelector('.gro-checkbox'); const label = row.querySelector('.gro-label'); if (item.checked) { if (cb) { cb.style.background = 'var(--accent-green)'; cb.style.borderColor = 'var(--accent-green)'; cb.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; } if (label) { label.style.textDecoration = 'line-through'; label.style.opacity = '0.4'; } } else { if (cb) { cb.style.background = 'transparent'; cb.style.borderColor = 'var(--text-secondary)'; cb.innerHTML = ''; } if (label) { label.style.textDecoration = 'none'; label.style.opacity = '1'; } } }
   _updateGroceryBadge();
   clearTimeout(state._smartGroceryRenderTimeout);
   state._smartGroceryRenderTimeout = setTimeout(() => {
@@ -3236,7 +3236,76 @@ function recipeIngList(r) {
 }
 
 // ============================================================
-// SECTION 10a: CLOUDFLARE STREAM VIDEO HELPERS
+// SECTION 10a: PLACEHOLDER GRADIENTS & CAROUSEL SCROLL BUTTONS
+// ============================================================
+
+function getPlaceholderGradient(recipe) {
+  const name = (recipe && (recipe.name || recipe.title)) || '';
+  const hash = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const gradients = [
+    'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+    'linear-gradient(135deg, #2d1b3d 0%, #1a1a2e 50%, #16213e 100%)',
+    'linear-gradient(135deg, #0f3460 0%, #1a1a2e 50%, #16213e 100%)',
+    'linear-gradient(135deg, #1b2838 0%, #203a43 50%, #2c5364 100%)',
+    'linear-gradient(135deg, #232526 0%, #414345 50%, #232526 100%)',
+    'linear-gradient(135deg, #1e3c72 0%, #2a5298 100%)',
+    'linear-gradient(135deg, #373b44 0%, #4286f4 100%)',
+    'linear-gradient(135deg, #134e5e 0%, #71b280 100%)',
+  ];
+  return gradients[hash % gradients.length];
+}
+
+function initCarouselScrollButtons() {
+  document.querySelectorAll('.recipe-carousel, .home-carousel, [class*="carousel"]').forEach(carousel => {
+    // Skip if already wrapped, is a scroll button, or is not scrollable
+    if (carousel.closest('.carousel-wrapper') || carousel.classList.contains('carousel-scroll-btn')) return;
+    if (carousel.classList.contains('skeleton-carousel')) return;
+    if (carousel.scrollWidth <= carousel.clientWidth) return;
+
+    // Wrap the carousel in a .carousel-wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'carousel-wrapper';
+    carousel.parentNode.insertBefore(wrapper, carousel);
+    wrapper.appendChild(carousel);
+
+    // Add left/right buttons
+    const leftBtn = document.createElement('button');
+    leftBtn.className = 'carousel-scroll-btn left';
+    leftBtn.innerHTML = '\u2039';
+    leftBtn.setAttribute('aria-label', 'Scroll left');
+
+    const rightBtn = document.createElement('button');
+    rightBtn.className = 'carousel-scroll-btn right';
+    rightBtn.innerHTML = '\u203A';
+    rightBtn.setAttribute('aria-label', 'Scroll right');
+
+    wrapper.appendChild(leftBtn);
+    wrapper.appendChild(rightBtn);
+
+    // Click handlers — scroll by full visible width
+    leftBtn.addEventListener('click', () => {
+      const scrollAmount = carousel.clientWidth - 40;
+      carousel.scrollBy({ left: -scrollAmount, behavior: 'smooth' });
+    });
+
+    rightBtn.addEventListener('click', () => {
+      const scrollAmount = carousel.clientWidth - 40;
+      carousel.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    });
+
+    // Hide left button when at the start, hide right when at the end
+    function updateButtonVisibility() {
+      leftBtn.style.display = carousel.scrollLeft <= 10 ? 'none' : 'flex';
+      rightBtn.style.display = carousel.scrollLeft + carousel.clientWidth >= carousel.scrollWidth - 10 ? 'none' : 'flex';
+    }
+
+    carousel.addEventListener('scroll', updateButtonVisibility, { passive: true });
+    updateButtonVisibility();
+  });
+}
+
+// ============================================================
+// SECTION 10b: CLOUDFLARE STREAM VIDEO HELPERS
 // ============================================================
 const CLOUDFLARE_STREAM_SUBDOMAIN = 'customer-3z4sk2e6gw4kp3xc.cloudflarestream.com';
 
@@ -4784,10 +4853,12 @@ function applySupabaseData(data) {
     localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(foodLogRow.entries));
   }
 
-  // Load grocery list from Supabase
-  const groceryListRow = data.find(d => d.id === 'groceryList_list');
-  if (groceryListRow && Array.isArray(groceryListRow.entries)) {
-    localStorage.setItem(GROCERY_KEY, JSON.stringify(groceryListRow.entries));
+  // Load grocery list from Supabase (skip if local changes are in-flight)
+  if (!(state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil)) {
+    const groceryListRow = data.find(d => d.id === 'groceryList_list');
+    if (groceryListRow && Array.isArray(groceryListRow.entries)) {
+      localStorage.setItem(GROCERY_KEY, JSON.stringify(groceryListRow.entries));
+    }
   }
 
   // Load ingredient photos from Supabase
@@ -4847,7 +4918,15 @@ function subscribeToChanges(userId) {
         clearTimeout(_realtimeDebounceTimer);
         _realtimeDebounceTimer = setTimeout(() => {
           loadDataFromSupabase().then(() => {
-            if (typeof render === 'function') render();
+            if (typeof render === 'function') {
+              const scrollEl = document.getElementById('app');
+              const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
+              render();
+              requestAnimationFrame(() => {
+                if (scrollEl) scrollEl.scrollTop = scrollPos;
+                else window.scrollTo(0, scrollPos);
+              });
+            }
           });
         }, 1000);
       }
@@ -6460,7 +6539,8 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
               const relSource = rel.sourceType === 'chefiq' ? 'ChefIQ' : rel.sourceType === 'imported' ? 'Imported' : rel.sourceType === 'claude' ? 'Chef Claude' : 'User';
               return `<div class="recipe-carousel-card" onclick="${opts.standalone ? `window.location.href='/recipe-detail.html?id=${relId}'` : `openRecipeView('${relId}')`}">
                 <div class="carousel-card-media">
-                  ${relImg ? `<img src="${esc(relImg)}" alt="${esc(rel.title)}" onerror="this.style.display='none'">` : `<div style="width:100%;height:100%;background:var(--bg-elevated);display:flex;align-items:center;justify-content:center;font-size:32px;color:rgba(255,255,255,0.1);">🍽️</div>`}
+                  ${relImg ? `<img src="${esc(relImg)}" alt="${esc(rel.title)}" onerror="this.style.display='none';this.nextElementSibling.style.display='block';">
+                    <div class="no-photo" style="display:none;background:${getPlaceholderGradient(rel)};"></div>` : `<div class="no-photo" style="background:${getPlaceholderGradient(rel)};"></div>`}
                 </div>
                 <div class="carousel-card-info">
                   <span class="card-source">${esc(relSource)}</span>
