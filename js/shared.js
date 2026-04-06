@@ -742,7 +742,10 @@ const state = {
   batchRecipePickerSearch: '',
   batchPickerMealFilter: null,
   batchPickerEffortFilter: null,
-  batchPickerSavedFilter: false
+  batchPickerSavedFilter: false,
+  // Components & Combos
+  components: [],
+  combos: []
 };
 
 // Bridge: state.today reads/writes state.mealDays[todayDate] for backward compatibility
@@ -885,6 +888,8 @@ function _doPersistState() {
   saveToLS('recordingNeeds', state.recordingNeeds);
   saveToLS('mealOptions', state.mealOptions);
   saveToLS('batchRecipes', state.batchRecipes);
+  saveToLS('components', state.components);
+  saveToLS('combos', state.combos);
 }
 
 function loadAllState() {
@@ -912,6 +917,8 @@ function loadAllState() {
   state.recordingNeeds = loadFromLS('recordingNeeds', []);
   state.mealOptions = loadFromLS('mealOptions', []);
   state.batchRecipes = loadFromLS('batchRecipes', []);
+  state.components = loadFromLS('components', []);
+  state.combos = loadFromLS('combos', []);
   if (!Array.isArray(state.batchRecipes)) { console.warn('[loadAllState] batchRecipes was not an array, resetting'); state.batchRecipes = []; }
 
   // Also load food log and grocery list (stored with direct keys, not yummy_ prefix)
@@ -1050,6 +1057,8 @@ const storage = {
       case 'expdefault': state.expirationDefaults[item.itemName] = item.days; break;
       case 'todayMeals': { const dateStr = item.date || item.id.replace('todayMeals_', ''); if (item.meals) state.mealDays[dateStr] = { date: dateStr, meals: item.meals }; } break;
       case 'batch': { const idx = state.batchRecipes.findIndex(b => b.id === item.id); if (idx >= 0) state.batchRecipes[idx] = item; else state.batchRecipes.push(item); } break;
+      case 'component': { const idx = state.components.findIndex(c => c.id === item.id); if (idx >= 0) state.components[idx] = item; else state.components.push(item); } break;
+      case 'combo': { const idx = state.combos.findIndex(c => c.id === item.id); if (idx >= 0) state.combos[idx] = item; else state.combos.push(item); } break;
       case 'savedRecipes': break; // handled via localStorage directly
       case 'config': break;
       default: break;
@@ -1091,6 +1100,8 @@ const storage = {
       case 'expdefault': state.expirationDefaults[item.itemName] = item.days; break;
       case 'todayMeals': { const dateStr = item.date || item.id.replace('todayMeals_', ''); if (item.meals) state.mealDays[dateStr] = { date: dateStr, meals: item.meals }; } break;
       case 'batch': updateInArray(state.batchRecipes); break;
+      case 'component': updateInArray(state.components); break;
+      case 'combo': updateInArray(state.combos); break;
       default: break;
     }
     // Guard against realtime events overwriting this save
@@ -1121,6 +1132,8 @@ const storage = {
       case 'frequent': removeFromArray(state.frequentItems); break;
       case 'meallog': removeFromArray(state.mealLogs); break;
       case 'batch': removeFromArray(state.batchRecipes); break;
+      case 'component': removeFromArray(state.components); break;
+      case 'combo': removeFromArray(state.combos); break;
       default: break;
     }
     // Guard against realtime events overwriting this delete
@@ -4306,7 +4319,8 @@ function navigateTo(view) {
     'kitchen-detail': '/kitchen-detail.html', 'kitchen-ingredient-meals': '/kitchen-detail.html',
     'recipe-detail': '/recipe-detail.html',
     'grocery-list': '/grocery.html', 'grocery-select-meals': '/grocery.html', 'grocery-ingredients': '/grocery.html',
-    'saved': '/saved.html'
+    'saved': '/saved.html',
+    'components': '/components.html', 'component-detail': '/components.html', 'build-plate': '/components.html', 'cook-mode': '/components.html', 'combos': '/components.html'
   };
 
   const targetPage = pageMap[view] || '/index.html';
@@ -4339,18 +4353,18 @@ function navigateTo(view) {
 // SECTION 19: NAV RENDERING
 // ============================================================
 function renderDesktopPageTitle() {
-  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home', 'saved': 'Cooking Journal' };
+  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home', 'saved': 'Cooking Journal', 'components': 'Components', 'component-detail': 'Component', 'build-plate': 'Build a Plate', 'cook-mode': 'Cook Mode', 'combos': 'Combos' };
   const title = pageTitles[state.currentView] || 'PotLuck';
   return `<div class="desktop-page-title-bar" style="display: none; padding-bottom: 24px;"><h1 style="font-size: 28px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">${title}</h1></div>`;
 }
 
 function renderNav() {
   if (state.currentView === 'home' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals' || state.currentView === 'recipe-view') return '';
-  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'saved': 'Cooking Journal' };
+  const pageTitles = { 'recipes': 'Recipes', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'saved': 'Cooking Journal', 'components': 'Components', 'component-detail': 'Component', 'build-plate': 'Build a Plate', 'cook-mode': 'Cook Mode', 'combos': 'Combos' };
   const pageTitle = pageTitles[state.currentView] || 'PotLuck';
   const expiringItems = getExpiringItems(); const expiringCount = expiringItems.length;
   // Main nav pages don't get a back arrow (they're reachable from bottom nav)
-  const mainNavPages = ['home', 'recipes', 'kitchen', 'grocery-list'];
+  const mainNavPages = ['home', 'recipes', 'kitchen', 'grocery-list', 'components'];
   const isMainNavPage = mainNavPages.includes(state.currentView);
   const backTarget = state.currentView === 'food-log-detail' ? 'home' : state.currentView === 'kitchen-detail' ? 'kitchen' : state.currentView === 'batch-edit' || state.currentView === 'batch-view' ? 'recipes' : 'home';
   const directNavViews = ['batch-view', 'batch-edit', 'food-log-detail'];
@@ -4367,6 +4381,7 @@ function renderBottomNav() {
   const navItems = [
     { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html', 'my-meals.html'] },
     { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'] },
+    { id: 'components', label: 'Components', href: '/components.html', pages: ['components.html'] },
     { id: 'kitchen', label: 'Kitchen', href: '/kitchen.html', pages: ['kitchen.html', 'kitchen-detail.html'] },
     { id: 'grocery', label: 'Grocery', href: '/grocery.html', pages: ['grocery.html'] }
   ];
@@ -4374,6 +4389,7 @@ function renderBottomNav() {
   const navIcons = {
     home: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>' },
     recipes: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>' },
+    components: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 6.087c0-.355.186-.676.401-.959.221-.29.349-.634.349-1.003 0-1.036-1.007-1.875-2.25-1.875S10.5 3.089 10.5 4.125c0 .369.128.713.349 1.003.215.283.401.604.401.959v0a.64.64 0 01-.657.643 48.4 48.4 0 01-4.163-.3c.186 1.613.293 3.25.315 4.907a.656.656 0 01-.658.663v0c-.355 0-.676-.186-.959-.401a1.647 1.647 0 00-1.003-.349c-1.036 0-1.875 1.007-1.875 2.25s.84 2.25 1.875 2.25c.369 0 .713-.128 1.003-.349.283-.215.604-.401.959-.401v0c.31 0 .555.26.532.57a48.039 48.039 0 01-.642 5.056c1.518.19 3.058.309 4.616.354a.64.64 0 00.657-.643v0c0-.355-.186-.676-.401-.959a1.647 1.647 0 01-.349-1.003c0-1.035 1.008-1.875 2.25-1.875 1.243 0 2.25.84 2.25 1.875 0 .369-.128.713-.349 1.003-.215.283-.401.604-.401.959v0c0 .333.277.599.61.58a48.1 48.1 0 005.427-.63 48.05 48.05 0 00.582-4.717.532.532 0 00-.533-.57v0c-.355 0-.676.186-.959.401-.29.221-.634.349-1.003.349-1.035 0-1.875-1.007-1.875-2.25s.84-2.25 1.875-2.25c.37 0 .713.128 1.003.349.283.215.604.401.959.401v0a.656.656 0 00.658-.663 48.422 48.422 0 00-.37-5.36c-1.886.342-3.81.574-5.766.689a.578.578 0 01-.61-.58v0z"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 6.087c0-.355.186-.676.401-.959.221-.29.349-.634.349-1.003 0-1.036-1.007-1.875-2.25-1.875S10.5 3.089 10.5 4.125c0 .369.128.713.349 1.003.215.283.401.604.401.959v0a.64.64 0 01-.657.643 48.4 48.4 0 01-4.163-.3c.186 1.613.293 3.25.315 4.907a.656.656 0 01-.658.663v0c-.355 0-.676-.186-.959-.401a1.647 1.647 0 00-1.003-.349c-1.036 0-1.875 1.007-1.875 2.25s.84 2.25 1.875 2.25c.369 0 .713-.128 1.003-.349.283-.215.604-.401.959-.401v0c.31 0 .555.26.532.57a48.039 48.039 0 01-.642 5.056c1.518.19 3.058.309 4.616.354a.64.64 0 00.657-.643v0c0-.355-.186-.676-.401-.959a1.647 1.647 0 01-.349-1.003c0-1.035 1.008-1.875 2.25-1.875 1.243 0 2.25.84 2.25 1.875 0 .369-.128.713-.349 1.003-.215.283-.401.604-.401.959v0c0 .333.277.599.61.58a48.1 48.1 0 005.427-.63 48.05 48.05 0 00.582-4.717.532.532 0 00-.533-.57v0c-.355 0-.676.186-.959.401-.29.221-.634.349-1.003.349-1.035 0-1.875-1.007-1.875-2.25s.84-2.25 1.875-2.25c.37 0 .713.128 1.003.349.283.215.604.401.959.401v0a.656.656 0 00.658-.663 48.422 48.422 0 00-.37-5.36c-1.886.342-3.81.574-5.766.689a.578.578 0 01-.61-.58v0z"/></svg>' },
     'my-meals': { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M2.25 18.75V7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v11.25m-19.5 0a2.25 2.25 0 002.25 2.25h15a2.25 2.25 0 002.25-2.25m-19.5 0v-7.5a2.25 2.25 0 012.25-2.25h15a2.25 2.25 0 012.25 2.25v7.5"/></svg>' },
     kitchen: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>' },
     grocery: { inactive: '<svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>', active: '<svg width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>' }
@@ -4398,6 +4414,7 @@ function renderDesktopSidebar() {
   const sidebarItems = [
     { id: 'home', label: 'Home', href: '/index.html', pages: ['index.html', 'my-meals.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 12l8.954-8.955a1.126 1.126 0 011.591 0L21.75 12M4.5 9.75v10.125c0 .621.504 1.125 1.125 1.125H9.75v-4.875c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125V21h4.125c.621 0 1.125-.504 1.125-1.125V9.75M8.25 21h8.25"/></svg>' },
     { id: 'recipes', label: 'Recipes', href: '/recipes.html', pages: ['recipes.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>' },
+    { id: 'components', label: 'Components', href: '/components.html', pages: ['components.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.25 6.087c0-.355.186-.676.401-.959.221-.29.349-.634.349-1.003 0-1.036-1.007-1.875-2.25-1.875S10.5 3.089 10.5 4.125c0 .369.128.713.349 1.003.215.283.401.604.401.959v0a.64.64 0 01-.657.643 48.4 48.4 0 01-4.163-.3c.186 1.613.293 3.25.315 4.907a.656.656 0 01-.658.663v0c-.355 0-.676-.186-.959-.401a1.647 1.647 0 00-1.003-.349c-1.036 0-1.875 1.007-1.875 2.25s.84 2.25 1.875 2.25c.369 0 .713-.128 1.003-.349.283-.215.604-.401.959-.401v0c.31 0 .555.26.532.57a48.039 48.039 0 01-.642 5.056c1.518.19 3.058.309 4.616.354a.64.64 0 00.657-.643v0c0-.355-.186-.676-.401-.959a1.647 1.647 0 01-.349-1.003c0-1.035 1.008-1.875 2.25-1.875 1.243 0 2.25.84 2.25 1.875 0 .369-.128.713-.349 1.003-.215.283-.401.604-.401.959v0c0 .333.277.599.61.58a48.1 48.1 0 005.427-.63 48.05 48.05 0 00.582-4.717.532.532 0 00-.533-.57v0c-.355 0-.676.186-.959.401-.29.221-.634.349-1.003.349-1.035 0-1.875-1.007-1.875-2.25s.84-2.25 1.875-2.25c.37 0 .713.128 1.003.349.283.215.604.401.959.401v0a.656.656 0 00.658-.663 48.422 48.422 0 00-.37-5.36c-1.886.342-3.81.574-5.766.689a.578.578 0 01-.61-.58v0z"/></svg>' },
     { id: 'saved', label: 'Journal', href: '/saved.html', pages: ['saved.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0zM18.75 10.5h.008v.008h-.008V10.5z"/></svg>' },
     { id: 'kitchen', label: 'Kitchen', href: '/kitchen.html', pages: ['kitchen.html', 'kitchen-detail.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8.25v-1.5m0 1.5c-1.355 0-2.697.056-4.024.166C6.845 8.51 6 9.473 6 10.608v2.513m6-4.871c1.355 0 2.697.056 4.024.166C17.155 8.51 18 9.473 18 10.608v2.513M15 8.25v-1.5m-6 1.5v-1.5m12 9.75l-1.5.75a3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0 3.354 3.354 0 00-3 0 3.354 3.354 0 01-3 0L3 16.5m15-3.379a48.474 48.474 0 00-6-.371c-2.032 0-4.034.126-6 .371m12 0c.39.049.777.102 1.163.16 1.07.16 1.837 1.094 1.837 2.175v5.169c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 013 20.496v-5.17c0-1.08.768-2.014 1.837-2.174A47.78 47.78 0 016 13.12"/></svg>' },
     { id: 'grocery', label: 'Grocery', href: '/grocery.html', pages: ['grocery.html'], icon: '<svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>' },
@@ -4840,6 +4857,10 @@ function applySupabaseData(data) {
   // Load batch recipes (plates) from Supabase — always overwrite from Supabase (source of truth)
   state.batchRecipes = data.filter(d => d.id && d.id.startsWith('batch_'));
   saveToLS('batchRecipes', state.batchRecipes);
+
+  // Load components and combos from Supabase
+  state.components = data.filter(d => d.id && d.id.startsWith('component_'));
+  state.combos = data.filter(d => d.id && d.id.startsWith('combo_'));
 
   // Load saved recipe IDs from Supabase
   const savedRecipesRow = data.find(d => d.id === 'savedRecipes_list');

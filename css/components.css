@@ -1,0 +1,65 @@
+/* Components page styles */
+
+@keyframes cookPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(232, 93, 93, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(232, 93, 93, 0); }
+}
+
+@keyframes timerTick {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.component-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  padding: 0 12px;
+}
+
+@media (min-width: 768px) {
+  .component-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    padding: 0;
+  }
+}
+
+@media (min-width: 1024px) {
+  .component-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.cook-mode-active {
+  animation: cookPulse 2s infinite;
+}
+
+.cook-mode-completed {
+  opacity: 0.4;
+}
+
+.category-tabs-scroll {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  gap: 6px;
+  padding: 0 12px;
+}
+
+.category-tabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.component-card-enter {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.timeline-card {
+  transition: all 0.3s ease;
+}
