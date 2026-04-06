@@ -1115,10 +1115,20 @@ const STARTER_COMPONENTS = [
 // ============================================================
 function seedStarterComponents() {
   if (localStorage.getItem('yummy_components_seeded')) return;
-  if (state.components.length === 0) {
-    state.components = STARTER_COMPONENTS.map(c => ({ ...c }));
-    persistStateNow();
-  }
+  if (state.components && state.components.length > 0) return;
+
+  state.components = STARTER_COMPONENTS.map(c => ({
+    ...c,
+    createdAt: new Date().toISOString(),
+    lastUsed: null,
+    timesCooked: 0,
+    rating: 0,
+    notes: '',
+    source: 'starter'
+  }));
+
+  // Save immediately — not debounced
+  localStorage.setItem('yummy_components', JSON.stringify(state.components));
   localStorage.setItem('yummy_components_seeded', 'true');
 }
 
@@ -1765,6 +1775,7 @@ function getTotalCookTime(slots) {
 // SECTION 7: RENDER - COMPONENTS LIBRARY
 // ============================================================
 function renderComponentsPage() {
+  seedStarterComponents();
   if (extractionState) return renderExtractionFlow();
 
   const comps = getFilteredComponents();
