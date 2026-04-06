@@ -374,6 +374,39 @@ function renderMealPlanTimeline() {
         const plan = getAutoPlan();
         const suggestion = plan && plan.days && plan.days[dateStr] && plan.days[dateStr][slot];
         if (suggestion) {
+          const slotType = suggestion.type || 'recipe';
+
+          // Combo suggestion
+          if (slotType === 'combo') {
+            const combo = (state.combos || []).find(c => c.id === suggestion.comboId);
+            if (combo) {
+              const comboComponents = (combo.slots || []).map(s => (state.components || []).find(c => (c.__backendId || c.id) === s.componentId)).filter(Boolean);
+              const compNames = comboComponents.map(c => c.name).join(' + ');
+              const cookTime = Math.max(0, ...comboComponents.map(c => (c.airFryer && c.airFryer.cookTime) || 0));
+              const locked = suggestion.locked;
+              const allAirFry = comboComponents.length > 0 && comboComponents.every(c => c.cookingMethod === 'Air Fry');
+              return `
+                <div class="meal-timeline-card" style="${!locked ? 'border: 1.5px solid var(--accent);' : ''}" onclick="handleComboMealCardClick('${esc(combo.id)}', '${esc(dateStr)}', '${esc(slot)}')">
+                  <div class="meal-timeline-image-placeholder" style="background:linear-gradient(135deg, #2a2a3d, #1a1a24);display:flex;align-items:center;justify-content:center;">
+                    <span style="font-size:24px;">&#127869;</span>
+                  </div>
+                  ${!locked ? `<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px;">Combo</span>` : ''}
+                  ${allAirFry ? `<span style="position:absolute;top:6px;right:6px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;">Air Fry</span>` : ''}
+                  <div class="meal-timeline-info">
+                    <div class="meal-timeline-type">${capitalize(slot)}</div>
+                    <p class="meal-timeline-name">${esc(combo.name)}</p>
+                    <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(compNames)}</div>
+                    ${cookTime > 0 ? `<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">&#9201; ${cookTime} min</div>` : ''}
+                    <div style="display:flex;gap:6px;margin-top:6px;">
+                      <button onclick="event.stopPropagation();handleSwapClick('${dateStr}','${slot}')" style="flex:1;font-size:11px;padding:3px 0;border-radius:8px;border:1px solid var(--text-tertiary);background:transparent;color:var(--text-secondary);cursor:pointer;">Swap</button>
+                      <button onclick="event.stopPropagation();lockMealSlot('${dateStr}','${slot}');render();" style="flex:1;font-size:11px;padding:3px 0;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;">Accept</button>
+                    </div>
+                  </div>
+                </div>`;
+            }
+          }
+
+          // Recipe suggestion (existing)
           const suggestedRecipe = getRecipeById(suggestion.recipeId);
           if (suggestedRecipe) {
             const locked = suggestion.locked;

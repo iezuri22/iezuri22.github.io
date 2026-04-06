@@ -223,6 +223,100 @@ function getRecipesForMeal(mealType) {
 }
 
 // ============================================================================
+// COMBO HELPERS & SCORING
+// ============================================================================
+
+/**
+ * Resolve a combo's component slots to full component objects
+ */
+function getComboComponents(combo) {
+  return (combo.slots || [])
+    .map(s => (state.components || []).find(c => (c.__backendId || c.id) === s.componentId))
+    .filter(Boolean);
+}
+
+/**
+ * Extract dominant protein name from a combo (for rotation tracking)
+ */
+function getComboProtein(combo) {
+  const components = getComboComponents(combo);
+  const protein = components.find(c => c.category === 'Protein');
+  if (!protein) return null;
+  return (protein.name || '').split(' ')[0].toLowerCase();
+}
+
+/**
+ * Get max cook time across a combo's components
+ */
+function getComboCookTime(combo) {
+  const components = getComboComponents(combo);
+  const times = components.map(c => (c.airFryer && c.airFryer.cookTime) || 0);
+  return times.length > 0 ? Math.max(...times) : 0;
+}
+
+/**
+ * Calculate days between two date strings (YYYY-MM-DD)
+ */
+function daysBetween(dateStr1, dateStr2) {
+  const d1 = new Date(dateStr1 + 'T12:00:00');
+  const d2 = new Date(dateStr2 + 'T12:00:00');
+  return Math.round(Math.abs(d2 - d1) / (1000 * 60 * 60 * 24));
+}
+
+/**
+ * Score a combo for auto-plan selection (mirrors scoreRecipe)
+ */
+function scoreCombo(combo, mealType, usedProteins = [], isWeeknight = false) {
+  let score = 50;
+
+  // Rating boost
+  if (combo.rating >= 4) score += 20;
+
+  // Times cooked boost (familiarity)
+  if (combo.timesCooked >= 3) score += 10;
+
+  // Air fryer boost on weeknights
+  const components = getComboComponents(combo);
+  const allAirFry = components.length > 0 && components.every(c => c.cookingMethod === 'Air Fry');
+  if (isWeeknight && allAirFry) score += 30;
+
+  // Cook time scoring
+  const cookMinutes = getComboCookTime(combo);
+  if (isWeeknight) {
+    if (cookMinutes > 0 && cookMinutes <= 20) score += 15;
+    else if (cookMinutes <= 30) score += 5;
+    else if (cookMinutes > 45) score -= 20;
+  }
+
+  // Effort level (derive from cook time)
+  if (cookMinutes > 0 && cookMinutes <= 20) score += 15; // lazy
+  else if (cookMinutes > 40) score -= 10; // timely
+
+  // Protein rotation penalty
+  const comboProteins = components
+    .filter(c => c.category === 'Protein')
+    .map(c => (c.name || '').split(' ')[0].toLowerCase());
+
+  for (const p of comboProteins) {
+    if (usedProteins.some(up => p.includes(up) || up.includes(p))) {
+      score -= 40;
+    }
+  }
+
+  // Recency penalty
+  if (combo.lastCooked) {
+    const days = daysBetween(combo.lastCooked.split('T')[0], getToday());
+    if (days <= 1) score -= 50;
+    else if (days <= 3) score -= 20;
+  }
+
+  // Small randomization
+  score += Math.random() * 20 - 10;
+
+  return Math.max(0, score);
+}
+
+// ============================================================================
 // CORE: Auto-Plan Generation
 // ============================================================================
 
@@ -248,58 +342,72 @@ function generateAutoPlan() {
   const usedProteinsTomorrow = [];
 
   /**
-   * Select best recipe for a slot
+   * Select best meal (recipe or combo) for a slot
    */
-  function selectRecipe(dateStr, mealType, usedProteins, dayOfWeek) {
-    const candidates = getRecipesForMeal(mealType);
-
-    if (candidates.length === 0) {
-      return null;
-    }
-
-    // Score all candidates
-    const scored = candidates.map(recipe => ({
-      recipe,
+  function selectMeal(dateStr, mealType, usedProteins, dayOfWeek) {
+    // Score recipes
+    const recipeCandidates = getRecipesForMeal(mealType);
+    const scoredRecipes = recipeCandidates.map(recipe => ({
+      item: recipe, type: 'recipe',
       score: scoreRecipe(recipe, mealType, usedProteins, isWeeknight(dayOfWeek))
     }));
 
-    // Sort by score descending
-    scored.sort((a, b) => b.score - a.score);
+    // Score combos (lunch + dinner only, combos aren't breakfast items)
+    let scoredCombos = [];
+    if (mealType !== 'breakfast') {
+      scoredCombos = (state.combos || [])
+        .filter(c => getComboComponents(c).length > 0)
+        .map(c => ({
+          item: c, type: 'combo',
+          score: scoreCombo(c, mealType, usedProteins, isWeeknight(dayOfWeek))
+        }));
+    }
 
-    // Pick top candidate
-    const selected = scored[0].recipe;
+    const all = [...scoredRecipes, ...scoredCombos].sort((a, b) => b.score - a.score);
+    if (all.length === 0) return null;
 
+    const winner = all[0];
     // Track protein for next meal
-    const protein = getRecipeProtein(selected);
+    const protein = winner.type === 'recipe' ? getRecipeProtein(winner.item) : getComboProtein(winner.item);
     if (protein && !usedProteins.includes(protein)) {
       usedProteins.push(protein);
     }
+    return winner;
+  }
 
-    return selected;
+  /**
+   * Convert selectMeal result to plan slot entry
+   */
+  function buildSlotEntry(selected) {
+    if (!selected) return null;
+    if (selected.type === 'combo') {
+      return { comboId: selected.item.id, type: 'combo', locked: false };
+    }
+    return { recipeId: selected.item.__backendId || selected.item.id, type: 'recipe', locked: false };
   }
 
   // Generate meals for today
-  const todayBreakfast = selectRecipe(today, 'breakfast', usedProteinsToday, todayDayOfWeek);
-  const todayLunch = selectRecipe(today, 'lunch', usedProteinsToday, todayDayOfWeek);
-  const todayDinner = selectRecipe(today, 'dinner', usedProteinsToday, todayDayOfWeek);
+  const todayBreakfast = selectMeal(today, 'breakfast', usedProteinsToday, todayDayOfWeek);
+  const todayLunch = selectMeal(today, 'lunch', usedProteinsToday, todayDayOfWeek);
+  const todayDinner = selectMeal(today, 'dinner', usedProteinsToday, todayDayOfWeek);
 
   // Generate meals for tomorrow
-  const tomorrowBreakfast = selectRecipe(tomorrowStr, 'breakfast', usedProteinsTomorrow, tomorrowDayOfWeek);
-  const tomorrowLunch = selectRecipe(tomorrowStr, 'lunch', usedProteinsTomorrow, tomorrowDayOfWeek);
-  const tomorrowDinner = selectRecipe(tomorrowStr, 'dinner', usedProteinsTomorrow, tomorrowDayOfWeek);
+  const tomorrowBreakfast = selectMeal(tomorrowStr, 'breakfast', usedProteinsTomorrow, tomorrowDayOfWeek);
+  const tomorrowLunch = selectMeal(tomorrowStr, 'lunch', usedProteinsTomorrow, tomorrowDayOfWeek);
+  const tomorrowDinner = selectMeal(tomorrowStr, 'dinner', usedProteinsTomorrow, tomorrowDayOfWeek);
 
   const plan = {
     generatedAt: new Date().toISOString(),
     days: {
       [today]: {
-        breakfast: todayBreakfast ? { recipeId: todayBreakfast.__backendId || todayBreakfast.id, locked: false } : null,
-        lunch: todayLunch ? { recipeId: todayLunch.__backendId || todayLunch.id, locked: false } : null,
-        dinner: todayDinner ? { recipeId: todayDinner.__backendId || todayDinner.id, locked: false } : null
+        breakfast: buildSlotEntry(todayBreakfast),
+        lunch: buildSlotEntry(todayLunch),
+        dinner: buildSlotEntry(todayDinner)
       },
       [tomorrowStr]: {
-        breakfast: tomorrowBreakfast ? { recipeId: tomorrowBreakfast.__backendId || tomorrowBreakfast.id, locked: false } : null,
-        lunch: tomorrowLunch ? { recipeId: tomorrowLunch.__backendId || tomorrowLunch.id, locked: false } : null,
-        dinner: tomorrowDinner ? { recipeId: tomorrowDinner.__backendId || tomorrowDinner.id, locked: false } : null
+        breakfast: buildSlotEntry(tomorrowBreakfast),
+        lunch: buildSlotEntry(tomorrowLunch),
+        dinner: buildSlotEntry(tomorrowDinner)
       }
     }
   };
@@ -460,9 +568,15 @@ function renderAutoPlanDay(plan, dateStr, dayName, dateFormatted, isToday) {
 
   meals.forEach(mealType => {
     const mealData = dayPlan?.[mealType];
-    const recipe = mealData?.recipeId ? getRecipeById(mealData.recipeId) : null;
+    const slotType = mealData?.type || 'recipe';
 
-    html += renderMealCard(recipe, dateStr, mealType, mealLabels[mealType], mealData?.locked || false);
+    if (slotType === 'combo') {
+      const combo = (state.combos || []).find(c => c.id === mealData.comboId);
+      html += renderComboMealCard(combo, dateStr, mealType, mealLabels[mealType], mealData?.locked || false);
+    } else {
+      const recipe = mealData?.recipeId ? getRecipeById(mealData.recipeId) : null;
+      html += renderMealCard(recipe, dateStr, mealType, mealLabels[mealType], mealData?.locked || false);
+    }
   });
 
   html += `
@@ -627,6 +741,115 @@ function renderMealCard(recipe, dateStr, mealType, mealLabel, isLocked) {
   `;
 }
 
+/**
+ * Render a combo meal card for the auto-plan timeline
+ */
+function renderComboMealCard(combo, dateStr, mealType, mealLabel, isLocked) {
+  if (!combo) {
+    return `
+      <div style="
+        background: ${CONFIG.surface_color};
+        border-radius: 8px;
+        padding: 16px;
+        text-align: center;
+        color: ${CONFIG.text_muted};
+        font-size: 14px;
+      ">No ${mealLabel.toLowerCase()} planned</div>
+    `;
+  }
+
+  const components = getComboComponents(combo);
+  const cookTime = getComboCookTime(combo);
+  const compNames = components.map(c => c.name).join(' + ');
+  const allAirFry = components.length > 0 && components.every(c => c.cookingMethod === 'Air Fry');
+
+  const COMBO_CATEGORY_COLORS = {
+    'Protein': '#e85d5d', 'Veggie': '#32d74b', 'Starch': '#ffd60a',
+    'Seasoning': '#ff9f0a', 'Sauce': '#5e5ce6'
+  };
+
+  const categoryDots = components.map(c => {
+    const color = COMBO_CATEGORY_COLORS[c.category] || '#888';
+    return `<div style="width: 8px; height: 8px; border-radius: 4px; background: ${color};"></div>`;
+  }).join('');
+
+  return `
+    <div style="
+      background: ${CONFIG.surface_color};
+      border: 1px solid ${CONFIG.divider_color};
+      border-radius: 8px;
+      overflow: hidden;
+      cursor: pointer;
+      position: relative;
+    "
+    onclick="handleComboMealCardClick('${esc(combo.id)}', '${esc(dateStr)}', '${esc(mealType)}')">
+
+      <!-- Combo visual header -->
+      <div style="
+        height: 160px;
+        background: linear-gradient(135deg, #2a2a3d, #1a1a24);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        padding: 12px;
+      ">
+        ${isLocked ? `<div style="position: absolute; top: 8px; left: 8px; background: ${CONFIG.primary_action_color}; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px;">&#128274;</div>` : ''}
+
+        <div style="position: absolute; top: 8px; left: ${isLocked ? '40px' : '8px'}; background: ${CONFIG.primary_action_color}20; color: ${CONFIG.primary_action_color}; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 6px; text-transform: uppercase; letter-spacing: 0.5px;">Combo</div>
+
+        <div style="text-align: center;">
+          <div style="font-size: 36px; margin-bottom: 8px;">&#127869;</div>
+          <div style="display: flex; gap: 4px; justify-content: center;">${categoryDots}</div>
+        </div>
+
+        <button style="
+          position: absolute; bottom: 8px; right: 8px;
+          background: ${CONFIG.primary_action_color}; color: white;
+          border: none; border-radius: 6px; padding: 6px 14px;
+          font-size: 12px; font-weight: 600; cursor: pointer;
+          min-height: 32px;
+        " onclick="event.stopPropagation(); handleSwapClick('${esc(dateStr)}', '${esc(mealType)}')">Swap</button>
+      </div>
+
+      <!-- Info -->
+      <div style="padding: 12px;">
+        <div style="font-size: 11px; color: ${CONFIG.text_muted}; font-weight: 500; margin-bottom: 2px;">${mealLabel}</div>
+        <h3 style="margin: 0 0 4px 0; font-size: 16px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${esc(combo.name)}
+        </h3>
+        <div style="font-size: 12px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px;">
+          ${esc(compNames)}
+        </div>
+        <div style="display: flex; gap: 10px; font-size: 12px; color: ${CONFIG.text_muted}; align-items: center; flex-wrap: wrap;">
+          ${cookTime > 0 ? `<span>&#9201; ${cookTime} min</span>` : ''}
+          ${combo.timesCooked > 0 ? `<span>Cooked ${combo.timesCooked}x</span>` : ''}
+          ${allAirFry ? `
+            <span style="
+              display: inline-flex; align-items: center; gap: 3px;
+              background: ${CONFIG.primary_action_color}20; color: ${CONFIG.primary_action_color};
+              padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600;
+            ">
+              <svg width="10" height="10" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2v14m-5-3l5 5 5-5M7 5h6a3 3 0 013 3v4a3 3 0 01-3 3H7a3 3 0 01-3-3V8a3 3 0 013-3z"/></svg>
+              Air Fry
+            </span>
+          ` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Handle click on combo meal card — navigate to components page with combo loaded
+ */
+function handleComboMealCardClick(comboId, dateStr, mealType) {
+  lockMealSlot(dateStr, mealType);
+  sessionStorage.setItem('yummy_target_view', 'build-plate');
+  sessionStorage.setItem('yummy_load_combo', comboId);
+  window.location.href = 'components.html';
+}
+
 // ============================================================================
 // UI: Swap Modal
 // ============================================================================
@@ -662,6 +885,24 @@ function renderSwapModal(dateStr, mealType) {
     alternatives.forEach(recipe => {
       cardsHtml += renderSwapAlternativeCard(recipe, dateStr, mealType);
     });
+  }
+
+  // Add combo alternatives for lunch/dinner
+  if (mealType !== 'breakfast') {
+    const currentSlot = plan.days?.[dateStr]?.[mealType];
+    const currentComboId = currentSlot?.comboId;
+    const comboCandidates = (state.combos || [])
+      .filter(c => c.id !== currentComboId && getComboComponents(c).length > 0)
+      .sort(() => Math.random() - 0.5);
+
+    if (comboCandidates.length > 0) {
+      cardsHtml += `<div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid ${CONFIG.divider_color};">
+        <div style="font-size: 13px; font-weight: 600; color: ${CONFIG.text_muted}; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px;">Combos</div>
+      </div>`;
+      comboCandidates.forEach(combo => {
+        cardsHtml += renderSwapComboCard(combo, dateStr, mealType);
+      });
+    }
   }
 
   return `
@@ -867,6 +1108,61 @@ function shuffleSwapAlternatives(dateStr, mealType) {
   closeSwapModal();
   const swapHtml = renderSwapModal(dateStr, mealType);
   showModalView(swapHtml);
+}
+
+/**
+ * Render a combo card in the swap modal
+ */
+function renderSwapComboCard(combo, dateStr, mealType) {
+  const components = getComboComponents(combo);
+  const compNames = components.map(c => c.name).join(' + ');
+  const cookTime = getComboCookTime(combo);
+  const allAirFry = components.length > 0 && components.every(c => c.cookingMethod === 'Air Fry');
+
+  return `
+    <div style="
+      display: flex; align-items: center; gap: 12px;
+      background: ${CONFIG.surface_color}; border-radius: 8px;
+      padding: 10px; margin-bottom: 8px; cursor: pointer;
+      border: 1px solid ${CONFIG.divider_color};
+      min-height: 44px;
+    " onclick="selectSwapCombo('${esc(combo.id)}', '${esc(dateStr)}', '${esc(mealType)}')">
+      <div style="
+        width: 64px; height: 64px; border-radius: 8px; flex-shrink: 0;
+        background: linear-gradient(135deg, #2a2a3d, #1a1a24);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 24px;
+      ">&#127869;</div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 2px;">
+          <span style="font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 3px; background: ${CONFIG.primary_action_color}20; color: ${CONFIG.primary_action_color}; text-transform: uppercase;">Combo</span>
+        </div>
+        <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+          ${esc(combo.name)}
+        </div>
+        <div style="font-size: 11px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px;">
+          ${esc(compNames)}
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 4px; font-size: 11px; color: ${CONFIG.text_muted}; align-items: center;">
+          ${cookTime > 0 ? `<span>&#9201; ${cookTime} min</span>` : ''}
+          ${allAirFry ? `<span style="color: ${CONFIG.primary_action_color}; font-weight: 600;">Air Fry</span>` : ''}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Swap a meal slot to a combo
+ */
+function selectSwapCombo(comboId, dateStr, mealType) {
+  const plan = getAutoPlan();
+  if (plan.days && plan.days[dateStr] && plan.days[dateStr][mealType]) {
+    plan.days[dateStr][mealType] = { comboId: comboId, type: 'combo', locked: false };
+    localStorage.setItem('yummy_autoplan', JSON.stringify(plan));
+  }
+  closeSwapModal();
+  if (typeof render === 'function') render();
 }
 
 // ============================================================================

@@ -1512,6 +1512,153 @@ async function uploadPhoto(file) {
   });
 }
 
+// ── Admin Detection ──────────────────────────────────
+async function isAppAdmin() {
+  if (!window.supabaseClient) return false;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    return session?.user?.email === 'iezuri22@gmail.com';
+  } catch (e) { return false; }
+}
+
+// ── Video Thumbnail Generation ───────────────────────
+async function generateVideoThumbnail(file) {
+  return new Promise((resolve) => {
+    const timeout = setTimeout(() => { resolve(null); }, 5000);
+    try {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      const objUrl = URL.createObjectURL(file);
+      video.src = objUrl;
+      video.onloadeddata = () => { video.currentTime = 0.5; };
+      video.onseeked = () => {
+        clearTimeout(timeout);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 320;
+          canvas.height = 180;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(video, 0, 0, 320, 180);
+          canvas.toBlob((blob) => {
+            URL.revokeObjectURL(objUrl);
+            resolve(blob);
+          }, 'image/jpeg', 0.7);
+        } catch (e) {
+          URL.revokeObjectURL(objUrl);
+          resolve(null);
+        }
+      };
+      video.onerror = () => {
+        clearTimeout(timeout);
+        URL.revokeObjectURL(objUrl);
+        resolve(null);
+      };
+    } catch (e) {
+      clearTimeout(timeout);
+      resolve(null);
+    }
+  });
+}
+
+// ── Step Video Upload ────────────────────────────────
+async function uploadStepVideo(file, componentId, stepId) {
+  if (!file.type.startsWith('video/')) {
+    showToast('Please select a video file', 'error');
+    return null;
+  }
+  if (file.size > 50 * 1024 * 1024) {
+    showToast('Video must be under 50MB', 'error');
+    return null;
+  }
+  if (!window.supabaseClient) {
+    showToast('Upload unavailable — no connection', 'error');
+    return null;
+  }
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    const user = session?.user;
+    if (!user) { showToast('Please log in to upload', 'error'); return null; }
+
+    const isAdmin = user.email === 'iezuri22@gmail.com';
+    const basePath = isAdmin
+      ? `defaults/${componentId}/${stepId}`
+      : `user/${user.id}/${componentId}/${stepId}`;
+
+    // Upload video
+    const { data: videoData, error: videoError } = await window.supabaseClient.storage
+      .from('component-videos')
+      .upload(`${basePath}.mp4`, file, {
+        contentType: file.type || 'video/mp4',
+        cacheControl: '3600',
+        upsert: true
+      });
+    if (videoError) {
+      console.error('Video upload error:', videoError);
+      showToast('Failed to upload video: ' + videoError.message, 'error');
+      return null;
+    }
+
+    // Generate and upload thumbnail
+    let thumbnailUrl = null;
+    const thumbBlob = await generateVideoThumbnail(file);
+    if (thumbBlob) {
+      const { error: thumbError } = await window.supabaseClient.storage
+        .from('component-videos')
+        .upload(`${basePath}-thumb.jpg`, thumbBlob, {
+          contentType: 'image/jpeg',
+          cacheControl: '3600',
+          upsert: true
+        });
+      if (!thumbError) {
+        const { data: thumbUrlData } = window.supabaseClient.storage
+          .from('component-videos')
+          .getPublicUrl(`${basePath}-thumb.jpg`);
+        thumbnailUrl = thumbUrlData.publicUrl;
+      }
+    }
+
+    // Get public URL for video
+    const { data: urlData } = window.supabaseClient.storage
+      .from('component-videos')
+      .getPublicUrl(`${basePath}.mp4`);
+
+    return {
+      videoUrl: urlData.publicUrl,
+      thumbnailUrl: thumbnailUrl,
+      storagePath: `${basePath}.mp4`
+    };
+  } catch (e) {
+    console.error('Video upload failed:', e);
+    showToast('Video upload failed', 'error');
+    return null;
+  }
+}
+
+// ── Step Video Delete ────────────────────────────────
+async function deleteStepVideo(storagePath) {
+  if (!storagePath || !window.supabaseClient) return false;
+  try {
+    const { error } = await window.supabaseClient.storage
+      .from('component-videos')
+      .remove([storagePath]);
+    if (error) {
+      console.error('Video delete error:', error);
+      return false;
+    }
+    // Also try to delete thumbnail
+    const thumbPath = storagePath.replace(/\.mp4$/, '-thumb.jpg');
+    await window.supabaseClient.storage
+      .from('component-videos')
+      .remove([thumbPath]);
+    return true;
+  } catch (e) {
+    console.error('Video delete failed:', e);
+    return false;
+  }
+}
+
 // String utilities
 function capitalize(str) {
   if (!str) return '';
