@@ -4913,6 +4913,26 @@ async function migrateSavedAndPlatesToSupabase() {
         .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
       debugLog('[migrate] Synced', Object.keys(effortLevels).length, 'effort levels to Supabase');
     }
+
+    // Migrate components (starter + user-created)
+    const components = state.components || [];
+    for (const comp of components) {
+      if (comp.id) {
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: comp.id, user_id: userId, data: comp }, { onConflict: 'id' });
+      }
+    }
+    if (components.length > 0) debugLog('[migrate] Synced', components.length, 'components to Supabase');
+
+    // Migrate combos
+    const combos = state.combos || [];
+    for (const combo of combos) {
+      if (combo.id) {
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: combo.id, user_id: userId, data: combo }, { onConflict: 'id' });
+      }
+    }
+    if (combos.length > 0) debugLog('[migrate] Synced', combos.length, 'combos to Supabase');
   } catch (e) { console.error('Migration of saved/plates failed (non-fatal):', e); }
 }
 
@@ -5006,8 +5026,22 @@ function applySupabaseData(data) {
   saveToLS('batchRecipes', state.batchRecipes);
 
   // Load components and combos from Supabase
-  state.components = data.filter(d => d.id && d.id.startsWith('component_'));
-  state.combos = data.filter(d => d.id && d.id.startsWith('combo_'));
+  // Only overwrite if Supabase actually has data — prevents wiping locally-seeded starter components
+  const supaComponents = data.filter(d => d.id && d.id.startsWith('component_'));
+  if (supaComponents.length > 0) {
+    state.components = supaComponents;
+  }
+  const supaCombos = data.filter(d => d.id && d.id.startsWith('combo_'));
+  if (supaCombos.length > 0) {
+    state.combos = supaCombos;
+  }
+
+  // If components are still empty and never seeded, try seeding now (handles case where Supabase loads before components.js init)
+  if (state.components.length === 0 && !localStorage.getItem('yummy_components_seeded')) {
+    if (typeof seedStarterComponents === 'function') {
+      seedStarterComponents();
+    }
+  }
 
   // Load saved recipe IDs from Supabase
   const savedRecipesRow = data.find(d => d.id === 'savedRecipes_list');

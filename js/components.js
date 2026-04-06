@@ -1117,7 +1117,7 @@ function seedStarterComponents() {
   if (localStorage.getItem('yummy_components_seeded')) return;
   if (state.components.length === 0) {
     state.components = STARTER_COMPONENTS.map(c => ({ ...c }));
-    persistState();
+    persistStateNow();
   }
   localStorage.setItem('yummy_components_seeded', 'true');
 }
