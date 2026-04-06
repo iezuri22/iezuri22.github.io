@@ -1114,8 +1114,15 @@ const STARTER_COMPONENTS = [
 // SECTION 3: SEEDING LOGIC
 // ============================================================
 function seedStarterComponents() {
-  if (localStorage.getItem('yummy_components_seeded')) return;
+  // If we already have components in memory, nothing to do
   if (state.components && state.components.length > 0) return;
+
+  // State is empty — check if the seeded flag is stale (data lost while flag survived)
+  const hadStaleFlag = localStorage.getItem('yummy_components_seeded');
+  if (hadStaleFlag) {
+    console.warn('[seedStarterComponents] Stale flag detected — yummy_components_seeded was set but state.components is empty. Clearing flag and re-seeding.');
+    localStorage.removeItem('yummy_components_seeded');
+  }
 
   state.components = STARTER_COMPONENTS.map(c => ({
     ...c,

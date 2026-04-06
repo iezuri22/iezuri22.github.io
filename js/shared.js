@@ -888,8 +888,8 @@ function _doPersistState() {
   saveToLS('recordingNeeds', state.recordingNeeds);
   saveToLS('mealOptions', state.mealOptions);
   saveToLS('batchRecipes', state.batchRecipes);
-  saveToLS('components', state.components);
-  saveToLS('combos', state.combos);
+  if (state.components && state.components.length > 0) saveToLS('components', state.components);
+  if (state.combos && state.combos.length > 0) saveToLS('combos', state.combos);
 }
 
 function loadAllState() {
@@ -5037,7 +5037,7 @@ function applySupabaseData(data) {
   }
 
   // If components are still empty and never seeded, try seeding now (handles case where Supabase loads before components.js init)
-  if (state.components.length === 0 && !localStorage.getItem('yummy_components_seeded')) {
+  if (state.components.length === 0) {
     if (typeof seedStarterComponents === 'function') {
       seedStarterComponents();
     }
