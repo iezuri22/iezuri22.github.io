@@ -645,93 +645,11 @@ function renderSwapModal(dateStr, mealType) {
   // Get alternatives
   const alternatives = getRecipesForMeal(mealType)
     .filter(r => r.id !== currentRecipeId)
-    .sort(() => Math.random() - 0.5); // Pre-shuffle
+    .sort(() => Math.random() - 0.5);
 
-  let html = `
-    <div id="swap-modal-overlay" style="
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0, 0, 0, 0.7);
-      display: flex;
-      flex-direction: column;
-      z-index: 1000;
-    " onclick="event.target.id === 'swap-modal-overlay' && closeSwapModal()">
-
-      <!-- Header -->
-      <div style="
-        background: ${CONFIG.surface_color};
-        border-bottom: 1px solid ${CONFIG.divider_color};
-        padding: 16px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      ">
-        <h2 style="
-          margin: 0;
-          font-size: 18px;
-          font-weight: 600;
-          color: ${CONFIG.text_color};
-        ">
-          Swap ${mealLabel}
-        </h2>
-        <button style="
-          background: none;
-          border: none;
-          color: ${CONFIG.text_muted};
-          font-size: 24px;
-          cursor: pointer;
-          padding: 0;
-          width: 32px;
-          height: 32px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        "
-        onclick="closeSwapModal()">
-          &#215;
-        </button>
-      </div>
-
-      <!-- Shuffle button -->
-      <div style="
-        background: ${CONFIG.surface_color};
-        padding: 12px 16px;
-        border-bottom: 1px solid ${CONFIG.divider_color};
-      ">
-        <button style="
-          background: ${CONFIG.primary_action_color};
-          color: white;
-          border: none;
-          border-radius: 6px;
-          padding: 8px 16px;
-          font-size: 13px;
-          font-weight: 600;
-          cursor: pointer;
-          width: 100%;
-          transition: opacity 0.2s;
-        "
-        onmouseover="this.style.opacity = '0.8'"
-        onmouseout="this.style.opacity = '1'"
-        onclick="event.stopPropagation(); shuffleSwapAlternatives('${esc(mealType)}')">
-          Shuffle Alternatives
-        </button>
-      </div>
-
-      <!-- Alternatives list -->
-      <div style="
-        flex: 1;
-        overflow-y: auto;
-        background: ${CONFIG.background_color};
-        padding: 16px;
-      ">
-        <div style="display: flex; flex-direction: column; gap: 12px;">
-  `;
-
+  let cardsHtml = '';
   if (alternatives.length === 0) {
-    html += `
+    cardsHtml = `
       <div style="
         text-align: center;
         color: ${CONFIG.text_muted};
@@ -742,120 +660,213 @@ function renderSwapModal(dateStr, mealType) {
     `;
   } else {
     alternatives.forEach(recipe => {
-      html += renderSwapAlternativeCard(recipe, dateStr, mealType);
+      cardsHtml += renderSwapAlternativeCard(recipe, dateStr, mealType);
     });
   }
 
-  html += `
+  return `
+    <div id="swap-modal-overlay" style="
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0, 0, 0, 0.6);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    " onclick="event.target.id === 'swap-modal-overlay' && closeSwapModal()">
+
+      <div style="
+        width: 100%;
+        max-width: 500px;
+        max-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: ${CONFIG.background_color};
+        overflow: hidden;
+      " onclick="event.stopPropagation()">
+
+        <!-- Header -->
+        <div style="
+          background: ${CONFIG.surface_color};
+          border-bottom: 1px solid ${CONFIG.divider_color};
+          padding: 16px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-shrink: 0;
+        ">
+          <h2 style="
+            margin: 0;
+            font-size: 18px;
+            font-weight: 600;
+            color: ${CONFIG.text_color};
+          ">Swap ${mealLabel}</h2>
+          <button style="
+            background: none;
+            border: none;
+            color: ${CONFIG.text_muted};
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          " onclick="closeSwapModal()">&#215;</button>
         </div>
+
+        <!-- Shuffle button -->
+        <div style="
+          background: ${CONFIG.surface_color};
+          padding: 12px 16px;
+          border-bottom: 1px solid ${CONFIG.divider_color};
+          flex-shrink: 0;
+        ">
+          <button style="
+            background: ${CONFIG.primary_action_color};
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            transition: opacity 0.2s;
+          "
+          onmouseover="this.style.opacity='0.8'"
+          onmouseout="this.style.opacity='1'"
+          onclick="shuffleSwapAlternatives('${esc(dateStr)}', '${esc(mealType)}')">
+            Shuffle Alternatives
+          </button>
+        </div>
+
+        <!-- Alternatives list -->
+        <div style="
+          flex: 1;
+          overflow-y: auto;
+          padding: 12px;
+          -webkit-overflow-scrolling: touch;
+        ">
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            ${cardsHtml}
+          </div>
+        </div>
+
       </div>
     </div>
   `;
-
-  return html;
 }
 
 /**
- * Render an alternative recipe card in swap modal
+ * Render a compact horizontal alternative recipe card in swap modal
  */
 function renderSwapAlternativeCard(recipe, dateStr, mealType) {
   const imageUrl = recipeThumb(recipe);
   const effort = getRecipeEffort(recipe.__backendId || recipe.id);
   const isAirFry = isAirFryerRecipe(recipe);
-  const gradientFallback = getPlaceholderGradient(recipe);
-  const backgroundImage = imageUrl
-    ? `url(${imageUrl})`
-    : `linear-gradient(135deg, ${gradientFallback})`;
+  const gradientBg = getPlaceholderGradient(recipe);
+
+  // Star rating inline (10px stars)
+  const ratings = typeof getRecipeRatings === 'function' ? getRecipeRatings(recipe.__backendId || recipe.id) : null;
+  const userRating = ratings ? (ratings.userRating || 0) : 0;
+  let starsHtml = '';
+  for (let i = 1; i <= 5; i++) {
+    const color = i <= userRating ? (CONFIG.primary_action_color || '#e85d5d') : (CONFIG.text_tertiary || '#5c5c66');
+    starsHtml += `<svg width="10" height="10" viewBox="0 0 24 24" fill="${color}" style="display:block;"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>`;
+  }
+
+  // Thumbnail: image or gradient placeholder
+  const thumbHtml = imageUrl
+    ? `<img src="${esc(imageUrl)}" style="
+        width: 80px; height: 80px;
+        border-radius: 8px;
+        object-fit: cover;
+        display: block;
+        flex-shrink: 0;
+      " loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />
+      <div style="
+        display: none;
+        width: 80px; height: 80px;
+        border-radius: 8px;
+        flex-shrink: 0;
+        background: ${gradientBg};
+        align-items: center;
+        justify-content: center;
+      "></div>`
+    : `<div style="
+        width: 80px; height: 80px;
+        border-radius: 8px;
+        flex-shrink: 0;
+        background: ${gradientBg};
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      "></div>`;
 
   return `
     <div style="
       background: ${CONFIG.surface_color};
       border: 1px solid ${CONFIG.divider_color};
-      border-radius: 8px;
-      overflow: hidden;
+      border-radius: 10px;
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
       cursor: pointer;
-      transition: transform 0.2s ease, box-shadow 0.2s ease;
+      min-height: 44px;
+      transition: background 0.15s ease;
     "
-    onclick="selectSwapRecipe('${esc(recipe.__backendId || recipe.id)}', '${esc(dateStr)}', '${esc(mealType)}')">
+    onclick="selectSwapRecipe('${esc(recipe.__backendId || recipe.id)}', '${esc(dateStr)}', '${esc(mealType)}')"
+    onmouseover="this.style.background='${CONFIG.divider_color}'"
+    onmouseout="this.style.background='${CONFIG.surface_color}'">
 
-      <div style="
-        height: 200px;
-        background-image: ${backgroundImage};
-        background-size: cover;
-        background-position: center;
-      "></div>
+      ${thumbHtml}
 
-      <div style="padding: 12px;">
-        <h3 style="
-          margin: 0 0 8px 0;
-          font-size: 15px;
-          font-weight: 600;
-          color: ${CONFIG.text_color};
-        ">
-          ${esc(recipe.title || 'Untitled')}
-        </h3>
-
-        <div style="margin-bottom: 8px;">
-          ${renderStarRating(recipe.id, 'sm')}
-        </div>
-
+      <div style="flex: 1; min-width: 0; padding: 2px 0;">
         <div style="
-          display: flex;
-          gap: 12px;
-          font-size: 12px;
-          color: ${CONFIG.text_muted};
-          margin-bottom: 8px;
-        ">
-          ${recipe.cookTime ? `<span>&#9201; ${esc(recipe.cookTime)}</span>` : ''}
-          ${effort ? `<span>${renderEffortPill(effort, 'sm')}</span>` : ''}
-        </div>
+          font-size: 14px;
+          font-weight: 700;
+          color: ${CONFIG.text_color};
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          margin-bottom: 4px;
+        ">${esc(recipe.title || 'Untitled')}</div>
 
-        ${isAirFry ? `
-          <div style="
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
+        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px;">
+          ${recipe.cookTime ? `<span style="font-size: 12px; color: ${CONFIG.text_muted};">&#9201; ${esc(recipe.cookTime)}</span>` : ''}
+          ${effort ? `<span>${renderEffortPill(effort, 'sm')}</span>` : ''}
+          ${isAirFry ? `<span style="
+            display: inline-block;
             background: ${CONFIG.primary_action_color}20;
             color: ${CONFIG.primary_action_color};
-            padding: 4px 8px;
+            padding: 1px 6px;
             border-radius: 4px;
-            font-size: 11px;
-            font-weight: 600;
-          ">
-            <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor" style="display: block;">
-              <path d="M10 2v14m-5-3l5 5 5-5M7 5h6a3 3 0 013 3v4a3 3 0 01-3 3H7a3 3 0 01-3-3V8a3 3 0 013-3z"/>
-            </svg>
-            Air Fry
-          </div>
-        ` : ''}
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+          ">AIR FRY</span>` : ''}
+        </div>
+
+        <div style="display: flex; gap: 2px; align-items: center;">
+          ${starsHtml}
+        </div>
       </div>
     </div>
   `;
 }
 
 /**
- * Shuffle alternatives in the swap modal
+ * Shuffle alternatives — re-renders swap modal with new random order
  */
-function shuffleSwapAlternatives(mealType) {
-  const modal = document.getElementById('swap-modal-overlay');
-  if (!modal) return;
-
-  const alternatives = modal.querySelectorAll('[data-alternative-recipe-id]');
-  const container = modal.querySelector('[data-alternatives-container]');
-
-  if (container) {
-    // Collect all alternative cards
-    const cards = Array.from(container.children);
-    // Shuffle using Fisher-Yates
-    for (let i = cards.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const temp = cards[i];
-      cards[i] = cards[j];
-      cards[j] = temp;
-    }
-    // Rebuild container
-    cards.forEach(card => container.appendChild(card));
-  }
+function shuffleSwapAlternatives(dateStr, mealType) {
+  closeSwapModal();
+  const swapHtml = renderSwapModal(dateStr, mealType);
+  showModalView(swapHtml);
 }
 
 // ============================================================================
