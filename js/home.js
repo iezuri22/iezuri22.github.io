@@ -372,7 +372,7 @@ function renderMealPlanTimeline() {
     if (slotEntries.length === 0) {
       if (typeof getAutoPlan === 'function') {
         const plan = getAutoPlan();
-        const suggestion = plan && plan[dateStr] && plan[dateStr][slot];
+        const suggestion = plan && plan.days && plan.days[dateStr] && plan.days[dateStr][slot];
         if (suggestion) {
           const suggestedRecipe = getRecipeById(suggestion.recipeId);
           if (suggestedRecipe) {
