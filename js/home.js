@@ -558,9 +558,9 @@ function renderHome() {
   return `
     ${renderHomeGreeting(greeting)}
     ${renderQuickActionsStrip()}
-    ${renderHeroCard(heroRecipe)}
+    ${typeof renderAutoPlanView === 'function' ? renderAutoPlanView() : renderHeroCard(heroRecipe)}
     ${renderCookAgainRow()}
-    ${renderMealPlanTimeline()}
+    ${typeof renderAutoPlanView === 'function' ? '' : renderMealPlanTimeline()}
     ${renderQuickEasyList(quickRecipes)}
     ${renderDinnerCarousel(dinnerRecipes)}
     ${renderSavedPeekCards()}
