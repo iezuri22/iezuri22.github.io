@@ -370,6 +370,43 @@ function renderMealPlanTimeline() {
     }
 
     if (slotEntries.length === 0) {
+      if (typeof getAutoPlan === 'function') {
+        const plan = getAutoPlan();
+        const suggestion = plan && plan[dateStr] && plan[dateStr][slot];
+        if (suggestion) {
+          const suggestedRecipe = getRecipeById(suggestion.recipeId);
+          if (suggestedRecipe) {
+            const locked = suggestion.locked;
+            const img = recipeThumb(suggestedRecipe);
+            const name = suggestedRecipe.title || capitalize(slot);
+            const rating = suggestedRecipe.rating || 0;
+            const effort = suggestedRecipe.effort || suggestedRecipe.effortLevel || '';
+            const airFry = isAirFryerRecipe(suggestedRecipe);
+            const stars = Array.from({length: 5}, (_, i) =>
+              `<span style="color:${i < rating ? 'var(--accent)' : 'var(--text-tertiary)'};font-size:10px;">&#9733;</span>`
+            ).join('');
+            return `
+              <div class="meal-timeline-card" style="${!locked ? 'border: 1.5px solid var(--accent);' : ''}" onclick="goToRecipe('${suggestedRecipe.id}')">
+                ${img
+                  ? `<img class="meal-timeline-image" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="meal-timeline-image-placeholder" style="display:none;background:${getPlaceholderGradient(suggestedRecipe)}"></div>`
+                  : `<div class="meal-timeline-image-placeholder" style="background:${getPlaceholderGradient(suggestedRecipe)}"></div>`
+                }
+                ${!locked ? `<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px;">Suggested</span>` : ''}
+                ${airFry ? `<span style="position:absolute;top:6px;right:6px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;">Air Fry</span>` : ''}
+                <div class="meal-timeline-info">
+                  <div class="meal-timeline-type">${capitalize(slot)}</div>
+                  <p class="meal-timeline-name">${esc(name)}</p>
+                  <div style="margin-top:2px;">${stars}</div>
+                  ${effort ? `<div style="margin-top:3px;">${renderEffortPill(effort, 'sm')}</div>` : ''}
+                  <div style="display:flex;gap:6px;margin-top:6px;">
+                    <button onclick="event.stopPropagation();handleSwapClick('${dateStr}','${slot}')" style="flex:1;font-size:11px;padding:3px 0;border-radius:8px;border:1px solid var(--text-tertiary);background:transparent;color:var(--text-secondary);cursor:pointer;">Swap</button>
+                    <button onclick="event.stopPropagation();lockMealSlot('${dateStr}','${slot}');render();" style="flex:1;font-size:11px;padding:3px 0;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;">Accept</button>
+                  </div>
+                </div>
+              </div>`;
+          }
+        }
+      }
       return `
         <div class="meal-timeline-card empty" onclick="openAddMealForSlot('${slot}', '${dateStr}')">
           <div class="meal-timeline-image-placeholder"></div>
