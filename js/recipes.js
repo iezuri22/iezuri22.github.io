@@ -4082,9 +4082,9 @@ function renderMyPicks() {
     }
   }
 
-  // Compact 3-column card grid
+  // Compact 4-column card grid
   const gridHtml = filtered.length > 0 ? `
-    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 10px;">
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 6px 8px;">
       ${filtered.map((r, idx) => {
         const id = r.__backendId || r.id;
         const img = recipeThumb(r);
@@ -4093,9 +4093,9 @@ function renderMyPicks() {
         const isPlanned = plannedIds.has(id);
 
         return `
-        <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 12px;
+        <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 10px;
           background: ${CONFIG.surface_color}; opacity:0; animation: cardFadeIn 0.25s ease forwards;
-          animation-delay: ${Math.min(idx * 0.03, 0.3)}s;"
+          animation-delay: ${Math.min(idx * 0.02, 0.3)}s;"
           onclick="openRecipeView('${esc(id)}')">
           ${img ? `
             <div style="aspect-ratio:1/1; width:100%; overflow:hidden; position:relative; background:#0d0d0d;">
@@ -4104,34 +4104,33 @@ function renderMyPicks() {
             </div>
           ` : `
             <div style="aspect-ratio:1/1; width:100%; background:${getPlaceholderGradient(r)};
-              display:flex; align-items:center; justify-content:center; padding:8px;">
-              <span style="color:white; font-size:11px; font-weight:600; text-align:center;
+              display:flex; align-items:center; justify-content:center; padding:6px;">
+              <span style="color:white; font-size:9px; font-weight:600; text-align:center;
                 -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">
                 ${esc(r.title)}</span>
             </div>
           `}
           <!-- Status badges -->
-          <div style="position:absolute; top:4px; left:4px; display:flex; gap:2px; flex-wrap:wrap; z-index:2;">
-            ${isMade ? `<span style="padding:1px 5px; border-radius:6px; font-size:8px; font-weight:700; letter-spacing:0.3px;
+          <div style="position:absolute; top:3px; left:3px; display:flex; gap:2px; flex-wrap:wrap; z-index:2;">
+            ${isMade ? `<span style="padding:1px 4px; border-radius:4px; font-size:7px; font-weight:700; letter-spacing:0.3px;
               background:rgba(50,215,75,0.2); color:${CONFIG.success_color}; backdrop-filter:blur(8px);">MADE</span>` : ''}
-            ${isPlanned ? `<span style="padding:1px 5px; border-radius:6px; font-size:8px; font-weight:700; letter-spacing:0.3px;
+            ${isPlanned ? `<span style="padding:1px 4px; border-radius:4px; font-size:7px; font-weight:700; letter-spacing:0.3px;
               background:rgba(100,160,255,0.2); color:#64a0ff; backdrop-filter:blur(8px);">PLANNED</span>` : ''}
           </div>
           <!-- Favorite button -->
           <button onclick="event.stopPropagation(); toggleSaveRecipe('${esc(id)}'); setTimeout(() => render(), 50);"
-            style="position:absolute; top:4px; right:4px; z-index:4; width:24px; height:24px;
+            style="position:absolute; top:3px; right:3px; z-index:4; width:20px; height:20px;
             border-radius:50%; border:none; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);
             color:${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.6)'};
             cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;">
-            <svg width="11" height="11" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+            <svg width="9" height="9" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
             </svg>
           </button>
-          <div style="padding:6px 6px 8px;">
-            <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; line-height:1.25;
+          <div style="padding:4px 4px 6px;">
+            <div style="color:${CONFIG.text_color}; font-size:10px; font-weight:600; line-height:1.2;
               -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">
               ${esc(r.title)}</div>
-            ${r.cookTime ? `<div style="color:${CONFIG.text_muted}; font-size:9px; margin-top:2px;">${esc(r.cookTime)}</div>` : ''}
           </div>
         </div>`;
       }).join('')}
@@ -4140,12 +4139,8 @@ function renderMyPicks() {
 
   return `
     <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
-      <!-- Header -->
-      <div style="padding: 16px 16px 4px;">
-        <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: 2px;">Recipes you'll actually eat</div>
-      </div>
       <!-- Toggle tabs -->
-      <div style="display:flex; gap:8px; overflow-x:auto; padding:8px 16px 6px;
+      <div style="display:flex; gap:8px; overflow-x:auto; padding:12px 16px 6px;
         -webkit-overflow-scrolling:touch; scrollbar-width:none;">
         ${tabsHtml}
       </div>
@@ -4268,7 +4263,9 @@ function init() {
       state.recipeForm = newRecipeDraft();
     }
   } else {
-    state.currentView = 'recipes';
+    // Default view based on which page we're on
+    const page = window.location.pathname.split('/').pop() || 'recipes.html';
+    state.currentView = page === 'my-picks.html' ? 'my-picks' : 'recipes';
   }
   setupKeyboardShortcuts();
   render();
