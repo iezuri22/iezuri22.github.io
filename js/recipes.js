@@ -1713,6 +1713,36 @@ function getFeedDinnerRecipes(list) {
 // SECTION: FEED RENDERING HELPERS
 // ============================================================
 
+function renderMyPicksBanner() {
+  const savedCount = getSavedRecipes().length;
+  if (savedCount === 0) return '';
+  return `
+    <div style="padding: 4px 12px 8px;">
+      <button onclick="navigateTo('my-picks')"
+        style="width:100%; display:flex; align-items:center; justify-content:space-between;
+        padding:14px 16px; border-radius:14px; border:none; cursor:pointer;
+        background: linear-gradient(135deg, rgba(232,93,93,0.12), rgba(232,93,93,0.04));
+        transition: transform 0.15s ease;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <div style="width:36px; height:36px; border-radius:10px; background:rgba(232,93,93,0.15);
+            display:flex; align-items:center; justify-content:center;">
+            <svg width="18" height="18" fill="${CONFIG.primary_action_color}" stroke="none" viewBox="0 0 24 24">
+              <path d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
+            </svg>
+          </div>
+          <div style="text-align:left;">
+            <div style="font-size:14px; font-weight:600; color:${CONFIG.text_color};">My Picks</div>
+            <div style="font-size:11px; color:${CONFIG.text_muted}; margin-top:1px;">Favorites, cooked & planned</div>
+          </div>
+        </div>
+        <svg width="16" height="16" fill="none" stroke="${CONFIG.text_muted}" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/>
+        </svg>
+      </button>
+    </div>
+  `;
+}
+
 function renderFeedSearchBar() {
   return `
     <div style="padding: 8px 12px 0;">
@@ -2267,6 +2297,7 @@ function renderRecipes() {
     <div class="recipes-feed" style="padding: 0; max-width: 100%; overflow-x: hidden;">
       ${renderFeedSearchBar()}
       ${renderRecipeFilterPills()}
+      ${renderMyPicksBanner()}
       ${renderHeroSection(hero)}
       ${renderCategoryCircles()}
       ${renderSavedRecipesSection(savedRecipes)}
@@ -3923,9 +3954,221 @@ function initBatchCardSwipe() {
   });
 }
 
+// ===== MY PICKS PAGE =====
+
+function getMadeRecipeIds() {
+  const ids = new Set();
+  // From food log
+  const log = getFoodLog();
+  log.forEach(entry => {
+    if (entry.recipeId) ids.add(entry.recipeId);
+  });
+  // From mealDays logged entries
+  Object.values(state.mealDays).forEach(day => {
+    if (!day.meals) return;
+    ['breakfast', 'lunch', 'dinner'].forEach(mt => {
+      const meal = day.meals[mt];
+      if (!meal || meal.status !== 'logged') return;
+      const rid = meal.actualRecipeId || meal.plannedRecipeId;
+      if (rid) ids.add(rid);
+    });
+  });
+  return ids;
+}
+
+function getPlannedRecipeIds() {
+  const ids = new Set();
+  const today = getToday();
+  Object.keys(state.mealDays).filter(d => d >= today).forEach(dateStr => {
+    const dayData = state.mealDays[dateStr];
+    if (!dayData || !dayData.meals) return;
+    ['breakfast', 'lunch', 'dinner'].forEach(mt => {
+      const meal = dayData.meals[mt];
+      if (!meal) return;
+      if (meal.status === 'selected' || meal.status === 'pending' || meal.status === 'planned') {
+        const rid = meal.plannedRecipeId || meal.actualRecipeId;
+        if (rid) ids.add(rid);
+      }
+    });
+  });
+  return ids;
+}
+
+function renderMyPicks() {
+  if (!state.recipes || !Array.isArray(state.recipes)) return renderSkeleton('card-grid');
+
+  const filter = state.myPicksFilter || 'favorites';
+  const catFilter = state.myPicksCategoryFilter || null;
+  const allRecipes = state.recipes.filter(r => !r.isDraft && !r.isTip);
+
+  const savedIds = getSavedRecipes();
+  const madeIds = getMadeRecipeIds();
+  const plannedIds = getPlannedRecipeIds();
+
+  // Primary filter
+  let filtered = [];
+  if (filter === 'favorites') {
+    filtered = allRecipes.filter(r => savedIds.includes(r.__backendId || r.id));
+  } else if (filter === 'made') {
+    filtered = allRecipes.filter(r => madeIds.has(r.__backendId || r.id));
+  } else if (filter === 'planned') {
+    filtered = allRecipes.filter(r => plannedIds.has(r.__backendId || r.id));
+  } else {
+    // 'all' — every recipe
+    filtered = [...allRecipes];
+  }
+
+  // Category sub-filter
+  if (catFilter) {
+    filtered = filtered.filter(r => (r.category || '') === catFilter);
+  }
+
+  const tabs = [
+    { id: 'favorites', label: 'Favorites', count: allRecipes.filter(r => savedIds.includes(r.__backendId || r.id)).length },
+    { id: 'made', label: 'Cooked', count: allRecipes.filter(r => madeIds.has(r.__backendId || r.id)).length },
+    { id: 'planned', label: 'Planned', count: allRecipes.filter(r => plannedIds.has(r.__backendId || r.id)).length },
+    { id: 'all', label: 'All Recipes', count: allRecipes.length }
+  ];
+
+  const tabsHtml = tabs.map(t => {
+    const active = filter === t.id;
+    return `<button onclick="state.myPicksFilter = '${t.id}'; state.myPicksCategoryFilter = null; render();"
+      style="flex-shrink:0; padding:7px 14px; border-radius:20px; border:none;
+      background:${active ? CONFIG.primary_action_color : 'rgba(255,255,255,0.06)'};
+      color:${active ? 'white' : CONFIG.text_muted};
+      font-size:13px; font-weight:${active ? '600' : '500'}; cursor:pointer; white-space:nowrap;
+      transition: all 0.2s ease;">
+      ${t.label} <span style="opacity:0.7; font-size:11px;">(${t.count})</span>
+    </button>`;
+  }).join('');
+
+  // Category sub-filter pills
+  const categories = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
+  const catPillsHtml = categories.map(c => {
+    const active = catFilter === c;
+    return `<button onclick="state.myPicksCategoryFilter = ${active ? 'null' : `'${c}'`}; render();"
+      style="flex-shrink:0; padding:5px 12px; border-radius:14px;
+      border:1px solid ${active ? 'rgba(232,93,93,0.3)' : 'rgba(255,255,255,0.08)'};
+      background:${active ? 'rgba(232,93,93,0.1)' : 'transparent'};
+      color:${active ? CONFIG.primary_action_color : CONFIG.text_tertiary};
+      font-size:12px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
+      ${c}</button>`;
+  }).join('');
+
+  let emptyMsg = '';
+  if (filtered.length === 0) {
+    const msgs = {
+      'favorites': { icon: '♥', title: 'No favorites yet', sub: 'Tap the heart on any recipe to save it here' },
+      'made': { icon: '🍳', title: 'Nothing cooked yet', sub: 'Recipes you log as cooked will appear here' },
+      'planned': { icon: '📅', title: 'No planned meals', sub: 'Plan meals from the home screen to see them here' },
+      'all': { icon: '🍽️', title: 'No recipes yet', sub: 'Add your first recipe to get started' }
+    };
+    const m = msgs[filter] || msgs['all'];
+    if (catFilter) {
+      emptyMsg = `
+        <div style="padding: 48px 24px; text-align: center;">
+          <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">No ${catFilter.toLowerCase()} recipes</div>
+          <div style="font-size: 13px; color: ${CONFIG.text_muted};">Try a different category</div>
+        </div>
+      `;
+    } else {
+      emptyMsg = `
+        <div style="padding: 64px 24px; text-align: center;">
+          <div style="font-size: 40px; margin-bottom: 12px;">${m.icon}</div>
+          <div style="font-size: 16px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 6px;">${m.title}</div>
+          <div style="font-size: 13px; color: ${CONFIG.text_muted}; line-height: 1.4;">${m.sub}</div>
+        </div>
+      `;
+    }
+  }
+
+  // Compact 3-column card grid
+  const gridHtml = filtered.length > 0 ? `
+    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px 10px;">
+      ${filtered.map((r, idx) => {
+        const id = r.__backendId || r.id;
+        const img = recipeThumb(r);
+        const saved = isRecipeSaved(id);
+        const isMade = madeIds.has(id);
+        const isPlanned = plannedIds.has(id);
+
+        return `
+        <div style="position: relative; cursor: pointer; overflow: hidden; border-radius: 12px;
+          background: ${CONFIG.surface_color}; opacity:0; animation: cardFadeIn 0.25s ease forwards;
+          animation-delay: ${Math.min(idx * 0.03, 0.3)}s;"
+          onclick="openRecipeView('${esc(id)}')">
+          ${img ? `
+            <div style="aspect-ratio:1/1; width:100%; overflow:hidden; position:relative; background:#0d0d0d;">
+              <img loading="lazy" src="${esc(img)}" alt="${esc(r.title)}"
+                style="width:100%; height:100%; object-fit:cover;" />
+            </div>
+          ` : `
+            <div style="aspect-ratio:1/1; width:100%; background:${getPlaceholderGradient(r)};
+              display:flex; align-items:center; justify-content:center; padding:8px;">
+              <span style="color:white; font-size:11px; font-weight:600; text-align:center;
+                -webkit-line-clamp:3; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">
+                ${esc(r.title)}</span>
+            </div>
+          `}
+          <!-- Status badges -->
+          <div style="position:absolute; top:4px; left:4px; display:flex; gap:2px; flex-wrap:wrap; z-index:2;">
+            ${isMade ? `<span style="padding:1px 5px; border-radius:6px; font-size:8px; font-weight:700; letter-spacing:0.3px;
+              background:rgba(50,215,75,0.2); color:${CONFIG.success_color}; backdrop-filter:blur(8px);">MADE</span>` : ''}
+            ${isPlanned ? `<span style="padding:1px 5px; border-radius:6px; font-size:8px; font-weight:700; letter-spacing:0.3px;
+              background:rgba(100,160,255,0.2); color:#64a0ff; backdrop-filter:blur(8px);">PLANNED</span>` : ''}
+          </div>
+          <!-- Favorite button -->
+          <button onclick="event.stopPropagation(); toggleSaveRecipe('${esc(id)}'); setTimeout(() => render(), 50);"
+            style="position:absolute; top:4px; right:4px; z-index:4; width:24px; height:24px;
+            border-radius:50%; border:none; background:rgba(0,0,0,0.45); backdrop-filter:blur(4px);
+            color:${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.6)'};
+            cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;">
+            <svg width="11" height="11" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 8.25c0-2.485-2.099-4.5-4.688-4.5-1.935 0-3.597 1.126-4.312 2.733-.715-1.607-2.377-2.733-4.313-2.733C5.1 3.75 3 5.765 3 8.25c0 7.22 9 12 9 12s9-4.78 9-12z"/>
+            </svg>
+          </button>
+          <div style="padding:6px 6px 8px;">
+            <div style="color:${CONFIG.text_color}; font-size:11px; font-weight:600; line-height:1.25;
+              -webkit-line-clamp:2; -webkit-box-orient:vertical; display:-webkit-box; overflow:hidden;">
+              ${esc(r.title)}</div>
+            ${r.cookTime ? `<div style="color:${CONFIG.text_muted}; font-size:9px; margin-top:2px;">${esc(r.cookTime)}</div>` : ''}
+          </div>
+        </div>`;
+      }).join('')}
+    </div>
+  ` : '';
+
+  return `
+    <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
+      <!-- Header -->
+      <div style="padding: 16px 16px 4px;">
+        <div style="font-size: 13px; color: ${CONFIG.text_muted}; margin-bottom: 2px;">Recipes you'll actually eat</div>
+      </div>
+      <!-- Toggle tabs -->
+      <div style="display:flex; gap:8px; overflow-x:auto; padding:8px 16px 6px;
+        -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+        ${tabsHtml}
+      </div>
+      <!-- Category sub-filters -->
+      <div style="display:flex; gap:6px; overflow-x:auto; padding:4px 16px 10px;
+        -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+        ${catPillsHtml}
+      </div>
+      <!-- Count -->
+      <div style="padding:0 16px 4px; font-size:11px; color:${CONFIG.text_tertiary};">
+        ${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}${catFilter ? ' in ' + catFilter : ''}
+      </div>
+      <!-- Results -->
+      ${emptyMsg}
+      ${gridHtml}
+    </div>
+  `;
+}
+
 // ===== PAGE INIT & RENDER =====
 
 const VIEW_RENDERERS = {
+  'my-picks': renderMyPicks,
   'recipes': renderRecipes,
   'recipe-view': renderRecipeView,
   'recipe-edit': renderRecipeEdit,
