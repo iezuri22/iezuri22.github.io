@@ -4018,6 +4018,14 @@ function renderMyPicks() {
     filtered = [...allRecipes];
   }
 
+  // Source type sub-filter (Chef IQ vs Manual)
+  const sourceFilter = state.myPicksSourceFilter || 'all';
+  if (sourceFilter === 'chefiq') {
+    filtered = filtered.filter(r => r.sourceType === 'chefiq');
+  } else if (sourceFilter === 'manual') {
+    filtered = filtered.filter(r => r.sourceType !== 'chefiq');
+  }
+
   // Category sub-filter
   if (catFilter) {
     filtered = filtered.filter(r => (r.category || '') === catFilter);
@@ -4055,6 +4063,23 @@ function renderMyPicks() {
       ${c}</button>`;
   }).join('');
 
+  // Source type pills (All / Manual / Chef IQ)
+  const sourcePills = [
+    { id: 'all', label: 'All' },
+    { id: 'manual', label: 'Manual' },
+    { id: 'chefiq', label: 'Chef IQ' }
+  ];
+  const sourcePillsHtml = sourcePills.map(s => {
+    const active = sourceFilter === s.id;
+    return `<button onclick="state.myPicksSourceFilter = '${s.id}'; render();"
+      style="flex-shrink:0; padding:5px 12px; border-radius:14px;
+      border:1px solid ${active ? 'rgba(232,93,93,0.3)' : 'rgba(255,255,255,0.08)'};
+      background:${active ? 'rgba(232,93,93,0.1)' : 'transparent'};
+      color:${active ? CONFIG.primary_action_color : CONFIG.text_tertiary};
+      font-size:12px; font-weight:${active ? '600' : '400'}; cursor:pointer; white-space:nowrap;">
+      ${s.label}</button>`;
+  }).join('');
+
   let emptyMsg = '';
   if (filtered.length === 0) {
     const msgs = {
@@ -4064,11 +4089,15 @@ function renderMyPicks() {
       'all': { icon: '🍽️', title: 'No recipes yet', sub: 'Add your first recipe to get started' }
     };
     const m = msgs[filter] || msgs['all'];
-    if (catFilter) {
+    const sourceLabel = sourceFilter === 'chefiq' ? 'Chef IQ' : sourceFilter === 'manual' ? 'manual' : '';
+    if (catFilter || sourceFilter !== 'all') {
+      const filterParts = [];
+      if (sourceFilter !== 'all') filterParts.push(sourceLabel);
+      if (catFilter) filterParts.push(catFilter.toLowerCase());
       emptyMsg = `
         <div style="padding: 48px 24px; text-align: center;">
-          <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">No ${catFilter.toLowerCase()} recipes</div>
-          <div style="font-size: 13px; color: ${CONFIG.text_muted};">Try a different category</div>
+          <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; margin-bottom: 4px;">No ${filterParts.join(' ')} recipes</div>
+          <div style="font-size: 13px; color: ${CONFIG.text_muted};">Try a different filter</div>
         </div>
       `;
     } else {
@@ -4145,13 +4174,18 @@ function renderMyPicks() {
         ${tabsHtml}
       </div>
       <!-- Category sub-filters -->
-      <div style="display:flex; gap:6px; overflow-x:auto; padding:4px 16px 10px;
+      <div style="display:flex; gap:6px; overflow-x:auto; padding:4px 16px 6px;
         -webkit-overflow-scrolling:touch; scrollbar-width:none;">
         ${catPillsHtml}
       </div>
+      <!-- Source type filter -->
+      <div style="display:flex; gap:6px; overflow-x:auto; padding:2px 16px 10px;
+        -webkit-overflow-scrolling:touch; scrollbar-width:none;">
+        ${sourcePillsHtml}
+      </div>
       <!-- Count -->
       <div style="padding:0 16px 4px; font-size:11px; color:${CONFIG.text_tertiary};">
-        ${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}${catFilter ? ' in ' + catFilter : ''}
+        ${filtered.length} recipe${filtered.length !== 1 ? 's' : ''}${sourceFilter !== 'all' ? ' · ' + (sourceFilter === 'chefiq' ? 'Chef IQ' : 'Manual') : ''}${catFilter ? ' · ' + catFilter : ''}
       </div>
       <!-- Results -->
       ${emptyMsg}
