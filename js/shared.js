@@ -4544,7 +4544,8 @@ function renderBottomNav() {
 
   return `<nav class="bottom-nav" style="position: fixed; bottom: 0; left: 0; right: 0; transform: translateZ(0); background: ${CONFIG.surface_color}; box-shadow: 0 -1px 8px rgba(0,0,0,0.3); z-index: 40; padding-bottom: env(safe-area-inset-bottom);"><div style="display: flex; justify-content: space-around; align-items: center; padding: 6px 0 4px;">${navItems.map(item => {
     const isActive = item.pages.includes(currentPage);
-    const iconSvg = isActive ? navIcons[item.id].active.replace('width="24" height="24"', 'width="20" height="20"') : navIcons[item.id].inactive.replace('width="24" height="24"', 'width="20" height="20"');
+    const icons = navIcons[item.id] || navIcons.home;
+    const iconSvg = isActive ? icons.active.replace('width="24" height="24"', 'width="20" height="20"') : icons.inactive.replace('width="24" height="24"', 'width="20" height="20"');
     const iconStyle = isActive ? `color: ${CONFIG.primary_action_color}; filter: drop-shadow(0 0 4px rgba(232,93,93,0.3));` : `color: ${CONFIG.text_muted};`;
     const groceryBadge = item.id === 'grocery' ? (() => { const count = getGroceryBadgeCount(); return count > 0 ? `<span id="grocery-badge" style="position: absolute; top: -2px; right: -4px; background: ${CONFIG.danger_color}; color: white; font-size: 8px; font-weight: 700; min-width: 14px; height: 14px; border-radius: 7px; display: flex; align-items: center; justify-content: center; padding: 0 3px;">${count}</span>` : '<span id="grocery-badge" style="display:none;"></span>'; })() : '';
     return `<a href="${item.href}" style="display: flex; flex-direction: column; align-items: center; padding: 2px 6px; text-decoration: none; gap: 1px;"><span style="position: relative; ${iconStyle}">${iconSvg}${groceryBadge}</span><span style="font-size: 10px; font-weight: 500; letter-spacing: 0.3px; color: ${isActive ? CONFIG.primary_action_color : CONFIG.text_muted};">${item.label}</span></a>`;

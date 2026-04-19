@@ -4244,12 +4244,17 @@ function init() {
     return;
   }
 
+  // Detect which page we're on
+  const page = window.location.pathname.split('/').pop() || 'recipes.html';
+  const isMyPicksPage = page === 'my-picks.html';
+
   const targetView = sessionStorage.getItem('yummy_target_view');
   if (targetView && VIEW_RENDERERS[targetView]) {
     sessionStorage.removeItem('yummy_target_view');
-    state.currentView = targetView;
+    // On my-picks.html, always default to my-picks view
+    state.currentView = isMyPicksPage ? 'my-picks' : targetView;
     // If navigating to recipe-view from another page, pick up the selected recipe ID
-    if (targetView === 'recipe-view') {
+    if (state.currentView === 'recipe-view') {
       const selectedRecipe = sessionStorage.getItem('yummy_selected_recipe');
       if (selectedRecipe) {
         sessionStorage.removeItem('yummy_selected_recipe');
@@ -4258,14 +4263,12 @@ function init() {
       }
     }
     // If navigating to recipe-edit for a new recipe
-    if (targetView === 'recipe-edit' && sessionStorage.getItem('yummy_new_recipe')) {
+    if (state.currentView === 'recipe-edit' && sessionStorage.getItem('yummy_new_recipe')) {
       sessionStorage.removeItem('yummy_new_recipe');
       state.recipeForm = newRecipeDraft();
     }
   } else {
-    // Default view based on which page we're on
-    const page = window.location.pathname.split('/').pop() || 'recipes.html';
-    state.currentView = page === 'my-picks.html' ? 'my-picks' : 'recipes';
+    state.currentView = isMyPicksPage ? 'my-picks' : 'recipes';
   }
   setupKeyboardShortcuts();
   render();
