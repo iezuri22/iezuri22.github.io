@@ -597,7 +597,7 @@ function _renderGroceryRow(item, isChecked) {
               ${isChecked ? '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
             </div>
           </div>
-          <div class="gro-item-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})`}">
+          <div class="gro-item-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);_scheduleGroceryRender(100);})`}">
             ${photo
               ? `<img src="${esc(photo)}" class="gro-item-img" />`
               : `<div class="gro-item-img-placeholder">
@@ -637,7 +637,7 @@ function _renderGroceryGridCard(item, isChecked) {
 
       return `
         <div data-gro-id="${esc(item.id)}" class="gro-grid-card ${isChecked ? 'gro-grid-card-checked' : ''}">
-          <div class="gro-grid-card-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})`}">
+          <div class="gro-grid-card-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);_scheduleGroceryRender(100);})`}">
             ${photo
               ? `<img src="${esc(photo)}" class="gro-grid-card-img" />`
               : `<div class="gro-grid-card-img-placeholder">

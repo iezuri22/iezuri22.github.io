@@ -4688,8 +4688,16 @@ async function confirmSplitInventoryItem(itemId) {
 // markRecipeCooked removed — cooking is only tracked via My Meals food log
 
 function init() {
-  loadAllState();
-  loadCustomIngredientImages();
+  try {
+    loadAllState();
+  } catch (e) {
+    console.error('[kitchen] loadAllState failed:', e);
+  }
+  try {
+    loadCustomIngredientImages();
+  } catch (e) {
+    console.error('[kitchen] loadCustomIngredientImages failed:', e);
+  }
   const targetView = sessionStorage.getItem('yummy_target_view');
   if (targetView === 'inventory' || targetView === 'ingredients') {
     sessionStorage.removeItem('yummy_target_view');
@@ -4702,8 +4710,18 @@ function init() {
   } else {
     state.currentView = 'kitchen';
   }
-  setupKeyboardShortcuts();
-  render();
+  try {
+    setupKeyboardShortcuts();
+  } catch (e) {
+    console.error('[kitchen] setupKeyboardShortcuts failed:', e);
+  }
+  try {
+    render();
+  } catch (e) {
+    console.error('[kitchen] render() failed:', e);
+    const app = document.getElementById('app');
+    if (app) app.innerHTML = '<div style="padding:24px;text-align:center;color:#999;"><div style="font-size:15px;margin-bottom:8px;">Something went wrong loading the kitchen.</div><div style="font-size:12px;margin-bottom:16px;">' + (e.message || 'Unknown error') + '</div><button onclick="location.reload()" style="padding:8px 16px;background:#e85d5d;color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer;">Reload</button></div>';
+  }
 }
 
 init();

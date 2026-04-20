@@ -2398,7 +2398,17 @@ function mapToGroceryCategory(group) {
 }
 
 function getSmartGroceryList() { try { return JSON.parse(localStorage.getItem(GROCERY_KEY) || '[]'); } catch { return []; } }
-function saveSmartGroceryList(list) { localStorage.setItem(GROCERY_KEY, JSON.stringify(list)); state.ignoreRealtimeUntil = Date.now() + 5000; syncGroceryListToSupabase(list); }
+function saveSmartGroceryList(list) {
+  localStorage.setItem(GROCERY_KEY, JSON.stringify(list));
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncGroceryListToSupabase(list).then(() => {
+    // Extend ignore window after sync to catch the echo event
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[grocery] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil, Date.now() + 2000);
+  });
+}
 function getGroceryBadgeCount() { return getSmartGroceryList().filter(i => !i.checked).length; }
 
 function getFrequentMeals() {
@@ -2596,7 +2606,7 @@ function submitPickerIngredients() {
   saveSmartGroceryList(list);
   closeModal();
   showToast(`Added ${selected.length} ingredient${selected.length !== 1 ? 's' : ''} to grocery list`, 'success');
-  if (typeof render === 'function') render();
+  _scheduleGroceryRender(100);
 }
 
 function showBatchIngredientPicker(batchId) {
@@ -2700,7 +2710,7 @@ function submitBatchPickerIngredients() {
   saveSmartGroceryList(list);
   closeModal();
   showToast(`Added ${selected.length} ingredient${selected.length !== 1 ? 's' : ''} to grocery list`, 'success');
-  if (typeof render === 'function') render();
+  _scheduleGroceryRender(100);
 }
 
 function addManualGroceryItemSmart() {
@@ -2715,7 +2725,7 @@ function addManualGroceryItemSmart() {
   saveSmartGroceryList(list); input.value = '';
   if (catInput) catInput.value = 'Other';
   showToast(`${toTitleCase(name)} added to ${category}`, 'success');
-  if (typeof render === 'function') render();
+  _scheduleGroceryRender(100);
   setTimeout(() => { const newInput = document.getElementById('groceryManualInput'); if (newInput) newInput.focus(); }, 50);
 }
 
@@ -2725,18 +2735,7 @@ function toggleSmartGroceryItem(itemId) {
   const row = document.querySelector(`[data-gro-id="${itemId}"]`);
   if (row) { const cb = row.querySelector('.gro-checkbox'); const label = row.querySelector('.gro-label'); if (item.checked) { if (cb) { cb.style.background = 'var(--accent-green)'; cb.style.borderColor = 'var(--accent-green)'; cb.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'; } if (label) { label.style.textDecoration = 'line-through'; label.style.opacity = '0.4'; } } else { if (cb) { cb.style.background = 'transparent'; cb.style.borderColor = 'var(--text-secondary)'; cb.innerHTML = ''; } if (label) { label.style.textDecoration = 'none'; label.style.opacity = '1'; } } }
   _updateGroceryBadge();
-  clearTimeout(state._smartGroceryRenderTimeout);
-  state._smartGroceryRenderTimeout = setTimeout(() => {
-    if (['grocery-list'].includes(state.currentView) && typeof render === 'function') {
-      const scrollEl = document.getElementById('app');
-      const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
-      render();
-      requestAnimationFrame(() => {
-        if (scrollEl) scrollEl.scrollTop = scrollPos;
-        else window.scrollTo(0, scrollPos);
-      });
-    }
-  }, 1200);
+  _scheduleGroceryRender(1200);
 }
 
 function removeSmartGroceryItem(itemId) {
@@ -2744,21 +2743,23 @@ function removeSmartGroceryItem(itemId) {
   const row = document.querySelector(`[data-gro-id="${itemId}"]`);
   if (row) { row.style.transition = 'opacity 150ms, transform 150ms'; row.style.opacity = '0'; row.style.transform = 'translateX(-20px)'; setTimeout(() => row.remove(), 150); }
   _updateGroceryBadge();
-  clearTimeout(state._smartGroceryRenderTimeout);
-  state._smartGroceryRenderTimeout = setTimeout(() => {
-    if (['grocery-list'].includes(state.currentView) && typeof render === 'function') {
-      const scrollEl = document.getElementById('app');
-      const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
-      render();
-      requestAnimationFrame(() => {
-        if (scrollEl) scrollEl.scrollTop = scrollPos;
-        else window.scrollTo(0, scrollPos);
-      });
-    }
-  }, 600);
+  _scheduleGroceryRender(600);
 }
 
-function clearCheckedGrocery() { saveSmartGroceryList(getSmartGroceryList().filter(i => !i.checked)); showToast('Checked items cleared', 'success'); if (typeof render === 'function') render(); }
+function clearCheckedGrocery() {
+  // Cancel any pending realtime debounce that could overwrite our changes
+  clearTimeout(_realtimeDebounceTimer);
+  clearTimeout(_groceryRenderTimer);
+  // Filter out checked items and save
+  saveSmartGroceryList(getSmartGroceryList().filter(i => !i.checked));
+  // Clear old grocery system checked items so migrateOldGroceryData() can't resurrect them
+  state.groceryItems = state.groceryItems.filter(item => !item.checked);
+  saveToLS('groceryItems', state.groceryItems);
+  // Extend ignore window to prevent stale Supabase data from overwriting the clear
+  state.ignoreRealtimeUntil = Date.now() + 15000;
+  showToast('Checked items cleared', 'success');
+  _scheduleGroceryRender(100);
+}
 function clearAllGrocerySmart() {
   if (!confirm('Clear your entire grocery list?')) return;
   saveSmartGroceryList([]);
@@ -2779,7 +2780,7 @@ function _updateGroceryBadge() {
 }
 
 let _cachedSuggestions = [];
-function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; const added = addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); showToast(added ? `${toTitleCase(s.name)} added` : `${toTitleCase(s.name)} removed`, added ? 'success' : 'info'); if (typeof render === 'function') render(); }
+function handleSuggestClick(idx) { const s = _cachedSuggestions[idx]; if (!s) return; const added = addSuggestedToGrocery(s.name, s.category, s.qty, s.unit, s.mealNames); showToast(added ? `${toTitleCase(s.name)} added` : `${toTitleCase(s.name)} removed`, added ? 'success' : 'info'); _scheduleGroceryRender(100); }
 
 // --- Add from a meal: filter state ---
 window._mealPickerFilters = { search: '', saved: false, mealType: null, effort: null };
@@ -5369,14 +5370,40 @@ function applySupabaseData(data) {
 }
 
 let _realtimeDebounceTimer = null;
+let _realtimeChannel = null;
+let _groceryRenderTimer = null;
+
+function _scheduleGroceryRender(delayMs) {
+  clearTimeout(_groceryRenderTimer);
+  clearTimeout(_realtimeDebounceTimer);
+  _groceryRenderTimer = setTimeout(() => {
+    if (['grocery-list'].includes(state.currentView) && typeof render === 'function') {
+      const scrollEl = document.getElementById('app');
+      const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
+      render();
+      requestAnimationFrame(() => {
+        if (scrollEl) scrollEl.scrollTop = scrollPos;
+        else window.scrollTo(0, scrollPos);
+      });
+    }
+  }, delayMs);
+}
+
 function subscribeToChanges(userId) {
-  const channel = window.supabaseClient
+  // Clean up existing channel to prevent duplicate subscriptions
+  if (_realtimeChannel) {
+    try { window.supabaseClient.removeChannel(_realtimeChannel); } catch (e) { console.error('[Realtime] removeChannel failed:', e); }
+    _realtimeChannel = null;
+  }
+
+  _realtimeChannel = window.supabaseClient
     .channel('meal_planner_changes')
     .on('postgres_changes',
       { event: '*', schema: 'public', table: 'meal_planner_data', filter: `user_id=eq.${userId}` },
       (payload) => {
         if (state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil) return;
         clearTimeout(_realtimeDebounceTimer);
+        clearTimeout(_groceryRenderTimer);
         _realtimeDebounceTimer = setTimeout(() => {
           loadDataFromSupabase().then(() => {
             if (typeof render === 'function') {
@@ -5494,7 +5521,10 @@ if (typeof showInventoryItemDetail === 'undefined') {
   };
 }
 
+let _keyboardShortcutsSetup = false;
 function setupKeyboardShortcuts() {
+  if (_keyboardShortcutsSetup) return;
+  _keyboardShortcutsSetup = true;
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
     if ((e.ctrlKey || e.metaKey) && e.key === 'e') { e.preventDefault(); exportData(); }
@@ -7183,20 +7213,7 @@ function toggleRecipeDescription() {
 
 // SECTION 21: INITIALIZATION
 // ============================================================
-
-// On page load, check for target view from navigation
-(function initShared() {
-  // Load from localStorage first for immediate display (Supabase data will override when loaded)
-  loadAllState();
-  loadCustomIngredientImages();
-
-  // Check if we navigated here from another page
-  const targetView = sessionStorage.getItem('yummy_target_view');
-  if (targetView) {
-    state.currentView = targetView;
-    sessionStorage.removeItem('yummy_target_view');
-  }
-
-  // Setup keyboard shortcuts
-  setupKeyboardShortcuts();
-})();
+// NOTE: Each page's own init() function (kitchen.js, grocery.js, home.js, recipes.js, etc.)
+// handles loadAllState(), sessionStorage target view, and setupKeyboardShortcuts().
+// No shared IIFE needed — it was removed because it consumed yummy_target_view before
+// page-specific init() could read it, and stacked duplicate keyboard listeners.
