@@ -574,6 +574,14 @@
   width: 100%;
 }
 
+@media (min-width: 768px) {
+  .all-recipes-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 20px;
+    padding: 0 12px;
+  }
+}
+
 .load-more-btn {
   display: block;
   width: calc(100% - 40px);
@@ -676,4 +684,148 @@
   font-size: 13px;
   color: var(--text-tertiary);
   margin: 0;
+}
+
+/* ===== INSTAGRAM FEED VIEW ===== */
+.insta-feed-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 4px;
+  padding: 8px 12px;
+}
+
+.insta-card {
+  position: relative;
+  border-radius: var(--radius-xl, 16px);
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.insta-card:active {
+  transform: scale(0.98);
+}
+
+.insta-card-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  background: #0d0d0d;
+}
+
+.insta-card-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.insta-card-media video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.insta-card-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.insta-card-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, transparent 30%, transparent 50%, rgba(0,0,0,0.65) 100%);
+  pointer-events: none;
+}
+
+.insta-card-top-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.insta-card-save {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  pointer-events: auto;
+  transition: transform 0.15s ease;
+}
+
+.insta-card-save:active {
+  transform: scale(0.9);
+}
+
+.insta-card-bottom {
+  pointer-events: auto;
+}
+
+.insta-card-title {
+  font-size: 20px;
+  font-weight: 700;
+  color: white;
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.25;
+  text-shadow: 0 1px 6px rgba(0,0,0,0.5);
+}
+
+.insta-card-meta {
+  margin-top: 6px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.75);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+/* Desktop: 2-column grid */
+@media (min-width: 768px) {
+  .insta-feed-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .insta-card-media {
+    aspect-ratio: 1 / 1;
+  }
+
+  .insta-card-title {
+    font-size: 17px;
+  }
+}
+
+/* Large desktop: 3-column grid */
+@media (min-width: 1200px) {
+  .insta-feed-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
 }

@@ -1744,29 +1744,45 @@ function renderMyPicksBanner() {
 }
 
 function renderFeedSearchBar() {
+  const mode = state.recipesFeedMode || 'feed';
+  const isInsta = mode === 'instagram';
   return `
     <div style="padding: 8px 12px 0;">
-      <div style="position:relative;">
-        <input id="recipesPageSearchInput" type="text" placeholder="Search recipes or ingredients..."
-          value="${esc(state.searchTerm || '')}"
-          oninput="handleRecipesPageSearch(this.value)"
-          style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
-          background:${CONFIG.surface_color}; color:${CONFIG.text_color};
-          border:1px solid rgba(255,255,255,0.08); border-radius:10px;
-          font-size:14px; font-family:${CONFIG.font_family};" />
-        ${state.searchTerm ? `
-          <button onclick="state.searchTerm=''; render(); setTimeout(() => { const i = document.getElementById('recipesPageSearchInput'); if(i) i.focus(); }, 0);"
-            style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
-            background:rgba(255,255,255,0.1); border:none; border-radius:50%;
-            width:20px; height:20px; display:flex; align-items:center; justify-content:center;
-            color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
-            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-          </button>
-        ` : `
-          <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
-            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
-          </div>
-        `}
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div style="position:relative; flex:1;">
+          <input id="recipesPageSearchInput" type="text" placeholder="Search recipes or ingredients..."
+            value="${esc(state.searchTerm || '')}"
+            oninput="handleRecipesPageSearch(this.value)"
+            style="width:100%; height:40px; padding:0 36px 0 12px; box-sizing:border-box;
+            background:${CONFIG.surface_color}; color:${CONFIG.text_color};
+            border:1px solid rgba(255,255,255,0.08); border-radius:10px;
+            font-size:14px; font-family:${CONFIG.font_family};" />
+          ${state.searchTerm ? `
+            <button onclick="state.searchTerm=''; render(); setTimeout(() => { const i = document.getElementById('recipesPageSearchInput'); if(i) i.focus(); }, 0);"
+              style="position:absolute; right:8px; top:50%; transform:translateY(-50%);
+              background:rgba(255,255,255,0.1); border:none; border-radius:50%;
+              width:20px; height:20px; display:flex; align-items:center; justify-content:center;
+              color:${CONFIG.text_muted}; cursor:pointer; padding:0;">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          ` : `
+            <div style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:${CONFIG.text_tertiary};">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            </div>
+          `}
+        </div>
+        <button onclick="state.recipesFeedMode = state.recipesFeedMode === 'instagram' ? 'feed' : 'instagram'; localStorage.setItem('recipesFeedMode', state.recipesFeedMode); render();"
+          style="width:40px; height:40px; flex-shrink:0; border-radius:10px;
+          border:1px solid ${isInsta ? CONFIG.primary_action_color : 'rgba(255,255,255,0.08)'};
+          background:${isInsta ? 'rgba(232,93,93,0.15)' : CONFIG.surface_color};
+          color:${isInsta ? CONFIG.primary_action_color : CONFIG.text_muted};
+          cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;"
+          title="${isInsta ? 'Switch to feed view' : 'Switch to grid view'}">
+          ${isInsta
+            ? `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>`
+            : `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>`
+          }
+        </button>
       </div>
     </div>
   `;
@@ -1907,6 +1923,73 @@ function renderLargeCard(recipe) {
         </div>
       </div>
     </div>
+  `;
+}
+
+function renderInstagramCard(recipe) {
+  const id = recipe.__backendId || recipe.id;
+  const img = recipeThumb(recipe);
+  const hasVid = recipeHasVideo(id);
+  const previewVideoId = hasVid ? getRecipePreviewVideoId(id) : null;
+  const saved = isRecipeSaved(id);
+  const effort = getRecipeEffort(id);
+
+  return `
+    <div class="insta-card ${hasVid ? 'video-card' : ''}" ${hasVid ? 'data-video-card' : ''}
+         data-recipe-id="${esc(id)}" onclick="openRecipeView('${esc(id)}')"
+         oncontextmenu="event.preventDefault(); showEffortContextMenu(event, '${id}', '${esc(recipe.title).replace(/'/g, "\\'")}');"
+         ontouchstart="this._lpt=setTimeout(()=>{this._lp=true;showEffortContextMenu(event,'${id}','${esc(recipe.title).replace(/'/g, "\\'")}');},500);"
+         ontouchend="clearTimeout(this._lpt);if(this._lp){event.preventDefault();this._lp=false;}"
+         ontouchmove="clearTimeout(this._lpt);">
+      <div class="insta-card-media">
+        ${img ? `<img src="${esc(img)}" alt="${esc(recipe.title)}" class="video-card-thumb" loading="lazy"
+            onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+          <div class="insta-card-placeholder" style="display:none;background:${getPlaceholderGradient(recipe)};"></div>` :
+          `<div class="insta-card-placeholder" style="background:${getPlaceholderGradient(recipe)};"></div>`}
+        ${previewVideoId ? `<video data-video-preview="${esc(previewVideoId)}" muted playsinline loop preload="none" style="pointer-events:none;"></video>` : ''}
+      </div>
+      <div class="insta-card-overlay">
+        <div class="insta-card-top-actions">
+          ${effort ? renderEffortPill(effort, 'sm') : ''}
+          ${hasVid && !previewVideoId ? `<div style="width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;">
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="white"><polygon points="2,1 9,5 2,9"/></svg>
+          </div>` : ''}
+          ${previewVideoId ? `<div class="video-live-dot"><div class="video-live-dot-inner"></div></div>` : ''}
+          <div style="flex:1;"></div>
+          <button class="insta-card-save" onclick="event.stopPropagation(); toggleSaveRecipe('${esc(id)}')"
+            style="color:${saved ? CONFIG.primary_action_color : 'rgba(255,255,255,0.8)'};">
+            <svg width="16" height="16" fill="${saved ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z"/></svg>
+          </button>
+        </div>
+        <div class="insta-card-bottom">
+          <h3 class="insta-card-title">${esc(recipe.title)}</h3>
+          <div class="insta-card-meta">
+            ${recipe.cookTime ? `<span>⏱ ${esc(recipe.cookTime)}</span>` : ''}
+            ${recipe.category ? `<span>${esc(recipe.category)}</span>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderInstagramFeed(list) {
+  if (!list || list.length === 0) return renderFeedEmptyState(false);
+
+  const perPage = 12;
+  const page = state.feedAllRecipesPage || 1;
+  const visible = list.slice(0, page * perPage);
+  const hasMore = visible.length < list.length;
+
+  return `
+    <div class="insta-feed-grid">
+      ${visible.map((r, idx) => renderInstagramCard(r)).join('')}
+    </div>
+    ${hasMore ? `
+      <button class="load-more-btn" onclick="state.feedAllRecipesPage = ${page + 1}; render();">
+        Load More (${list.length - visible.length} remaining)
+      </button>
+    ` : ''}
   `;
 }
 
@@ -2267,6 +2350,17 @@ function renderRecipes() {
       <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
         ${renderFeedSearchBar()}
         ${renderFeedSeeAllGrid(state.feedSeeAllSection, list)}
+      </div>
+    `;
+  }
+
+  // --- MODE 2.5: Instagram feed mode ---
+  if ((state.recipesFeedMode || 'feed') === 'instagram') {
+    return `
+      <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
+        ${renderFeedSearchBar()}
+        ${renderRecipeFilterPills()}
+        ${renderInstagramFeed(list)}
       </div>
     `;
   }

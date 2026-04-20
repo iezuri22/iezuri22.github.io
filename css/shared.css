@@ -1226,7 +1226,7 @@
         align-items: center;
         min-height: 0;
         width: 100%;
-        max-width: 500px;
+        max-width: 900px;
         flex: 1;
       }
       .desktop-home-main > * {
@@ -1278,7 +1278,7 @@
         gap: 16px;
         padding-top: 8px;
         width: 100%;
-        max-width: 500px;
+        max-width: 900px;
         overflow-y: auto;
       }
 
@@ -1427,7 +1427,7 @@
 
       /* Swipe container desktop sizing */
       .swipe-container {
-        max-width: 500px;
+        max-width: 600px;
         width: 100%;
         margin: 0 auto;
       }
@@ -1540,6 +1540,42 @@
       }
       .sidebar-collapsed #moreMenuOverlay > div {
         left: 70px !important;
+      }
+
+      /* Desktop: slightly larger carousel cards */
+      .recipe-carousel-card {
+        width: 240px;
+      }
+      .large-carousel-card {
+        max-width: 480px;
+      }
+    }
+
+    /* ===== LARGE DESKTOP (1200px+) ===== */
+    @media (min-width: 1200px) {
+      .desktop-home-layout {
+        flex-direction: row !important;
+        align-items: flex-start !important;
+        gap: 32px;
+      }
+      .desktop-home-main {
+        flex: 3;
+        max-width: 600px;
+      }
+      .desktop-home-sidebar {
+        flex: 2;
+        max-width: none;
+      }
+      .all-recipes-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+        gap: 20px !important;
+      }
+      .recipes-photo-grid {
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)) !important;
+        gap: 10px !important;
+      }
+      .desktop-grocery-layout {
+        grid-template-columns: 2fr 1fr;
       }
     }
 

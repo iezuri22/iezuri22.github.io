@@ -852,6 +852,7 @@ const state = {
   recipeShowSecondaryFilters: false,
   recipeSourceToggles: {},
   recipeEffortToggles: {},
+  recipesFeedMode: localStorage.getItem('recipesFeedMode') || 'feed',
   showTips: false,
   showRecipesOrTips: 'recipes',
   selectedGroceryDate: null,
@@ -2640,7 +2641,7 @@ function addManualGroceryItemSmart() {
   if (list.find(i => i.name.toLowerCase().trim() === name.toLowerCase().trim())) { showToast('Already on your list', 'info'); input.value = ''; return; }
   const catInput = document.getElementById('groceryManualCategory');
   const category = (catInput && catInput.value) ? catInput.value : 'Other';
-  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category, qty: '', unit: '', checked: false, manual: true, sourceMeals: [], addedAt: Date.now() });
+  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category, qty: '', unit: '', checked: false, manual: true, sourceMeals: [], store: state.groceryStoreFilter || '', addedAt: Date.now() });
   saveSmartGroceryList(list); input.value = '';
   if (catInput) catInput.value = 'Other';
   showToast(`${toTitleCase(name)} added to ${category}`, 'success');

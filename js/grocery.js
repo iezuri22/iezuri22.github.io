@@ -1285,14 +1285,24 @@ function showStorePickerForItem(itemId) {
       <div style="margin-top:16px;">
         <div style="display:flex;gap:8px;">
           <input type="text" id="newStoreInput" placeholder="Add a new store..."
-            onkeydown="if(event.key==='Enter'){addGroceryStore(this.value);showStorePickerForItem('${esc(itemId).replace(/'/g, "\\'")}');}"
+            onkeydown="if(event.key==='Enter'){addNewStoreAndAssign(this.value,'${esc(itemId).replace(/'/g, "\\'")}');}"
             style="flex:1;padding:12px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:${CONFIG.text_color};font-size:14px;outline:none;" />
-          <button onclick="addGroceryStore(document.getElementById('newStoreInput').value);showStorePickerForItem('${esc(itemId).replace(/'/g, "\\'")}');"
+          <button onclick="addNewStoreAndAssign(document.getElementById('newStoreInput').value,'${esc(itemId).replace(/'/g, "\\'")}');"
             style="padding:12px 16px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Add</button>
         </div>
       </div>
     </div>
   `);
+}
+
+function addNewStoreAndAssign(storeName, itemId) {
+  const trimmed = (storeName || '').trim();
+  if (!trimmed) return;
+  addGroceryStore(trimmed);
+  setGroceryItemStore(itemId, trimmed);
+  closeModal();
+  showToast(`Assigned to ${trimmed}`, 'success');
+  if (typeof render === 'function') render();
 }
 
 function showManageStoresModal() {
