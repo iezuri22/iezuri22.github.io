@@ -387,114 +387,103 @@ function renderGroceryList() {
       const groceryList = getSmartGroceryList();
       const unchecked = groceryList.filter(item => !item.checked);
       const checked = groceryList.filter(item => item.checked);
+      const stores = getGroceryStores();
+      const activeStore = state.groceryStoreFilter || '';
 
-      // Categorized suggestions (planned > saved only — no frequent ingredient pills)
+      // Filter by store if active
+      const filteredUnchecked = activeStore ? unchecked.filter(i => (i.store || '') === activeStore) : unchecked;
+      const filteredChecked = activeStore ? checked.filter(i => (i.store || '') === activeStore) : checked;
+
+      // Frequency / recurring items
+      const dueItems = getDueFrequencyItems();
+      const allFreqItems = getFrequencyItems();
+
+      // Categorized suggestions
       const catSugg = getCategorizedSuggestions();
       const allSuggestions = [...catSugg.planned];
       _cachedSuggestions = allSuggestions;
 
-      // Split items into unique vs staples
-      const uniqueUnchecked = unchecked.filter(item => !isStaple(item.name));
-      const stapleUnchecked = unchecked.filter(item => isStaple(item.name));
-      const uniqueChecked = checked.filter(item => !isStaple(item.name));
-      const stapleChecked = checked.filter(item => isStaple(item.name));
-      const totalStaples = stapleUnchecked.length + stapleChecked.length;
+      // Store filter pills
+      const allStores = [...new Set([...stores, ...groceryList.map(i => i.store).filter(Boolean)])];
+      const storeFilterHtml = allStores.length > 0 ? `
+        <div class="gro-store-filters">
+          <button class="gro-store-pill ${!activeStore ? 'active' : ''}" onclick="state.groceryStoreFilter='';render();">All</button>
+          ${allStores.map(s => `
+            <button class="gro-store-pill ${activeStore === s ? 'active' : ''}" onclick="state.groceryStoreFilter='${esc(s).replace(/'/g, "\\'")}';render();">${esc(s)}</button>
+          `).join('')}
+          <button class="gro-store-pill gro-store-pill-add" onclick="showManageStoresModal()">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          </button>
+        </div>
+      ` : '';
 
-      // Group unique unchecked items by category
-      const groupedUnchecked = {};
-      uniqueUnchecked.forEach(item => {
-        const cat = item.category || 'Other';
-        if (!groupedUnchecked[cat]) groupedUnchecked[cat] = [];
-        groupedUnchecked[cat].push(item);
-      });
-      const sortedCats = GROCERY_CATEGORIES.filter(c => groupedUnchecked[c]);
-      Object.keys(groupedUnchecked).forEach(c => {
-        if (!GROCERY_CATEGORIES.includes(c)) sortedCats.push(c);
-      });
+      // Due recurring items banner
+      const dueBannerHtml = dueItems.length > 0 ? `
+        <div class="gro-recurring-banner">
+          <div class="gro-recurring-banner-left">
+            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992"/></svg>
+            <span>${dueItems.length} recurring item${dueItems.length !== 1 ? 's' : ''} due</span>
+          </div>
+          <button class="gro-recurring-banner-btn" onclick="addAllDueFrequencyItems()">Add all</button>
+        </div>
+      ` : '';
 
-      // Group unique checked items by category
-      const groupedChecked = {};
-      uniqueChecked.forEach(item => {
-        const cat = item.category || 'Other';
-        if (!groupedChecked[cat]) groupedChecked[cat] = [];
-        groupedChecked[cat].push(item);
-      });
-
-      // Empty message (but don't return early — always show controls)
-      const emptyMessage = (groceryList.length === 0 && allSuggestions.length === 0)
-        ? `<div style="text-align: center; padding: 24px 0; color: ${CONFIG.text_muted}; font-size: 13px;">Your grocery list is empty. Add items manually or from a meal.</div>`
+      // Empty state
+      const emptyHtml = (groceryList.length === 0 && allSuggestions.length === 0 && dueItems.length === 0)
+        ? `<div class="gro-empty">
+            <svg width="48" height="48" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
+            <div style="margin-top:12px;font-size:15px;font-weight:500;">Your list is empty</div>
+            <div style="margin-top:4px;font-size:13px;color:${CONFIG.text_muted};">Add items manually, from a meal, or set up recurring buys</div>
+          </div>`
         : '';
 
-      // Build suggestion pills HTML with categorized sections
-      function _buildSuggestionPills(items, startIdx, label, sublabelFn) {
-        if (items.length === 0) return '';
-        return `
-          <div style="margin-bottom: 10px;">
-            <div class="section-label" style="margin-bottom: 5px;">${label}</div>
-            <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-              ${items.slice(0, 8).map((s, i) => `
-                <button data-sug-idx="${startIdx + i}" onclick="handleSuggestClick(${startIdx + i})"
-                  style="display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; min-height: 36px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.06); border-radius: 20px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer; white-space: nowrap; -webkit-tap-highlight-color: transparent;"
-                  class="card-press">
-                  <svg width="14" height="14" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-                  ${esc(toTitleCase(s.name))}
-                  <span style="color: ${CONFIG.text_muted}; font-size: 10px;">${sublabelFn(s)}</span>
-                </button>
-              `).join('')}
-            </div>
-          </div>`;
-      }
-
+      // Suggestion pills
       const suggestionsHtml = allSuggestions.length > 0 ? `
-        <div style="margin-bottom: 12px;">
-          ${_buildSuggestionPills(catSugg.planned, 0, 'For your upcoming meals', s => s.recipeName || '')}
+        <div style="margin-bottom:16px;">
+          <div class="section-label" style="margin-bottom:8px;">From upcoming meals</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;">
+            ${allSuggestions.slice(0, 8).map((s, i) => `
+              <button data-sug-idx="${i}" onclick="handleSuggestClick(${i})"
+                class="gro-suggest-pill card-press">
+                <svg width="14" height="14" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+                ${esc(toTitleCase(s.name))}
+              </button>
+            `).join('')}
+          </div>
         </div>
       ` : '';
 
-      // "Things you make often" as meal cards (not ingredient pills)
-      const frequentMeals = getFrequentMeals();
-      const frequentMealsHtml = frequentMeals.length > 0 ? `
-        <div style="margin-bottom: 12px;">
-          <div class="section-label" style="margin-bottom: 6px;">Things you make often</div>
-          ${frequentMeals.slice(0, 6).map(m => {
-            const imgHtml = m.image
-              ? `<img src="${esc(m.image)}" style="width: 48px; height: 48px; border-radius: 10px; object-fit: cover; flex-shrink: 0;">`
-              : `<div style="width: 48px; height: 48px; border-radius: 10px; background: ${CONFIG.surface_elevated}; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0;">&#127869;</div>`;
-            return `<div onclick="showMealIngredientPicker('${esc(m.recipeId || '')}')" style="display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; cursor: pointer; margin-bottom: 4px; background: ${CONFIG.surface_color};" class="card-press">${imgHtml}<div style="flex: 1; min-width: 0;"><div style="font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: ${CONFIG.text_color};">${esc(m.name)}</div><div style="font-size: 11px; color: ${CONFIG.text_muted};">Cooked ${m.count}x</div></div></div>`;
-          }).join('')}
-        </div>
-      ` : '';
+      // Quick actions row
+      const quickActionsHtml = `
+        <div class="gro-quick-actions">
+          <button onclick="showAddFromMealModal()" class="gro-quick-btn card-press">
+            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+            <span>From a meal</span>
+          </button>
+          <button onclick="showRecurringItemsModal()" class="gro-quick-btn card-press">
+            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992"/></svg>
+            <span>Recurring</span>
+            ${allFreqItems.length > 0 ? `<span class="gro-quick-badge">${allFreqItems.length}</span>` : ''}
+          </button>
+          <button onclick="showManageStoresModal()" class="gro-quick-btn card-press">
+            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
+            <span>Stores</span>
+          </button>
+        </div>`;
 
-      const addFromMealHtml = `
-        <button onclick="showAddFromMealModal()"
-          style="width: 100%; padding: 12px; min-height: 44px; margin-bottom: 12px; background: ${CONFIG.surface_color}; border: 1px dashed rgba(255,255,255,0.12); border-radius: 10px; color: ${CONFIG.text_color}; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; -webkit-tap-highlight-color: transparent;"
-          class="card-press">
-          <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
-          Add from a meal
-        </button>`;
-
-      // Staples collapsible section
-      const staplesHtml = totalStaples > 0 ? `
-        <div style="margin-top: 8px;">
-          <div onclick="var c=this.nextElementSibling; var ch=this.querySelector('.staple-chev'); if(c.style.display==='none'){c.style.display='block';ch.style.transform='rotate(90deg)';}else{c.style.display='none';ch.style.transform='';}"
-               style="display: flex; align-items: center; gap: 8px; padding: 10px; background: ${CONFIG.surface_color}; border-radius: 8px; cursor: pointer; margin-bottom: 4px;">
-            <span class="staple-chev" style="color: ${CONFIG.text_muted}; font-size: 12px; transition: transform 150ms; display: inline-block;">&#9656;</span>
-            <span style="color: ${CONFIG.text_muted}; font-size: 13px; font-weight: 600;">Staples (you might have these)</span>
-            <span style="color: ${CONFIG.text_tertiary}; font-size: 11px;">${totalStaples} item${totalStaples !== 1 ? 's' : ''}</span>
-          </div>
-          <div style="display: none;">
-            ${stapleUnchecked.map(item => _renderGroceryRow(item, false)).join('')}
-            ${stapleChecked.map(item => _renderGroceryRow(item, true)).join('')}
-          </div>
+      // Clear actions
+      const clearHtml = groceryList.length > 0 ? `
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          ${checked.length > 0 ? `<button onclick="clearCheckedGrocery()" class="gro-clear-btn">Clear checked (${checked.length})</button>` : ''}
+          <button onclick="clearAllGrocerySmart()" class="gro-clear-btn gro-clear-all">Clear all</button>
         </div>
       ` : '';
 
       return `
-        <div style="padding: 0 20px; flex: 1;">
-
-          <!-- Manual Add Input -->
-          <div style="display: flex; gap: 8px; margin-bottom: 6px;">
-            <div class="search-bar" style="flex: 1;">
+        <div class="gro-container">
+          <!-- Add Item Input -->
+          <div class="gro-add-bar">
+            <div class="search-bar" style="flex:1;">
               <div class="search-icon">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
               </div>
@@ -503,119 +492,49 @@ function renderGroceryList() {
                 onfocus="document.getElementById('groceryCategoryRow').style.display='flex';"
               />
             </div>
-            <button onclick="addManualGroceryItemSmart()"
-              style="padding: 8px 14px; height: 40px; box-sizing: border-box; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 100px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; min-width: 52px; font-family: var(--font-sans);">
-              Add
-            </button>
+            <button onclick="addManualGroceryItemSmart()" class="gro-add-btn">Add</button>
           </div>
-          <!-- Category selector row -->
-          <div id="groceryCategoryRow" class="filter-pill-row" style="display: none; flex-wrap: wrap; padding: 2px 0; margin-bottom: 12px;">
+          <div id="groceryCategoryRow" class="filter-pill-row" style="display:none;flex-wrap:wrap;padding:2px 0;margin-bottom:12px;">
             ${GROCERY_CATEGORIES.map(cat => `
-              <button onclick="selectGroceryCategory(this, '${esc(cat)}')"
-                data-cat="${esc(cat)}"
+              <button onclick="selectGroceryCategory(this, '${esc(cat)}')" data-cat="${esc(cat)}"
                 class="filter-pill ${cat === 'Other' ? 'active' : ''}">${esc(cat)}</button>
             `).join('')}
           </div>
           <input type="hidden" id="groceryManualCategory" value="Other" />
 
-          <!-- View Mode Toggle -->
-          <div class="grocery-tab-bar">
-            <button class="grocery-tab ${state.groceryViewMode === 'recipe' ? 'active' : ''}" onclick="state.groceryViewMode='recipe';render();">By Recipe</button>
-            <button class="grocery-tab ${state.groceryViewMode === 'category' ? 'active' : ''}" onclick="state.groceryViewMode='category';render();">By Category</button>
+          ${quickActionsHtml}
+          ${storeFilterHtml}
+          ${dueBannerHtml}
+          ${suggestionsHtml}
+          ${clearHtml}
+          ${emptyHtml}
+
+          <!-- Main Grocery List -->
+          <div class="gro-list">
+            ${filteredUnchecked.map(item => _renderGroceryRow(item, false)).join('')}
           </div>
 
-          <div class="desktop-grocery-layout">
-            <div class="desktop-grocery-main">
-
-          <!-- Suggestions Section (mobile) -->
-          <div class="mobile-only-sections">
-            ${suggestionsHtml}
-            ${frequentMealsHtml}
-            ${addFromMealHtml}
-          </div>
-
-          <!-- Clear buttons -->
-          ${groceryList.length > 0 ? `
-            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-              ${checked.length > 0 ? `
-                <button onclick="clearCheckedGrocery()"
-                  style="flex: 1; padding: 8px; min-height: 36px; background: ${CONFIG.surface_color}; border: none; border-radius: 16px; color: ${CONFIG.text_muted}; font-size: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;">
-                  Clear checked (${checked.length})
-                </button>
-              ` : ''}
-              <button onclick="clearAllGrocerySmart()"
-                style="flex: 1; padding: 8px; min-height: 36px; background: ${CONFIG.surface_color}; border: none; border-radius: 16px; color: ${CONFIG.danger_color}; font-size: 12px; cursor: pointer; -webkit-tap-highlight-color: transparent;">
-                Clear all
-              </button>
+          <!-- Checked Items -->
+          ${filteredChecked.length > 0 ? `
+            <div class="gro-checked-section">
+              <div class="gro-checked-header" onclick="var c=this.nextElementSibling;c.style.display=c.style.display==='none'?'block':'none';this.querySelector('.gro-chev').style.transform=c.style.display==='none'?'':'rotate(90deg)';">
+                <span class="gro-chev" style="transform:rotate(90deg);">&#9656;</span>
+                <span>Completed (${filteredChecked.length})</span>
+              </div>
+              <div class="gro-list">
+                ${filteredChecked.map(item => _renderGroceryRow(item, true)).join('')}
+              </div>
             </div>
           ` : ''}
-
-          ${emptyMessage}
-
-          ${state.groceryViewMode === 'recipe' ? renderGroceryByRecipe() : `
-          <!-- BY CATEGORY VIEW -->
-          <!-- What you'll need (unique ingredients by category) -->
-          ${(uniqueUnchecked.length > 0 || uniqueChecked.length > 0) ? `
-            <div style="color: ${CONFIG.text_color}; font-size: 13px; font-weight: 600; margin-bottom: 8px;">What you'll need</div>
-          ` : ''}
-
-          ${sortedCats.map(cat => `
-            <div style="margin-bottom: 12px;">
-              <div class="section-label" style="margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid var(--border-subtle);">
-                ${esc(cat)} (${groupedUnchecked[cat].length})
-              </div>
-              ${groupedUnchecked[cat].map(item => _renderGroceryRow(item, false)).join('')}
-              ${(groupedChecked[cat] || []).map(item => _renderGroceryRow(item, true)).join('')}
-            </div>
-          `).join('')}
-
-          <!-- Remaining checked items in categories with no unchecked -->
-          ${(() => {
-            const catsWithUnchecked = new Set(sortedCats);
-            const remainingCheckedCats = Object.keys(groupedChecked).filter(c => !catsWithUnchecked.has(c));
-            if (remainingCheckedCats.length === 0) return '';
-            return remainingCheckedCats.map(cat => `
-              <div style="margin-bottom: 12px;">
-                <div class="section-label" style="margin-bottom: 6px; padding-bottom: 3px; border-bottom: 1px solid var(--border-subtle);">
-                  ${esc(cat)} (${groupedChecked[cat].length})
-                </div>
-                ${groupedChecked[cat].map(item => _renderGroceryRow(item, true)).join('')}
-              </div>
-            `).join('');
-          })()}
-          `}
-
-          <!-- Staples section (collapsed) -->
-          ${staplesHtml}
-
-            </div><!-- end desktop-grocery-main -->
-            <div class="desktop-grocery-side">
-              ${suggestionsHtml}
-              ${frequentMealsHtml}
-              ${addFromMealHtml}
-            </div>
-          </div><!-- end desktop-grocery-layout -->
-
         </div>
 
-        <!-- Sticky Bottom Bar -->
-        ${groceryList.length > 0 ? (() => {
-          const recipeNames = new Set();
-          groceryList.forEach(item => {
-            if (item.sourceMeals) item.sourceMeals.forEach(m => recipeNames.add(m));
-          });
-          const recipeCount = recipeNames.size;
-          const itemCount = unchecked.length;
-          return `
-            <div class="grocery-sticky-bar">
-              <span class="grocery-sticky-count">${recipeCount} RECIPE${recipeCount !== 1 ? 'S' : ''}, ${itemCount} ITEM${itemCount !== 1 ? 'S' : ''}</span>
-              <button class="grocery-sticky-cta" onclick="showToast('Delivery integration coming soon!', 'info')">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272M6 20.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm12.75 0a.75.75 0 11-1.5 0 .75.75 0 011.5 0z"/></svg>
-                Shop With Walmart
-              </button>
-            </div>
-          `;
-        })() : ''}
+        <!-- Sticky Bottom Summary -->
+        ${groceryList.length > 0 ? `
+          <div class="grocery-sticky-bar">
+            <span class="grocery-sticky-count">${unchecked.length} ITEM${unchecked.length !== 1 ? 'S' : ''} LEFT</span>
+            ${activeStore ? `<span class="grocery-sticky-store">${esc(activeStore)}</span>` : ''}
+          </div>
+        ` : ''}
       `;
     }
 
@@ -626,34 +545,42 @@ function _renderGroceryRow(item, isChecked) {
         ? item.sourceMeals.join(', ') : '';
       const photo = findIngredientPhoto(item.name);
       const escapedItemName = esc(item.name).replace(/'/g, "\\'");
+      const escapedId = esc(item.id).replace(/'/g, "\\'");
+      const store = item.store || '';
 
       return `
-        <div data-gro-id="${esc(item.id)}"
-             onclick="toggleSmartGroceryItem('${esc(item.id)}')"
-             style="display: flex; align-items: center; gap: 10px; padding: 10px; min-height: 44px; margin-bottom: 2px; background: var(--bg-card); border-radius: var(--radius-lg); cursor: pointer; -webkit-tap-highlight-color: transparent;" class="card-press">
-          <div class="gro-checkbox"
-               style="width: 24px; height: 24px; border: 1.5px solid ${isChecked ? 'var(--accent-green)' : 'var(--text-secondary)'}; border-radius: 50%; flex-shrink: 0; display: flex; align-items: center; justify-content: center; background: ${isChecked ? 'var(--accent-green)' : 'transparent'}; transition: all 150ms ease;">
-            ${isChecked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
-          </div>
-          ${photo ? `
-            <div onclick="event.stopPropagation();openPhotoExpandOverlay('${esc(photo).replace(/'/g, "\\'")}','${escapedItemName}')"
-              style="width:36px;height:36px;border-radius:6px;overflow:hidden;flex-shrink:0;background:${CONFIG.surface_elevated};display:flex;align-items:center;justify-content:center;cursor:pointer;">
-              <img src="${esc(photo)}" style="width:100%;height:100%;object-fit:cover;" />
+        <div data-gro-id="${esc(item.id)}" class="gro-item ${isChecked ? 'gro-item-checked' : ''}">
+          <div class="gro-item-check" onclick="toggleSmartGroceryItem('${escapedId}')">
+            <div class="gro-checkbox ${isChecked ? 'checked' : ''}">
+              ${isChecked ? '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
             </div>
-          ` : ''}
-          <div class="gro-label" style="flex: 1; min-width: 0; ${isChecked ? 'text-decoration: line-through; color: var(--text-secondary); opacity: 0.5;' : ''}">
-            <div style="display: flex; align-items: baseline; gap: 6px;">
-              <span style="color: ${isChecked ? 'var(--text-secondary)' : 'var(--text-primary)'}; font-size: 13px;">${esc(name)}</span>
-              ${qtyLabel ? `<span style="color: var(--text-secondary); font-size: 11px;">${esc(qtyLabel)}</span>` : ''}
-            </div>
-            ${sourceLabel ? `<div style="color: var(--text-tertiary); font-size: 10px; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">from ${esc(sourceLabel)}</div>` : ''}
           </div>
-          ${!isChecked ? `
-            <button onclick="event.stopPropagation(); removeSmartGroceryItem('${esc(item.id)}')"
-              style="padding: 8px; background: none; border: none; color: ${CONFIG.text_muted}; font-size: 18px; cursor: pointer; flex-shrink: 0; line-height: 1; min-width: 36px; min-height: 36px; display: flex; align-items: center; justify-content: center;">
-              ×
-            </button>
-          ` : ''}
+          <div class="gro-item-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${esc(photo).replace(/'/g, "\\'")}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})`}">
+            ${photo
+              ? `<img src="${esc(photo)}" class="gro-item-img" />`
+              : `<div class="gro-item-img-placeholder">
+                  <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                </div>`
+            }
+          </div>
+          <div class="gro-item-body" onclick="toggleSmartGroceryItem('${escapedId}')">
+            <div class="gro-item-name ${isChecked ? 'checked' : ''}">${esc(name)}</div>
+            <div class="gro-item-meta">
+              ${qtyLabel ? `<span class="gro-item-qty">${esc(qtyLabel)}</span>` : ''}
+              ${sourceLabel ? `<span class="gro-item-source">from ${esc(sourceLabel)}</span>` : ''}
+            </div>
+            ${store ? `<span class="gro-item-store-tag">${esc(store)}</span>` : ''}
+          </div>
+          <div class="gro-item-actions">
+            ${!isChecked ? `
+              <button class="gro-item-store-btn" onclick="event.stopPropagation();showStorePickerForItem('${escapedId}')" title="Set store">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
+              </button>
+              <button class="gro-item-delete-btn" onclick="event.stopPropagation();removeSmartGroceryItem('${escapedId}')">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            ` : ''}
+          </div>
         </div>
       `;
     }
@@ -1315,6 +1242,170 @@ if (typeof addQuickGroceryItem === 'undefined') {
     closeModal();
     showToast(`"${itemName}" added to grocery list!`, 'success');
   }
+}
+
+// ============================================================
+// STORE PICKER & RECURRING ITEMS MODALS
+// ============================================================
+
+function showStorePickerForItem(itemId) {
+  const stores = getGroceryStores();
+  const list = getSmartGroceryList();
+  const item = list.find(i => i.id === itemId);
+  const currentStore = item ? (item.store || '') : '';
+
+  const defaultStoresHtml = DEFAULT_STORES.filter(s => !stores.includes(s)).length > 0
+    ? `<div style="margin-top:12px;">
+        <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Suggested stores</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${DEFAULT_STORES.filter(s => !stores.includes(s)).slice(0, 6).map(s => `
+            <button onclick="addGroceryStore('${esc(s).replace(/'/g, "\\'")}');showStorePickerForItem('${esc(itemId).replace(/'/g, "\\'")}')"
+              style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.1);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
+          `).join('')}
+        </div>
+      </div>`
+    : '';
+
+  openModal(`
+    <div style="color:${CONFIG.text_color};">
+      <div style="font-size:17px;font-weight:600;margin-bottom:16px;">Assign Store</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button onclick="setGroceryItemStore('${esc(itemId).replace(/'/g, "\\'")}','');closeModal();render();"
+          style="padding:14px 16px;background:${!currentStore ? 'rgba(232,93,93,0.15)' : CONFIG.surface_color};border:1px solid ${!currentStore ? CONFIG.primary_action_color : 'transparent'};border-radius:12px;color:${CONFIG.text_color};font-size:15px;text-align:left;cursor:pointer;">
+          No store assigned
+        </button>
+        ${stores.map(s => `
+          <button onclick="setGroceryItemStore('${esc(itemId).replace(/'/g, "\\'")}','${esc(s).replace(/'/g, "\\'")}');closeModal();render();"
+            style="padding:14px 16px;background:${currentStore === s ? 'rgba(232,93,93,0.15)' : CONFIG.surface_color};border:1px solid ${currentStore === s ? CONFIG.primary_action_color : 'transparent'};border-radius:12px;color:${CONFIG.text_color};font-size:15px;text-align:left;cursor:pointer;">
+            ${esc(s)}
+          </button>
+        `).join('')}
+      </div>
+      ${defaultStoresHtml}
+      <div style="margin-top:16px;">
+        <div style="display:flex;gap:8px;">
+          <input type="text" id="newStoreInput" placeholder="Add a new store..."
+            onkeydown="if(event.key==='Enter'){addGroceryStore(this.value);showStorePickerForItem('${esc(itemId).replace(/'/g, "\\'")}');}"
+            style="flex:1;padding:12px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:${CONFIG.text_color};font-size:14px;outline:none;" />
+          <button onclick="addGroceryStore(document.getElementById('newStoreInput').value);showStorePickerForItem('${esc(itemId).replace(/'/g, "\\'")}');"
+            style="padding:12px 16px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Add</button>
+        </div>
+      </div>
+    </div>
+  `);
+}
+
+function showManageStoresModal() {
+  const stores = getGroceryStores();
+
+  const defaultStoresHtml = DEFAULT_STORES.filter(s => !stores.includes(s)).length > 0
+    ? `<div style="margin-top:16px;">
+        <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:8px;">Quick add</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;">
+          ${DEFAULT_STORES.filter(s => !stores.includes(s)).map(s => `
+            <button onclick="addGroceryStore('${esc(s).replace(/'/g, "\\'")}');showManageStoresModal();"
+              style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.1);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
+          `).join('')}
+        </div>
+      </div>`
+    : '';
+
+  openModal(`
+    <div style="color:${CONFIG.text_color};">
+      <div style="font-size:17px;font-weight:600;margin-bottom:16px;">My Stores</div>
+      ${stores.length === 0 ? `<div style="text-align:center;padding:16px;color:${CONFIG.text_muted};font-size:13px;">No stores yet. Add your go-to stores below.</div>` : ''}
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        ${stores.map(s => `
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:${CONFIG.surface_color};border-radius:12px;">
+            <span style="font-size:15px;">${esc(s)}</span>
+            <button onclick="removeGroceryStore('${esc(s).replace(/'/g, "\\'")}');showManageStoresModal();"
+              style="background:none;border:none;color:${CONFIG.danger_color || '#ff6b6b'};cursor:pointer;padding:4px;font-size:13px;">Remove</button>
+          </div>
+        `).join('')}
+      </div>
+      ${defaultStoresHtml}
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <input type="text" id="newStoreInput" placeholder="Add a store..."
+          onkeydown="if(event.key==='Enter'){addGroceryStore(this.value);showManageStoresModal();}"
+          style="flex:1;padding:12px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:${CONFIG.text_color};font-size:14px;outline:none;" />
+        <button onclick="addGroceryStore(document.getElementById('newStoreInput').value);showManageStoresModal();"
+          style="padding:12px 16px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Add</button>
+      </div>
+    </div>
+  `);
+}
+
+function showRecurringItemsModal() {
+  const freqItems = getFrequencyItems();
+  const stores = getGroceryStores();
+
+  const storeOptions = stores.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+
+  openModal(`
+    <div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
+      <div style="font-size:17px;font-weight:600;margin-bottom:16px;">Recurring Buys</div>
+      <div style="font-size:13px;color:${CONFIG.text_muted};margin-bottom:16px;">Items you buy on a regular schedule. They'll be suggested when due.</div>
+
+      <!-- Add new recurring item -->
+      <div style="background:${CONFIG.surface_color};border-radius:12px;padding:14px;margin-bottom:16px;">
+        <div style="font-size:13px;font-weight:600;margin-bottom:10px;">Add recurring item</div>
+        <input type="text" id="freqItemName" placeholder="Item name (e.g., Paper Towels)"
+          style="width:100%;padding:10px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:${CONFIG.text_color};font-size:14px;margin-bottom:8px;outline:none;box-sizing:border-box;" />
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <select id="freqItemFrequency" style="flex:1;padding:10px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:${CONFIG.text_color};font-size:13px;">
+            ${FREQUENCY_OPTIONS.map(f => `<option value="${f.value}">${f.label}</option>`).join('')}
+          </select>
+          <select id="freqItemStore" style="flex:1;padding:10px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:${CONFIG.text_color};font-size:13px;">
+            <option value="">Any store</option>
+            ${storeOptions}
+          </select>
+        </div>
+        <select id="freqItemCategory" style="width:100%;padding:10px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:${CONFIG.text_color};font-size:13px;margin-bottom:10px;">
+          ${GROCERY_CATEGORIES.map(c => `<option value="${c}">${c}</option>`).join('')}
+        </select>
+        <button onclick="addFreqItemFromModal()"
+          style="width:100%;padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;">Add</button>
+      </div>
+
+      <!-- Existing recurring items -->
+      <div style="overflow-y:auto;flex:1;">
+        ${freqItems.length === 0
+          ? `<div style="text-align:center;padding:24px;color:${CONFIG.text_muted};font-size:13px;">No recurring items yet</div>`
+          : freqItems.map(item => {
+            const freq = FREQUENCY_OPTIONS.find(f => f.value === item.frequency);
+            const isDue = getDueFrequencyItems().some(d => d.id === item.id);
+            return `
+              <div style="display:flex;align-items:center;gap:12px;padding:14px;background:${CONFIG.surface_color};border-radius:12px;margin-bottom:6px;${isDue ? `border-left:3px solid ${CONFIG.primary_action_color};` : ''}">
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:15px;font-weight:500;">${esc(toTitleCase(item.name))}</div>
+                  <div style="font-size:12px;color:${CONFIG.text_muted};margin-top:2px;">
+                    ${freq ? freq.label : item.frequency}${item.store ? ` · ${esc(item.store)}` : ''}${isDue ? ` · <span style="color:${CONFIG.primary_action_color};">Due now</span>` : ''}
+                  </div>
+                </div>
+                ${isDue ? `<button onclick="addFrequencyItemToGrocery('${esc(item.id)}');showRecurringItemsModal();"
+                  style="padding:8px 12px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;">Add</button>` : ''}
+                <button onclick="removeFrequencyItem('${esc(item.id)}');showRecurringItemsModal();"
+                  style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:4px;">
+                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+                </button>
+              </div>
+            `;
+          }).join('')}
+      </div>
+    </div>
+  `);
+}
+
+function addFreqItemFromModal() {
+  const name = document.getElementById('freqItemName')?.value.trim();
+  const frequency = document.getElementById('freqItemFrequency')?.value || 'monthly';
+  const store = document.getElementById('freqItemStore')?.value || '';
+  const category = document.getElementById('freqItemCategory')?.value || 'Other';
+  if (!name) { showToast('Enter an item name', 'error'); return; }
+  const added = addFrequencyItem(name, frequency, store, category);
+  if (!added) { showToast('Already in recurring list', 'info'); return; }
+  showToast(`${toTitleCase(name)} added as recurring`, 'success');
+  showRecurringItemsModal();
 }
 
 function init() {

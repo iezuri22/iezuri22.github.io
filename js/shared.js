@@ -548,6 +548,167 @@ const GROCERY_CATEGORIES = [
 const PANTRY_STAPLES = ['salt', 'pepper', 'black pepper', 'kosher salt', 'sea salt', 'olive oil', 'extra virgin olive oil', 'vegetable oil', 'cooking spray', 'canola oil', 'water', 'butter', 'unsalted butter', 'sugar', 'brown sugar', 'granulated sugar', 'flour', 'all-purpose flour', 'all purpose flour', 'garlic powder', 'onion powder', 'paprika', 'cumin', 'oregano', 'baking soda', 'baking powder', 'soy sauce', 'vinegar', 'white vinegar', 'apple cider vinegar'];
 function isStaple(name) { return PANTRY_STAPLES.some(s => normalizeIngredient(s) === normalizeIngredient(name)); }
 
+// ============================================================
+// GROCERY STORES & FREQUENCY BUYS
+// ============================================================
+const GROCERY_STORES_KEY = 'groceryStores_v1';
+const GROCERY_FREQUENCY_KEY = 'groceryFrequency_v1';
+const DEFAULT_STORES = ['Walmart', 'Costco', 'Target', 'Whole Foods', 'Trader Joe\'s', 'Kroger', 'Aldi', 'H-E-B', 'Publix'];
+const FREQUENCY_OPTIONS = [
+  { value: 'weekly', label: 'Weekly', days: 7 },
+  { value: 'biweekly', label: 'Every 2 Weeks', days: 14 },
+  { value: 'monthly', label: 'Monthly', days: 30 }
+];
+
+function getGroceryStores() {
+  try { return JSON.parse(localStorage.getItem(GROCERY_STORES_KEY) || '[]'); } catch { return []; }
+}
+function saveGroceryStores(stores) {
+  localStorage.setItem(GROCERY_STORES_KEY, JSON.stringify(stores));
+  syncGroceryStoresToSupabase(stores);
+}
+function addGroceryStore(name) {
+  if (!name || !name.trim()) return false;
+  const stores = getGroceryStores();
+  const trimmed = name.trim();
+  if (stores.some(s => s.toLowerCase() === trimmed.toLowerCase())) return false;
+  stores.push(trimmed);
+  saveGroceryStores(stores);
+  return true;
+}
+function removeGroceryStore(name) {
+  const stores = getGroceryStores().filter(s => s !== name);
+  saveGroceryStores(stores);
+  // Also clear this store from any grocery items
+  const list = getSmartGroceryList();
+  list.forEach(item => { if (item.store === name) item.store = ''; });
+  saveSmartGroceryList(list);
+}
+
+function getFrequencyItems() {
+  try { return JSON.parse(localStorage.getItem(GROCERY_FREQUENCY_KEY) || '[]'); } catch { return []; }
+}
+function saveFrequencyItems(items) {
+  localStorage.setItem(GROCERY_FREQUENCY_KEY, JSON.stringify(items));
+  syncFrequencyItemsToSupabase(items);
+}
+function addFrequencyItem(name, frequency, store, category) {
+  const items = getFrequencyItems();
+  const key = name.toLowerCase().trim();
+  if (items.some(i => i.name.toLowerCase().trim() === key)) return false;
+  items.push({
+    id: 'freq_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    name: name.trim(),
+    frequency: frequency || 'monthly',
+    store: store || '',
+    category: category || 'Other',
+    lastAdded: null,
+    createdAt: Date.now()
+  });
+  saveFrequencyItems(items);
+  return true;
+}
+function removeFrequencyItem(id) {
+  saveFrequencyItems(getFrequencyItems().filter(i => i.id !== id));
+}
+function updateFrequencyItem(id, updates) {
+  const items = getFrequencyItems();
+  const item = items.find(i => i.id === id);
+  if (item) { Object.assign(item, updates); saveFrequencyItems(items); }
+}
+function getDueFrequencyItems() {
+  const items = getFrequencyItems();
+  const now = Date.now();
+  const groceryNames = new Set(getSmartGroceryList().map(i => i.name.toLowerCase().trim()));
+  return items.filter(item => {
+    if (groceryNames.has(item.name.toLowerCase().trim())) return false;
+    if (!item.lastAdded) return true;
+    const freq = FREQUENCY_OPTIONS.find(f => f.value === item.frequency);
+    if (!freq) return true;
+    return (now - item.lastAdded) >= freq.days * 24 * 60 * 60 * 1000;
+  });
+}
+function addFrequencyItemToGrocery(freqId) {
+  const freqItems = getFrequencyItems();
+  const freqItem = freqItems.find(i => i.id === freqId);
+  if (!freqItem) return;
+  const list = getSmartGroceryList();
+  if (list.some(i => i.name.toLowerCase().trim() === freqItem.name.toLowerCase().trim())) {
+    showToast('Already on your list', 'info');
+    return;
+  }
+  list.push({
+    id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+    name: freqItem.name,
+    category: freqItem.category || 'Other',
+    qty: '', unit: '',
+    checked: false,
+    manual: true,
+    sourceMeals: [],
+    store: freqItem.store || '',
+    addedAt: Date.now()
+  });
+  saveSmartGroceryList(list);
+  freqItem.lastAdded = Date.now();
+  saveFrequencyItems(freqItems);
+  showToast(`${toTitleCase(freqItem.name)} added`, 'success');
+  if (typeof render === 'function') render();
+}
+function addAllDueFrequencyItems() {
+  const due = getDueFrequencyItems();
+  if (due.length === 0) { showToast('Nothing due yet', 'info'); return; }
+  const list = getSmartGroceryList();
+  const freqItems = getFrequencyItems();
+  const listNames = new Set(list.map(i => i.name.toLowerCase().trim()));
+  let added = 0;
+  due.forEach(freqItem => {
+    if (listNames.has(freqItem.name.toLowerCase().trim())) return;
+    list.push({
+      id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + added,
+      name: freqItem.name,
+      category: freqItem.category || 'Other',
+      qty: '', unit: '',
+      checked: false,
+      manual: true,
+      sourceMeals: [],
+      store: freqItem.store || '',
+      addedAt: Date.now()
+    });
+    const orig = freqItems.find(i => i.id === freqItem.id);
+    if (orig) orig.lastAdded = Date.now();
+    added++;
+  });
+  saveSmartGroceryList(list);
+  saveFrequencyItems(freqItems);
+  showToast(`Added ${added} recurring item${added !== 1 ? 's' : ''}`, 'success');
+  if (typeof render === 'function') render();
+}
+
+function setGroceryItemStore(itemId, store) {
+  const list = getSmartGroceryList();
+  const item = list.find(i => i.id === itemId);
+  if (item) { item.store = store; saveSmartGroceryList(list); }
+}
+
+async function syncGroceryStoresToSupabase(stores) {
+  if (!window.supabaseClient) return;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return;
+    await window.supabaseClient.from('meal_planner_data')
+      .upsert({ id: 'groceryStores_data', user_id: session.user.id, data: { id: 'groceryStores_data', type: 'groceryStores', stores } }, { onConflict: 'id' });
+  } catch (e) { console.error('Sync grocery stores failed:', e); }
+}
+async function syncFrequencyItemsToSupabase(items) {
+  if (!window.supabaseClient) return;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return;
+    await window.supabaseClient.from('meal_planner_data')
+      .upsert({ id: 'groceryFrequency_data', user_id: session.user.id, data: { id: 'groceryFrequency_data', type: 'groceryFrequency', items } }, { onConflict: 'id' });
+  } catch (e) { console.error('Sync frequency items failed:', e); }
+}
+
 const SAVED_RECIPES_KEY = 'savedRecipes';
 const FOOD_LOG_KEY = 'foodLog';
 const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';
@@ -697,6 +858,7 @@ const state = {
   selectedGroceryMeal: null,
   selectedGroceryRecipeId: null,
   groceryViewMode: 'recipe',
+  groceryStoreFilter: '',
   currentWeekStartDate: (() => {
     const today = new Date();
     const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
@@ -5084,6 +5246,18 @@ function applySupabaseData(data) {
   const effortLevelsRow = data.find(d => d.id === 'effortLevels_data');
   if (effortLevelsRow && effortLevelsRow.levels && typeof effortLevelsRow.levels === 'object') {
     localStorage.setItem(EFFORT_LEVELS_KEY, JSON.stringify(effortLevelsRow.levels));
+  }
+
+  // Load grocery stores from Supabase
+  const groceryStoresRow = data.find(d => d.id === 'groceryStores_data');
+  if (groceryStoresRow && Array.isArray(groceryStoresRow.stores)) {
+    localStorage.setItem(GROCERY_STORES_KEY, JSON.stringify(groceryStoresRow.stores));
+  }
+
+  // Load frequency items from Supabase
+  const groceryFreqRow = data.find(d => d.id === 'groceryFrequency_data');
+  if (groceryFreqRow && Array.isArray(groceryFreqRow.items)) {
+    localStorage.setItem(GROCERY_FREQUENCY_KEY, JSON.stringify(groceryFreqRow.items));
   }
 
   // Load mealDays (last 90 days)
