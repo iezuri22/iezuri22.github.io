@@ -1185,7 +1185,7 @@ function migrateOldGroceryData() {
 
 // One-time fix: ensure all grocery item names have proper Title Case
 function _fixGroceryItemNames() {
-  if (localStorage.getItem('_groceryNamesFix_v1')) return;
+  if (localStorage.getItem('_groceryNamesFix_v2')) return;
   const list = getSmartGroceryList();
   if (list.length === 0) { localStorage.setItem('_groceryNamesFix_v1', '1'); return; }
   let changed = false;
@@ -1197,7 +1197,7 @@ function _fixGroceryItemNames() {
     saveSmartGroceryList(list);
     debugLog('[_fixGroceryItemNames] Fixed title case on grocery item names');
   }
-  localStorage.setItem('_groceryNamesFix_v1', '1');
+  localStorage.setItem('_groceryNamesFix_v2', '1');
 }
 
 // One-time cleanup: reset fake timesCooked/cookCount data on recipes.
@@ -1890,7 +1890,7 @@ function capitalize(str) {
 
 function toTitleCase(str) {
   if (!str) return '';
-  return str.replace(/\b\w/g, function(char) { return char.toUpperCase(); });
+  return str.toLowerCase().replace(/\b\w/g, function(char) { return char.toUpperCase(); });
 }
 
 function normalizeString(str) {
@@ -2759,7 +2759,18 @@ function removeSmartGroceryItem(itemId) {
 }
 
 function clearCheckedGrocery() { saveSmartGroceryList(getSmartGroceryList().filter(i => !i.checked)); showToast('Checked items cleared', 'success'); if (typeof render === 'function') render(); }
-function clearAllGrocerySmart() { if (!confirm('Clear your entire grocery list?')) return; saveSmartGroceryList([]); showToast('Grocery list cleared', 'success'); if (typeof render === 'function') render(); }
+function clearAllGrocerySmart() {
+  if (!confirm('Clear your entire grocery list?')) return;
+  saveSmartGroceryList([]);
+  // Also clear old grocery system data so migrateOldGroceryData() doesn't resurrect items
+  state.groceryItems = [];
+  saveToLS('groceryItems', []);
+  state.mealSelections = state.mealSelections.filter(s => !s.id.startsWith('mealSel_manual'));
+  // Extend the realtime ignore window to prevent stale Supabase data from overwriting the clear
+  state.ignoreRealtimeUntil = Date.now() + 15000;
+  showToast('Grocery list cleared', 'success');
+  if (typeof render === 'function') render();
+}
 
 function _updateGroceryBadge() {
   const badge = document.getElementById('grocery-badge');

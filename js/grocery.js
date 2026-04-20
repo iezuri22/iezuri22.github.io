@@ -1328,7 +1328,7 @@ function showStorePickerForItem(itemId) {
         <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Suggested stores</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           ${pickerQuickAdd.slice(0, 6).map(s => `
-            <button onclick="addGroceryStore('${escJs(s)}');showStorePickerForItem('${safeId}')"
+            <button onclick="addGroceryStore('${escJs(s)}');setGroceryItemStore('${safeId}','${escJs(s)}');setLastSelectedStore('${escJs(s)}');closeModal();showToast('Assigned to ${escJs(s)}','success');render();"
               style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.1);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
           `).join('')}
         </div>
