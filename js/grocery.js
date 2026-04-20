@@ -524,9 +524,7 @@ function renderGroceryList() {
 
           <!-- Main Grocery List -->
           ${state.groceryViewMode === 'grid' ? `
-            <div class="gro-grid">
-              ${filteredUnchecked.map(item => _renderGroceryGridCard(item, false)).join('')}
-            </div>
+            ${_renderGridByCategory(filteredUnchecked, false)}
           ` : `
             <div class="gro-list">
               ${filteredUnchecked.map(item => _renderGroceryRow(item, false)).join('')}
@@ -541,8 +539,8 @@ function renderGroceryList() {
                 <span>Completed (${filteredChecked.length})</span>
               </div>
               ${state.groceryViewMode === 'grid' ? `
-                <div class="gro-grid" style="opacity:0.5;">
-                  ${filteredChecked.map(item => _renderGroceryGridCard(item, true)).join('')}
+                <div style="opacity:0.5;">
+                  ${_renderGridByCategory(filteredChecked, true)}
                 </div>
               ` : `
                 <div class="gro-list">
@@ -555,6 +553,32 @@ function renderGroceryList() {
 
       `;
     }
+
+function _renderGridByCategory(items, isChecked) {
+  const byCategory = {};
+  items.forEach(item => {
+    const cat = item.category || guessGroceryCategory(item.name);
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(item);
+  });
+
+  // Sort categories: GROCERY_CATEGORIES order first, then any extras
+  const orderedCats = GROCERY_CATEGORIES.filter(c => byCategory[c]);
+  Object.keys(byCategory).forEach(c => {
+    if (!orderedCats.includes(c)) orderedCats.push(c);
+  });
+
+  if (orderedCats.length === 0) return '';
+
+  return orderedCats.map(cat => `
+    <div class="gro-grid-category">
+      <div class="gro-grid-category-header">${esc(cat)}</div>
+      <div class="gro-grid">
+        ${byCategory[cat].map(item => _renderGroceryGridCard(item, isChecked)).join('')}
+      </div>
+    </div>
+  `).join('');
+}
 
 function _renderGroceryRow(item, isChecked) {
       const name = toTitleCase(item.name);
