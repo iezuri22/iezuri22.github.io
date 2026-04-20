@@ -639,7 +639,7 @@ function addFrequencyItemToGrocery(freqId) {
   }
   list.push({
     id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
-    name: freqItem.name,
+    name: toTitleCase(freqItem.name),
     category: freqItem.category || 'Other',
     qty: '', unit: '',
     checked: false,
@@ -665,7 +665,7 @@ function addAllDueFrequencyItems() {
     if (listNames.has(freqItem.name.toLowerCase().trim())) return;
     list.push({
       id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + added,
-      name: freqItem.name,
+      name: toTitleCase(freqItem.name),
       category: freqItem.category || 'Other',
       qty: '', unit: '',
       checked: false,
@@ -1120,12 +1120,16 @@ function loadAllState() {
 // One-time migration: old groceryItems → smartGroceryList_v1
 function migrateOldGroceryData() {
   const newList = getSmartGroceryList();
-  if (newList.length > 0) return; // new system already has data
+  if (newList.length > 0) {
+    // Fix existing items: ensure all names are title-cased (fixes legacy compressed/lowercase names)
+    _fixGroceryItemNames();
+    return;
+  }
   const oldItems = state.groceryItems;
   if (!oldItems || oldItems.length === 0) return;
   const migrated = oldItems.map(item => ({
     id: item.id || ('gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
-    name: item.name || item.ingredientKey || '',
+    name: toTitleCase(item.name || item.ingredientKey || ''),
     category: item.category || item.group || 'Other',
     qty: item.quantity || item.qty || '',
     unit: item.unit || '',
@@ -1138,6 +1142,23 @@ function migrateOldGroceryData() {
     saveSmartGroceryList(migrated);
     debugLog('[migrateGroceryData] Migrated ' + migrated.length + ' items from old groceryItems to smartGroceryList_v1');
   }
+}
+
+// One-time fix: ensure all grocery item names have proper Title Case
+function _fixGroceryItemNames() {
+  if (localStorage.getItem('_groceryNamesFix_v1')) return;
+  const list = getSmartGroceryList();
+  if (list.length === 0) { localStorage.setItem('_groceryNamesFix_v1', '1'); return; }
+  let changed = false;
+  list.forEach(item => {
+    const fixed = toTitleCase(item.name);
+    if (fixed !== item.name) { item.name = fixed; changed = true; }
+  });
+  if (changed) {
+    saveSmartGroceryList(list);
+    debugLog('[_fixGroceryItemNames] Fixed title case on grocery item names');
+  }
+  localStorage.setItem('_groceryNamesFix_v1', '1');
 }
 
 // One-time cleanup: reset fake timesCooked/cookCount data on recipes.
@@ -1846,6 +1867,12 @@ function esc(s) {
     .replace(/'/g, '&#39;');
 }
 
+// Escape a string for safe embedding inside a JS string literal in an onclick attribute.
+// Unlike esc(), this does NOT HTML-encode — it only escapes JS-dangerous chars.
+function escJs(s) {
+  return String(s || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '');
+}
+
 function getMonday(date) {
   const d = new Date(date);
   const day = d.getDay();
@@ -2398,10 +2425,11 @@ function getCategorizedSuggestions() {
 }
 
 function addSuggestedToGrocery(name, category, qty, unit, mealNames) {
-  const list = getSmartGroceryList(); const nameLower = name.toLowerCase().trim();
+  const titleName = toTitleCase(name);
+  const list = getSmartGroceryList(); const nameLower = titleName.toLowerCase().trim();
   const existing = list.find(i => i.name.toLowerCase().trim() === nameLower);
   if (existing) { saveSmartGroceryList(list.filter(i => i.name.toLowerCase().trim() !== nameLower)); return false; }
-  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category: category || 'Other', qty: qty || '', unit: unit || '', checked: false, manual: false, sourceMeals: mealNames || [], addedAt: Date.now() });
+  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: titleName, category: category || 'Other', qty: qty || '', unit: unit || '', checked: false, manual: false, sourceMeals: mealNames || [], addedAt: Date.now() });
   saveSmartGroceryList(list); return true;
 }
 
@@ -2514,13 +2542,14 @@ function submitPickerIngredients() {
   const list = getSmartGroceryList();
   let added = 0;
   selected.forEach(ing => {
-    const nameLower = ing.name.toLowerCase().trim();
+    const titleName = toTitleCase(ing.name);
+    const nameLower = titleName.toLowerCase().trim();
     if (!nameLower) return;
     const existing = list.find(i => i.name.toLowerCase().trim() === nameLower);
     if (existing) {
       if (!existing.sourceMeals.includes(recipe.title)) existing.sourceMeals.push(recipe.title);
     } else {
-      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [recipe.title], addedAt: Date.now() });
+      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: titleName, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [recipe.title], addedAt: Date.now() });
       added++;
     }
   });
@@ -2625,7 +2654,7 @@ function submitBatchPickerIngredients() {
     if (existing) {
       if (!existing.sourceMeals.includes(batch.name)) existing.sourceMeals.push(batch.name);
     } else {
-      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], addedAt: Date.now() });
+      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: toTitleCase(ing.name), category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], addedAt: Date.now() });
     }
   });
   saveSmartGroceryList(list);
@@ -2636,7 +2665,8 @@ function submitBatchPickerIngredients() {
 
 function addManualGroceryItemSmart() {
   const input = document.getElementById('groceryManualInput'); if (!input) return;
-  const name = input.value.trim(); if (!name) return;
+  const rawName = input.value.trim(); if (!rawName) return;
+  const name = toTitleCase(rawName);
   const list = getSmartGroceryList();
   if (list.find(i => i.name.toLowerCase().trim() === name.toLowerCase().trim())) { showToast('Already on your list', 'info'); input.value = ''; return; }
   const catInput = document.getElementById('groceryManualCategory');

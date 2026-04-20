@@ -322,7 +322,7 @@ function renderGroceryByRecipe() {
     const servings = recipe && recipe.servings ? recipe.servings + ' servings' : '';
     const uncheckedCount = items.filter(i => !i.checked).length;
     const isExpanded = state.groceryExpandedRecipes.has(recipeName);
-    const escapedName = esc(recipeName).replace(/'/g, "\\'");
+    const escapedName = escJs(recipeName);
 
     html += `
       <div class="grocery-recipe-card ${isExpanded ? 'expanded' : ''}">
@@ -409,7 +409,7 @@ function renderGroceryList() {
         <div class="gro-store-filters">
           <button class="gro-store-pill ${!activeStore ? 'active' : ''}" onclick="state.groceryStoreFilter='';render();">All</button>
           ${allStores.map(s => `
-            <button class="gro-store-pill ${activeStore === s ? 'active' : ''}" onclick="state.groceryStoreFilter='${esc(s).replace(/'/g, "\\'")}';render();">${esc(s)}</button>
+            <button class="gro-store-pill ${activeStore === s ? 'active' : ''}" onclick="state.groceryStoreFilter='${escJs(s)}';render();">${esc(s)}</button>
           `).join('')}
           <button class="gro-store-pill gro-store-pill-add" onclick="showManageStoresModal()">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
@@ -509,10 +509,28 @@ function renderGroceryList() {
           ${clearHtml}
           ${emptyHtml}
 
+          <!-- View toggle -->
+          ${(filteredUnchecked.length + filteredChecked.length) > 0 ? `
+            <div class="gro-view-toggle">
+              <button class="gro-view-btn ${state.groceryViewMode !== 'grid' ? 'active' : ''}" onclick="state.groceryViewMode='list';render();" title="List view">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
+              </button>
+              <button class="gro-view-btn ${state.groceryViewMode === 'grid' ? 'active' : ''}" onclick="state.groceryViewMode='grid';render();" title="Grid view">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5h4.5v-4.5h-4.5zm0 12v4.5h4.5v-4.5h-4.5zm12-12v4.5h4.5v-4.5h-4.5zm0 12v4.5h4.5v-4.5h-4.5z"/></svg>
+              </button>
+            </div>
+          ` : ''}
+
           <!-- Main Grocery List -->
-          <div class="gro-list">
-            ${filteredUnchecked.map(item => _renderGroceryRow(item, false)).join('')}
-          </div>
+          ${state.groceryViewMode === 'grid' ? `
+            <div class="gro-grid">
+              ${filteredUnchecked.map(item => _renderGroceryGridCard(item, false)).join('')}
+            </div>
+          ` : `
+            <div class="gro-list">
+              ${filteredUnchecked.map(item => _renderGroceryRow(item, false)).join('')}
+            </div>
+          `}
 
           <!-- Checked Items -->
           ${filteredChecked.length > 0 ? `
@@ -521,9 +539,15 @@ function renderGroceryList() {
                 <span class="gro-chev" style="transform:rotate(90deg);">&#9656;</span>
                 <span>Completed (${filteredChecked.length})</span>
               </div>
-              <div class="gro-list">
-                ${filteredChecked.map(item => _renderGroceryRow(item, true)).join('')}
-              </div>
+              ${state.groceryViewMode === 'grid' ? `
+                <div class="gro-grid" style="opacity:0.5;">
+                  ${filteredChecked.map(item => _renderGroceryGridCard(item, true)).join('')}
+                </div>
+              ` : `
+                <div class="gro-list">
+                  ${filteredChecked.map(item => _renderGroceryRow(item, true)).join('')}
+                </div>
+              `}
             </div>
           ` : ''}
         </div>
@@ -544,8 +568,8 @@ function _renderGroceryRow(item, isChecked) {
       const sourceLabel = item.sourceMeals && item.sourceMeals.length > 0
         ? item.sourceMeals.join(', ') : '';
       const photo = findIngredientPhoto(item.name);
-      const escapedItemName = esc(item.name).replace(/'/g, "\\'");
-      const escapedId = esc(item.id).replace(/'/g, "\\'");
+      const escapedItemName = escJs(item.name);
+      const escapedId = escJs(item.id);
       const store = item.store || '';
 
       return `
@@ -555,7 +579,7 @@ function _renderGroceryRow(item, isChecked) {
               ${isChecked ? '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
             </div>
           </div>
-          <div class="gro-item-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${esc(photo).replace(/'/g, "\\'")}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})`}">
+          <div class="gro-item-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})`}">
             ${photo
               ? `<img src="${esc(photo)}" class="gro-item-img" />`
               : `<div class="gro-item-img-placeholder">
@@ -580,6 +604,43 @@ function _renderGroceryRow(item, isChecked) {
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
             ` : ''}
+          </div>
+        </div>
+      `;
+    }
+
+function _renderGroceryGridCard(item, isChecked) {
+      const name = toTitleCase(item.name);
+      const qtyLabel = item.qty ? `${item.qty}${item.unit ? ' ' + item.unit : ''}` : '';
+      const photo = findIngredientPhoto(item.name);
+      const escapedItemName = escJs(item.name);
+      const escapedId = escJs(item.id);
+      const store = item.store || '';
+
+      return `
+        <div data-gro-id="${esc(item.id)}" class="gro-grid-card ${isChecked ? 'gro-grid-card-checked' : ''}">
+          <div class="gro-grid-card-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);render();})`}">
+            ${photo
+              ? `<img src="${esc(photo)}" class="gro-grid-card-img" />`
+              : `<div class="gro-grid-card-img-placeholder">
+                  <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                </div>`
+            }
+            <div class="gro-grid-card-check" onclick="event.stopPropagation();toggleSmartGroceryItem('${escapedId}')">
+              <div class="gro-checkbox ${isChecked ? 'checked' : ''}">
+                ${isChecked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+              </div>
+            </div>
+            ${!isChecked ? `
+              <button class="gro-grid-card-delete" onclick="event.stopPropagation();removeSmartGroceryItem('${escapedId}')">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              </button>
+            ` : ''}
+          </div>
+          <div class="gro-grid-card-body" onclick="toggleSmartGroceryItem('${escapedId}')">
+            <div class="gro-grid-card-name ${isChecked ? 'checked' : ''}">${esc(name)}</div>
+            ${qtyLabel ? `<div class="gro-grid-card-qty">${esc(qtyLabel)}</div>` : ''}
+            ${store ? `<span class="gro-grid-card-store">${esc(store)}</span>` : ''}
           </div>
         </div>
       `;
@@ -1253,13 +1314,14 @@ function showStorePickerForItem(itemId) {
   const list = getSmartGroceryList();
   const item = list.find(i => i.id === itemId);
   const currentStore = item ? (item.store || '') : '';
+  const safeId = escJs(itemId);
 
   const defaultStoresHtml = DEFAULT_STORES.filter(s => !stores.includes(s)).length > 0
     ? `<div style="margin-top:12px;">
         <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Suggested stores</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           ${DEFAULT_STORES.filter(s => !stores.includes(s)).slice(0, 6).map(s => `
-            <button onclick="addGroceryStore('${esc(s).replace(/'/g, "\\'")}');showStorePickerForItem('${esc(itemId).replace(/'/g, "\\'")}')"
+            <button onclick="addGroceryStore('${escJs(s)}');showStorePickerForItem('${safeId}')"
               style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.1);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
           `).join('')}
         </div>
@@ -1270,12 +1332,12 @@ function showStorePickerForItem(itemId) {
     <div style="color:${CONFIG.text_color};">
       <div style="font-size:17px;font-weight:600;margin-bottom:16px;">Assign Store</div>
       <div style="display:flex;flex-direction:column;gap:6px;">
-        <button onclick="setGroceryItemStore('${esc(itemId).replace(/'/g, "\\'")}','');closeModal();render();"
+        <button onclick="setGroceryItemStore('${safeId}','');closeModal();render();"
           style="padding:14px 16px;background:${!currentStore ? 'rgba(232,93,93,0.15)' : CONFIG.surface_color};border:1px solid ${!currentStore ? CONFIG.primary_action_color : 'transparent'};border-radius:12px;color:${CONFIG.text_color};font-size:15px;text-align:left;cursor:pointer;">
           No store assigned
         </button>
         ${stores.map(s => `
-          <button onclick="setGroceryItemStore('${esc(itemId).replace(/'/g, "\\'")}','${esc(s).replace(/'/g, "\\'")}');closeModal();render();"
+          <button onclick="setGroceryItemStore('${safeId}','${escJs(s)}');closeModal();render();"
             style="padding:14px 16px;background:${currentStore === s ? 'rgba(232,93,93,0.15)' : CONFIG.surface_color};border:1px solid ${currentStore === s ? CONFIG.primary_action_color : 'transparent'};border-radius:12px;color:${CONFIG.text_color};font-size:15px;text-align:left;cursor:pointer;">
             ${esc(s)}
           </button>
@@ -1285,9 +1347,9 @@ function showStorePickerForItem(itemId) {
       <div style="margin-top:16px;">
         <div style="display:flex;gap:8px;">
           <input type="text" id="newStoreInput" placeholder="Add a new store..."
-            onkeydown="if(event.key==='Enter'){addNewStoreAndAssign(this.value,'${esc(itemId).replace(/'/g, "\\'")}');}"
+            onkeydown="if(event.key==='Enter'){addNewStoreAndAssign(this.value,'${safeId}');}"
             style="flex:1;padding:12px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:${CONFIG.text_color};font-size:14px;outline:none;" />
-          <button onclick="addNewStoreAndAssign(document.getElementById('newStoreInput').value,'${esc(itemId).replace(/'/g, "\\'")}');"
+          <button onclick="addNewStoreAndAssign(document.getElementById('newStoreInput').value,'${safeId}');"
             style="padding:12px 16px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Add</button>
         </div>
       </div>
@@ -1313,7 +1375,7 @@ function showManageStoresModal() {
         <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:8px;">Quick add</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
           ${DEFAULT_STORES.filter(s => !stores.includes(s)).map(s => `
-            <button onclick="addGroceryStore('${esc(s).replace(/'/g, "\\'")}');showManageStoresModal();"
+            <button onclick="addGroceryStore('${escJs(s)}');showManageStoresModal();"
               style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.1);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
           `).join('')}
         </div>
@@ -1328,7 +1390,7 @@ function showManageStoresModal() {
         ${stores.map(s => `
           <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;background:${CONFIG.surface_color};border-radius:12px;">
             <span style="font-size:15px;">${esc(s)}</span>
-            <button onclick="removeGroceryStore('${esc(s).replace(/'/g, "\\'")}');showManageStoresModal();"
+            <button onclick="removeGroceryStore('${escJs(s)}');showManageStoresModal();"
               style="background:none;border:none;color:${CONFIG.danger_color || '#ff6b6b'};cursor:pointer;padding:4px;font-size:13px;">Remove</button>
           </div>
         `).join('')}
