@@ -403,13 +403,14 @@ function renderGroceryList() {
       const allSuggestions = [...catSugg.planned];
       _cachedSuggestions = allSuggestions;
 
-      // Store filter pills
-      const allStores = [...new Set([...stores, ...groceryList.map(i => i.store).filter(Boolean)])];
-      const storeFilterHtml = allStores.length > 0 ? `
+      // Store filter pills — only show when grocery items actually have stores assigned
+      const storesWithItems = [...new Set(groceryList.map(i => i.store).filter(Boolean))];
+      if (activeStore && !storesWithItems.includes(activeStore)) { state.groceryStoreFilter = ''; }
+      const storeFilterHtml = storesWithItems.length > 0 ? `
         <div class="gro-store-filters">
-          <button class="gro-store-pill ${!activeStore ? 'active' : ''}" onclick="state.groceryStoreFilter='';render();">All</button>
-          ${allStores.map(s => `
-            <button class="gro-store-pill ${activeStore === s ? 'active' : ''}" onclick="state.groceryStoreFilter='${escJs(s)}';render();">${esc(s)}</button>
+          <button class="gro-store-pill ${!state.groceryStoreFilter ? 'active' : ''}" onclick="state.groceryStoreFilter='';render();">All</button>
+          ${storesWithItems.map(s => `
+            <button class="gro-store-pill ${state.groceryStoreFilter === s ? 'active' : ''}" onclick="state.groceryStoreFilter='${escJs(s)}';render();">${esc(s)}</button>
           `).join('')}
           <button class="gro-store-pill gro-store-pill-add" onclick="showManageStoresModal()">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
@@ -1316,11 +1317,17 @@ function showStorePickerForItem(itemId) {
   const currentStore = item ? (item.store || '') : '';
   const safeId = escJs(itemId);
 
-  const defaultStoresHtml = DEFAULT_STORES.filter(s => !stores.includes(s)).length > 0
+  const groceryListForPicker = getSmartGroceryList();
+  const pickerStoresFromItems = [...new Set(groceryListForPicker.map(i => i.store).filter(Boolean))];
+  const pickerFreqStores = [...new Set(getFrequencyItems().map(i => i.store).filter(Boolean))];
+  const pickerAllKnown = [...new Set([...DEFAULT_STORES, ...pickerStoresFromItems, ...pickerFreqStores])];
+  const pickerQuickAdd = pickerAllKnown.filter(s => !stores.some(st => st.toLowerCase() === s.toLowerCase()));
+
+  const defaultStoresHtml = pickerQuickAdd.length > 0
     ? `<div style="margin-top:12px;">
         <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Suggested stores</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${DEFAULT_STORES.filter(s => !stores.includes(s)).slice(0, 6).map(s => `
+          ${pickerQuickAdd.slice(0, 6).map(s => `
             <button onclick="addGroceryStore('${escJs(s)}');showStorePickerForItem('${safeId}')"
               style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.1);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
           `).join('')}
@@ -1362,6 +1369,7 @@ function addNewStoreAndAssign(storeName, itemId) {
   if (!trimmed) return;
   addGroceryStore(trimmed);
   setGroceryItemStore(itemId, trimmed);
+  setLastSelectedStore(trimmed);
   closeModal();
   showToast(`Assigned to ${trimmed}`, 'success');
   if (typeof render === 'function') render();
@@ -1369,12 +1377,17 @@ function addNewStoreAndAssign(storeName, itemId) {
 
 function showManageStoresModal() {
   const stores = getGroceryStores();
+  const groceryListForStores = getSmartGroceryList();
+  const storesFromItems = [...new Set(groceryListForStores.map(i => i.store).filter(Boolean))];
+  const freqStores = [...new Set(getFrequencyItems().map(i => i.store).filter(Boolean))];
+  const allKnownStores = [...new Set([...DEFAULT_STORES, ...storesFromItems, ...freqStores])];
+  const quickAddStores = allKnownStores.filter(s => !stores.some(st => st.toLowerCase() === s.toLowerCase()));
 
-  const defaultStoresHtml = DEFAULT_STORES.filter(s => !stores.includes(s)).length > 0
+  const defaultStoresHtml = quickAddStores.length > 0
     ? `<div style="margin-top:16px;">
         <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:8px;">Quick add</div>
         <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${DEFAULT_STORES.filter(s => !stores.includes(s)).map(s => `
+          ${quickAddStores.map(s => `
             <button onclick="addGroceryStore('${escJs(s)}');showManageStoresModal();"
               style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.1);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
           `).join('')}

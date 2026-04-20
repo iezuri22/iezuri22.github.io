@@ -744,7 +744,7 @@
 
 @media (min-width: 768px) {
   .gro-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
     gap: 10px;
   }
 
@@ -811,9 +811,8 @@
 /* ===== DESKTOP ADJUSTMENTS ===== */
 @media (min-width: 768px) {
   .gro-container {
-    max-width: 960px;
-    margin: 0 auto;
-    padding: 0 32px;
+    max-width: 100%;
+    padding: 0 48px;
   }
 
   .gro-item {

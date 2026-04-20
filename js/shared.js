@@ -436,6 +436,35 @@ const INGREDIENT_IMAGES = {
   'brandy': 'https://cdn11.bigcommerce.com/s-0ddlsmhg83/images/stencil/836x836/products/2485/2703/hennessy-very-special-cognac__42099.1752495284.1280.1280__79246.1755241936.jpg?c=1'
 };
 
+// Synonym map: variant name → canonical name (for grocery deduplication)
+const INGREDIENT_SYNONYMS = {
+  // Singular/plural normalization
+  'shallot': 'shallots', 'carrot': 'carrots', 'mushroom': 'mushrooms',
+  'egg': 'eggs', 'tomato': 'tomatoes', 'potato': 'potatoes',
+  'apple': 'apples', 'banana': 'bananas', 'orange': 'oranges',
+  'lemon': 'lemons', 'lime': 'limes', 'peach': 'peaches',
+  'tortilla': 'tortillas', 'bay leaf': 'bay leaves',
+  'strawberry': 'strawberries', 'blueberry': 'blueberries', 'raspberry': 'raspberries',
+  'sweet potato': 'sweet potatoes', 'baby potato': 'baby potatoes',
+  'baby carrot': 'baby carrots', 'bell peppers': 'bell pepper',
+  // True synonyms (different names, same item)
+  'chicken stock': 'chicken broth', 'beef stock': 'beef broth',
+  'garbanzo beans': 'chickpeas', 'red pepper flakes': 'crushed red pepper',
+  'jalapeno': 'jalapeño', 'ribeye': 'ribeye steak', 't-bone': 't-bone steak',
+  'vanilla': 'vanilla extract', 'cheddar': 'cheddar cheese',
+  'monterey jack cheese': 'monterey jack', 'pepper jack cheese': 'pepper jack',
+  'lasagna': 'lasagna noodles', 'diced tomatoes': 'canned tomatoes',
+  // Pantry staple aliases
+  'kosher salt': 'salt', 'sea salt': 'salt',
+  'extra virgin olive oil': 'olive oil', 'unsalted butter': 'butter',
+  'granulated sugar': 'sugar', 'all-purpose flour': 'flour', 'all purpose flour': 'flour'
+};
+
+function canonicalIngredientName(name) {
+  const lower = (name || '').toLowerCase().trim();
+  return INGREDIENT_SYNONYMS[lower] || lower;
+}
+
 // ITEM_MAPPINGS for receipt scanning
 const ITEM_MAPPINGS = [
   { patterns: [/bnls\s*sknls?\s*(ckn|chkn|chicken)/i, /chicken\s*breast/i, /ckn\s*brst/i], name: 'Chicken Breast (Boneless Skinless)', category: 'Meat & Seafood' },
@@ -546,13 +575,14 @@ const GROCERY_CATEGORIES = [
 ];
 
 const PANTRY_STAPLES = ['salt', 'pepper', 'black pepper', 'kosher salt', 'sea salt', 'olive oil', 'extra virgin olive oil', 'vegetable oil', 'cooking spray', 'canola oil', 'water', 'butter', 'unsalted butter', 'sugar', 'brown sugar', 'granulated sugar', 'flour', 'all-purpose flour', 'all purpose flour', 'garlic powder', 'onion powder', 'paprika', 'cumin', 'oregano', 'baking soda', 'baking powder', 'soy sauce', 'vinegar', 'white vinegar', 'apple cider vinegar'];
-function isStaple(name) { return PANTRY_STAPLES.some(s => normalizeIngredient(s) === normalizeIngredient(name)); }
+function isStaple(name) { const c = canonicalIngredientName(name); return PANTRY_STAPLES.some(s => canonicalIngredientName(s) === c); }
 
 // ============================================================
 // GROCERY STORES & FREQUENCY BUYS
 // ============================================================
 const GROCERY_STORES_KEY = 'groceryStores_v1';
 const GROCERY_FREQUENCY_KEY = 'groceryFrequency_v1';
+const LAST_SELECTED_STORE_KEY = 'lastSelectedStore_v1';
 const DEFAULT_STORES = ['Walmart', 'Costco', 'Target', 'Whole Foods', 'Trader Joe\'s', 'Kroger', 'Aldi', 'H-E-B', 'Publix'];
 const FREQUENCY_OPTIONS = [
   { value: 'weekly', label: 'Weekly', days: 7 },
@@ -583,6 +613,14 @@ function removeGroceryStore(name) {
   const list = getSmartGroceryList();
   list.forEach(item => { if (item.store === name) item.store = ''; });
   saveSmartGroceryList(list);
+  // Clear lastSelectedStore if it matches the removed store
+  if (getLastSelectedStore() === name) setLastSelectedStore('');
+}
+function getLastSelectedStore() {
+  return localStorage.getItem(LAST_SELECTED_STORE_KEY) || '';
+}
+function setLastSelectedStore(store) {
+  localStorage.setItem(LAST_SELECTED_STORE_KEY, store || '');
 }
 
 function getFrequencyItems() {
@@ -633,7 +671,7 @@ function addFrequencyItemToGrocery(freqId) {
   const freqItem = freqItems.find(i => i.id === freqId);
   if (!freqItem) return;
   const list = getSmartGroceryList();
-  if (list.some(i => i.name.toLowerCase().trim() === freqItem.name.toLowerCase().trim())) {
+  if (list.some(i => canonicalIngredientName(i.name) === canonicalIngredientName(freqItem.name))) {
     showToast('Already on your list', 'info');
     return;
   }
@@ -659,10 +697,10 @@ function addAllDueFrequencyItems() {
   if (due.length === 0) { showToast('Nothing due yet', 'info'); return; }
   const list = getSmartGroceryList();
   const freqItems = getFrequencyItems();
-  const listNames = new Set(list.map(i => i.name.toLowerCase().trim()));
+  const listCanonical = new Set(list.map(i => canonicalIngredientName(i.name)));
   let added = 0;
   due.forEach(freqItem => {
-    if (listNames.has(freqItem.name.toLowerCase().trim())) return;
+    if (listCanonical.has(canonicalIngredientName(freqItem.name))) return;
     list.push({
       id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + added,
       name: toTitleCase(freqItem.name),
@@ -688,6 +726,7 @@ function setGroceryItemStore(itemId, store) {
   const list = getSmartGroceryList();
   const item = list.find(i => i.id === itemId);
   if (item) { item.store = store; saveSmartGroceryList(list); }
+  if (store) setLastSelectedStore(store);
 }
 
 async function syncGroceryStoresToSupabase(stores) {
@@ -2385,7 +2424,7 @@ function getSuggestedIngredients() {
 
 function getCategorizedSuggestions() {
   const today = getToday();
-  const listKeys = new Set(getSmartGroceryList().map(i => normalizeIngredient(i.name)));
+  const listCanonicals = new Set(getSmartGroceryList().map(i => canonicalIngredientName(i.name)));
   const seenKeys = new Set();
 
   // 1. Planned meals (today + future from mealDays)
@@ -2407,9 +2446,9 @@ function getCategorizedSuggestions() {
         if (ings.length === 0) return;
         plannedRecipeIds.add(rid);
         ings.forEach(ing => {
-          const key = normalizeIngredient(ing.name);
-          if (!key || listKeys.has(key) || isStaple(ing.name) || seenKeys.has(key)) return;
-          seenKeys.add(key);
+          const canonical = canonicalIngredientName(ing.name);
+          if (!canonical || listCanonicals.has(canonical) || isStaple(ing.name) || seenKeys.has(canonical)) return;
+          seenKeys.add(canonical);
           planned.push({ name: ing.name, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', mealNames: [recipe.title], recipeName: recipe.title, dateLabel: getDateLabel(dateStr) });
         });
       }
@@ -2426,10 +2465,10 @@ function getCategorizedSuggestions() {
 
 function addSuggestedToGrocery(name, category, qty, unit, mealNames) {
   const titleName = toTitleCase(name);
-  const list = getSmartGroceryList(); const nameLower = titleName.toLowerCase().trim();
-  const existing = list.find(i => i.name.toLowerCase().trim() === nameLower);
-  if (existing) { saveSmartGroceryList(list.filter(i => i.name.toLowerCase().trim() !== nameLower)); return false; }
-  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: titleName, category: category || 'Other', qty: qty || '', unit: unit || '', checked: false, manual: false, sourceMeals: mealNames || [], addedAt: Date.now() });
+  const list = getSmartGroceryList(); const canonical = canonicalIngredientName(titleName);
+  const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
+  if (existing) { saveSmartGroceryList(list.filter(i => canonicalIngredientName(i.name) !== canonical)); return false; }
+  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: titleName, category: category || 'Other', qty: qty || '', unit: unit || '', checked: false, manual: false, sourceMeals: mealNames || [], store: getLastSelectedStore() || '', addedAt: Date.now() });
   saveSmartGroceryList(list); return true;
 }
 
@@ -2445,13 +2484,13 @@ function showMealIngredientPicker(recipeId) {
   const ingredients = recipeIngList(recipe);
   if (ingredients.length === 0) { showToast('No ingredients found', 'info'); return; }
 
-  const listKeys = new Set(getSmartGroceryList().map(i => normalizeIngredient(i.name)));
+  const listKeys = new Set(getSmartGroceryList().map(i => canonicalIngredientName(i.name)));
 
   // Build ingredient list with default checked state
   // Staples unchecked by default, already-on-list items marked
   const ingData = ingredients.map((ing, idx) => {
     const key = normalizeIngredient(ing.name);
-    const onList = listKeys.has(key);
+    const onList = listKeys.has(canonicalIngredientName(ing.name));
     const staple = isStaple(ing.name);
     return { idx, name: ing.name, group: ing.group || 'Other', qty: ing.qty || '', unit: ing.unit || '', key, onList, staple, checked: !staple };
   });
@@ -2545,11 +2584,12 @@ function submitPickerIngredients() {
     const titleName = toTitleCase(ing.name);
     const nameLower = titleName.toLowerCase().trim();
     if (!nameLower) return;
-    const existing = list.find(i => i.name.toLowerCase().trim() === nameLower);
+    const canonical = canonicalIngredientName(titleName);
+    const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
     if (existing) {
       if (!existing.sourceMeals.includes(recipe.title)) existing.sourceMeals.push(recipe.title);
     } else {
-      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: titleName, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [recipe.title], addedAt: Date.now() });
+      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: titleName, category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [recipe.title], store: getLastSelectedStore() || '', addedAt: Date.now() });
       added++;
     }
   });
@@ -2565,10 +2605,10 @@ function showBatchIngredientPicker(batchId) {
   const allIngs = getBatchRecipeIngredients(batch);
   if (allIngs.length === 0) { showToast('No ingredients found', 'info'); return; }
 
-  const listKeys = new Set(getSmartGroceryList().map(i => normalizeIngredient(i.name)));
+  const listKeys = new Set(getSmartGroceryList().map(i => canonicalIngredientName(i.name)));
   const ingData = allIngs.map((ing, idx) => {
     const key = normalizeIngredient(ing.name);
-    const onList = listKeys.has(key);
+    const onList = listKeys.has(canonicalIngredientName(ing.name));
     const staple = isStaple(ing.name);
     return { idx, name: ing.name, group: ing.group || 'Other', qty: ing.qty || '', unit: ing.unit || '', key, onList, staple, checked: !staple, componentName: ing.componentName, componentId: ing.componentId };
   });
@@ -2648,13 +2688,13 @@ function submitBatchPickerIngredients() {
 
   const list = getSmartGroceryList();
   selected.forEach(ing => {
-    const key = normalizeIngredient(ing.name);
-    if (!key) return;
-    const existing = list.find(i => normalizeIngredient(i.name) === key);
+    const canonical = canonicalIngredientName(ing.name);
+    if (!canonical) return;
+    const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
     if (existing) {
       if (!existing.sourceMeals.includes(batch.name)) existing.sourceMeals.push(batch.name);
     } else {
-      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: toTitleCase(ing.name), category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], addedAt: Date.now() });
+      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: toTitleCase(ing.name), category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], store: getLastSelectedStore() || '', addedAt: Date.now() });
     }
   });
   saveSmartGroceryList(list);
@@ -2668,10 +2708,10 @@ function addManualGroceryItemSmart() {
   const rawName = input.value.trim(); if (!rawName) return;
   const name = toTitleCase(rawName);
   const list = getSmartGroceryList();
-  if (list.find(i => i.name.toLowerCase().trim() === name.toLowerCase().trim())) { showToast('Already on your list', 'info'); input.value = ''; return; }
+  if (list.find(i => canonicalIngredientName(i.name) === canonicalIngredientName(name))) { showToast('Already on your list', 'info'); input.value = ''; return; }
   const catInput = document.getElementById('groceryManualCategory');
   const category = (catInput && catInput.value) ? catInput.value : 'Other';
-  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category, qty: '', unit: '', checked: false, manual: true, sourceMeals: [], store: state.groceryStoreFilter || '', addedAt: Date.now() });
+  list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category, qty: '', unit: '', checked: false, manual: true, sourceMeals: [], store: state.groceryStoreFilter || getLastSelectedStore() || '', addedAt: Date.now() });
   saveSmartGroceryList(list); input.value = '';
   if (catInput) catInput.value = 'Other';
   showToast(`${toTitleCase(name)} added to ${category}`, 'success');
