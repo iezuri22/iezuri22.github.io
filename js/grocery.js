@@ -553,13 +553,6 @@ function renderGroceryList() {
           ` : ''}
         </div>
 
-        <!-- Sticky Bottom Summary -->
-        ${groceryList.length > 0 ? `
-          <div class="grocery-sticky-bar">
-            <span class="grocery-sticky-count">${unchecked.length} ITEM${unchecked.length !== 1 ? 'S' : ''} LEFT</span>
-            ${activeStore ? `<span class="grocery-sticky-store">${esc(activeStore)}</span>` : ''}
-          </div>
-        ` : ''}
       `;
     }
 
