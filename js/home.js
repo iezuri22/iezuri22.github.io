@@ -145,16 +145,44 @@ function renderHomeSearchResults() {
 // ============================================================
 // DISCOVERY HOME HELPERS
 // ============================================================
-// Navigate to recipe view from home page (cross-page)
+// Navigate to recipe view from home page (inline detail)
 function goToRecipe(id) {
-  if (typeof openRecipeView === 'function') {
-    openRecipeView(id);
-  } else {
-    sessionStorage.setItem('yummy_target_view', 'recipe-view');
-    sessionStorage.setItem('yummy_selected_recipe', id);
-    window.location.href = 'recipes.html';
+  // Save scroll position before navigating
+  const app = document.getElementById('app');
+  if (app && state.currentView) {
+    state.scrollPositions[state.currentView] = app.scrollTop;
   }
+  state.recipeViewReturnTo = state.currentView;
+  state.selectedRecipeViewId = id;
+  state.currentView = 'recipe-view';
+  render();
+  setTimeout(() => { const a = document.getElementById('app'); if (a) a.scrollTop = 0; }, 0);
 }
+
+function goBackFromHomeRecipeView() {
+  const returnTo = state.recipeViewReturnTo || 'home';
+  state.recipeViewReturnTo = null;
+  state.selectedRecipeViewId = null;
+  state.currentView = returnTo;
+  render();
+  setTimeout(() => {
+    const a = document.getElementById('app');
+    if (a && state.scrollPositions[returnTo] !== undefined) a.scrollTop = state.scrollPositions[returnTo];
+  }, 0);
+}
+
+function renderHomeRecipeView() {
+  if (typeof renderRecipeDetailV2 === 'function') {
+    return renderRecipeDetailV2(state.selectedRecipeViewId, {
+      onBack: 'goBackFromHomeRecipeView()',
+      standalone: true
+    });
+  }
+  return '<div style="padding: 24px; color: ' + CONFIG.text_color + ';">Recipe not found.</div>';
+}
+
+// Override shared.js stub so any openRecipeView call also stays inline
+window.openRecipeView = function(id) { goToRecipe(id); };
 
 function getTimeGreeting() {
   const hour = new Date().getHours();
@@ -3178,18 +3206,57 @@ function handleWeekPlanSwap(dateStr, mealType, optionIndex) {
   const currentOption = plan?.days?.[dateStr]?.[mealType]?.options?.[optionIndex];
   const currentId = currentOption?.recipeId || currentOption?.comboId;
 
-  const alternatives = getRecipesForMeal(mealType)
-    .filter(r => (r.__backendId || r.id) !== currentId)
-    .sort(() => Math.random() - 0.5);
+  // Build cooked recipe IDs set from food log + mealDays
+  const cookedIds = new Set();
+  (typeof getFoodLog === 'function' ? getFoodLog() : []).forEach(e => { if (e.recipeId) cookedIds.add(e.recipeId); });
+  Object.values(state.mealDays || {}).forEach(day => {
+    if (!day.meals) return;
+    ['breakfast', 'lunch', 'dinner'].forEach(mt => {
+      const meal = day.meals[mt];
+      if (meal && meal.status === 'logged') {
+        if (meal.actualRecipeId) cookedIds.add(meal.actualRecipeId);
+        if (meal.plannedRecipeId) cookedIds.add(meal.plannedRecipeId);
+      }
+    });
+  });
+
+  const allAlternatives = getRecipesForMeal(mealType)
+    .filter(r => (r.__backendId || r.id) !== currentId);
+
+  // Store swap context for filter re-rendering
+  window._swapCtx = { dateStr, mealType, optionIndex, currentId, allAlternatives, cookedIds, mealLabel };
+  _renderSwapModal('all');
+}
+
+function _renderSwapModal(filter) {
+  const ctx = window._swapCtx;
+  if (!ctx) return;
+  const { dateStr, mealType, optionIndex, allAlternatives, cookedIds, mealLabel } = ctx;
+
+  let filtered = allAlternatives;
+  if (filter === 'saved') {
+    filtered = allAlternatives.filter(r => typeof isRecipeSaved === 'function' && isRecipeSaved(r.__backendId || r.id));
+  } else if (filter === 'cooked') {
+    filtered = allAlternatives.filter(r => cookedIds.has(r.__backendId || r.id));
+  } else if (filter === 'manual') {
+    filtered = allAlternatives.filter(r => (r.sourceType || 'user') === 'user');
+  } else if (filter === 'chefiq') {
+    filtered = allAlternatives.filter(r => r.sourceType === 'chefiq');
+  }
+
+  // Shuffle for variety
+  filtered = [...filtered].sort(() => Math.random() - 0.5);
 
   let cardsHtml = '';
-  if (alternatives.length === 0) {
-    cardsHtml = `<div style="text-align: center; color: ${CONFIG.text_muted}; padding: 32px 16px;">No other recipes available for ${mealLabel.toLowerCase()}</div>`;
+  if (filtered.length === 0) {
+    const filterLabel = filter === 'all' ? '' : filter === 'saved' ? ' saved' : filter === 'cooked' ? ' cooked' : filter === 'manual' ? ' manual' : ' Chef IQ';
+    cardsHtml = `<div style="text-align: center; color: ${CONFIG.text_muted}; padding: 32px 16px;">No${filterLabel} recipes available for ${mealLabel.toLowerCase()}</div>`;
   } else {
-    alternatives.forEach(recipe => {
+    filtered.forEach(recipe => {
       const id = recipe.__backendId || recipe.id;
       const img = recipeThumb(recipe);
       const title = recipe.title || 'Recipe';
+      const sourceTag = recipe.sourceType === 'chefiq' ? 'ChefIQ' : recipe.sourceType === 'imported' ? 'Imported' : recipe.sourceType === 'claude' ? 'Claude' : '';
       cardsHtml += `
         <div onclick="swapWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}, '${id}'); document.getElementById('week-swap-modal')?.remove(); render();"
           style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid ${CONFIG.divider_color};">
@@ -3198,27 +3265,55 @@ function handleWeekPlanSwap(dateStr, mealType, optionIndex) {
           </div>
           <div style="flex: 1; min-width: 0;">
             <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(title)}</div>
-            ${recipe.cookTime ? `<div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">${esc(recipe.cookTime)}</div>` : ''}
+            <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+              ${recipe.cookTime ? `<span style="font-size: 12px; color: ${CONFIG.text_muted};">${esc(recipe.cookTime)}</span>` : ''}
+              ${sourceTag ? `<span style="font-size: 10px; font-weight: 600; color: ${CONFIG.primary_action_color}; background: rgba(232,93,93,0.12); padding: 1px 6px; border-radius: 4px;">${sourceTag}</span>` : ''}
+            </div>
           </div>
         </div>`;
     });
   }
 
+  const filters = [
+    { id: 'all', label: 'All' },
+    { id: 'saved', label: 'Saved' },
+    { id: 'cooked', label: 'Cooked' },
+    { id: 'manual', label: 'Manual' },
+    { id: 'chefiq', label: 'Chef IQ' }
+  ];
+
+  const filterPillsHtml = filters.map(f => `
+    <button onclick="event.stopPropagation(); _renderSwapModal('${f.id}');"
+      style="padding: 5px 14px; border-radius: 20px; border: none; cursor: pointer; font-size: 12px; font-weight: 600; font-family: inherit; white-space: nowrap;
+        background: ${filter === f.id ? CONFIG.primary_action_color : 'rgba(255,255,255,0.06)'};
+        color: ${filter === f.id ? '#fff' : CONFIG.text_muted};">
+      ${f.label}
+    </button>
+  `).join('');
+
   const modalHtml = `
-    <div id="week-swap-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000;" onclick="if(event.target.id==='week-swap-modal') this.remove();">
+    <div id="week-swap-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000;" onclick="if(event.target.id==='week-swap-modal') { this.remove(); window._swapCtx = null; }">
       <div style="width: 100%; max-width: 500px; max-height: 100vh; display: flex; flex-direction: column; background: ${CONFIG.background_color}; overflow: hidden;" onclick="event.stopPropagation()">
-        <div style="background: ${CONFIG.surface_color}; border-bottom: 1px solid ${CONFIG.divider_color}; padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
-          <div>
-            <div style="font-size: 17px; font-weight: 700; color: ${CONFIG.text_color};">Swap ${mealLabel}</div>
-            <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Pick a different recipe</div>
+        <div style="background: ${CONFIG.surface_color}; border-bottom: 1px solid ${CONFIG.divider_color}; padding: 16px; flex-shrink: 0;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+              <div style="font-size: 17px; font-weight: 700; color: ${CONFIG.text_color};">Swap ${mealLabel}</div>
+              <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Pick a different recipe</div>
+            </div>
+            <button onclick="document.getElementById('week-swap-modal')?.remove(); window._swapCtx = null;" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; font-size: 22px; padding: 4px;">&#10005;</button>
           </div>
-          <button onclick="document.getElementById('week-swap-modal')?.remove();" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; font-size: 22px; padding: 4px;">&#10005;</button>
+          <div style="display: flex; gap: 6px; margin-top: 12px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;">
+            ${filterPillsHtml}
+          </div>
         </div>
         <div style="overflow-y: auto; flex: 1;">${cardsHtml}</div>
       </div>
     </div>
   `;
 
+  // Replace existing modal or create new one
+  const existing = document.getElementById('week-swap-modal');
+  if (existing) existing.remove();
   const container = document.createElement('div');
   container.innerHTML = modalHtml;
   document.body.appendChild(container.firstElementChild);
@@ -3231,6 +3326,7 @@ const VIEW_RENDERERS = {
   'home': renderHome,
   'my-meals': renderHome,
   'week-plan': renderWeekPlanView,
+  'recipe-view': renderHomeRecipeView,
   'food-log-detail': typeof renderFoodLogDetail === 'function' ? renderFoodLogDetail : renderHome
 };
 
