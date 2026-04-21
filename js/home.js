@@ -409,7 +409,7 @@ function renderHomeWeekPlan() {
         }
       }
       if (recipe) {
-        mealCards.push({ recipe, id, mealType, label: mealLabels[mealType] });
+        mealCards.push({ recipe, id, mealType, label: mealLabels[mealType], dateStr });
         count++;
       }
     }
@@ -426,7 +426,7 @@ function renderHomeWeekPlan() {
       <div class="recipe-carousel home-carousel" id="weekplan-carousel">
         ${mealCards.map((c, i) => `
           <div style="scroll-snap-align: start; opacity: 0; animation: cardFadeIn 0.35s ease forwards; animation-delay: ${i * 0.05}s;">
-            ${renderWeekPlanCard(c.recipe, c.id, c.label)}
+            ${renderWeekPlanCard(c.recipe, c.id, c.label, c.dateStr, c.mealType)}
           </div>
         `).join('')}
       </div>
@@ -437,6 +437,8 @@ function renderHomeWeekPlan() {
 function _weekPlanHeaderButtons(isThisWeek, viewedStart) {
   return `
     <div style="display: flex; align-items: center; gap: 8px;">
+      <button onclick="navigateTo('week-plan')"
+        style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted};">Manage</button>
       <button onclick="state.weekPlanWeekOffset = ${isThisWeek ? 1 : 0}; updateMealPlanSection();"
         style="font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted};">${isThisWeek ? 'Next' : 'This'} Week</button>
       <button onclick="regenerateWeekPlan('${viewedStart}'); updateMealPlanSection();" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; display: flex; align-items: center; padding: 4px;">
@@ -446,9 +448,10 @@ function _weekPlanHeaderButtons(isThisWeek, viewedStart) {
   `;
 }
 
-function renderWeekPlanCard(recipe, id, mealLabel) {
+function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
   const img = recipe.image || (typeof recipeThumb === 'function' ? recipeThumb(recipe) : '');
   const name = recipe.title || '';
+  const hasSwap = dateStr && mealType;
   return `
     <div class="recipe-carousel-card" onclick="goToRecipe('${id}')">
       <div class="carousel-card-media">
@@ -459,6 +462,12 @@ function renderWeekPlanCard(recipe, id, mealLabel) {
           <div style="width:100%; height:100%; background: ${getPlaceholderGradient(recipe)};"></div>
         `}
         <span class="wp-card-meal-label">${mealLabel}</span>
+        ${hasSwap ? `
+          <button onclick="event.stopPropagation(); handleWeekPlanSwap('${dateStr}', '${mealType}', 0)"
+            style="position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; z-index: 2;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
+          </button>
+        ` : ''}
       </div>
       <div class="carousel-card-info">
         <h3 class="card-title">${esc(name)}</h3>
@@ -3130,8 +3139,8 @@ function renderWeekPlanOptionCard(slotEntry, dateStr, mealType, optionIndex) {
   const recipeId = recipe ? (recipe.__backendId || recipe.id) : null;
 
   return `
-    <div class="week-plan-option-card ${locked ? 'locked' : ''}">
-      <div class="week-plan-option-thumb" ${recipeId ? `onclick="goToRecipe('${recipeId}')"` : ''}>
+    <div class="week-plan-option-card ${locked ? 'locked' : ''}" ${recipeId ? `onclick="goToRecipe('${recipeId}')"` : ''} style="cursor: ${recipeId ? 'pointer' : 'default'};">
+      <div class="week-plan-option-thumb">
         ${img
           ? `<img src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="week-plan-thumb-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
           : `<div class="week-plan-thumb-placeholder" style="background:${isCombo ? 'linear-gradient(135deg, #2a2a3d, #1a1a24)' : getPlaceholderGradient({title:name})}">
@@ -3147,8 +3156,8 @@ function renderWeekPlanOptionCard(slotEntry, dateStr, mealType, optionIndex) {
         <div class="week-plan-option-name">${esc(name)}</div>
         ${cookTime ? `<div class="week-plan-option-meta">${esc(cookTime)}</div>` : ''}
         <div class="week-plan-option-actions">
-          <button onclick="handleWeekPlanSwap('${dateStr}', '${mealType}', ${optionIndex})" class="week-plan-swap-btn">Swap</button>
-          <button onclick="lockWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}); render();" class="week-plan-lock-btn ${locked ? 'is-locked' : ''}">
+          <button onclick="event.stopPropagation(); handleWeekPlanSwap('${dateStr}', '${mealType}', ${optionIndex})" class="week-plan-swap-btn">Swap</button>
+          <button onclick="event.stopPropagation(); lockWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}); render();" class="week-plan-lock-btn ${locked ? 'is-locked' : ''}">
             ${locked ? 'Unlock' : 'Lock'}
           </button>
         </div>
