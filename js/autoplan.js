@@ -321,6 +321,17 @@ function scoreCombo(combo, mealType, usedProteins = [], isWeeknight = false) {
 // ============================================================================
 
 /**
+ * Convert selectMeal result to plan slot entry
+ */
+function buildSlotEntry(selected) {
+  if (!selected) return null;
+  if (selected.type === 'combo') {
+    return { comboId: selected.item.id, type: 'combo', locked: false };
+  }
+  return { recipeId: selected.item.__backendId || selected.item.id, type: 'recipe', locked: false };
+}
+
+/**
  * Generate a fresh 2-day auto-plan
  * Returns plan object with today and tomorrow's meal suggestions
  */
@@ -373,17 +384,6 @@ function generateAutoPlan() {
       usedProteins.push(protein);
     }
     return winner;
-  }
-
-  /**
-   * Convert selectMeal result to plan slot entry
-   */
-  function buildSlotEntry(selected) {
-    if (!selected) return null;
-    if (selected.type === 'combo') {
-      return { comboId: selected.item.id, type: 'combo', locked: false };
-    }
-    return { recipeId: selected.item.__backendId || selected.item.id, type: 'recipe', locked: false };
   }
 
   // Generate meals for today
