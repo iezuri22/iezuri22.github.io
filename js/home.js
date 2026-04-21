@@ -232,7 +232,6 @@ function renderHomeGreeting(greeting) {
 function renderQuickActionsStrip() {
   const actions = [
     { label: "What's for dinner?", icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>`, action: 'suggestDinner()' },
-    { label: 'Plan the Week', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>`, action: "navigateTo('week-plan')" },
     { label: 'Grocery List', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>`, action: "navigateTo('grocery-list')" },
     { label: 'Add Recipe', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>`, action: "window.location.href='recipes.html'; sessionStorage.setItem('yummy_target_view','recipe-edit'); sessionStorage.setItem('yummy_new_recipe','1')" }
   ];
@@ -324,212 +323,66 @@ function renderRecipeCarousel(title, subtitle, recipes) {
 }
 
 // ============================================================
-// MEAL PLAN TIMELINE (replaces renderMyMeals on home page)
+// INLINE WEEK PLAN (home page section)
 // ============================================================
-function renderMealPlanTimeline() {
-  if (!state.myMealsDate) state.myMealsDate = getToday();
-  const dateStr = state.myMealsDate;
-  const dateLabel = typeof getFoodLogDateLabel === 'function' ? getFoodLogDateLabel(dateStr) : dateStr;
+function renderHomeWeekPlan() {
+  const weekStart = state.currentWeekStartDate;
+  const weekDates = getWeekDates(weekStart);
   const todayStr = getToday();
-  const showTodayBtn = dateStr !== todayStr;
 
-  const log = getFoodLog();
-  const dayEntries = log.filter(e => e.dateCooked && e.dateCooked.split('T')[0] === dateStr);
-  const mealSlots = ['breakfast', 'lunch', 'dinner', 'snack'];
+  if (!state.weekPlanActiveDay || !weekDates.includes(state.weekPlanActiveDay)) {
+    state.weekPlanActiveDay = weekDates.includes(todayStr) ? todayStr : weekDates[0];
+  }
 
-  const cards = mealSlots.map(slot => {
-    const slotEntries = dayEntries.filter(e => e.mealType === slot);
+  let plan = typeof getWeekPlan === 'function' ? getWeekPlan() : null;
 
-    if (slot === 'snack') {
-      if (slotEntries.length === 0) {
-        return `
-          <div class="meal-timeline-card empty" onclick="openAddMealForSlot('snack', '${dateStr}')">
-            <div class="meal-timeline-image-placeholder"></div>
-            <div class="meal-timeline-info">
-              <div class="meal-timeline-type">Snack</div>
-              <p class="meal-timeline-name" style="color: var(--text-tertiary);">Add snack</p>
-            </div>
-          </div>`;
-      }
-      return slotEntries.map(entry => {
-        const recipe = entry.recipeId ? getRecipeById(entry.recipeId) : null;
-        const img = entry.photo || entry.myPhoto || (recipe ? recipeThumb(recipe) : null);
-        const name = entry.recipeName || (recipe ? recipe.title : 'Snack');
-        return `
-          <div class="meal-timeline-card" onclick="openFoodLogDetail('${entry.id}')">
-            ${img
-              ? `<img class="meal-timeline-image" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="meal-timeline-image-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
-              : `<div class="meal-timeline-image-placeholder" style="background:${getPlaceholderGradient({title:name})}"></div>`
-            }
-            <div class="meal-timeline-info">
-              <div class="meal-timeline-type">Snack</div>
-              <p class="meal-timeline-name">${esc(name)}</p>
-            </div>
-          </div>`;
-      }).join('');
-    }
-
-    if (slotEntries.length === 0) {
-      // Check week plan first — show 2 options side by side
-      if (typeof getWeekPlan === 'function') {
-        const weekPlan = getWeekPlan();
-        const weekSlot = weekPlan?.days?.[dateStr]?.[slot];
-        if (weekSlot?.options?.length > 0) {
-          const optionCards = weekSlot.options.map((opt, idx) => {
-            const optLabel = idx === 0 ? 'A' : 'B';
-            let name = '', img = '', recipeId = null;
-            if (opt.type === 'combo') {
-              const combo = (state.combos || []).find(c => c.id === opt.comboId);
-              name = combo ? combo.name : 'Combo';
-            } else {
-              const r = getRecipeById(opt.recipeId);
-              if (r) { name = r.title; img = recipeThumb(r); recipeId = r.__backendId || r.id; }
-              else { name = 'Recipe'; }
-            }
-            return `
-              <div class="meal-timeline-card" style="flex: 1; min-width: 0; border: 1px solid rgba(232,93,93,0.25);" ${recipeId ? `onclick="goToRecipe('${recipeId}')"` : ''}>
-                ${img
-                  ? `<img class="meal-timeline-image" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="meal-timeline-image-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
-                  : `<div class="meal-timeline-image-placeholder" style="background:${getPlaceholderGradient({title:name})}"></div>`
-                }
-                <span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px;">Option ${optLabel}</span>
-                <div class="meal-timeline-info">
-                  <div class="meal-timeline-type">${capitalize(slot)}</div>
-                  <p class="meal-timeline-name">${esc(name)}</p>
-                </div>
-              </div>`;
-          }).join('');
-          return `<div style="display:flex; gap:8px;">${optionCards}</div>`;
-        }
-      }
-
-      if (typeof getAutoPlan === 'function') {
-        const plan = getAutoPlan();
-        const suggestion = plan && plan.days && plan.days[dateStr] && plan.days[dateStr][slot];
-        if (suggestion) {
-          const slotType = suggestion.type || 'recipe';
-
-          // Combo suggestion
-          if (slotType === 'combo') {
-            const combo = (state.combos || []).find(c => c.id === suggestion.comboId);
-            if (combo) {
-              const comboComponents = (combo.slots || []).map(s => (state.components || []).find(c => (c.__backendId || c.id) === s.componentId)).filter(Boolean);
-              const compNames = comboComponents.map(c => c.name).join(' + ');
-              const cookTime = Math.max(0, ...comboComponents.map(c => (c.airFryer && c.airFryer.cookTime) || 0));
-              const locked = suggestion.locked;
-              const allAirFry = comboComponents.length > 0 && comboComponents.every(c => c.cookingMethod === 'Air Fry');
-              return `
-                <div class="meal-timeline-card" style="${!locked ? 'border: 1.5px solid var(--accent);' : ''}" onclick="handleComboMealCardClick('${esc(combo.id)}', '${esc(dateStr)}', '${esc(slot)}')">
-                  <div class="meal-timeline-image-placeholder" style="background:linear-gradient(135deg, #2a2a3d, #1a1a24);display:flex;align-items:center;justify-content:center;">
-                    <span style="font-size:24px;">&#127869;</span>
-                  </div>
-                  ${!locked ? `<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px;">Combo</span>` : ''}
-                  ${allAirFry ? `<span style="position:absolute;top:6px;right:6px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;">Air Fry</span>` : ''}
-                  <div class="meal-timeline-info">
-                    <div class="meal-timeline-type">${capitalize(slot)}</div>
-                    <p class="meal-timeline-name">${esc(combo.name)}</p>
-                    <div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(compNames)}</div>
-                    ${cookTime > 0 ? `<div style="font-size:11px;color:var(--text-tertiary);margin-top:2px;">&#9201; ${cookTime} min</div>` : ''}
-                    <div style="display:flex;gap:6px;margin-top:6px;">
-                      <button onclick="event.stopPropagation();handleSwapClick('${dateStr}','${slot}')" style="flex:1;font-size:11px;padding:3px 0;border-radius:8px;border:1px solid var(--text-tertiary);background:transparent;color:var(--text-secondary);cursor:pointer;">Swap</button>
-                      <button onclick="event.stopPropagation();lockMealSlot('${dateStr}','${slot}');render();" style="flex:1;font-size:11px;padding:3px 0;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;">Accept</button>
-                    </div>
-                  </div>
-                </div>`;
-            }
-          }
-
-          // Recipe suggestion (existing)
-          const suggestedRecipe = getRecipeById(suggestion.recipeId);
-          if (suggestedRecipe) {
-            const locked = suggestion.locked;
-            const img = recipeThumb(suggestedRecipe);
-            const name = suggestedRecipe.title || capitalize(slot);
-            const rating = suggestedRecipe.rating || 0;
-            const effort = suggestedRecipe.effort || suggestedRecipe.effortLevel || '';
-            const airFry = isAirFryerRecipe(suggestedRecipe);
-            const stars = Array.from({length: 5}, (_, i) =>
-              `<span style="color:${i < rating ? 'var(--accent)' : 'var(--text-tertiary)'};font-size:10px;">&#9733;</span>`
-            ).join('');
-            return `
-              <div class="meal-timeline-card" style="${!locked ? 'border: 1.5px solid var(--accent);' : ''}" onclick="goToRecipe('${suggestedRecipe.id}')">
-                ${img
-                  ? `<img class="meal-timeline-image" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="meal-timeline-image-placeholder" style="display:none;background:${getPlaceholderGradient(suggestedRecipe)}"></div>`
-                  : `<div class="meal-timeline-image-placeholder" style="background:${getPlaceholderGradient(suggestedRecipe)}"></div>`
-                }
-                ${!locked ? `<span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px;">Suggested</span>` : ''}
-                ${airFry ? `<span style="position:absolute;top:6px;right:6px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;padding:2px 6px;border-radius:8px;text-transform:uppercase;">Air Fry</span>` : ''}
-                <div class="meal-timeline-info">
-                  <div class="meal-timeline-type">${capitalize(slot)}</div>
-                  <p class="meal-timeline-name">${esc(name)}</p>
-                  <div style="margin-top:2px;">${stars}</div>
-                  ${effort ? `<div style="margin-top:3px;">${renderEffortPill(effort, 'sm')}</div>` : ''}
-                  <div style="display:flex;gap:6px;margin-top:6px;">
-                    <button onclick="event.stopPropagation();handleSwapClick('${dateStr}','${slot}')" style="flex:1;font-size:11px;padding:3px 0;border-radius:8px;border:1px solid var(--text-tertiary);background:transparent;color:var(--text-secondary);cursor:pointer;">Swap</button>
-                    <button onclick="event.stopPropagation();lockMealSlot('${dateStr}','${slot}');render();" style="flex:1;font-size:11px;padding:3px 0;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;font-weight:600;">Accept</button>
-                  </div>
-                </div>
-              </div>`;
-          }
-        }
-      }
-      return `
-        <div class="meal-timeline-card empty" onclick="openAddMealForSlot('${slot}', '${dateStr}')">
-          <div class="meal-timeline-image-placeholder"></div>
-          <div class="meal-timeline-info">
-            <div class="meal-timeline-type">${capitalize(slot)}</div>
-            <p class="meal-timeline-name" style="color: var(--text-tertiary);">Add meal</p>
-          </div>
-        </div>`;
-    }
-
-    const entry = slotEntries[0];
-    const recipe = entry.recipeId ? getRecipeById(entry.recipeId) : null;
-    const img = entry.photo || entry.myPhoto || (recipe ? recipeThumb(recipe) : null);
-    const name = entry.recipeName || (recipe ? recipe.title : capitalize(slot));
-
+  // No plan yet — show generate prompt
+  if (!plan || !plan.days) {
     return `
-      <div class="meal-timeline-card" onclick="openFoodLogDetail('${entry.id}')">
-        ${img
-          ? `<img class="meal-timeline-image" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="meal-timeline-image-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
-          : `<div class="meal-timeline-image-placeholder" style="background:${getPlaceholderGradient({title:name})}"></div>`
-        }
-        <div class="meal-timeline-info">
-          <div class="meal-timeline-type">${capitalize(slot)}</div>
-          <p class="meal-timeline-name">${esc(name)}</p>
+      <div class="home-section" id="home-week-plan-section">
+        <div class="feed-section-header" style="display: flex; align-items: center; justify-content: space-between;">
+          <h2 class="feed-section-title caps">This Week</h2>
         </div>
-      </div>`;
-  }).join('');
+        <div style="padding: 24px 16px; text-align: center;">
+          <div style="font-size: 32px; margin-bottom: 12px;">
+            <svg width="32" height="32" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+          </div>
+          <div style="color: ${CONFIG.text_color}; font-size: 15px; font-weight: 600; margin-bottom: 6px;">Plan your meals for the week</div>
+          <div style="color: ${CONFIG.text_muted}; font-size: 13px; margin-bottom: 20px;">Get 2 options per meal, every day</div>
+          <button onclick="generateWeekPlan(false); render();" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 12px 28px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;">Generate Plan</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const activeDay = state.weekPlanActiveDay;
 
   return `
-    <div class="home-section" id="home-meals-section">
-      <div class="feed-section-header">
-        <h2 class="feed-section-title caps">Today's Meals</h2>
-      </div>
-      <div class="meal-timeline-date-nav">
-        <button class="meal-timeline-date-btn" onclick="navigateMyMealsDate(-1)">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
-        </button>
-        <div class="meal-timeline-date-label">
-          <div class="meal-timeline-date-label-text">${esc(dateLabel)}</div>
-          ${showTodayBtn ? `<button onclick="state.myMealsDate = getToday(); render();" style="font-size: 12px; color: var(--accent); background: none; border: none; cursor: pointer; margin-top: 2px; font-weight: 600;">Jump to Today</button>` : ''}
-        </div>
-        <button class="meal-timeline-date-btn" onclick="navigateMyMealsDate(1)">
-          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+    <div class="home-section" id="home-week-plan-section">
+      <div class="feed-section-header" style="display: flex; align-items: center; justify-content: space-between;">
+        <h2 class="feed-section-title caps">This Week</h2>
+        <button onclick="regenerateWeekPlan(); render();" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; display: flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 8px; font-family: inherit;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
+          Refresh
         </button>
       </div>
-      <div class="meal-timeline">
-        ${cards}
+
+      ${renderWeekPlanDayTabs(weekDates, activeDay, todayStr)}
+
+      <div style="padding: 0 16px 8px;">
+        ${['breakfast', 'lunch', 'dinner'].map(mealType =>
+          renderWeekPlanMealRow(plan, activeDay, mealType)
+        ).join('')}
       </div>
     </div>
   `;
 }
 
-// Targeted update of the meal plan section only (avoids full DOM rebuild / video restart)
+// Targeted update of the week plan section only (avoids full DOM rebuild / video restart)
 function updateMealPlanSection() {
-  const el = document.getElementById('home-meals-section');
+  const el = document.getElementById('home-week-plan-section');
   if (el) {
-    el.outerHTML = renderMealPlanTimeline();
+    el.outerHTML = renderHomeWeekPlan();
   } else {
     render();
   }
@@ -663,7 +516,7 @@ function renderHome() {
     ${renderQuickActionsStrip()}
     ${renderHeroCard(heroRecipe)}
     ${renderCookAgainRow()}
-    ${renderMealPlanTimeline()}
+    ${renderHomeWeekPlan()}
     ${renderQuickEasyList(quickRecipes)}
     ${renderDinnerCarousel(dinnerRecipes)}
     ${renderSavedPeekCards()}
