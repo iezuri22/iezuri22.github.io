@@ -1476,14 +1476,15 @@ function showModalView(html) {
  * Get or generate the week plan.
  * Returns the stored plan if it covers the current week, else generates a fresh one.
  */
-function getWeekPlan() {
-  const stored = localStorage.getItem('yummy_weekplan');
-  const weekStart = state.currentWeekStartDate;
+function getWeekPlan(weekStart) {
+  const ws = weekStart || state.currentWeekStartDate;
+  const key = ws === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + ws;
+  const stored = localStorage.getItem(key);
 
   if (stored) {
     try {
       const plan = JSON.parse(stored);
-      if (plan.weekStart === weekStart && plan.days) {
+      if (plan.weekStart === ws && plan.days) {
         return plan;
       }
     } catch (e) {
@@ -1498,10 +1499,10 @@ function getWeekPlan() {
  * Generate a full 7-day week plan with 2 options per meal slot.
  * Uses the existing scoring engine with cross-option and cross-day diversity.
  */
-function generateWeekPlan(preserveLocked) {
-  const weekStart = state.currentWeekStartDate;
+function generateWeekPlan(preserveLocked, weekStartOverride) {
+  const weekStart = weekStartOverride || state.currentWeekStartDate;
   const weekDates = getWeekDates(weekStart);
-  const existingPlan = preserveLocked ? getWeekPlan() : null;
+  const existingPlan = preserveLocked ? getWeekPlan(weekStart) : null;
 
   const isWeeknight = (dow) => dow >= 1 && dow <= 4;
   const weekUsedProteins = []; // mild cross-day diversity
@@ -1569,7 +1570,8 @@ function generateWeekPlan(preserveLocked) {
     days
   };
 
-  localStorage.setItem('yummy_weekplan', JSON.stringify(plan));
+  const key = weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + weekStart;
+  localStorage.setItem(key, JSON.stringify(plan));
   return plan;
 }
 
@@ -1617,7 +1619,8 @@ function lockWeekMealSlot(dateStr, mealType, optionIndex) {
   if (!plan?.days?.[dateStr]?.[mealType]?.options?.[optionIndex]) return;
   plan.days[dateStr][mealType].options[optionIndex].locked =
     !plan.days[dateStr][mealType].options[optionIndex].locked;
-  localStorage.setItem('yummy_weekplan', JSON.stringify(plan));
+  const key = plan.weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + plan.weekStart;
+  localStorage.setItem(key, JSON.stringify(plan));
 }
 
 /**
@@ -1631,14 +1634,15 @@ function swapWeekMealSlot(dateStr, mealType, optionIndex, newRecipeId) {
     type: 'recipe',
     locked: false
   };
-  localStorage.setItem('yummy_weekplan', JSON.stringify(plan));
+  const key = plan.weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + plan.weekStart;
+  localStorage.setItem(key, JSON.stringify(plan));
 }
 
 /**
  * Regenerate the week plan, preserving locked slots.
  */
-function regenerateWeekPlan() {
-  return generateWeekPlan(true);
+function regenerateWeekPlan(weekStartOverride) {
+  return generateWeekPlan(true, weekStartOverride);
 }
 
 /**

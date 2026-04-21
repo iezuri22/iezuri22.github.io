@@ -326,54 +326,129 @@ function renderRecipeCarousel(title, subtitle, recipes) {
 // INLINE WEEK PLAN (home page section)
 // ============================================================
 function renderHomeWeekPlan() {
-  const weekStart = state.currentWeekStartDate;
-  const weekDates = getWeekDates(weekStart);
-  const todayStr = getToday();
+  if (!state.weekPlanWeekOffset) state.weekPlanWeekOffset = 0;
 
-  if (!state.weekPlanActiveDay || !weekDates.includes(state.weekPlanActiveDay)) {
-    state.weekPlanActiveDay = weekDates.includes(todayStr) ? todayStr : weekDates[0];
+  // Compute the viewed week's start based on offset (0 = this week, 1 = next week)
+  const thisWeekStart = state.currentWeekStartDate;
+  let viewedStart = thisWeekStart;
+  if (state.weekPlanWeekOffset === 1) {
+    const d = new Date(thisWeekStart + 'T12:00:00');
+    d.setDate(d.getDate() + 7);
+    viewedStart = _localDateStr(d);
   }
+  const weekDates = getWeekDates(viewedStart);
+  const todayStr = getToday();
+  const isThisWeek = state.weekPlanWeekOffset === 0;
 
-  let plan = typeof getWeekPlan === 'function' ? getWeekPlan() : null;
+  // Check for plan in the viewed week
+  let plan = typeof getWeekPlan === 'function' ? getWeekPlan(viewedStart) : null;
 
-  // No plan yet — show generate prompt
-  if (!plan || !plan.days) {
+  // Also check if this week has any plan at all (to decide whether to show toggle)
+  const thisWeekPlan = typeof getWeekPlan === 'function' ? getWeekPlan(thisWeekStart) : null;
+  const hasAnyPlan = !!thisWeekPlan;
+
+  // No plan at all — show generate prompt (no toggle)
+  if (!hasAnyPlan) {
     return `
       <div class="home-section" id="home-week-plan-section">
-        <div class="feed-section-header" style="display: flex; align-items: center; justify-content: space-between;">
-          <h2 class="feed-section-title caps">This Week</h2>
-        </div>
-        <div style="padding: 24px 16px; text-align: center;">
-          <div style="font-size: 32px; margin-bottom: 12px;">
-            <svg width="32" height="32" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
-          </div>
-          <div style="color: ${CONFIG.text_color}; font-size: 15px; font-weight: 600; margin-bottom: 6px;">Plan your meals for the week</div>
-          <div style="color: ${CONFIG.text_muted}; font-size: 13px; margin-bottom: 20px;">Get 2 options per meal, every day</div>
-          <button onclick="generateWeekPlan(false); render();" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 12px 28px; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;">Generate Plan</button>
+        <div class="home-section-label">Meal Plan</div>
+        <div style="padding: 24px 20px; text-align: center;">
+          <svg width="28" height="28" fill="none" stroke="${CONFIG.text_muted}" stroke-width="1.5" viewBox="0 0 24 24" style="margin-bottom: 10px;"><path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+          <div style="color: ${CONFIG.text_color}; font-size: 14px; font-weight: 600; margin-bottom: 4px;">Plan your meals</div>
+          <div style="color: ${CONFIG.text_muted}; font-size: 12px; margin-bottom: 16px;">Get 2 options per meal, every day</div>
+          <button onclick="generateWeekPlan(false); render();" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 10px 24px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;">Generate Plan</button>
         </div>
       </div>
     `;
   }
 
-  const activeDay = state.weekPlanActiveDay;
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Build week toggle + refresh header
+  const weekToggle = `
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 20px; margin-bottom: 12px;">
+      <div style="display: flex; align-items: center; gap: 6px;">
+        <button onclick="state.weekPlanWeekOffset = 0; updateMealPlanSection();"
+          style="font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; transition: all 0.15s;
+          ${isThisWeek ? `background: ${CONFIG.primary_action_color}; color: white;` : `background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted};`}">This Week</button>
+        <button onclick="state.weekPlanWeekOffset = 1; updateMealPlanSection();"
+          style="font-size: 12px; font-weight: 600; padding: 5px 12px; border-radius: 8px; border: none; cursor: pointer; font-family: inherit; transition: all 0.15s;
+          ${!isThisWeek ? `background: ${CONFIG.primary_action_color}; color: white;` : `background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted};`}">Next Week</button>
+      </div>
+      <button onclick="regenerateWeekPlan('${viewedStart}'); updateMealPlanSection();" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; display: flex; align-items: center; gap: 3px; font-size: 11px; padding: 4px 6px; font-family: inherit;">
+        <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
+        Refresh
+      </button>
+    </div>
+  `;
+
+  // Viewed week has no plan yet — show generate for that week
+  if (!plan || !plan.days) {
+    return `
+      <div class="home-section" id="home-week-plan-section">
+        ${weekToggle}
+        <div style="padding: 16px 20px; text-align: center;">
+          <div style="color: ${CONFIG.text_muted}; font-size: 13px; margin-bottom: 14px;">No plan for next week yet</div>
+          <button onclick="generateWeekPlan(false, '${viewedStart}'); updateMealPlanSection();" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 10px 24px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;">Generate Plan</button>
+        </div>
+      </div>
+    `;
+  }
 
   return `
     <div class="home-section" id="home-week-plan-section">
-      <div class="feed-section-header" style="display: flex; align-items: center; justify-content: space-between;">
-        <h2 class="feed-section-title caps">This Week</h2>
-        <button onclick="regenerateWeekPlan(); render();" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; display: flex; align-items: center; gap: 4px; font-size: 12px; padding: 4px 8px; font-family: inherit;">
-          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
-          Refresh
-        </button>
+      ${weekToggle}
+      <div style="padding: 0 20px;">
+        ${weekDates.map(dateStr => {
+          const d = new Date(dateStr + 'T12:00:00');
+          const dayName = dayNames[d.getDay()];
+          const isToday_ = dateStr === todayStr;
+          const dayPlan = plan.days?.[dateStr];
+          return renderWeekPlanDayRow(dayName, dateStr, dayPlan, isToday_);
+        }).join('')}
       </div>
+    </div>
+  `;
+}
 
-      ${renderWeekPlanDayTabs(weekDates, activeDay, todayStr)}
+function renderWeekPlanDayRow(dayName, dateStr, dayPlan, isToday) {
+  const meals = ['breakfast', 'lunch', 'dinner'];
+  const mealIcons = { breakfast: '☀', lunch: '☀', dinner: '☾' };
 
-      <div style="padding: 0 16px 8px;">
-        ${['breakfast', 'lunch', 'dinner'].map(mealType =>
-          renderWeekPlanMealRow(plan, activeDay, mealType)
-        ).join('')}
+  const thumbs = meals.map(mealType => {
+    const slot = dayPlan?.[mealType];
+    const opt = slot?.options?.[0]; // show first option thumbnail
+    if (!opt) return { img: '', name: '', mealType, gradient: 'linear-gradient(135deg, #2a2a3d, #1a1a24)' };
+
+    let img = '';
+    let name = '';
+    if (opt.type === 'combo') {
+      const combo = (state.combos || []).find(c => c.id === opt.comboId);
+      name = combo?.name || 'Combo';
+    } else {
+      const recipe = getRecipeById(opt.recipeId);
+      if (recipe) {
+        name = recipe.title || '';
+        img = recipeThumb(recipe);
+      }
+    }
+    return { img, name, mealType, gradient: getPlaceholderGradient({ title: name }) };
+  });
+
+  return `
+    <div class="wp-day-row ${isToday ? 'wp-today' : ''}" onclick="state.weekPlanActiveDay='${dateStr}'; navigateTo('week-plan');">
+      <div class="wp-day-name ${isToday ? 'wp-today-name' : ''}">${dayName}${isToday ? '<span class="wp-today-badge">Today</span>' : ''}</div>
+      <div class="wp-day-meals">
+        ${thumbs.map(t => `
+          <div class="wp-meal-thumb">
+            ${t.img
+              ? `<img src="${esc(t.img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="wp-meal-placeholder" style="display:none;background:${t.gradient}"></div>`
+              : `<div class="wp-meal-placeholder" style="background:${t.gradient}"></div>`
+            }
+          </div>
+        `).join('')}
       </div>
+      <svg width="14" height="14" fill="none" stroke="${CONFIG.text_muted}" stroke-width="2" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
     </div>
   `;
 }
@@ -383,6 +458,9 @@ function updateMealPlanSection() {
   const el = document.getElementById('home-week-plan-section');
   if (el) {
     el.outerHTML = renderHomeWeekPlan();
+    // Re-add visible class since the observer already ran
+    const newEl = document.getElementById('home-week-plan-section');
+    if (newEl) newEl.classList.add('visible');
   } else {
     render();
   }
@@ -2885,7 +2963,14 @@ function renderExternalMealPicker() {
 // ============================================================
 
 function renderWeekPlanView() {
-  const weekStart = state.currentWeekStartDate;
+  // Determine which week to show based on active day
+  let weekStart = state.currentWeekStartDate;
+  if (state.weekPlanActiveDay) {
+    const ad = new Date(state.weekPlanActiveDay + 'T12:00:00');
+    const sunday = new Date(ad.getFullYear(), ad.getMonth(), ad.getDate() - ad.getDay());
+    const ws = _localDateStr(sunday);
+    if (ws !== weekStart) weekStart = ws;
+  }
   const weekDates = getWeekDates(weekStart);
   const todayStr = getToday();
 
@@ -2894,9 +2979,9 @@ function renderWeekPlanView() {
     state.weekPlanActiveDay = weekDates.includes(todayStr) ? todayStr : weekDates[0];
   }
 
-  let plan = typeof getWeekPlan === 'function' ? getWeekPlan() : null;
+  let plan = typeof getWeekPlan === 'function' ? getWeekPlan(weekStart) : null;
   if (!plan) {
-    plan = typeof generateWeekPlan === 'function' ? generateWeekPlan(false) : null;
+    plan = typeof generateWeekPlan === 'function' ? generateWeekPlan(false, weekStart) : null;
   }
 
   if (!plan || !plan.days) {
@@ -3062,8 +3147,11 @@ function handleWeekPlanSwap(dateStr, mealType, optionIndex) {
   const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
   const mealLabel = mealLabels[mealType];
 
-  // Get current option to exclude from alternatives
-  const plan = typeof getWeekPlan === 'function' ? getWeekPlan() : null;
+  // Determine which week this date belongs to
+  const dd = new Date(dateStr + 'T12:00:00');
+  const sun = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() - dd.getDay());
+  const ws = _localDateStr(sun);
+  const plan = typeof getWeekPlan === 'function' ? getWeekPlan(ws) : null;
   const currentOption = plan?.days?.[dateStr]?.[mealType]?.options?.[optionIndex];
   const currentId = currentOption?.recipeId || currentOption?.comboId;
 

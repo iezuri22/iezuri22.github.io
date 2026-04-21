@@ -717,3 +717,84 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
   padding: 12px 16px 20px;
   flex-shrink: 0;
 }
+
+/* ===== Compact Week Plan Rows (Home Inline) ===== */
+.wp-day-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.wp-day-row:last-child {
+  border-bottom: none;
+}
+
+.wp-day-row:active {
+  opacity: 0.7;
+}
+
+.wp-today {
+  background: rgba(232,93,93,0.06);
+  border-radius: 10px;
+  padding: 10px 8px;
+  margin: 0 -8px;
+}
+
+.wp-day-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary, #8e8e93);
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.wp-today-name {
+  color: var(--accent, #e85d5d);
+}
+
+.wp-today-badge {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  background: var(--accent, #e85d5d);
+  color: white;
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.wp-day-meals {
+  display: flex;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.wp-meal-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.wp-meal-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wp-meal-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
