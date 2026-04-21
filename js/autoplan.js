@@ -1468,6 +1468,179 @@ function showModalView(html) {
 // INITIALIZATION
 // ============================================================================
 
+// ============================================================================
+// WEEK PLAN: 7-day planning with 2 options per meal slot
+// ============================================================================
+
+/**
+ * Get or generate the week plan.
+ * Returns the stored plan if it covers the current week, else generates a fresh one.
+ */
+function getWeekPlan() {
+  const stored = localStorage.getItem('yummy_weekplan');
+  const weekStart = state.currentWeekStartDate;
+
+  if (stored) {
+    try {
+      const plan = JSON.parse(stored);
+      if (plan.weekStart === weekStart && plan.days) {
+        return plan;
+      }
+    } catch (e) {
+      console.error('Failed to parse stored week plan:', e);
+    }
+  }
+
+  return null; // Don't auto-generate — user initiates via "Plan the Week"
+}
+
+/**
+ * Generate a full 7-day week plan with 2 options per meal slot.
+ * Uses the existing scoring engine with cross-option and cross-day diversity.
+ */
+function generateWeekPlan(preserveLocked) {
+  const weekStart = state.currentWeekStartDate;
+  const weekDates = getWeekDates(weekStart);
+  const existingPlan = preserveLocked ? getWeekPlan() : null;
+
+  const isWeeknight = (dow) => dow >= 1 && dow <= 4;
+  const weekUsedProteins = []; // mild cross-day diversity
+
+  const days = {};
+
+  for (const dateStr of weekDates) {
+    const date = new Date(dateStr + 'T12:00:00');
+    const dayOfWeek = date.getDay();
+    const dayUsedProteins = [];
+
+    days[dateStr] = {};
+
+    for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+      // Check if there's a locked slot from existing plan
+      const existingSlot = existingPlan?.days?.[dateStr]?.[mealType];
+
+      const options = [];
+
+      for (let optIdx = 0; optIdx < 2; optIdx++) {
+        // If locked in existing plan, keep it
+        if (existingSlot?.options?.[optIdx]?.locked) {
+          options.push(existingSlot.options[optIdx]);
+          // Track its protein for diversity
+          const recipe = existingSlot.options[optIdx].recipeId
+            ? getRecipeById(existingSlot.options[optIdx].recipeId)
+            : null;
+          if (recipe) {
+            const p = getRecipeProtein(recipe);
+            if (p) {
+              dayUsedProteins.push(p);
+              if (!weekUsedProteins.includes(p)) weekUsedProteins.push(p);
+            }
+          }
+          continue;
+        }
+
+        // Build exclusion list: IDs already picked for this slot
+        const excludeIds = options.map(o => o.recipeId || o.comboId).filter(Boolean);
+
+        const selected = selectMealForWeekPlan(
+          dateStr, mealType, dayUsedProteins, weekUsedProteins,
+          isWeeknight(dayOfWeek), excludeIds
+        );
+
+        if (selected) {
+          options.push(buildSlotEntry(selected));
+          const protein = selected.type === 'recipe'
+            ? getRecipeProtein(selected.item)
+            : (typeof getComboProtein === 'function' ? getComboProtein(selected.item) : null);
+          if (protein) {
+            dayUsedProteins.push(protein);
+            if (!weekUsedProteins.includes(protein)) weekUsedProteins.push(protein);
+          }
+        }
+      }
+
+      days[dateStr][mealType] = { options };
+    }
+  }
+
+  const plan = {
+    generatedAt: new Date().toISOString(),
+    weekStart,
+    days
+  };
+
+  localStorage.setItem('yummy_weekplan', JSON.stringify(plan));
+  return plan;
+}
+
+/**
+ * Select a meal candidate, similar to selectMeal() but with exclusion support
+ * and a milder penalty for week-level protein repetition.
+ */
+function selectMealForWeekPlan(dateStr, mealType, dayUsedProteins, weekUsedProteins, isWknight, excludeIds) {
+  const recipeCandidates = getRecipesForMeal(mealType)
+    .filter(r => !excludeIds.includes(r.__backendId || r.id));
+
+  const scoredRecipes = recipeCandidates.map(recipe => {
+    let score = scoreRecipe(recipe, mealType, dayUsedProteins, isWknight);
+    // Milder week-level protein penalty
+    const p = getRecipeProtein(recipe);
+    if (p && weekUsedProteins.includes(p)) {
+      score -= 15;
+    }
+    return { item: recipe, type: 'recipe', score };
+  });
+
+  let scoredCombos = [];
+  if (mealType !== 'breakfast' && typeof getComboComponents === 'function') {
+    scoredCombos = (state.combos || [])
+      .filter(c => !excludeIds.includes(c.id) && getComboComponents(c).length > 0)
+      .map(c => {
+        let score = scoreCombo(c, mealType, dayUsedProteins, isWknight);
+        const p = typeof getComboProtein === 'function' ? getComboProtein(c) : null;
+        if (p && weekUsedProteins.includes(p)) {
+          score -= 15;
+        }
+        return { item: c, type: 'combo', score };
+      });
+  }
+
+  const all = [...scoredRecipes, ...scoredCombos].sort((a, b) => b.score - a.score);
+  return all.length > 0 ? all[0] : null;
+}
+
+/**
+ * Lock/unlock a specific option in the week plan.
+ */
+function lockWeekMealSlot(dateStr, mealType, optionIndex) {
+  const plan = getWeekPlan();
+  if (!plan?.days?.[dateStr]?.[mealType]?.options?.[optionIndex]) return;
+  plan.days[dateStr][mealType].options[optionIndex].locked =
+    !plan.days[dateStr][mealType].options[optionIndex].locked;
+  localStorage.setItem('yummy_weekplan', JSON.stringify(plan));
+}
+
+/**
+ * Swap a specific option in the week plan with a new recipe.
+ */
+function swapWeekMealSlot(dateStr, mealType, optionIndex, newRecipeId) {
+  const plan = getWeekPlan();
+  if (!plan?.days?.[dateStr]?.[mealType]?.options) return;
+  plan.days[dateStr][mealType].options[optionIndex] = {
+    recipeId: newRecipeId,
+    type: 'recipe',
+    locked: false
+  };
+  localStorage.setItem('yummy_weekplan', JSON.stringify(plan));
+}
+
+/**
+ * Regenerate the week plan, preserving locked slots.
+ */
+function regenerateWeekPlan() {
+  return generateWeekPlan(true);
+}
+
 /**
  * Initialize the auto-plan system
  * Call once on app startup

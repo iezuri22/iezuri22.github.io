@@ -920,6 +920,7 @@ const state = {
   viewingDate: (() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); })(),
   swipeContext: { active: false, mealType: null, forDate: null },
   homeTab: 'swipe',
+  weekPlanActiveDay: null,
   calendarPickerOpen: false,
   calendarMonth: null,
   todaySwipeMealSlot: null,
@@ -4705,7 +4706,7 @@ function navigateTo(view) {
 
   const pageMap = {
     'home': '/index.html', 'food-log-detail': '/index.html',
-    'my-meals': '/index.html',
+    'my-meals': '/index.html', 'week-plan': '/index.html',
     'recipes': '/recipes.html', 'my-picks': '/my-picks.html', 'recipe-view': '/recipes.html', 'recipe-edit': '/recipes.html', 'freestyle-edit': '/recipes.html', 'batch-edit': '/recipes.html', 'batch-view': '/recipes.html',
     'kitchen': '/kitchen.html', 'inventory': '/kitchen.html', 'ingredients': '/kitchen.html', 'ingredient-detail': '/kitchen.html',
     'kitchen-detail': '/kitchen-detail.html', 'kitchen-ingredient-meals': '/kitchen-detail.html',

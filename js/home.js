@@ -232,7 +232,7 @@ function renderHomeGreeting(greeting) {
 function renderQuickActionsStrip() {
   const actions = [
     { label: "What's for dinner?", icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z"/></svg>`, action: 'suggestDinner()' },
-    { label: 'Meal Plan', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>`, action: "document.getElementById('home-meals-section')?.scrollIntoView({behavior:'smooth'})" },
+    { label: 'Plan the Week', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>`, action: "navigateTo('week-plan')" },
     { label: 'Grocery List', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M15.75 10.5V6a3.75 3.75 0 10-7.5 0v4.5m11.356-1.993l1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 01-1.12-1.243l1.264-12A1.125 1.125 0 015.513 7.5h12.974c.576 0 1.059.435 1.119 1.007zM8.625 10.5a.375.375 0 11-.75 0 .375.375 0 01.75 0zm7.5 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>`, action: "navigateTo('grocery-list')" },
     { label: 'Add Recipe', icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path d="M12 4.5v15m7.5-7.5h-15"/></svg>`, action: "window.location.href='recipes.html'; sessionStorage.setItem('yummy_target_view','recipe-edit'); sessionStorage.setItem('yummy_new_recipe','1')" }
   ];
@@ -370,6 +370,39 @@ function renderMealPlanTimeline() {
     }
 
     if (slotEntries.length === 0) {
+      // Check week plan first — show 2 options side by side
+      if (typeof getWeekPlan === 'function') {
+        const weekPlan = getWeekPlan();
+        const weekSlot = weekPlan?.days?.[dateStr]?.[slot];
+        if (weekSlot?.options?.length > 0) {
+          const optionCards = weekSlot.options.map((opt, idx) => {
+            const optLabel = idx === 0 ? 'A' : 'B';
+            let name = '', img = '', recipeId = null;
+            if (opt.type === 'combo') {
+              const combo = (state.combos || []).find(c => c.id === opt.comboId);
+              name = combo ? combo.name : 'Combo';
+            } else {
+              const r = getRecipeById(opt.recipeId);
+              if (r) { name = r.title; img = recipeThumb(r); recipeId = r.__backendId || r.id; }
+              else { name = 'Recipe'; }
+            }
+            return `
+              <div class="meal-timeline-card" style="flex: 1; min-width: 0; border: 1px solid rgba(232,93,93,0.25);" ${recipeId ? `onclick="goToRecipe('${recipeId}')"` : ''}>
+                ${img
+                  ? `<img class="meal-timeline-image" src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="meal-timeline-image-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
+                  : `<div class="meal-timeline-image-placeholder" style="background:${getPlaceholderGradient({title:name})}"></div>`
+                }
+                <span style="position:absolute;top:6px;left:6px;background:rgba(0,0,0,0.55);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px;">Option ${optLabel}</span>
+                <div class="meal-timeline-info">
+                  <div class="meal-timeline-type">${capitalize(slot)}</div>
+                  <p class="meal-timeline-name">${esc(name)}</p>
+                </div>
+              </div>`;
+          }).join('');
+          return `<div style="display:flex; gap:8px;">${optionCards}</div>`;
+        }
+      }
+
       if (typeof getAutoPlan === 'function') {
         const plan = getAutoPlan();
         const suggestion = plan && plan.days && plan.days[dateStr] && plan.days[dateStr][slot];
@@ -2995,11 +3028,245 @@ function renderExternalMealPicker() {
 }
 
 // ============================================================
+// WEEK PLAN VIEW
+// ============================================================
+
+function renderWeekPlanView() {
+  const weekStart = state.currentWeekStartDate;
+  const weekDates = getWeekDates(weekStart);
+  const todayStr = getToday();
+
+  // Default to today if within this week, else first day
+  if (!state.weekPlanActiveDay || !weekDates.includes(state.weekPlanActiveDay)) {
+    state.weekPlanActiveDay = weekDates.includes(todayStr) ? todayStr : weekDates[0];
+  }
+
+  let plan = typeof getWeekPlan === 'function' ? getWeekPlan() : null;
+  if (!plan) {
+    plan = typeof generateWeekPlan === 'function' ? generateWeekPlan(false) : null;
+  }
+
+  if (!plan || !plan.days) {
+    return `
+      <div style="padding: 32px 16px; text-align: center;">
+        <div style="font-size: 36px; margin-bottom: 16px;">📅</div>
+        <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: 8px;">No recipes yet</div>
+        <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: 24px;">Add some recipes first to plan your week.</div>
+        <button onclick="navigateTo('recipes')" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">Go to Recipes</button>
+      </div>
+    `;
+  }
+
+  const activeDay = state.weekPlanActiveDay;
+
+  return `
+    <div class="week-plan-container">
+      <div class="week-plan-header">
+        <button onclick="navigateTo('home')" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_color}; display: flex; align-items: center; padding: 4px;">
+          <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+        </button>
+        <div style="font-size: 18px; font-weight: 700; color: ${CONFIG.text_color};">Plan the Week</div>
+        <button onclick="regenerateWeekPlan(); render();" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; display: flex; align-items: center; gap: 4px; font-size: 13px; padding: 4px 8px;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
+          Refresh
+        </button>
+      </div>
+
+      ${renderWeekPlanDayTabs(weekDates, activeDay, todayStr)}
+
+      <div class="week-plan-body">
+        ${['breakfast', 'lunch', 'dinner'].map(mealType =>
+          renderWeekPlanMealRow(plan, activeDay, mealType)
+        ).join('')}
+      </div>
+
+      <div class="week-plan-footer">
+        <button onclick="navigateTo('home')" style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
+          Done
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderWeekPlanDayTabs(weekDates, activeDay, todayStr) {
+  const dayAbbrs = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+  return `
+    <div class="week-plan-day-tabs">
+      ${weekDates.map(dateStr => {
+        const d = new Date(dateStr + 'T12:00:00');
+        const dayNum = d.getDate();
+        const dayAbbr = dayAbbrs[d.getDay()];
+        const isActive = dateStr === activeDay;
+        const isToday = dateStr === todayStr;
+        const plan = typeof getWeekPlan === 'function' ? getWeekPlan() : null;
+        const dayPlan = plan?.days?.[dateStr];
+        const hasLockedSlots = dayPlan && Object.values(dayPlan).some(
+          slot => slot?.options?.some(o => o?.locked)
+        );
+
+        return `
+          <button onclick="state.weekPlanActiveDay='${dateStr}'; render();"
+            class="week-plan-day-tab ${isActive ? 'active' : ''} ${isToday ? 'today' : ''}"
+            style="${isActive ? `background: ${CONFIG.primary_action_color}; color: white; border-color: ${CONFIG.primary_action_color};` : ''}">
+            <span class="week-plan-day-abbr">${dayAbbr}</span>
+            <span class="week-plan-day-num">${dayNum}</span>
+            ${isToday && !isActive ? '<span class="week-plan-today-dot"></span>' : ''}
+            ${hasLockedSlots ? '<span class="week-plan-locked-dot"></span>' : ''}
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderWeekPlanMealRow(plan, dateStr, mealType) {
+  const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
+  const slot = plan?.days?.[dateStr]?.[mealType];
+  const options = slot?.options || [];
+
+  return `
+    <div class="week-plan-meal-section">
+      <div class="week-plan-meal-label">${mealLabels[mealType]}</div>
+      <div class="week-plan-options-row">
+        ${options.length > 0
+          ? options.map((opt, idx) => renderWeekPlanOptionCard(opt, dateStr, mealType, idx)).join('')
+          : `<div style="flex: 1; padding: 24px; text-align: center; color: ${CONFIG.text_muted}; font-size: 13px;">No options available</div>`
+        }
+      </div>
+    </div>
+  `;
+}
+
+function renderWeekPlanOptionCard(slotEntry, dateStr, mealType, optionIndex) {
+  if (!slotEntry) return '';
+
+  let recipe = null;
+  let name = '';
+  let img = '';
+  let cookTime = '';
+  let isCombo = false;
+  let isAirFry = false;
+
+  if (slotEntry.type === 'combo') {
+    isCombo = true;
+    const combo = (state.combos || []).find(c => c.id === slotEntry.comboId);
+    if (combo) {
+      name = combo.name;
+      const components = typeof getComboComponents === 'function' ? getComboComponents(combo) : [];
+      const time = typeof getComboCookTime === 'function' ? getComboCookTime(combo) : 0;
+      if (time > 0) cookTime = time + ' min';
+      isAirFry = components.length > 0 && components.every(c => c.cookingMethod === 'Air Fry');
+    } else {
+      name = 'Combo';
+    }
+  } else {
+    recipe = getRecipeById(slotEntry.recipeId);
+    if (recipe) {
+      name = recipe.title || 'Recipe';
+      img = recipeThumb(recipe);
+      cookTime = recipe.cookTime || '';
+      isAirFry = typeof isAirFryerRecipe === 'function' && isAirFryerRecipe(recipe);
+    } else {
+      name = 'Recipe';
+    }
+  }
+
+  const locked = slotEntry.locked;
+  const optionLabel = optionIndex === 0 ? 'A' : 'B';
+  const recipeId = recipe ? (recipe.__backendId || recipe.id) : null;
+
+  return `
+    <div class="week-plan-option-card ${locked ? 'locked' : ''}">
+      <div class="week-plan-option-thumb" ${recipeId ? `onclick="goToRecipe('${recipeId}')"` : ''}>
+        ${img
+          ? `<img src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="week-plan-thumb-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
+          : `<div class="week-plan-thumb-placeholder" style="background:${isCombo ? 'linear-gradient(135deg, #2a2a3d, #1a1a24)' : getPlaceholderGradient({title:name})}">
+              ${isCombo ? '<span style="font-size:22px;">&#127869;</span>' : ''}
+            </div>`
+        }
+        <span class="week-plan-option-badge">${optionLabel}</span>
+        ${locked ? `<span class="week-plan-lock-badge"><svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg></span>` : ''}
+        ${isAirFry ? '<span class="week-plan-airfry-badge">Air Fry</span>' : ''}
+        ${isCombo ? '<span class="week-plan-combo-badge">Combo</span>' : ''}
+      </div>
+      <div class="week-plan-option-info">
+        <div class="week-plan-option-name">${esc(name)}</div>
+        ${cookTime ? `<div class="week-plan-option-meta">${esc(cookTime)}</div>` : ''}
+        <div class="week-plan-option-actions">
+          <button onclick="handleWeekPlanSwap('${dateStr}', '${mealType}', ${optionIndex})" class="week-plan-swap-btn">Swap</button>
+          <button onclick="lockWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}); render();" class="week-plan-lock-btn ${locked ? 'is-locked' : ''}">
+            ${locked ? 'Unlock' : 'Lock'}
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function handleWeekPlanSwap(dateStr, mealType, optionIndex) {
+  const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
+  const mealLabel = mealLabels[mealType];
+
+  // Get current option to exclude from alternatives
+  const plan = typeof getWeekPlan === 'function' ? getWeekPlan() : null;
+  const currentOption = plan?.days?.[dateStr]?.[mealType]?.options?.[optionIndex];
+  const currentId = currentOption?.recipeId || currentOption?.comboId;
+
+  const alternatives = getRecipesForMeal(mealType)
+    .filter(r => (r.__backendId || r.id) !== currentId)
+    .sort(() => Math.random() - 0.5);
+
+  let cardsHtml = '';
+  if (alternatives.length === 0) {
+    cardsHtml = `<div style="text-align: center; color: ${CONFIG.text_muted}; padding: 32px 16px;">No other recipes available for ${mealLabel.toLowerCase()}</div>`;
+  } else {
+    alternatives.forEach(recipe => {
+      const id = recipe.__backendId || recipe.id;
+      const img = recipeThumb(recipe);
+      const title = recipe.title || 'Recipe';
+      cardsHtml += `
+        <div onclick="swapWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}, '${id}'); document.getElementById('week-swap-modal')?.remove(); render();"
+          style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid ${CONFIG.divider_color};">
+          <div style="width: 52px; height: 52px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated};">
+            ${img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${getPlaceholderGradient(recipe)}"></div>`}
+          </div>
+          <div style="flex: 1; min-width: 0;">
+            <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(title)}</div>
+            ${recipe.cookTime ? `<div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">${esc(recipe.cookTime)}</div>` : ''}
+          </div>
+        </div>`;
+    });
+  }
+
+  const modalHtml = `
+    <div id="week-swap-modal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; z-index: 1000;" onclick="if(event.target.id==='week-swap-modal') this.remove();">
+      <div style="width: 100%; max-width: 500px; max-height: 100vh; display: flex; flex-direction: column; background: ${CONFIG.background_color}; overflow: hidden;" onclick="event.stopPropagation()">
+        <div style="background: ${CONFIG.surface_color}; border-bottom: 1px solid ${CONFIG.divider_color}; padding: 16px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+          <div>
+            <div style="font-size: 17px; font-weight: 700; color: ${CONFIG.text_color};">Swap ${mealLabel}</div>
+            <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Pick a different recipe</div>
+          </div>
+          <button onclick="document.getElementById('week-swap-modal')?.remove();" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; font-size: 22px; padding: 4px;">&#10005;</button>
+        </div>
+        <div style="overflow-y: auto; flex: 1;">${cardsHtml}</div>
+      </div>
+    </div>
+  `;
+
+  const container = document.createElement('div');
+  container.innerHTML = modalHtml;
+  document.body.appendChild(container.firstElementChild);
+}
+
+// ============================================================
 // VIEW RENDERERS & RENDER / INIT
 // ============================================================
 const VIEW_RENDERERS = {
   'home': renderHome,
   'my-meals': renderHome,
+  'week-plan': renderWeekPlanView,
   'food-log-detail': typeof renderFoodLogDetail === 'function' ? renderFoodLogDetail : renderHome
 };
 
