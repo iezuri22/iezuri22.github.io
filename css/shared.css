@@ -424,39 +424,6 @@
     .mobile-only-sections { display: block; }
 
     @media (max-width: 767px) {
-      html {
-        height: 100dvh;
-        margin: 0;
-        overflow: hidden;
-      }
-      body {
-        height: 100dvh;
-        margin: 0;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-      }
-      #app {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        overflow: hidden;
-      }
-      .app-shell {
-        flex: 1;
-        min-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 56px);
-        display: flex;
-        flex-direction: column;
-      }
-      .app-shell > .desktop-content-area {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        min-height: 0;
-        overflow-y: auto;
-        -webkit-overflow-scrolling: touch;
-      }
       .page-container { padding: 12px !important; }
       .desktop-content-area { padding: 0 !important; }
       .desktop-home-layout {
@@ -478,7 +445,7 @@
       .desktop-grocery-main { display: block; }
       .desktop-grocery-side { display: none; }
       .desktop-kitchen-detail-layout { display: block; }
-      /* Ensure bottom nav sits flush */
+      /* No-op under fixed positioning; kept for minimal diff */
       .bottom-nav {
         flex-shrink: 0;
       }
@@ -1583,15 +1550,6 @@
       }
       .desktop-grocery-layout {
         grid-template-columns: 2fr 1fr;
-      }
-    }
-
-    /* ===== MOBILE BOTTOM NAV CONTENT CLEARANCE ===== */
-    /* Padding must be on the scrollable container, not the flex parent */
-    @media (max-width: 767px) {
-      .app-shell > .desktop-content-area {
-        padding-bottom: calc(56px + env(safe-area-inset-bottom)) !important;
-        box-sizing: border-box;
       }
     }
 
