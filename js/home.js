@@ -451,7 +451,7 @@ function renderHomeWeekPlan() {
         </div>
         ${_weekPlanHeaderButtons(isThisWeek, viewedStart)}
       </div>
-      <div class="recipe-carousel home-carousel" id="weekplan-carousel">
+      <div class="week-plan-grid" id="weekplan-carousel">
         ${mealCards.map((c, i) => `
           <div style="scroll-snap-align: start; opacity: 0; animation: cardFadeIn 0.35s ease forwards; animation-delay: ${i * 0.05}s;">
             ${renderWeekPlanCard(c.recipe, c.id, c.label, c.dateStr, c.mealType)}
@@ -3010,188 +3010,424 @@ function renderExternalMealPicker() {
 }
 
 // ============================================================
-// WEEK PLAN VIEW
+// MANAGE VIEW (week-level, grouped by meal type)
 // ============================================================
 
-function renderWeekPlanView() {
-  // Determine which week to show based on active day
-  let weekStart = state.currentWeekStartDate;
-  if (state.weekPlanActiveDay) {
-    const ad = new Date(state.weekPlanActiveDay + 'T12:00:00');
-    const sunday = new Date(ad.getFullYear(), ad.getMonth(), ad.getDate() - ad.getDay());
-    const ws = _localDateStr(sunday);
-    if (ws !== weekStart) weekStart = ws;
-  }
+const MANAGE_DAY_ABBRS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+function _manageWeekStart() {
+  const offset = state.weekPlanWeekOffset || 0;
+  if (offset === 0) return state.currentWeekStartDate;
+  const d = new Date(state.currentWeekStartDate + 'T12:00:00');
+  d.setDate(d.getDate() + 7 * offset);
+  return _localDateStr(d);
+}
+
+function renderManageView() {
+  if (state.weekPlanWeekOffset == null) state.weekPlanWeekOffset = 0;
+  const weekStart = _manageWeekStart();
   const weekDates = getWeekDates(weekStart);
   const todayStr = getToday();
-
-  // Default to today if within this week, else first day
-  if (!state.weekPlanActiveDay || !weekDates.includes(state.weekPlanActiveDay)) {
-    state.weekPlanActiveDay = weekDates.includes(todayStr) ? todayStr : weekDates[0];
-  }
+  const isThisWeek = (state.weekPlanWeekOffset || 0) === 0;
 
   let plan = typeof getWeekPlan === 'function' ? getWeekPlan(weekStart) : null;
   if (!plan) {
     plan = typeof generateWeekPlan === 'function' ? generateWeekPlan(false, weekStart) : null;
   }
 
-  if (!plan || !plan.days) {
-    return `
-      <div style="padding: 32px 16px; text-align: center;">
-        <div style="font-size: 36px; margin-bottom: 16px;">📅</div>
-        <div style="color: ${CONFIG.text_color}; font-size: 18px; font-weight: 600; margin-bottom: 8px;">No recipes yet</div>
-        <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: 24px;">Add some recipes first to plan your week.</div>
-        <button onclick="navigateTo('recipes')" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 12px 24px; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">Go to Recipes</button>
-      </div>
-    `;
-  }
-
-  const activeDay = state.weekPlanActiveDay;
+  const hasPlan = !!(plan && plan.days);
 
   return `
-    <div class="week-plan-container">
-      <div class="week-plan-header">
-        <button onclick="navigateTo('home')" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_color}; display: flex; align-items: center; padding: 4px;">
+    <div class="manage-container">
+      <div class="manage-header">
+        <button onclick="navigateTo('home')" class="manage-back-btn" aria-label="Back">
           <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
         </button>
-        <div style="font-size: 18px; font-weight: 700; color: ${CONFIG.text_color};">Plan the Week</div>
-        <button onclick="regenerateWeekPlan(); render();" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; display: flex; align-items: center; gap: 4px; font-size: 13px; padding: 4px 8px;">
+        <div class="manage-title">Manage Week</div>
+        <button onclick="regenerateWeekPlan('${weekStart}'); render();" class="manage-refresh-btn" aria-label="Regenerate">
           <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
-          Refresh
         </button>
       </div>
 
-      ${renderWeekPlanDayTabs(weekDates, activeDay, todayStr)}
+      <div class="manage-toolbar">
+        <div class="manage-week-toggle" role="tablist">
+          <button role="tab" aria-selected="${isThisWeek}"
+            class="manage-week-toggle-btn ${isThisWeek ? 'active' : ''}"
+            onclick="state.weekPlanWeekOffset = 0; render();">This Week</button>
+          <button role="tab" aria-selected="${!isThisWeek}"
+            class="manage-week-toggle-btn ${!isThisWeek ? 'active' : ''}"
+            onclick="state.weekPlanWeekOffset = 1; render();">Next Week</button>
+        </div>
+        <div class="manage-header-actions">
+          <button class="manage-action-btn" onclick="showAddManualRecipeModal()">+ Add Manual Recipe</button>
+          <button class="manage-action-btn" onclick="showAddTakeoutModal()">+ Add Takeout</button>
+        </div>
+      </div>
 
-      <div class="week-plan-body">
-        ${['breakfast', 'lunch', 'dinner'].map(mealType =>
-          renderWeekPlanMealRow(plan, activeDay, mealType)
+      <div class="manage-body">
+        ${!hasPlan ? `
+          <div style="padding: 32px 16px; text-align: center;">
+            <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: 16px;">No plan for this week yet.</div>
+            <button onclick="generateWeekPlan(false, '${weekStart}'); render();" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 10px 24px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;">Generate Plan</button>
+          </div>
+        ` : ['breakfast', 'lunch', 'dinner'].map(mealType =>
+          renderManageMealGroup(plan, weekDates, mealType, todayStr)
         ).join('')}
       </div>
-
-      <div class="week-plan-footer">
-        <button onclick="navigateTo('home')" style="width: 100%; padding: 14px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer;">
-          Done
-        </button>
-      </div>
     </div>
   `;
 }
 
-function renderWeekPlanDayTabs(weekDates, activeDay, todayStr) {
-  const dayAbbrs = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
-
-  return `
-    <div class="week-plan-day-tabs">
-      ${weekDates.map(dateStr => {
-        const d = new Date(dateStr + 'T12:00:00');
-        const dayNum = d.getDate();
-        const dayAbbr = dayAbbrs[d.getDay()];
-        const isActive = dateStr === activeDay;
-        const isToday = dateStr === todayStr;
-        const plan = typeof getWeekPlan === 'function' ? getWeekPlan() : null;
-        const dayPlan = plan?.days?.[dateStr];
-        const hasLockedSlots = dayPlan && Object.values(dayPlan).some(
-          slot => slot?.options?.some(o => o?.locked)
-        );
-
-        return `
-          <button onclick="state.weekPlanActiveDay='${dateStr}'; render();"
-            class="week-plan-day-tab ${isActive ? 'active' : ''} ${isToday ? 'today' : ''}"
-            style="${isActive ? `background: ${CONFIG.primary_action_color}; color: white; border-color: ${CONFIG.primary_action_color};` : ''}">
-            <span class="week-plan-day-abbr">${dayAbbr}</span>
-            <span class="week-plan-day-num">${dayNum}</span>
-            ${isToday && !isActive ? '<span class="week-plan-today-dot"></span>' : ''}
-            ${hasLockedSlots ? '<span class="week-plan-locked-dot"></span>' : ''}
-          </button>
-        `;
-      }).join('')}
-    </div>
-  `;
-}
-
-function renderWeekPlanMealRow(plan, dateStr, mealType) {
+function renderManageMealGroup(plan, weekDates, mealType, todayStr) {
   const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
-  const slot = plan?.days?.[dateStr]?.[mealType];
-  const options = slot?.options || [];
-
   return `
-    <div class="week-plan-meal-section">
-      <div class="week-plan-meal-label">${mealLabels[mealType]}</div>
-      <div class="week-plan-options-row">
-        ${options.length > 0
-          ? options.map((opt, idx) => renderWeekPlanOptionCard(opt, dateStr, mealType, idx)).join('')
-          : `<div style="flex: 1; padding: 24px; text-align: center; color: ${CONFIG.text_muted}; font-size: 13px;">No options available</div>`
-        }
+    <div class="manage-meal-group">
+      <div class="manage-meal-group-header">${mealLabels[mealType]}</div>
+      <div class="manage-meal-group-body">
+        ${weekDates.map(dateStr => {
+          const slot = plan?.days?.[dateStr]?.[mealType];
+          const entry = slot?.options?.[0];
+          return renderManageSlotRow(entry, dateStr, mealType, 0, dateStr === todayStr);
+        }).join('')}
       </div>
     </div>
   `;
 }
 
-function renderWeekPlanOptionCard(slotEntry, dateStr, mealType, optionIndex) {
-  if (!slotEntry) return '';
+function renderManageSlotRow(slotEntry, dateStr, mealType, optionIndex, isToday) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const dayLabel = MANAGE_DAY_ABBRS[d.getDay()] + ' ' + d.getDate();
 
-  let recipe = null;
-  let name = '';
+  let title = '';
+  let caption = '';
   let img = '';
-  let cookTime = '';
-  let isCombo = false;
-  let isAirFry = false;
+  let tag = '';
+  let recipeId = null;
+  let clickable = false;
+  const locked = !!slotEntry?.locked;
+  const source = slotEntry?.source || 'recipe';
 
-  if (slotEntry.type === 'combo') {
-    isCombo = true;
-    const combo = (state.combos || []).find(c => c.id === slotEntry.comboId);
-    if (combo) {
-      name = combo.name;
-      const components = typeof getComboComponents === 'function' ? getComboComponents(combo) : [];
-      const time = typeof getComboCookTime === 'function' ? getComboCookTime(combo) : 0;
-      if (time > 0) cookTime = time + ' min';
-      isAirFry = components.length > 0 && components.every(c => c.cookingMethod === 'Air Fry');
-    } else {
-      name = 'Combo';
+  if (!slotEntry) {
+    title = 'Empty slot';
+  } else if (source === 'takeout') {
+    title = slotEntry.manualName || 'Takeout';
+    if (slotEntry.restaurantName) caption = slotEntry.restaurantName;
+    tag = 'Takeout';
+  } else if (source === 'manual') {
+    title = slotEntry.manualName || 'Manual recipe';
+    img = slotEntry.imageUrl || '';
+    if (slotEntry.similarToRecipeId) {
+      const similar = getRecipeById(slotEntry.similarToRecipeId);
+      if (similar) caption = 'Similar to ' + similar.title;
     }
+  } else if (slotEntry.type === 'combo') {
+    const combo = (state.combos || []).find(c => c.id === slotEntry.comboId);
+    title = combo?.name || 'Combo';
   } else {
-    recipe = getRecipeById(slotEntry.recipeId);
+    const recipe = getRecipeById(slotEntry.recipeId);
     if (recipe) {
-      name = recipe.title || 'Recipe';
+      title = recipe.title || 'Recipe';
       img = recipeThumb(recipe);
-      cookTime = recipe.cookTime || '';
-      isAirFry = typeof isAirFryerRecipe === 'function' && isAirFryerRecipe(recipe);
+      recipeId = recipe.__backendId || recipe.id;
+      clickable = true;
     } else {
-      name = 'Recipe';
+      title = 'Recipe';
     }
   }
 
-  const locked = slotEntry.locked;
-  const optionLabel = optionIndex === 0 ? 'A' : 'B';
-  const recipeId = recipe ? (recipe.__backendId || recipe.id) : null;
+  const rowClickAttr = clickable ? `onclick="goToRecipe('${recipeId}')"` : '';
 
   return `
-    <div class="week-plan-option-card ${locked ? 'locked' : ''}" ${recipeId ? `onclick="goToRecipe('${recipeId}')"` : ''} style="cursor: ${recipeId ? 'pointer' : 'default'};">
-      <div class="week-plan-option-thumb">
+    <div class="manage-slot-row ${locked ? 'locked' : ''} ${clickable ? 'clickable' : ''} ${isToday ? 'is-today' : ''}" ${rowClickAttr}>
+      <div class="manage-slot-day">${dayLabel}${isToday ? ' <span class="manage-today-dot"></span>' : ''}</div>
+      <div class="manage-slot-thumb">
         ${img
-          ? `<img src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="week-plan-thumb-placeholder" style="display:none;background:${getPlaceholderGradient({title:name})}"></div>`
-          : `<div class="week-plan-thumb-placeholder" style="background:${isCombo ? 'linear-gradient(135deg, #2a2a3d, #1a1a24)' : getPlaceholderGradient({title:name})}">
-              ${isCombo ? '<span style="font-size:22px;">&#127869;</span>' : ''}
-            </div>`
+          ? `<img src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="manage-thumb-placeholder" style="display:none;background:${getPlaceholderGradient({title})}"></div>`
+          : `<div class="manage-thumb-placeholder" style="background:${getPlaceholderGradient({title: title || mealType})}"></div>`
         }
-        <span class="week-plan-option-badge">${optionLabel}</span>
-        ${locked ? `<span class="week-plan-lock-badge"><svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg></span>` : ''}
-        ${isAirFry ? '<span class="week-plan-airfry-badge">Air Fry</span>' : ''}
-        ${isCombo ? '<span class="week-plan-combo-badge">Combo</span>' : ''}
+        ${locked ? `<span class="manage-lock-badge" aria-label="locked"><svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg></span>` : ''}
       </div>
-      <div class="week-plan-option-info">
-        <div class="week-plan-option-name">${esc(name)}</div>
-        ${cookTime ? `<div class="week-plan-option-meta">${esc(cookTime)}</div>` : ''}
-        <div class="week-plan-option-actions">
-          <button onclick="event.stopPropagation(); handleWeekPlanSwap('${dateStr}', '${mealType}', ${optionIndex})" class="week-plan-swap-btn">Swap</button>
-          <button onclick="event.stopPropagation(); lockWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}); render();" class="week-plan-lock-btn ${locked ? 'is-locked' : ''}">
-            ${locked ? 'Unlock' : 'Lock'}
-          </button>
+      <div class="manage-slot-info">
+        <div class="manage-slot-title-row">
+          <div class="manage-slot-title">${esc(title)}</div>
+          ${tag ? `<span class="manage-takeout-tag">${esc(tag)}</span>` : ''}
+        </div>
+        ${caption ? `<div class="manage-similar-caption">${esc(caption)}</div>` : ''}
+      </div>
+      <div class="manage-slot-actions">
+        <button onclick="event.stopPropagation(); handleWeekPlanSwap('${dateStr}', '${mealType}', ${optionIndex})" class="week-plan-swap-btn">Swap</button>
+        <button onclick="event.stopPropagation(); lockWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}); render();" class="week-plan-lock-btn ${locked ? 'is-locked' : ''}">
+          ${locked ? 'Unlock' : 'Lock'}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+// ============================================================
+// MANAGE: Add Manual Recipe / Add Takeout modals
+// ============================================================
+
+function _manageWeekDayOptions() {
+  const ws = _manageWeekStart();
+  const dates = getWeekDates(ws);
+  return dates.map(ds => {
+    const d = new Date(ds + 'T12:00:00');
+    const label = MANAGE_DAY_ABBRS[d.getDay()] + ', ' + (d.getMonth() + 1) + '/' + d.getDate();
+    return `<option value="${ds}">${label}</option>`;
+  }).join('');
+}
+
+function showAddManualRecipeModal() {
+  const modalId = 'add-manual-modal';
+  const html = `
+    <div id="${modalId}" class="manage-modal-backdrop" onclick="if(event.target.id==='${modalId}') this.remove();">
+      <div class="manage-modal">
+        <div class="manage-modal-header">
+          <div class="manage-modal-title">Add Manual Recipe</div>
+          <button class="manage-modal-close" onclick="document.getElementById('${modalId}')?.remove();">&#10005;</button>
+        </div>
+        <div class="manage-modal-body">
+          <label class="manage-field-label">Name <span class="req">*</span></label>
+          <input id="manual-name" type="text" class="manage-input" placeholder="e.g., Grandma's lasagna" />
+
+          <label class="manage-field-label">Meal <span class="req">*</span></label>
+          <select id="manual-meal" class="manage-input">
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner" selected>Dinner</option>
+          </select>
+
+          <label class="manage-field-label">Day <span class="req">*</span></label>
+          <select id="manual-day" class="manage-input">${_manageWeekDayOptions()}</select>
+
+          <label class="manage-field-label">Image <span class="opt">(optional)</span></label>
+          <input id="manual-image" type="file" accept="image/*" class="manage-input" />
+
+          <label class="manage-field-label">Similar to <span class="opt">(optional)</span></label>
+          <div class="manage-typeahead">
+            <input id="manual-similar-query" type="text" class="manage-input" placeholder="Search your recipes..." autocomplete="off"
+              oninput="_renderManualSimilarResults(this.value)" />
+            <input id="manual-similar-id" type="hidden" value="" />
+            <div id="manual-similar-selected" class="manage-typeahead-selected" style="display:none;"></div>
+            <div id="manual-similar-results" class="manage-typeahead-results"></div>
+          </div>
+        </div>
+        <div class="manage-modal-footer">
+          <button class="manage-btn-secondary" onclick="document.getElementById('${modalId}')?.remove();">Cancel</button>
+          <button class="manage-btn-primary" onclick="submitAddManualRecipe()">Save</button>
         </div>
       </div>
     </div>
   `;
+  document.getElementById(modalId)?.remove();
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  document.body.appendChild(container.firstElementChild);
+}
+
+function _renderManualSimilarResults(query) {
+  const box = document.getElementById('manual-similar-results');
+  if (!box) return;
+  const q = (query || '').trim().toLowerCase();
+  if (!q) { box.innerHTML = ''; return; }
+  const all = state.recipes || [];
+  const matches = all.filter(r => (r.title || '').toLowerCase().includes(q)).slice(0, 8);
+  if (matches.length === 0) {
+    box.innerHTML = `<div class="manage-typeahead-empty">No matches</div>`;
+    return;
+  }
+  box.innerHTML = matches.map(r => {
+    const id = r.__backendId || r.id;
+    return `<div class="manage-typeahead-item" onclick="_pickManualSimilar('${id}')">${esc(r.title || '')}</div>`;
+  }).join('');
+}
+
+function _pickManualSimilar(id) {
+  const r = (state.recipes || []).find(x => (x.__backendId || x.id) === id);
+  const title = r?.title || '';
+  const idEl = document.getElementById('manual-similar-id');
+  const queryEl = document.getElementById('manual-similar-query');
+  const selEl = document.getElementById('manual-similar-selected');
+  const resEl = document.getElementById('manual-similar-results');
+  if (idEl) idEl.value = id;
+  if (queryEl) queryEl.value = '';
+  if (resEl) resEl.innerHTML = '';
+  if (selEl) {
+    selEl.style.display = 'flex';
+    selEl.innerHTML = `<span>Similar to: ${esc(title)}</span><button type="button" onclick="_clearManualSimilar()" aria-label="Remove">&#10005;</button>`;
+  }
+}
+
+function _clearManualSimilar() {
+  const idEl = document.getElementById('manual-similar-id');
+  const selEl = document.getElementById('manual-similar-selected');
+  if (idEl) idEl.value = '';
+  if (selEl) { selEl.style.display = 'none'; selEl.innerHTML = ''; }
+}
+
+async function submitAddManualRecipe() {
+  const name = (document.getElementById('manual-name')?.value || '').trim();
+  const mealType = document.getElementById('manual-meal')?.value;
+  const dateStr = document.getElementById('manual-day')?.value;
+  const similarId = (document.getElementById('manual-similar-id')?.value || '').trim() || null;
+  const fileEl = document.getElementById('manual-image');
+  const file = fileEl?.files?.[0] || null;
+
+  if (!name) { showToast('Name is required', 'error'); return; }
+  if (!mealType || !dateStr) { showToast('Meal and day are required', 'error'); return; }
+
+  let imageUrl = '';
+  if (file) {
+    try {
+      imageUrl = await new Promise((resolve, reject) => {
+        if (typeof compressImage === 'function') {
+          compressImage(file, 800, 0.8).then(resolve).catch(reject);
+        } else {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(file);
+        }
+      });
+    } catch (e) { console.error('image read failed', e); }
+  }
+
+  await saveManualSlot({ name, mealType, dateStr, imageUrl, similarToRecipeId: similarId });
+  document.getElementById('add-manual-modal')?.remove();
+  showToast('Manual recipe added', 'success');
+  render();
+}
+
+function showAddTakeoutModal() {
+  const modalId = 'add-takeout-modal';
+  const html = `
+    <div id="${modalId}" class="manage-modal-backdrop" onclick="if(event.target.id==='${modalId}') this.remove();">
+      <div class="manage-modal">
+        <div class="manage-modal-header">
+          <div class="manage-modal-title">Add Takeout</div>
+          <button class="manage-modal-close" onclick="document.getElementById('${modalId}')?.remove();">&#10005;</button>
+        </div>
+        <div class="manage-modal-body">
+          <label class="manage-field-label">Name <span class="req">*</span></label>
+          <input id="takeout-name" type="text" class="manage-input" placeholder="e.g., Thai from Rainbow" />
+
+          <label class="manage-field-label">Restaurant <span class="opt">(optional)</span></label>
+          <input id="takeout-restaurant" type="text" class="manage-input" placeholder="e.g., Rainbow Thai" />
+
+          <label class="manage-field-label">Meal <span class="req">*</span></label>
+          <select id="takeout-meal" class="manage-input">
+            <option value="breakfast">Breakfast</option>
+            <option value="lunch">Lunch</option>
+            <option value="dinner" selected>Dinner</option>
+          </select>
+
+          <label class="manage-field-label">Day <span class="req">*</span></label>
+          <select id="takeout-day" class="manage-input">${_manageWeekDayOptions()}</select>
+        </div>
+        <div class="manage-modal-footer">
+          <button class="manage-btn-secondary" onclick="document.getElementById('${modalId}')?.remove();">Cancel</button>
+          <button class="manage-btn-primary" onclick="submitAddTakeout()">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById(modalId)?.remove();
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  document.body.appendChild(container.firstElementChild);
+}
+
+async function submitAddTakeout() {
+  const name = (document.getElementById('takeout-name')?.value || '').trim();
+  const restaurant = (document.getElementById('takeout-restaurant')?.value || '').trim() || null;
+  const mealType = document.getElementById('takeout-meal')?.value;
+  const dateStr = document.getElementById('takeout-day')?.value;
+
+  if (!name) { showToast('Name is required', 'error'); return; }
+  if (!mealType || !dateStr) { showToast('Meal and day are required', 'error'); return; }
+
+  await saveTakeoutSlot({ name, restaurant, mealType, dateStr });
+  document.getElementById('add-takeout-modal')?.remove();
+  showToast('Takeout added', 'success');
+  render();
+}
+
+async function saveManualSlot({ name, mealType, dateStr, imageUrl, similarToRecipeId }) {
+  const dd = new Date(dateStr + 'T12:00:00');
+  const sun = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() - dd.getDay());
+  const ws = _localDateStr(sun);
+  let plan = getWeekPlan(ws);
+  if (!plan) plan = generateWeekPlan(false, ws);
+  if (!plan?.days) return;
+
+  if (!plan.days[dateStr]) plan.days[dateStr] = {};
+  if (!plan.days[dateStr][mealType]) plan.days[dateStr][mealType] = { options: [] };
+  const slot = plan.days[dateStr][mealType];
+  const wasLocked = !!slot.options?.[0]?.locked;
+  slot.options[0] = {
+    type: 'manual',
+    source: 'manual',
+    manualName: name,
+    imageUrl: imageUrl || null,
+    similarToRecipeId: similarToRecipeId || null,
+    locked: wasLocked
+  };
+  saveWeekPlanPersist(plan);
+
+  if (typeof upsertMealPlanRow === 'function') {
+    await upsertMealPlanRow({
+      week_start: ws,
+      day_date: dateStr,
+      meal_type: mealType,
+      option_index: 0,
+      source: 'manual',
+      recipe_id: null,
+      manual_name: name,
+      restaurant_name: null,
+      similar_to_recipe_id: similarToRecipeId || null,
+      image_url: imageUrl || null,
+      locked: wasLocked
+    });
+  }
+}
+
+async function saveTakeoutSlot({ name, restaurant, mealType, dateStr }) {
+  const dd = new Date(dateStr + 'T12:00:00');
+  const sun = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() - dd.getDay());
+  const ws = _localDateStr(sun);
+  let plan = getWeekPlan(ws);
+  if (!plan) plan = generateWeekPlan(false, ws);
+  if (!plan?.days) return;
+
+  if (!plan.days[dateStr]) plan.days[dateStr] = {};
+  if (!plan.days[dateStr][mealType]) plan.days[dateStr][mealType] = { options: [] };
+  const slot = plan.days[dateStr][mealType];
+  const wasLocked = !!slot.options?.[0]?.locked;
+  slot.options[0] = {
+    type: 'takeout',
+    source: 'takeout',
+    manualName: name,
+    restaurantName: restaurant || null,
+    locked: wasLocked
+  };
+  saveWeekPlanPersist(plan);
+
+  if (typeof upsertMealPlanRow === 'function') {
+    await upsertMealPlanRow({
+      week_start: ws,
+      day_date: dateStr,
+      meal_type: mealType,
+      option_index: 0,
+      source: 'takeout',
+      recipe_id: null,
+      manual_name: name,
+      restaurant_name: restaurant || null,
+      similar_to_recipe_id: null,
+      image_url: null,
+      locked: wasLocked
+    });
+  }
 }
 
 function handleWeekPlanSwap(dateStr, mealType, optionIndex) {
@@ -3325,7 +3561,7 @@ function _renderSwapModal(filter) {
 const VIEW_RENDERERS = {
   'home': renderHome,
   'my-meals': renderHome,
-  'week-plan': renderWeekPlanView,
+  'week-plan': renderManageView,
   'recipe-view': renderHomeRecipeView,
   'food-log-detail': typeof renderFoodLogDetail === 'function' ? renderFoodLogDetail : renderHome
 };

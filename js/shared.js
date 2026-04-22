@@ -748,6 +748,37 @@ async function syncFrequencyItemsToSupabase(items) {
   } catch (e) { console.error('Sync frequency items failed:', e); }
 }
 
+async function upsertMealPlanRow(row) {
+  if (!window.supabaseClient) return null;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return null;
+    const payload = { ...row, user_id: session.user.id, updated_at: new Date().toISOString() };
+    const { data, error } = await window.supabaseClient
+      .from('meal_plan')
+      .upsert(payload, { onConflict: 'user_id,week_start,day_date,meal_type,option_index' })
+      .select()
+      .single();
+    if (error) { console.error('upsertMealPlanRow failed:', error.message); return null; }
+    return data;
+  } catch (e) { console.error('upsertMealPlanRow error:', e); return null; }
+}
+
+async function deleteMealPlanRow({ weekStart, dayDate, mealType, optionIndex }) {
+  if (!window.supabaseClient) return;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return;
+    await window.supabaseClient.from('meal_plan')
+      .delete()
+      .eq('user_id', session.user.id)
+      .eq('week_start', weekStart)
+      .eq('day_date', dayDate)
+      .eq('meal_type', mealType)
+      .eq('option_index', optionIndex);
+  } catch (e) { console.error('deleteMealPlanRow error:', e); }
+}
+
 const SAVED_RECIPES_KEY = 'savedRecipes';
 const FOOD_LOG_KEY = 'foodLog';
 const CHEF_API_URL = 'https://chef-claude.iezuri22.workers.dev';

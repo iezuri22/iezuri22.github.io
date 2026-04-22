@@ -397,6 +397,24 @@
   flex-shrink: 0;
 }
 
+/* ===== Week Plan Grid (2x3 mobile / 3x2 tablet+desktop) ===== */
+.week-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  padding: 0 20px;
+}
+
+.week-plan-grid .recipe-carousel-card {
+  width: 100%;
+}
+
+@media (min-width: 768px) {
+  .week-plan-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
 /* ===== Quick actions scrollbar hide ===== */
 div[style*="overflow-x: auto"]::-webkit-scrollbar {
   display: none;
@@ -451,238 +469,12 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
   margin-bottom: 12px;
 }
 
-/* ===== Week Plan View ===== */
-.week-plan-container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100dvh;
-  padding-bottom: 0;
-}
-
-.week-plan-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 12px 8px;
-  flex-shrink: 0;
-}
-
-.week-plan-day-tabs {
-  display: flex;
-  gap: 6px;
-  padding: 8px 16px 12px;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-
-.week-plan-day-tab {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 44px;
-  height: 54px;
-  border-radius: 14px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: var(--bg-card, #1a1a24);
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.week-plan-day-tab:active {
-  transform: scale(0.94);
-}
-
-.week-plan-day-abbr {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--text-secondary, #8e8e93);
-  line-height: 1;
-}
-
-.week-plan-day-num {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--text-primary, #f5f5f7);
-  line-height: 1.2;
-  margin-top: 2px;
-}
-
-.week-plan-day-tab.active .week-plan-day-abbr,
-.week-plan-day-tab.active .week-plan-day-num {
-  color: white;
-}
-
-.week-plan-today-dot {
-  position: absolute;
-  bottom: 4px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: var(--accent, #e85d5d);
-}
-
-.week-plan-locked-dot {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--success, #32d74b);
-}
-
-.week-plan-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 16px 16px;
-}
-
-.week-plan-meal-section {
-  margin-bottom: 20px;
-}
-
-.week-plan-meal-label {
-  font-size: 13px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary, #8e8e93);
-  margin-bottom: 8px;
-}
-
-.week-plan-options-row {
-  display: flex;
-  gap: 10px;
-}
-
-.week-plan-option-card {
-  flex: 1;
-  min-width: 0;
-  background: var(--bg-card, #1a1a24);
-  border-radius: 14px;
-  overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.05);
-  transition: border-color 0.2s ease;
-}
-
-.week-plan-option-card.locked {
-  border-color: var(--success, #32d74b);
-}
-
-.week-plan-option-thumb {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4/3;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.week-plan-option-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.week-plan-thumb-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.week-plan-option-badge {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  color: white;
-  font-size: 10px;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.week-plan-lock-badge {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: var(--success, #32d74b);
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.week-plan-airfry-badge {
-  position: absolute;
-  bottom: 6px;
-  right: 6px;
-  background: var(--accent, #e85d5d);
-  color: white;
-  font-size: 9px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 6px;
-  text-transform: uppercase;
-}
-
-.week-plan-combo-badge {
-  position: absolute;
-  bottom: 6px;
-  left: 6px;
-  background: rgba(0,0,0,0.6);
-  color: white;
-  font-size: 9px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 6px;
-}
-
-.week-plan-option-info {
-  padding: 8px 10px 10px;
-}
-
-.week-plan-option-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary, #f5f5f7);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.week-plan-option-meta {
-  font-size: 11px;
-  color: var(--text-tertiary, #5c5c66);
-  margin-top: 2px;
-}
-
-.week-plan-option-actions {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-}
-
+/* ===== Shared Swap / Lock buttons (reused by Manage view) ===== */
 .week-plan-swap-btn,
 .week-plan-lock-btn {
-  flex: 1;
   font-size: 11px;
   font-weight: 600;
-  padding: 5px 0;
+  padding: 5px 12px;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -713,9 +505,423 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
   transform: scale(0.95);
 }
 
-.week-plan-footer {
-  padding: 12px 16px 20px;
+/* ===== Manage View (week-level) ===== */
+.manage-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  padding-bottom: 20px;
+}
+
+.manage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 12px 8px;
   flex-shrink: 0;
+}
+
+.manage-back-btn,
+.manage-refresh-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-primary, #f5f5f7);
+  display: flex;
+  align-items: center;
+  padding: 6px;
+}
+
+.manage-refresh-btn {
+  color: var(--text-secondary, #8e8e93);
+}
+
+.manage-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary, #f5f5f7);
+}
+
+.manage-toolbar {
+  padding: 4px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.manage-week-toggle {
+  display: inline-flex;
+  align-self: flex-start;
+  background: rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.manage-week-toggle-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-secondary, #8e8e93);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.manage-week-toggle-btn.active {
+  background: var(--accent, #e85d5d);
+  color: white;
+}
+
+.manage-header-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.manage-action-btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  color: var(--text-primary, #f5f5f7);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.manage-action-btn:active {
+  transform: scale(0.97);
+}
+
+.manage-body {
+  flex: 1;
+  padding: 0 16px;
+  overflow-y: auto;
+}
+
+.manage-meal-group {
+  margin-bottom: 18px;
+}
+
+.manage-meal-group-header {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--text-secondary, #8e8e93);
+  margin-bottom: 8px;
+  padding: 0 2px;
+}
+
+.manage-meal-group-body {
+  background: var(--bg-card, #1a1a24);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.manage-slot-row {
+  display: grid;
+  grid-template-columns: 56px 56px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.manage-slot-row:last-child {
+  border-bottom: none;
+}
+
+.manage-slot-row.clickable {
+  cursor: pointer;
+}
+
+.manage-slot-row.locked {
+  background: rgba(50,215,75,0.04);
+}
+
+.manage-slot-row.is-today .manage-slot-day {
+  color: var(--accent, #e85d5d);
+}
+
+.manage-slot-day {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary, #8e8e93);
+}
+
+.manage-today-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent, #e85d5d);
+  margin-left: 2px;
+  vertical-align: middle;
+}
+
+.manage-slot-thumb {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-elevated, #242432);
+}
+
+.manage-slot-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.manage-thumb-placeholder {
+  width: 100%;
+  height: 100%;
+}
+
+.manage-lock-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--success, #32d74b);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.manage-slot-info {
+  min-width: 0;
+}
+
+.manage-slot-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.manage-slot-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #f5f5f7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.manage-similar-caption {
+  font-size: 11px;
+  color: var(--text-tertiary, #5c5c66);
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.manage-takeout-tag {
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--accent, #e85d5d);
+  background: rgba(232,93,93,0.14);
+  padding: 2px 6px;
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+
+.manage-slot-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ===== Manage modals ===== */
+.manage-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 16px;
+}
+
+.manage-modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-card, #1a1a24);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.manage-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.manage-modal-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-primary, #f5f5f7);
+}
+
+.manage-modal-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary, #8e8e93);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.manage-modal-body {
+  padding: 14px 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.manage-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.manage-field-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--text-secondary, #8e8e93);
+  margin: 10px 0 4px;
+}
+
+.manage-field-label .req { color: var(--accent, #e85d5d); }
+.manage-field-label .opt { opacity: 0.6; text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+.manage-input {
+  width: 100%;
+  padding: 9px 12px;
+  font-size: 14px;
+  background: var(--bg-elevated, #242432);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  color: var(--text-primary, #f5f5f7);
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.manage-input:focus {
+  outline: none;
+  border-color: var(--accent, #e85d5d);
+}
+
+.manage-typeahead {
+  position: relative;
+}
+
+.manage-typeahead-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  background: rgba(232,93,93,0.12);
+  color: var(--accent, #e85d5d);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.manage-typeahead-selected button {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.manage-typeahead-results {
+  margin-top: 6px;
+  max-height: 180px;
+  overflow-y: auto;
+  background: var(--bg-elevated, #242432);
+  border-radius: 10px;
+}
+
+.manage-typeahead-results:empty {
+  display: none;
+}
+
+.manage-typeahead-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--text-primary, #f5f5f7);
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+
+.manage-typeahead-item:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.manage-typeahead-item:last-child {
+  border-bottom: none;
+}
+
+.manage-typeahead-empty {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-tertiary, #5c5c66);
+}
+
+.manage-btn-primary {
+  background: var(--accent, #e85d5d);
+  color: white;
+  border: none;
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.manage-btn-secondary {
+  background: rgba(255,255,255,0.06);
+  color: var(--text-secondary, #8e8e93);
+  border: none;
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
 }
 
 /* ===== Week Plan Carousel Cards (Home Inline) ===== */

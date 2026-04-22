@@ -1611,31 +1611,46 @@ function selectMealForWeekPlan(dateStr, mealType, dayUsedProteins, weekUsedProte
   return all.length > 0 ? all[0] : null;
 }
 
-/**
- * Lock/unlock a specific option in the week plan.
- */
-function lockWeekMealSlot(dateStr, mealType, optionIndex) {
-  const plan = getWeekPlan();
-  if (!plan?.days?.[dateStr]?.[mealType]?.options?.[optionIndex]) return;
-  plan.days[dateStr][mealType].options[optionIndex].locked =
-    !plan.days[dateStr][mealType].options[optionIndex].locked;
+function saveWeekPlanPersist(plan) {
+  if (!plan?.weekStart) return;
   const key = plan.weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + plan.weekStart;
   localStorage.setItem(key, JSON.stringify(plan));
 }
 
 /**
+ * Lock/unlock a specific option in the week plan.
+ */
+function lockWeekMealSlot(dateStr, mealType, optionIndex) {
+  const dd = new Date(dateStr + 'T12:00:00');
+  const sun = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() - dd.getDay());
+  const ws = _localDateStr(sun);
+  const plan = getWeekPlan(ws);
+  if (!plan?.days?.[dateStr]?.[mealType]?.options?.[optionIndex]) return;
+  plan.days[dateStr][mealType].options[optionIndex].locked =
+    !plan.days[dateStr][mealType].options[optionIndex].locked;
+  saveWeekPlanPersist(plan);
+}
+
+/**
  * Swap a specific option in the week plan with a new recipe.
+ * Clears any manual/takeout metadata since the slot is now a recipe pick.
  */
 function swapWeekMealSlot(dateStr, mealType, optionIndex, newRecipeId) {
-  const plan = getWeekPlan();
+  const dd = new Date(dateStr + 'T12:00:00');
+  const sun = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() - dd.getDay());
+  const ws = _localDateStr(sun);
+  const plan = getWeekPlan(ws);
   if (!plan?.days?.[dateStr]?.[mealType]?.options) return;
   plan.days[dateStr][mealType].options[optionIndex] = {
     recipeId: newRecipeId,
     type: 'recipe',
-    locked: false
+    locked: false,
+    source: 'recipe'
   };
-  const key = plan.weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + plan.weekStart;
-  localStorage.setItem(key, JSON.stringify(plan));
+  saveWeekPlanPersist(plan);
+  if (typeof deleteMealPlanRow === 'function') {
+    deleteMealPlanRow({ weekStart: ws, dayDate: dateStr, mealType, optionIndex });
+  }
 }
 
 /**
