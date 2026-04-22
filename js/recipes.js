@@ -4314,7 +4314,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
+    <div class="${getAppShellClass()}">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">

@@ -3,7 +3,7 @@
 /* ===== PAGE SHELL ===== */
 .kitchen-page {
   background: var(--bg-app);
-  min-height: 100vh;
+  min-height: 100dvh;
   padding-bottom: 120px;
   animation: kitchenFadeIn 0.3s ease;
 }

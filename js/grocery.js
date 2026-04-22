@@ -1276,9 +1276,11 @@ function render() {
     </div>`;
   }
 
-  const extraPadding = state.currentView === 'grocery-list' ? '120px' : '56px';
+  const shellClass = state.currentView === 'grocery-list'
+    ? `${getAppShellClass()} app-shell--grocery-list`
+    : getAppShellClass();
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: ${extraPadding};">
+    <div class="${shellClass}">
       ${renderDesktopSidebar()}
       ${renderNav()}
       <div class="desktop-content-area">

@@ -962,7 +962,7 @@ function render() {
   // If plate detail is open, render that instead (still supported via deep links)
   if (plateDetailId) {
     app.innerHTML = `
-      <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
+      <div class="${getAppShellClass()}">
         ${renderDesktopSidebar()}
         <div class="desktop-content-area">
           ${renderPlateDetail()}
@@ -975,7 +975,7 @@ function render() {
   }
 
   app.innerHTML = `
-    <div class="${getAppShellClass()}" style="background: ${CONFIG.background_color}; min-height: 100dvh; padding-bottom: 56px;">
+    <div class="${getAppShellClass()}">
       ${renderDesktopSidebar()}
       <div class="desktop-content-area">
         <div class="desktop-page-title-bar" style="display: none; padding-bottom: 24px;">
