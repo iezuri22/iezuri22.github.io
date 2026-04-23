@@ -4911,7 +4911,7 @@ function showMoreMenu() {
   const isDesktop = window.innerWidth >= 768;
   const popupStyle = isDesktop
     ? `position: fixed; left: 230px; bottom: 60px; background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.3); min-width: 180px;`
-    : `position: fixed; bottom: 56px; left: 50%; transform: translateX(-50%); background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); min-width: 180px;`;
+    : `position: fixed; bottom: 50px; left: 50%; transform: translateX(-50%); background: ${CONFIG.surface_color}; border-radius: 12px; padding: 6px; box-shadow: 0 4px 24px rgba(0,0,0,0.15); min-width: 180px;`;
   const menuHtml = `<div id="moreMenuOverlay" onclick="closeMoreMenu()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 70;"><div onclick="event.stopPropagation()" style="${popupStyle}">${menuItems.map(item => {
     const onclick = item.href ? `window.location.href='${item.href}'` : (item.action ? item.action : `navigateTo('${item.id}')`);
     const iconHtml = item.iconSvg ? `<span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;color:${CONFIG.text_muted};">${item.iconSvg}</span>` : `<span style="font-size: 18px;">${item.icon}</span>`;

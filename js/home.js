@@ -2360,7 +2360,7 @@ function renderSwipe() {
   const nextImg = nextRecipe ? recipeThumb(nextRecipe) : '';
 
   return `
-    <div style="background: ${CONFIG.background_color}; flex: 1; padding-bottom: 56px;">
+    <div style="background: ${CONFIG.background_color}; flex: 1;">
       <div style="padding: 16px 20px 8px; display: flex; align-items: center; justify-content: space-between;">
         <div style="width: 36px;"></div>
         <div style="text-align: center;">
@@ -2451,7 +2451,7 @@ function renderSwipeConfirm() {
   const ings = recipeIngList(recipe);
 
   return `
-    <div style="background: ${CONFIG.background_color}; flex: 1; padding: 20px; padding-bottom: 56px;">
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding: 20px;">
       <div class="max-w-md mx-auto confirm-pop">
         <div style="text-align: center; margin-bottom: 20px;">
           <div style="font-size: 48px; margin-bottom: 8px;">🎉</div>
@@ -2700,7 +2700,7 @@ function renderSwipeSetup() {
   ];
 
   return `
-    <div style="background: ${CONFIG.background_color}; flex: 1; padding-bottom: 56px;">
+    <div style="background: ${CONFIG.background_color}; flex: 1;">
       <div style="padding: ${CONFIG.space_md} 8px 8px;">
         ${state.swipeSettings.setupCompleted ? `
           <button onclick="navigateTo('swipe')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 20px; cursor: pointer; margin-bottom: 4px;">←</button>
@@ -2928,7 +2928,7 @@ function renderAlreadySelected() {
   const mealLabel = capitalize(sel.mealType);
 
   return `
-    <div style="background: ${CONFIG.background_color}; flex: 1; padding: 20px; padding-bottom: 56px;">
+    <div style="background: ${CONFIG.background_color}; flex: 1; padding: 20px;">
       <div style="max-width: 400px; margin: 0 auto;">
         <div style="text-align: center; padding-top: ${CONFIG.space_2xl}; margin-bottom: ${CONFIG.space_lg};">
           <div style="color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; margin-bottom: ${CONFIG.space_xs};">You picked for ${mealLabel}</div>
