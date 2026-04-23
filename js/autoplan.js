@@ -1648,8 +1648,20 @@ function swapWeekMealSlot(dateStr, mealType, optionIndex, newRecipeId) {
     source: 'recipe'
   };
   saveWeekPlanPersist(plan);
-  if (typeof deleteMealPlanRow === 'function') {
-    deleteMealPlanRow({ weekStart: ws, dayDate: dateStr, mealType, optionIndex });
+  if (typeof upsertMealPlanRow === 'function') {
+    upsertMealPlanRow({
+      week_start: ws,
+      day_date: dateStr,
+      meal_type: mealType,
+      option_index: optionIndex,
+      source: 'recipe',
+      recipe_id: newRecipeId,
+      manual_name: null,
+      restaurant_name: null,
+      similar_to_recipe_id: null,
+      image_url: null,
+      locked: false
+    });
   }
 }
 

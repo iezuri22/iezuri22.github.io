@@ -5297,7 +5297,7 @@ async function loadMealPlanFromSupabase(userId) {
     .in('week_start', [thisWeekStart, nextWeekStart]);
 
   if (error) { console.error('Load meal_plan error:', error); return; }
-  if (!Array.isArray(data)) return;
+  if (!Array.isArray(data) || data.length === 0) return;
 
   if (state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil) return;
 
@@ -5310,11 +5310,44 @@ async function loadMealPlanFromSupabase(userId) {
     days[row.day_date][row.meal_type].options[row.option_index] = _mealPlanRowToOption(row);
   }
 
-  for (const ws of [thisWeekStart, nextWeekStart]) {
-    const days = byWeek[ws];
-    if (!days) continue;
-    const plan = { generatedAt: new Date().toISOString(), weekStart: ws, days };
+  for (const ws of Object.keys(byWeek)) {
+    const incomingDays = byWeek[ws];
     const key = ws === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + ws;
+
+    let existing = null;
+    try { existing = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) {}
+
+    const maxRemoteUpdated = Math.max(...data
+      .filter(r => r.week_start === ws)
+      .map(r => new Date(r.updated_at).getTime()));
+    const localGeneratedAt = existing?.generatedAt ? new Date(existing.generatedAt).getTime() : 0;
+
+    if (localGeneratedAt > maxRemoteUpdated) {
+      console.log(`Skipping week ${ws} — local plan is newer than remote`);
+      continue;
+    }
+
+    const mergedDays = { ...(existing?.days || {}) };
+    for (const dayDate of Object.keys(incomingDays)) {
+      const existingDay = mergedDays[dayDate] || {};
+      const mergedDay = { ...existingDay };
+      for (const mealType of Object.keys(incomingDays[dayDate])) {
+        const existingMeal = existingDay[mealType] || { options: [] };
+        const opts = Array.isArray(existingMeal.options) ? [...existingMeal.options] : [];
+        const incoming = incomingDays[dayDate][mealType].options;
+        for (let i = 0; i < incoming.length; i++) {
+          if (incoming[i] !== undefined) opts[i] = incoming[i];
+        }
+        mergedDay[mealType] = { ...existingMeal, options: opts };
+      }
+      mergedDays[dayDate] = mergedDay;
+    }
+
+    const plan = {
+      generatedAt: existing?.generatedAt || new Date().toISOString(),
+      weekStart: ws,
+      days: mergedDays
+    };
     localStorage.setItem(key, JSON.stringify(plan));
   }
 }
