@@ -1747,19 +1747,8 @@ async function confirmHomeSwipeSelection(recipeId) {
   dayData.meals[meal].plannedRecipeId = recipeId;
   dayData.meals[meal].selectedAt = Date.now();
 
-  let plan = state.planData.find(p => p.date === dateStr);
-  if (!plan) {
-    plan = { id: `plan_${dateStr}`, type: 'plan', date: dateStr, breakfast: [], lunch: [], dinner: [] };
-    state.planData.push(plan);
-  }
-  if (!Array.isArray(plan[meal])) plan[meal] = [];
-  if (!plan[meal].includes(recipeId)) plan[meal].push(recipeId);
-
   state.ignoreRealtimeUntil = Date.now() + 3000;
-  await Promise.all([
-    storage.update(plan).then(r => { if (!r?.isOk) return storage.create(plan); }),
-    saveMealDay(dateStr)
-  ]);
+  await saveMealDay(dateStr);
 
   state.todaySwipeMealSlot = null;
   showToast(`${capitalize(meal)} picked!`, 'success');
@@ -2108,22 +2097,6 @@ async function confirmSwipeSelection(recipeId) {
     photoTaken: false,
     logged: false
   };
-
-  const today = state.currentMealSelection.date;
-  let plan = state.planData.find(p => p.date === today);
-  if (!plan) {
-    plan = { id: `plan_${today}`, type: 'plan', date: today, breakfast: [], lunch: [], dinner: [] };
-    state.planData.push(plan);
-  }
-
-  const mealKey = state.currentMealSelection.mealType;
-  if (mealKey !== 'snack') {
-    if (!Array.isArray(plan[mealKey])) plan[mealKey] = [];
-    if (!plan[mealKey].includes(recipeId)) {
-      plan[mealKey].push(recipeId);
-    }
-    await storage.update(plan);
-  }
 
   const log = createMealLog(recipeId);
   if (log) {
@@ -3374,22 +3347,6 @@ async function saveManualSlot({ name, mealType, dateStr, imageUrl, similarToReci
     locked: wasLocked
   };
   saveWeekPlanPersist(plan);
-
-  if (typeof upsertMealPlanRow === 'function') {
-    await upsertMealPlanRow({
-      week_start: ws,
-      day_date: dateStr,
-      meal_type: mealType,
-      option_index: 0,
-      source: 'manual',
-      recipe_id: null,
-      manual_name: name,
-      restaurant_name: null,
-      similar_to_recipe_id: similarToRecipeId || null,
-      image_url: imageUrl || null,
-      locked: wasLocked
-    });
-  }
 }
 
 async function saveTakeoutSlot({ name, restaurant, mealType, dateStr }) {
@@ -3412,22 +3369,6 @@ async function saveTakeoutSlot({ name, restaurant, mealType, dateStr }) {
     locked: wasLocked
   };
   saveWeekPlanPersist(plan);
-
-  if (typeof upsertMealPlanRow === 'function') {
-    await upsertMealPlanRow({
-      week_start: ws,
-      day_date: dateStr,
-      meal_type: mealType,
-      option_index: 0,
-      source: 'takeout',
-      recipe_id: null,
-      manual_name: name,
-      restaurant_name: restaurant || null,
-      similar_to_recipe_id: null,
-      image_url: null,
-      locked: wasLocked
-    });
-  }
 }
 
 function handleWeekPlanSwap(dateStr, mealType, optionIndex) {

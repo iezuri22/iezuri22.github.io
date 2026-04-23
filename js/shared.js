@@ -748,35 +748,18 @@ async function syncFrequencyItemsToSupabase(items) {
   } catch (e) { console.error('Sync frequency items failed:', e); }
 }
 
-async function upsertMealPlanRow(row) {
-  if (!window.supabaseClient) return null;
-  try {
-    const { data: { session } } = await window.supabaseClient.auth.getSession();
-    if (!session?.user) return null;
-    const payload = { ...row, user_id: session.user.id, updated_at: new Date().toISOString() };
-    const { data, error } = await window.supabaseClient
-      .from('meal_plan')
-      .upsert(payload, { onConflict: 'user_id,week_start,day_date,meal_type,option_index' })
-      .select()
-      .single();
-    if (error) { console.error('upsertMealPlanRow failed:', error.message); return null; }
-    return data;
-  } catch (e) { console.error('upsertMealPlanRow error:', e); return null; }
-}
-
-async function deleteMealPlanRow({ weekStart, dayDate, mealType, optionIndex }) {
+async function syncWeekPlanToSupabase(plan) {
   if (!window.supabaseClient) return;
+  if (!plan?.weekStart) return;
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
-    await window.supabaseClient.from('meal_plan')
-      .delete()
-      .eq('user_id', session.user.id)
-      .eq('week_start', weekStart)
-      .eq('day_date', dayDate)
-      .eq('meal_type', mealType)
-      .eq('option_index', optionIndex);
-  } catch (e) { console.error('deleteMealPlanRow error:', e); }
+    const id = 'weekPlan_' + plan.weekStart;
+    const item = { id, type: 'weekPlan', weekStart: plan.weekStart, generatedAt: plan.generatedAt, days: plan.days || {} };
+    await window.supabaseClient
+      .from('meal_planner_data')
+      .upsert({ id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  } catch (e) { console.error('Sync week plan failed:', e); }
 }
 
 const SAVED_RECIPES_KEY = 'savedRecipes';
@@ -5249,97 +5232,6 @@ async function loadDataFromSupabase() {
 
   const items = data.map(row => ({ id: row.id, ...row.data }));
   applySupabaseData(items);
-
-  await loadMealPlanFromSupabase(user.id);
-}
-
-function _mealPlanRowToOption(row) {
-  const locked = !!row.locked;
-  switch (row.source) {
-    case 'manual':
-      return {
-        type: 'manual',
-        source: 'manual',
-        manualName: row.manual_name,
-        imageUrl: row.image_url || null,
-        similarToRecipeId: row.similar_to_recipe_id || null,
-        locked
-      };
-    case 'takeout':
-      return {
-        type: 'takeout',
-        source: 'takeout',
-        manualName: row.manual_name,
-        restaurantName: row.restaurant_name || null,
-        locked
-      };
-    case 'combo':
-      return { comboId: row.recipe_id, type: 'combo', locked };
-    case 'recipe':
-    default:
-      return { recipeId: row.recipe_id, type: 'recipe', locked };
-  }
-}
-
-async function loadMealPlanFromSupabase(userId) {
-  if (!window.supabaseClient) return;
-
-  const today = new Date();
-  const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
-  const thisWeekStart = _localDateStr(sunday);
-  const nextSunday = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + 7);
-  const nextWeekStart = _localDateStr(nextSunday);
-
-  const { data, error } = await window.supabaseClient
-    .from('meal_plan')
-    .select('*')
-    .eq('user_id', userId)
-    .in('week_start', [thisWeekStart, nextWeekStart]);
-
-  if (error) { console.error('Load meal_plan error:', error); return; }
-  if (!Array.isArray(data) || data.length === 0) return;
-
-  if (state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil) return;
-
-  const byWeek = {};
-  for (const row of data) {
-    if (!byWeek[row.week_start]) byWeek[row.week_start] = {};
-    const days = byWeek[row.week_start];
-    if (!days[row.day_date]) days[row.day_date] = {};
-    if (!days[row.day_date][row.meal_type]) days[row.day_date][row.meal_type] = { options: [] };
-    days[row.day_date][row.meal_type].options[row.option_index] = _mealPlanRowToOption(row);
-  }
-
-  for (const ws of Object.keys(byWeek)) {
-    const incomingDays = byWeek[ws];
-    const key = ws === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + ws;
-
-    let existing = null;
-    try { existing = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) {}
-
-    const mergedDays = { ...(existing?.days || {}) };
-    for (const dayDate of Object.keys(incomingDays)) {
-      const existingDay = mergedDays[dayDate] || {};
-      const mergedDay = { ...existingDay };
-      for (const mealType of Object.keys(incomingDays[dayDate])) {
-        const existingMeal = existingDay[mealType] || { options: [] };
-        const opts = Array.isArray(existingMeal.options) ? [...existingMeal.options] : [];
-        const incoming = incomingDays[dayDate][mealType].options;
-        for (let i = 0; i < incoming.length; i++) {
-          if (incoming[i] !== undefined) opts[i] = incoming[i];
-        }
-        mergedDay[mealType] = { ...existingMeal, options: opts };
-      }
-      mergedDays[dayDate] = mergedDay;
-    }
-
-    const plan = {
-      generatedAt: existing?.generatedAt || new Date().toISOString(),
-      weekStart: ws,
-      days: mergedDays
-    };
-    localStorage.setItem(key, JSON.stringify(plan));
-  }
 }
 
 function applySupabaseData(data) {
@@ -5373,15 +5265,17 @@ function applySupabaseData(data) {
   state.frequentItems = data.filter(d => d.id?.startsWith('frequent_'));
   state.ingredientKnowledge = data.filter(d => d.id?.startsWith('ingredient_') && d.type === 'ingredient_knowledge');
 
-  let planData = data.filter(d => d.date && d.id && d.id.startsWith('plan_'));
-  planData = planData.map(plan => {
-    const needsMigration = typeof plan.breakfast === 'string' || typeof plan.lunch === 'string' || typeof plan.dinner === 'string';
-    if (needsMigration) {
-      return { ...plan, breakfast: plan.breakfast ? [plan.breakfast] : [], lunch: plan.lunch ? [plan.lunch] : [], dinner: plan.dinner ? [plan.dinner] : [] };
-    }
-    return { ...plan, breakfast: plan.breakfast || [], lunch: plan.lunch || [], dinner: plan.dinner || [] };
-  });
-  state.planData = planData;
+  const weekPlanRows = data.filter(d => d.id && d.id.startsWith('weekPlan_'));
+  for (const row of weekPlanRows) {
+    if (!row.weekStart || !row.days) continue;
+    const key = row.weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + row.weekStart;
+    localStorage.setItem(key, JSON.stringify({
+      weekStart: row.weekStart,
+      generatedAt: row.generatedAt || new Date().toISOString(),
+      days: row.days
+    }));
+  }
+  state.planData = [];
 
   state.mealSelections = data.filter(d => d.id && d.id.startsWith('mealSel_'));
   state.groceryItems = data.filter(d => d.ingredientKey);
@@ -5695,7 +5589,7 @@ async function showSettingsMenu() {
 
       <div style="border-top: 1px solid ${CONFIG.divider_color}; margin-top: 4px; padding-top: 4px;">
         <div style="display: flex; align-items: center; gap: 12px; height: 36px; padding: 0 12px;">
-          <span style="font-size: 13px; color: ${CONFIG.text_tertiary};">${state.recipes.length} recipes · ${state.planData.length} plans · ${state.groceryItems.length} grocery</span>
+          <span style="font-size: 13px; color: ${CONFIG.text_tertiary};">${state.recipes.length} recipes · ${state.groceryItems.length} grocery</span>
         </div>
       </div>
 

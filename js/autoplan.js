@@ -1570,8 +1570,7 @@ function generateWeekPlan(preserveLocked, weekStartOverride) {
     days
   };
 
-  const key = weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + weekStart;
-  localStorage.setItem(key, JSON.stringify(plan));
+  saveWeekPlanPersist(plan);
   return plan;
 }
 
@@ -1615,6 +1614,7 @@ function saveWeekPlanPersist(plan) {
   if (!plan?.weekStart) return;
   const key = plan.weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + plan.weekStart;
   localStorage.setItem(key, JSON.stringify(plan));
+  if (typeof syncWeekPlanToSupabase === 'function') syncWeekPlanToSupabase(plan);
 }
 
 /**
@@ -1648,21 +1648,6 @@ function swapWeekMealSlot(dateStr, mealType, optionIndex, newRecipeId) {
     source: 'recipe'
   };
   saveWeekPlanPersist(plan);
-  if (typeof upsertMealPlanRow === 'function') {
-    upsertMealPlanRow({
-      week_start: ws,
-      day_date: dateStr,
-      meal_type: mealType,
-      option_index: optionIndex,
-      source: 'recipe',
-      recipe_id: newRecipeId,
-      manual_name: null,
-      restaurant_name: null,
-      similar_to_recipe_id: null,
-      image_url: null,
-      locked: false
-    });
-  }
 }
 
 /**
