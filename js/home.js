@@ -433,7 +433,7 @@ function renderHomeWeekPlan() {
         if (!seenIds.has(opt.recipeId)) {
           seenIds.add(opt.recipeId);
           recipe = getRecipeById(opt.recipeId);
-          id = opt.recipeId;
+          id = recipe ? (recipe.__backendId || recipe.id) : opt.recipeId;
         }
       }
       if (recipe) {
