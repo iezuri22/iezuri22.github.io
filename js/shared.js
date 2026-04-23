@@ -5249,6 +5249,74 @@ async function loadDataFromSupabase() {
 
   const items = data.map(row => ({ id: row.id, ...row.data }));
   applySupabaseData(items);
+
+  await loadMealPlanFromSupabase(user.id);
+}
+
+function _mealPlanRowToOption(row) {
+  const locked = !!row.locked;
+  switch (row.source) {
+    case 'manual':
+      return {
+        type: 'manual',
+        source: 'manual',
+        manualName: row.manual_name,
+        imageUrl: row.image_url || null,
+        similarToRecipeId: row.similar_to_recipe_id || null,
+        locked
+      };
+    case 'takeout':
+      return {
+        type: 'takeout',
+        source: 'takeout',
+        manualName: row.manual_name,
+        restaurantName: row.restaurant_name || null,
+        locked
+      };
+    case 'combo':
+      return { comboId: row.recipe_id, type: 'combo', locked };
+    case 'recipe':
+    default:
+      return { recipeId: row.recipe_id, type: 'recipe', locked };
+  }
+}
+
+async function loadMealPlanFromSupabase(userId) {
+  if (!window.supabaseClient) return;
+
+  const today = new Date();
+  const sunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+  const thisWeekStart = _localDateStr(sunday);
+  const nextSunday = new Date(sunday.getFullYear(), sunday.getMonth(), sunday.getDate() + 7);
+  const nextWeekStart = _localDateStr(nextSunday);
+
+  const { data, error } = await window.supabaseClient
+    .from('meal_plan')
+    .select('*')
+    .eq('user_id', userId)
+    .in('week_start', [thisWeekStart, nextWeekStart]);
+
+  if (error) { console.error('Load meal_plan error:', error); return; }
+  if (!Array.isArray(data)) return;
+
+  if (state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil) return;
+
+  const byWeek = {};
+  for (const row of data) {
+    if (!byWeek[row.week_start]) byWeek[row.week_start] = {};
+    const days = byWeek[row.week_start];
+    if (!days[row.day_date]) days[row.day_date] = {};
+    if (!days[row.day_date][row.meal_type]) days[row.day_date][row.meal_type] = { options: [] };
+    days[row.day_date][row.meal_type].options[row.option_index] = _mealPlanRowToOption(row);
+  }
+
+  for (const ws of [thisWeekStart, nextWeekStart]) {
+    const days = byWeek[ws];
+    if (!days) continue;
+    const plan = { generatedAt: new Date().toISOString(), weekStart: ws, days };
+    const key = ws === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + ws;
+    localStorage.setItem(key, JSON.stringify(plan));
+  }
 }
 
 function applySupabaseData(data) {
