@@ -5317,16 +5317,6 @@ async function loadMealPlanFromSupabase(userId) {
     let existing = null;
     try { existing = JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) {}
 
-    const maxRemoteUpdated = Math.max(...data
-      .filter(r => r.week_start === ws)
-      .map(r => new Date(r.updated_at).getTime()));
-    const localGeneratedAt = existing?.generatedAt ? new Date(existing.generatedAt).getTime() : 0;
-
-    if (localGeneratedAt > maxRemoteUpdated) {
-      console.log(`Skipping week ${ws} — local plan is newer than remote`);
-      continue;
-    }
-
     const mergedDays = { ...(existing?.days || {}) };
     for (const dayDate of Object.keys(incomingDays)) {
       const existingDay = mergedDays[dayDate] || {};
