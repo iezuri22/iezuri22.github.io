@@ -73,8 +73,8 @@ const KITCHEN_INGREDIENTS = {
   }
 };
 
-// ===== INGREDIENT SYNONYMS =====
-const INGREDIENT_SYNONYMS = {
+// ===== INGREDIENT VARIANTS (canonical → [variants]; distinct from shared.js INGREDIENT_SYNONYMS which is variant → canonical) =====
+const KITCHEN_INGREDIENT_VARIANTS = {
   'chicken': ['chkn', 'poultry', 'hen', 'wing', 'wings', 'drumstick', 'drumsticks', 'thigh', 'thighs', 'breast', 'breasts', 'tender', 'tenders'],
   'beef': ['ground beef', 'steak', 'sirloin', 'ribeye', 'brisket', 'chuck', 'flank', 'filet', 'mignon', 'roast', 'short rib', 'short ribs'],
   'pork': ['bacon', 'ham', 'sausage', 'chorizo', 'prosciutto', 'pancetta', 'tenderloin', 'chop', 'chops', 'pulled pork', 'ribs'],
@@ -858,10 +858,10 @@ function renderKitchenIngredientMeals() {
 function getIngredientSearchTerms(ingredientName) {
   const lower = ingredientName.toLowerCase();
   const terms = [lower];
-  if (INGREDIENT_SYNONYMS[lower]) {
-    terms.push(...INGREDIENT_SYNONYMS[lower]);
+  if (KITCHEN_INGREDIENT_VARIANTS[lower]) {
+    terms.push(...KITCHEN_INGREDIENT_VARIANTS[lower]);
   }
-  Object.entries(INGREDIENT_SYNONYMS).forEach(([key, synonyms]) => {
+  Object.entries(KITCHEN_INGREDIENT_VARIANTS).forEach(([key, synonyms]) => {
     if (synonyms.some(s => s === lower || lower.includes(s) || s.includes(lower))) {
       terms.push(key);
       terms.push(...synonyms);
