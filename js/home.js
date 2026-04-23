@@ -481,7 +481,7 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
   const name = recipe.title || '';
   const hasSwap = dateStr && mealType;
   return `
-    <div class="recipe-carousel-card" onclick="goToRecipe('${id}')">
+    <div class="recipe-carousel-card" onclick="openRecipeView('${id}')">
       <div class="carousel-card-media">
         ${img ? `
           <img loading="lazy" src="${esc(img)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" />

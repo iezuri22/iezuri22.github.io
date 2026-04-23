@@ -4261,7 +4261,7 @@ function renderMyPicks() {
   ` : '';
 
   return `
-    <div style="padding: 0; max-width: 100%; overflow-x: hidden;">
+    <div style="padding: 0; max-width: 100%; overflow-x: hidden; display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: calc(50px + env(safe-area-inset-bottom));">
       <!-- Toggle tabs -->
       <div style="display:flex; gap:8px; overflow-x:auto; padding:12px 16px 6px;
         -webkit-overflow-scrolling:touch; scrollbar-width:none;">
@@ -4284,6 +4284,13 @@ function renderMyPicks() {
       <!-- Results -->
       ${emptyMsg}
       ${gridHtml}
+      <!-- Bottom CTA fills remaining space so nav stays pinned -->
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 16px;">
+        <a href="/recipes.html" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-size: 13px; font-weight: 500; text-decoration: none;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+          Find more recipes
+        </a>
+      </div>
     </div>
   `;
 }

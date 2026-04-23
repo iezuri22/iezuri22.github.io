@@ -481,7 +481,7 @@ function renderGroceryList() {
       ` : '';
 
       return `
-        <div class="gro-container">
+        <div class="gro-container" style="display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: calc(50px + env(safe-area-inset-bottom));">
           <!-- Add Item Input -->
           <div class="gro-add-bar">
             <div class="search-bar" style="flex:1;">
@@ -549,6 +549,14 @@ function renderGroceryList() {
               `}
             </div>
           ` : ''}
+
+          <!-- Bottom CTA fills remaining space so nav stays pinned -->
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 16px;">
+            <button onclick="document.getElementById('groceryManualInput')?.focus()" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-size: 13px; font-weight: 500; border: none; cursor: pointer;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+              Add items
+            </button>
+          </div>
         </div>
 
       `;

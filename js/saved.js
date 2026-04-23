@@ -640,13 +640,20 @@ function renderCookingJournal() {
 
   if (photosEntries.length === 0) {
     return `
-      <div style="padding: 0; padding-bottom: 80px; max-width: 100%; overflow-x: hidden;">
+      <div style="padding: 0; max-width: 100%; overflow-x: hidden; display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: calc(50px + env(safe-area-inset-bottom));">
         ${searchAndFilters}
         <div style="padding: ${CONFIG.space_2xl} ${CONFIG.space_md}; text-align: center;">
           <div style="font-size: 48px; opacity: 0.3; margin-bottom: ${CONFIG.space_md};">
             <svg width="48" height="48" fill="none" stroke="${CONFIG.text_tertiary}" stroke-width="1.5" viewBox="0 0 24 24" style="margin: 0 auto;"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
           </div>
           <div style="color: ${CONFIG.text_muted}; font-size: 14px; line-height: 1.5;">No cooking photos yet.<br>Mark meals as cooked and add photos to see them here.</div>
+        </div>
+        <!-- Bottom CTA fills remaining space so nav stays pinned -->
+        <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 16px;">
+          <a href="/my-meals.html" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-size: 13px; font-weight: 500; text-decoration: none;">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            Log a meal
+          </a>
         </div>
       </div>
     `;
@@ -674,7 +681,7 @@ function renderCookingJournal() {
   });
 
   return `
-    <div style="padding: 0; padding-bottom: 80px; max-width: 100%; overflow-x: hidden;">
+    <div style="padding: 0; max-width: 100%; overflow-x: hidden; display: flex; flex-direction: column; min-height: 100dvh; padding-bottom: calc(50px + env(safe-area-inset-bottom));">
       ${searchAndFilters}
       ${dateOrder.map(date => {
         const photos = dateGroups[date];
@@ -699,6 +706,13 @@ function renderCookingJournal() {
           </div>
         `;
       }).join('')}
+      <!-- Bottom CTA fills remaining space so nav stays pinned -->
+      <div style="flex: 1; display: flex; align-items: center; justify-content: center; padding: 32px 16px;">
+        <a href="/my-meals.html" style="display: inline-flex; align-items: center; gap: 8px; padding: 12px 20px; border-radius: 999px; background: rgba(255,255,255,0.06); color: ${CONFIG.text_muted}; font-size: 13px; font-weight: 500; text-decoration: none;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          Log a meal
+        </a>
+      </div>
     </div>
   `;
 }
