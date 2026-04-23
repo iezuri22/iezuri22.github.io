@@ -175,7 +175,7 @@ function renderHomeRecipeView() {
   if (typeof renderRecipeDetailV2 === 'function') {
     return renderRecipeDetailV2(state.selectedRecipeViewId, {
       onBack: 'goBackFromHomeRecipeView()',
-      standalone: true
+      standalone: false
     });
   }
   return '<div style="padding: 24px; color: ' + CONFIG.text_color + ';">Recipe not found.</div>';
