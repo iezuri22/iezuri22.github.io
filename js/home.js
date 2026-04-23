@@ -147,16 +147,8 @@ function renderHomeSearchResults() {
 // ============================================================
 // Navigate to recipe view from home page (inline detail)
 function goToRecipe(id) {
-  // Save scroll position before navigating
-  const app = document.getElementById('app');
-  if (app && state.currentView) {
-    state.scrollPositions[state.currentView] = app.scrollTop;
-  }
-  state.recipeViewReturnTo = state.currentView;
-  state.selectedRecipeViewId = id;
-  state.currentView = 'recipe-view';
-  render();
-  setTimeout(() => { const a = document.getElementById('app'); if (a) a.scrollTop = 0; }, 0);
+  sessionStorage.setItem('yummy_selected_recipe', id);
+  navigateTo('recipe-view');
 }
 
 function goBackFromHomeRecipeView() {
