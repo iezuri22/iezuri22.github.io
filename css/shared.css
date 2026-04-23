@@ -70,6 +70,10 @@
       flex-direction: column;
     }
 
+    .app-shell > .desktop-content-area > :last-child {
+      flex: 1 0 auto;
+    }
+
     /* Desktop sidebar — hidden on mobile */
     .desktop-sidebar { display: none; }
 
