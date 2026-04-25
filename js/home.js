@@ -3042,10 +3042,28 @@ function renderManageView() {
               const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
               const cards = [];
               for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+                const seenIds = new Set();
+                let count = 0;
                 for (const dateStr of weekDates) {
+                  if (count >= 2) break;
                   const slot = plan?.days?.[dateStr]?.[mealType];
                   const entry = slot?.options?.[0];
+                  if (!entry) continue;
+
+                  let key = '';
+                  if (entry.type === 'combo') {
+                    if (!entry.comboId) continue;
+                    key = 'combo:' + entry.comboId;
+                  } else if (entry.recipeId) {
+                    key = 'recipe:' + entry.recipeId;
+                  } else {
+                    continue;
+                  }
+                  if (seenIds.has(key)) continue;
+                  seenIds.add(key);
+
                   cards.push(renderManageSlotCard(entry, dateStr, mealType, 0, dateStr === todayStr, mealLabels[mealType]));
+                  count++;
                 }
               }
               return cards.join('');

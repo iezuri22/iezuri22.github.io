@@ -462,21 +462,21 @@ function renderGroceryList() {
         <div class="gro-quick-actions">
           ${hasThisWeekPlan ? `
             <button onclick="showAddFromThisWeekModal()" class="gro-quick-btn card-press">
-              <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
-              <span>From this week</span>
+              <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+              <span>This Week</span>
             </button>
           ` : ''}
           <button onclick="showAddFromMealModal()" class="gro-quick-btn card-press">
-            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
-            <span>From a meal</span>
+            <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+            <span>From Meal</span>
           </button>
           <button onclick="showRecurringItemsModal()" class="gro-quick-btn card-press">
-            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992"/></svg>
+            <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992"/></svg>
             <span>Recurring</span>
             ${allFreqItems.length > 0 ? `<span class="gro-quick-badge">${allFreqItems.length}</span>` : ''}
           </button>
           <button onclick="showManageStoresModal()" class="gro-quick-btn card-press">
-            <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
+            <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
             <span>Stores</span>
           </button>
         </div>`;
@@ -1622,6 +1622,42 @@ function _hasThisWeekPlannedRecipes() {
   return _getThisWeekPlannedSlots().length > 0;
 }
 
+// ---- Weekly added-pairs tracking (resets on week roll-over) ----
+const GROCERY_WEEK_TRACKING_KEY = 'groceryAddedThisWeek_v1';
+
+function _slotMealId(slot) {
+  return `${slot.dateStr}_${slot.mealType}_${slot.recipeId}`;
+}
+
+function getWeekAddedTracking() {
+  try {
+    const raw = localStorage.getItem(GROCERY_WEEK_TRACKING_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || obj.weekStart !== state.currentWeekStartDate) return null;
+    return obj;
+  } catch (e) { return null; }
+}
+
+function _saveWeekAddedTracking(tracking) {
+  localStorage.setItem(GROCERY_WEEK_TRACKING_KEY, JSON.stringify(tracking));
+}
+
+function _getMealAddedCanonicals(mealId) {
+  const t = getWeekAddedTracking();
+  if (!t || !t.added || !t.added[mealId]) return new Set();
+  return new Set(Object.keys(t.added[mealId]));
+}
+
+function _markIngredientsAdded(mealId, canonicals) {
+  let t = getWeekAddedTracking();
+  if (!t) t = { weekStart: state.currentWeekStartDate, added: {} };
+  if (!t.added[mealId]) t.added[mealId] = {};
+  canonicals.forEach(c => { if (c) t.added[mealId][c] = true; });
+  _saveWeekAddedTracking(t);
+}
+
+// ---- Step 1: meal selection sheet ----
 function showAddFromThisWeekModal() {
   const slots = _getThisWeekPlannedSlots();
   if (slots.length === 0) {
@@ -1629,62 +1665,69 @@ function showAddFromThisWeekModal() {
     return;
   }
   window._weekPlanPickerSlots = slots;
-  window._weekPlanPickerSelections = new Set(slots.map((_, i) => i));
+  // Default: nothing selected. (Previously-added meals stay unselected by default
+  // but remain tappable so the user can re-add ingredients they skipped.)
+  window._weekPlanPickerSelections = new Set();
+  window._weekPlanIngredientReview = null;
+
+  _renderMealSelectionStep();
+}
+
+function _renderMealSelectionStep() {
+  const slots = window._weekPlanPickerSlots || [];
+  const sel = window._weekPlanPickerSelections;
 
   const modalHtml = `<div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
     <h2 style="font-size:17px;font-weight:600;margin-bottom:4px;">Add from this week's plan</h2>
-    <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:12px;">Tap a recipe to deselect it. Selected recipes' ingredients will be added.</div>
-    <div id="weekPlanPickerGrid" style="overflow-y:auto;flex:1;margin:0 -8px;padding:0 8px;min-height:0;"></div>
+    <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:12px;">Tap meals to pick which ones you want ingredients from.</div>
+    <div id="weekPlanPickerGrid" style="overflow-y:auto;flex:1;margin:0 -8px;padding:0 8px;min-height:0;">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+        ${slots.map((s, i) => {
+          const selected = sel.has(i);
+          const mealId = _slotMealId(s);
+          const previouslyAdded = _getMealAddedCanonicals(mealId).size > 0;
+          const img = s.displayImage;
+          const cardOpacity = previouslyAdded && !selected ? 'opacity:0.55;' : '';
+          return `
+            <div onclick="_toggleWeekPlanPick(${i})"
+              style="position:relative;border-radius:14px;overflow:hidden;cursor:pointer;background:${CONFIG.surface_color};outline:2px solid ${selected ? CONFIG.primary_action_color : 'transparent'};-webkit-tap-highlight-color:transparent;${cardOpacity}">
+              <div style="position:relative;aspect-ratio:4/3;background:#0d0d0d;">
+                ${img
+                  ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;${selected ? '' : 'opacity:0.6;'}" loading="lazy" onerror="this.style.display='none'"/>`
+                  : `<div style="width:100%;height:100%;background:${getPlaceholderGradient(s.recipe)};${selected ? '' : 'opacity:0.6;'}"></div>`
+                }
+                <span style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;color:white;background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:3px 8px;border-radius:6px;">${s.mealLabel}</span>
+                ${previouslyAdded ? `<span style="position:absolute;bottom:8px;left:8px;font-size:10px;font-weight:600;letter-spacing:0.3px;color:white;background:rgba(48,209,88,0.85);padding:3px 8px;border-radius:6px;">Added</span>` : ''}
+                <div style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:${selected ? CONFIG.primary_action_color : 'rgba(0,0,0,0.55)'};display:flex;align-items:center;justify-content:center;color:white;border:1.5px solid ${selected ? CONFIG.primary_action_color : 'rgba(255,255,255,0.6)'};">
+                  ${selected ? '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+                </div>
+              </div>
+              <div style="padding:8px 10px 10px;">
+                <h3 style="font-size:13px;font-weight:600;color:${CONFIG.text_color};margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;">${esc(s.displayTitle)}</h3>
+              </div>
+            </div>`;
+        }).join('')}
+      </div>
+    </div>
     <div style="display:flex;gap:8px;margin-top:12px;flex-shrink:0;">
       <button onclick="closeModal()" style="padding:10px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;flex:1;font-size:14px;">Cancel</button>
-      <button id="weekPlanPickerConfirm" onclick="confirmAddFromThisWeek()" style="padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;cursor:pointer;flex:2;font-size:14px;font-weight:600;">Add Ingredients to Grocery List</button>
+      <button id="weekPlanPickerConfirm" onclick="_advanceToIngredientReview()" style="padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;cursor:pointer;flex:2;font-size:14px;font-weight:600;">${sel.size === 0 ? 'Save' : `Save (${sel.size})`}</button>
     </div>
   </div>`;
 
   openModal(modalHtml);
-  _renderWeekPlanPickerGrid();
+  _updateMealSelectionConfirm();
 }
 
-function _renderWeekPlanPickerGrid() {
-  const container = document.getElementById('weekPlanPickerGrid');
-  if (!container) return;
-  const slots = window._weekPlanPickerSlots || [];
-  const sel = window._weekPlanPickerSelections;
-
-  container.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
-      ${slots.map((s, i) => {
-        const selected = sel.has(i);
-        const img = s.displayImage;
-        return `
-          <div onclick="_toggleWeekPlanPick(${i})"
-            style="position:relative;border-radius:14px;overflow:hidden;cursor:pointer;background:${CONFIG.surface_color};outline:2px solid ${selected ? CONFIG.primary_action_color : 'transparent'};-webkit-tap-highlight-color:transparent;">
-            <div style="position:relative;aspect-ratio:4/3;background:#0d0d0d;">
-              ${img
-                ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;${selected ? '' : 'opacity:0.45;'}" loading="lazy" onerror="this.style.display='none'"/>`
-                : `<div style="width:100%;height:100%;background:${getPlaceholderGradient(s.recipe)};${selected ? '' : 'opacity:0.45;'}"></div>`
-              }
-              <span style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;color:white;background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:3px 8px;border-radius:6px;">${s.mealLabel}</span>
-              <div style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:${selected ? CONFIG.primary_action_color : 'rgba(0,0,0,0.55)'};display:flex;align-items:center;justify-content:center;color:white;border:1.5px solid ${selected ? CONFIG.primary_action_color : 'rgba(255,255,255,0.6)'};">
-                ${selected ? '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
-              </div>
-            </div>
-            <div style="padding:8px 10px 10px;">
-              <h3 style="font-size:13px;font-weight:600;color:${CONFIG.text_color};margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;">${esc(s.displayTitle)}</h3>
-            </div>
-          </div>`;
-      }).join('')}
-    </div>
-  `;
-
+function _updateMealSelectionConfirm() {
   const btn = document.getElementById('weekPlanPickerConfirm');
-  if (btn) {
-    const n = sel.size;
-    btn.disabled = n === 0;
-    btn.style.opacity = n === 0 ? '0.5' : '1';
-    btn.style.cursor = n === 0 ? 'not-allowed' : 'pointer';
-    btn.textContent = n === 0 ? 'Select at least one' : `Add Ingredients to Grocery List (${n})`;
-  }
+  if (!btn) return;
+  const sel = window._weekPlanPickerSelections;
+  const n = sel ? sel.size : 0;
+  btn.disabled = n === 0;
+  btn.style.opacity = n === 0 ? '0.5' : '1';
+  btn.style.cursor = n === 0 ? 'not-allowed' : 'pointer';
+  btn.textContent = n === 0 ? 'Save' : `Save (${n})`;
 }
 
 function _toggleWeekPlanPick(idx) {
@@ -1692,7 +1735,127 @@ function _toggleWeekPlanPick(idx) {
   if (!sel) return;
   if (sel.has(idx)) sel.delete(idx);
   else sel.add(idx);
-  _renderWeekPlanPickerGrid();
+  _renderMealSelectionStep();
+}
+
+// ---- Step 2: ingredient review sheet ----
+function _advanceToIngredientReview() {
+  const slots = window._weekPlanPickerSlots || [];
+  const sel = window._weekPlanPickerSelections || new Set();
+  if (sel.size === 0) return;
+
+  const groceryList = getSmartGroceryList();
+  const groceryListCanonicals = new Set(groceryList.map(i => canonicalIngredientName(i.name)));
+
+  const meals = Array.from(sel).sort((a, b) => a - b).map(idx => {
+    const slot = slots[idx];
+    const mealId = _slotMealId(slot);
+    const previouslyAddedFromMeal = _getMealAddedCanonicals(mealId);
+    const ings = recipeIngList(slot.recipe).map(ing => {
+      const canonical = canonicalIngredientName(ing.name);
+      const alreadyOnList = canonical && groceryListCanonicals.has(canonical);
+      // Default checked = NOT already on the grocery list. This way previously-added
+      // ingredients land unchecked, and any ingredient the user skipped last time
+      // (or that was never added) starts checked.
+      return {
+        canonical,
+        name: ing.name,
+        qty: ing.qty || '',
+        unit: ing.unit || '',
+        category: mapToGroceryCategory(ing.group || 'Other'),
+        alreadyOnList,
+        previouslyAddedFromMeal: previouslyAddedFromMeal.has(canonical),
+        checked: !alreadyOnList
+      };
+    });
+    return { slotIdx: idx, slot, mealId, ingredients: ings };
+  });
+
+  window._weekPlanIngredientReview = meals;
+  _renderIngredientReviewStep();
+}
+
+function _renderIngredientReviewStep() {
+  const meals = window._weekPlanIngredientReview || [];
+  const totalChecked = meals.reduce((sum, m) => sum + m.ingredients.filter(i => i.checked).length, 0);
+
+  const modalHtml = `<div style="color:${CONFIG.text_color};max-height:85vh;display:flex;flex-direction:column;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+      <button onclick="_renderMealSelectionStep()" aria-label="Back"
+        style="background:none;border:none;color:${CONFIG.text_color};cursor:pointer;padding:4px 6px;display:flex;align-items:center;border-radius:8px;">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+      </button>
+      <h2 style="font-size:17px;font-weight:600;margin:0;">Review ingredients</h2>
+    </div>
+    <div style="font-size:12px;color:${CONFIG.text_muted};margin:0 0 12px 30px;">Uncheck items you don't need (already at home, etc.).</div>
+
+    <div id="ingredientReviewBody" style="overflow-y:auto;flex:1;margin:0 -4px;padding:0 4px;min-height:0;">
+      ${meals.map((m, mi) => `
+        <div style="margin-bottom:14px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px 8px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:6px;">
+            <div style="min-width:0;">
+              <div style="font-size:14px;font-weight:600;color:${CONFIG.text_color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(m.slot.displayTitle)}</div>
+              <div style="font-size:11px;color:${CONFIG.text_muted};margin-top:1px;">${esc(m.slot.mealLabel)}${m.slot.dateStr ? ' · ' + esc(formatDateDisplay(m.slot.dateStr)) : ''}</div>
+            </div>
+            <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px;">
+              <button onclick="_setMealReviewAll(${mi}, true)" style="padding:5px 10px;background:${CONFIG.surface_color};color:${CONFIG.text_muted};border:none;border-radius:100px;font-size:11px;cursor:pointer;">All</button>
+              <button onclick="_setMealReviewAll(${mi}, false)" style="padding:5px 10px;background:${CONFIG.surface_color};color:${CONFIG.text_muted};border:none;border-radius:100px;font-size:11px;cursor:pointer;">None</button>
+            </div>
+          </div>
+          ${m.ingredients.length === 0 ? `<div style="padding:10px;color:${CONFIG.text_muted};font-size:12px;">No ingredients on this recipe.</div>` : m.ingredients.map((ing, ii) => {
+            const qtyLabel = ing.qty ? `${esc(ing.qty)}${ing.unit ? ' ' + esc(ing.unit) : ''} · ` : '';
+            return `
+              <div onclick="_toggleReviewIngredient(${mi},${ii})"
+                style="display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:4px;background:${ing.checked ? 'rgba(232,93,93,0.08)' : CONFIG.surface_color};border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;${ing.alreadyOnList && !ing.checked ? 'opacity:0.7;' : ''}">
+                <div style="width:22px;height:22px;border-radius:6px;border:2px solid ${ing.checked ? CONFIG.primary_action_color : CONFIG.text_muted};background:${ing.checked ? CONFIG.primary_action_color : 'transparent'};display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;">
+                  ${ing.checked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+                </div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:13px;color:${CONFIG.text_color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(toTitleCase(ing.name))}</div>
+                  <div style="font-size:11px;color:${CONFIG.text_muted};margin-top:1px;">
+                    ${qtyLabel}${ing.alreadyOnList ? '<span style="color:#30d158;font-weight:500;">Already added</span>' : esc(ing.category)}
+                  </div>
+                </div>
+              </div>`;
+          }).join('')}
+        </div>
+      `).join('')}
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;flex-shrink:0;">
+      <button onclick="_renderMealSelectionStep()" style="padding:10px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;flex:1;font-size:14px;">Back</button>
+      <button id="ingredientReviewConfirm" onclick="confirmAddFromThisWeek()" style="padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;cursor:pointer;flex:2;font-size:14px;font-weight:600;">${totalChecked === 0 ? 'Select at least one' : `Add to Grocery List (${totalChecked})`}</button>
+    </div>
+  </div>`;
+
+  openModal(modalHtml);
+  _updateIngredientReviewConfirm();
+}
+
+function _updateIngredientReviewConfirm() {
+  const meals = window._weekPlanIngredientReview || [];
+  const total = meals.reduce((sum, m) => sum + m.ingredients.filter(i => i.checked).length, 0);
+  const btn = document.getElementById('ingredientReviewConfirm');
+  if (!btn) return;
+  btn.disabled = total === 0;
+  btn.style.opacity = total === 0 ? '0.5' : '1';
+  btn.style.cursor = total === 0 ? 'not-allowed' : 'pointer';
+  btn.textContent = total === 0 ? 'Select at least one' : `Add to Grocery List (${total})`;
+}
+
+function _toggleReviewIngredient(mealIdx, ingIdx) {
+  const meals = window._weekPlanIngredientReview;
+  if (!meals || !meals[mealIdx] || !meals[mealIdx].ingredients[ingIdx]) return;
+  const ing = meals[mealIdx].ingredients[ingIdx];
+  ing.checked = !ing.checked;
+  _renderIngredientReviewStep();
+}
+
+function _setMealReviewAll(mealIdx, value) {
+  const meals = window._weekPlanIngredientReview;
+  if (!meals || !meals[mealIdx]) return;
+  meals[mealIdx].ingredients.forEach(ing => { ing.checked = !!value; });
+  _renderIngredientReviewStep();
 }
 
 function _parseQtyToNumber(qty) {
@@ -1723,48 +1886,49 @@ function _formatQty(n) {
 }
 
 function confirmAddFromThisWeek() {
-  const slots = window._weekPlanPickerSlots || [];
-  const sel = window._weekPlanPickerSelections || new Set();
-  if (sel.size === 0) return;
+  const meals = window._weekPlanIngredientReview || [];
+  if (meals.length === 0) return;
 
+  // Aggregate only the user-checked ingredients, deduped across meals.
   const aggregated = {};
+  // Per-meal canonicals to write back into the weekly tracking ledger.
+  const markByMeal = {};
 
-  for (const idx of sel) {
-    const slot = slots[idx];
-    if (!slot || !slot.recipe) continue;
-
-    const ings = recipeIngList(slot.recipe);
-    for (const ing of ings) {
-      if (!ing.name) continue;
-      const canonical = canonicalIngredientName(ing.name);
-      if (!canonical) continue;
+  for (const m of meals) {
+    const recipeTitle = m.slot.recipe && m.slot.recipe.title ? m.slot.recipe.title : (m.slot.displayTitle || '');
+    for (const ing of m.ingredients) {
+      if (!ing.checked || !ing.canonical) continue;
+      if (!markByMeal[m.mealId]) markByMeal[m.mealId] = [];
+      markByMeal[m.mealId].push(ing.canonical);
 
       const parsedQty = _parseQtyToNumber(ing.qty);
       const unit = (ing.unit || '').trim().toLowerCase();
-      const category = mapToGroceryCategory(ing.group || 'Other');
 
-      if (!aggregated[canonical]) {
-        aggregated[canonical] = {
+      if (!aggregated[ing.canonical]) {
+        aggregated[ing.canonical] = {
           name: ing.name,
           qty: parsedQty,
-          unit: unit,
-          category: category,
-          mealNames: slot.recipe.title ? [slot.recipe.title] : [],
+          unit,
+          category: ing.category,
+          mealNames: recipeTitle ? [recipeTitle] : [],
           unitsCompatible: true
         };
       } else {
-        const a = aggregated[canonical];
+        const a = aggregated[ing.canonical];
         if (a.unit === unit) {
           if (parsedQty != null && a.qty != null) a.qty += parsedQty;
           else if (parsedQty != null && a.qty == null) a.qty = parsedQty;
         } else {
           a.unitsCompatible = false;
         }
-        if (slot.recipe.title && !a.mealNames.includes(slot.recipe.title)) {
-          a.mealNames.push(slot.recipe.title);
-        }
+        if (recipeTitle && !a.mealNames.includes(recipeTitle)) a.mealNames.push(recipeTitle);
       }
     }
+  }
+
+  if (Object.keys(aggregated).length === 0) {
+    showToast('Nothing selected', 'info');
+    return;
   }
 
   const list = getSmartGroceryList();
@@ -1787,6 +1951,7 @@ function confirmAddFromThisWeek() {
       const sm = existing.sourceMeals || [];
       item.mealNames.forEach(m => { if (m && !sm.includes(m)) sm.push(m); });
       existing.sourceMeals = sm;
+      if (existing.checked) existing.checked = false;
       updated++;
     } else {
       list.push({
@@ -1806,6 +1971,18 @@ function confirmAddFromThisWeek() {
   }
 
   saveSmartGroceryList(list);
+
+  // Persist (meal_id, ingredient_canonical) pairs for this week so the next
+  // visit can dim previously-added meals and pre-uncheck their ingredients.
+  Object.entries(markByMeal).forEach(([mealId, canonicals]) => {
+    _markIngredientsAdded(mealId, canonicals);
+  });
+
+  // Clear ephemeral picker state.
+  window._weekPlanPickerSlots = null;
+  window._weekPlanPickerSelections = null;
+  window._weekPlanIngredientReview = null;
+
   closeModal();
 
   const msg = added > 0 && updated > 0

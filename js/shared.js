@@ -4766,7 +4766,7 @@ function renderDesktopPageTitle() {
 }
 
 function renderNav() {
-  if (state.currentView === 'home' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals' || state.currentView === 'recipe-view') return '';
+  if (state.currentView === 'home' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals' || state.currentView === 'recipe-view' || state.currentView === 'week-plan') return '';
   const pageTitles = { 'recipes': 'Recipes', 'my-picks': 'My Picks', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'saved': 'Cooking Journal', 'components': 'Components', 'component-detail': 'Component', 'build-plate': 'Build a Plate', 'cook-mode': 'Cook Mode', 'combos': 'Combos' };
   const pageTitle = pageTitles[state.currentView] || 'PotLuck';
   const expiringItems = getExpiringItems(); const expiringCount = expiringItems.length;
