@@ -1774,9 +1774,10 @@ function _advanceToIngredientReview() {
     const ings = recipeIngList(slot.recipe).map(ing => {
       const canonical = canonicalIngredientName(ing.name);
       const alreadyOnList = canonical && groceryListCanonicals.has(canonical);
-      // Default checked = NOT already on the grocery list. This way previously-added
-      // ingredients land unchecked, and any ingredient the user skipped last time
-      // (or that was never added) starts checked.
+      const staple = isStaple(ing.name);
+      // Default checked = NOT already on the grocery list AND not a pantry staple.
+      // Staples (salt, oil, etc.) are assumed to be at home; user can manually check
+      // them if they actually need to restock.
       return {
         canonical,
         name: ing.name,
@@ -1784,8 +1785,9 @@ function _advanceToIngredientReview() {
         unit: ing.unit || '',
         category: mapToGroceryCategory(ing.group || 'Other'),
         alreadyOnList,
+        staple,
         previouslyAddedFromMeal: previouslyAddedFromMeal.has(canonical),
-        checked: !alreadyOnList
+        checked: !alreadyOnList && !staple
       };
     });
     return { slotIdx: idx, slot, mealId, ingredients: ings };
@@ -1833,7 +1835,7 @@ function _renderIngredientReviewStep() {
                 <div style="flex:1;min-width:0;">
                   <div style="font-size:13px;color:${CONFIG.text_color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(toTitleCase(ing.name))}</div>
                   <div style="font-size:11px;color:${CONFIG.text_muted};margin-top:1px;">
-                    ${qtyLabel}${ing.alreadyOnList ? '<span style="color:#30d158;font-weight:500;">Already added</span>' : esc(ing.category)}
+                    ${qtyLabel}${ing.alreadyOnList ? '<span style="color:#30d158;font-weight:500;">Already added</span>' : ing.staple ? '<span style="font-weight:500;">Pantry staple</span>' : esc(ing.category)}
                   </div>
                 </div>
               </div>`;
