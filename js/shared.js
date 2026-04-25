@@ -1171,16 +1171,28 @@ function loadAllState() {
   migrateOldGroceryData();
 }
 
-// One-time migration: old groceryItems → smartGroceryList_v1
+// One-time migration: old groceryItems → smartGroceryList_v1.
+// Guarded by a localStorage flag so it can NEVER run again after the first
+// successful pass. Without this guard, if a user cleared the grocery list and
+// state.groceryItems still held legacy rows from Supabase, the migration would
+// resurrect them on the next refresh — making cleared items reappear.
 function migrateOldGroceryData() {
-  const newList = getSmartGroceryList();
-  if (newList.length > 0) {
-    // Fix existing items: ensure all names are title-cased (fixes legacy compressed/lowercase names)
+  const MIGRATION_DONE_KEY = '_groceryMigrated_v2';
+  if (localStorage.getItem(MIGRATION_DONE_KEY)) {
     _fixGroceryItemNames();
     return;
   }
+  const newList = getSmartGroceryList();
+  if (newList.length > 0) {
+    _fixGroceryItemNames();
+    localStorage.setItem(MIGRATION_DONE_KEY, '1');
+    return;
+  }
   const oldItems = state.groceryItems;
-  if (!oldItems || oldItems.length === 0) return;
+  if (!oldItems || oldItems.length === 0) {
+    localStorage.setItem(MIGRATION_DONE_KEY, '1');
+    return;
+  }
   const migrated = oldItems.map(item => ({
     id: item.id || ('gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8)),
     name: toTitleCase(item.name || item.ingredientKey || ''),
@@ -1196,6 +1208,7 @@ function migrateOldGroceryData() {
     saveSmartGroceryList(migrated);
     debugLog('[migrateGroceryData] Migrated ' + migrated.length + ' items from old groceryItems to smartGroceryList_v1');
   }
+  localStorage.setItem(MIGRATION_DONE_KEY, '1');
 }
 
 // One-time fix: ensure all grocery item names have proper Title Case

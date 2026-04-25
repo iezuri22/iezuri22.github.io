@@ -1575,8 +1575,13 @@ function _getThisWeekPlannedSlots() {
   const dates = getWeekDates(ws);
   const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
   const out = [];
-  for (const dateStr of dates) {
-    for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+  // Match Home page's "This Week's Plan": up to 2 unique recipes per meal type,
+  // deduped across the week. Max 6 cards total (2 breakfast, 2 lunch, 2 dinner).
+  for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+    const seenKeys = new Set();
+    let count = 0;
+    for (const dateStr of dates) {
+      if (count >= 2) break;
       const slot = plan.days?.[dateStr]?.[mealType];
       const entry = slot?.options?.[0];
       if (!entry) continue;
@@ -1585,6 +1590,7 @@ function _getThisWeekPlannedSlots() {
       let recipeId = null;
       let displayTitle = '';
       let displayImage = '';
+      let dedupeKey = '';
       if (source === 'takeout') continue;
       if (source === 'manual') {
         if (entry.similarToRecipeId) {
@@ -1594,6 +1600,7 @@ function _getThisWeekPlannedSlots() {
         displayTitle = entry.manualName || (recipe?.title) || 'Manual recipe';
         displayImage = entry.imageUrl || (recipe ? recipeThumb(recipe) : '');
         if (!recipe) continue;
+        dedupeKey = 'manual:' + (entry.similarToRecipeId || displayTitle);
       } else if (entry.type === 'combo' || source === 'combo') {
         const combo = (state.combos || []).find(c => c.id === entry.comboId);
         if (!combo) continue;
@@ -1602,17 +1609,22 @@ function _getThisWeekPlannedSlots() {
         recipeId = combo.id;
         displayTitle = combo.name || 'Combo';
         displayImage = '';
+        dedupeKey = 'combo:' + combo.id;
       } else if (entry.recipeId) {
         recipe = getRecipeById(entry.recipeId);
         recipeId = entry.recipeId;
         if (!recipe) continue;
         displayTitle = recipe.title || 'Recipe';
         displayImage = recipeThumb(recipe);
+        dedupeKey = 'recipe:' + entry.recipeId;
       } else {
         continue;
       }
       if (!recipeIngList(recipe).length) continue;
+      if (seenKeys.has(dedupeKey)) continue;
+      seenKeys.add(dedupeKey);
       out.push({ dateStr, mealType, recipe, recipeId, mealLabel: mealLabels[mealType], displayTitle, displayImage });
+      count++;
     }
   }
   return out;
@@ -1678,9 +1690,17 @@ function _renderMealSelectionStep() {
   const sel = window._weekPlanPickerSelections;
 
   const modalHtml = `<div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
-    <h2 style="font-size:17px;font-weight:600;margin-bottom:4px;">Add from this week's plan</h2>
-    <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:12px;">Tap meals to pick which ones you want ingredients from.</div>
-    <div id="weekPlanPickerGrid" style="overflow-y:auto;flex:1;margin:0 -8px;padding:0 8px;min-height:0;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;flex-shrink:0;">
+      <div style="min-width:0;">
+        <h2 style="font-size:17px;font-weight:600;margin:0 0 4px;">Add from this week's plan</h2>
+        <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:12px;">Tap meals to pick which ones you want ingredients from.</div>
+      </div>
+      <button onclick="closeModal()" aria-label="Close"
+        style="background:${CONFIG.surface_color};border:none;color:${CONFIG.text_muted};cursor:pointer;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div id="weekPlanPickerGrid" style="overflow-y:auto;flex:1;margin:0 -8px;padding:0 8px 12px;min-height:0;">
       <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
         ${slots.map((s, i) => {
           const selected = sel.has(i);
@@ -1709,9 +1729,9 @@ function _renderMealSelectionStep() {
         }).join('')}
       </div>
     </div>
-    <div style="display:flex;gap:8px;margin-top:12px;flex-shrink:0;">
-      <button onclick="closeModal()" style="padding:10px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;flex:1;font-size:14px;">Cancel</button>
-      <button id="weekPlanPickerConfirm" onclick="_advanceToIngredientReview()" style="padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;cursor:pointer;flex:2;font-size:14px;font-weight:600;">${sel.size === 0 ? 'Save' : `Save (${sel.size})`}</button>
+    <div style="flex-shrink:0;background:${CONFIG.surface_elevated};margin:0 -16px -16px;padding:12px 16px calc(12px + env(safe-area-inset-bottom));border-top:1px solid rgba(255,255,255,0.06);">
+      <button id="weekPlanPickerConfirm" onclick="_advanceToIngredientReview()"
+        style="width:100%;padding:14px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:12px;cursor:pointer;font-size:15px;font-weight:600;-webkit-tap-highlight-color:transparent;">Save</button>
     </div>
   </div>`;
 
