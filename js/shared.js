@@ -575,7 +575,46 @@ const GROCERY_CATEGORIES = [
 ];
 
 const PANTRY_STAPLES = ['salt', 'pepper', 'black pepper', 'kosher salt', 'sea salt', 'olive oil', 'extra virgin olive oil', 'vegetable oil', 'cooking spray', 'canola oil', 'water', 'butter', 'unsalted butter', 'sugar', 'brown sugar', 'granulated sugar', 'flour', 'all-purpose flour', 'all purpose flour', 'garlic powder', 'onion powder', 'paprika', 'cumin', 'oregano', 'baking soda', 'baking powder', 'soy sauce', 'vinegar', 'white vinegar', 'apple cider vinegar'];
-function isStaple(name) { const c = canonicalIngredientName(name); return PANTRY_STAPLES.some(s => canonicalIngredientName(s) === c); }
+// Catches plain staples ("salt"), multi-word staples ("olive oil"), combined
+// strings ("Salt + Pepper, To Taste"), and quantity-prefixed forms ("1 tsp salt").
+function isStaple(name) {
+  if (!name) return false;
+  const stapleSet = new Set(PANTRY_STAPLES.map(s => canonicalIngredientName(s)));
+  const matchesStaple = (str) => {
+    if (!str) return false;
+    return stapleSet.has(canonicalIngredientName(String(str).trim()));
+  };
+  // 1. Whole-name canonical match (handles "olive oil", "garlic powder", etc.).
+  if (matchesStaple(name)) return true;
+  // 2. Normalize: lowercase, strip punctuation, drop measurement modifiers,
+  //    unify "and"/"or" to commas, strip any leading qty/unit prefix.
+  let s = String(name).toLowerCase();
+  s = s.replace(/[.()'"!?:;\-]/g, ' ');
+  s = s.replace(/\b(to\s+taste|as\s+needed|optional|pinch(?:es)?|dash(?:es)?|sprinkle|for\s+serving|for\s+garnish|to\s+garnish|for\s+sprinkling|divided)\b/g, ' ');
+  s = s.replace(/\b(and|or)\b/g, ',');
+  s = s.replace(/^\s*(?:\d+(?:\.\d+)?(?:\s+\d+\/\d+)?|\d+\/\d+)\s*(?:tsps?|teaspoons?|tbsps?|tablespoons?|cups?|c|ounces?|oz|lbs?|pounds?|grams?|g|kg|ml|liters?|l|cloves?|bunches?|sprigs?)?\s+(?:of\s+)?/i, '');
+  s = s.replace(/\s+/g, ' ').trim();
+  if (!s) return false;
+  // 3. Re-check whole after normalization (handles "1 tsp salt" → "salt").
+  if (matchesStaple(s)) return true;
+  // 4. If list-like separators present (+, &, /, ","), split into segments and
+  //    check each. Within each segment, also try 1- to 3-word adjacent windows so
+  //    multi-word staples like "olive oil" are still caught when bundled with
+  //    quantities or modifiers.
+  if (/[+&/,]/.test(s)) {
+    const segments = s.split(/[+&/,]+/).map(seg => seg.trim()).filter(Boolean);
+    for (const seg of segments) {
+      if (matchesStaple(seg)) return true;
+      const tokens = seg.split(/\s+/).filter(Boolean);
+      for (let i = 0; i < tokens.length; i++) {
+        for (let len = 1; len <= 3 && i + len <= tokens.length; len++) {
+          if (matchesStaple(tokens.slice(i, i + len).join(' '))) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
 
 // ============================================================
 // GROCERY STORES & FREQUENCY BUYS
