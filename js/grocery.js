@@ -454,9 +454,18 @@ function renderGroceryList() {
         </div>
       ` : '';
 
+      // Has any planned recipes for this week?
+      const hasThisWeekPlan = _hasThisWeekPlannedRecipes();
+
       // Quick actions row
       const quickActionsHtml = `
         <div class="gro-quick-actions">
+          ${hasThisWeekPlan ? `
+            <button onclick="showAddFromThisWeekModal()" class="gro-quick-btn card-press">
+              <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5"/></svg>
+              <span>From this week</span>
+            </button>
+          ` : ''}
           <button onclick="showAddFromMealModal()" class="gro-quick-btn card-press">
             <svg width="18" height="18" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
             <span>From a meal</span>
@@ -1518,6 +1527,296 @@ function addFreqItemFromModal() {
   if (!added) { showToast('Already in recurring list', 'info'); return; }
   showToast(`${toTitleCase(name)} added as recurring`, 'success');
   showRecurringItemsModal();
+}
+
+// ============================================================
+// ADD FROM THIS WEEK'S PLAN
+// ============================================================
+
+function _readThisWeekPlan() {
+  const ws = state.currentWeekStartDate;
+  const stored = localStorage.getItem('yummy_weekplan');
+  if (!stored) return null;
+  try {
+    const plan = JSON.parse(stored);
+    if (plan && plan.weekStart === ws && plan.days) return plan;
+  } catch (e) {}
+  return null;
+}
+
+function _comboToRecipeShape(combo) {
+  if (!combo) return null;
+  const slots = combo.slots || [];
+  const ingredientsRows = [];
+  for (const s of slots) {
+    const comp = (state.components || []).find(c => c.id === s.componentId);
+    if (!comp || !Array.isArray(comp.ingredients)) continue;
+    for (const ing of comp.ingredients) {
+      if (!ing || !ing.name) continue;
+      ingredientsRows.push({
+        qty: String(ing.amount ?? ing.qty ?? '').trim(),
+        unit: String(ing.unit || '').trim(),
+        name: String(ing.name).trim(),
+        group: ing.group || comp.category || 'Other'
+      });
+    }
+  }
+  return {
+    id: combo.id,
+    title: combo.name || 'Combo',
+    ingredientsRows
+  };
+}
+
+function _getThisWeekPlannedSlots() {
+  const plan = _readThisWeekPlan();
+  if (!plan) return [];
+  const ws = state.currentWeekStartDate;
+  const dates = getWeekDates(ws);
+  const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
+  const out = [];
+  for (const dateStr of dates) {
+    for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+      const slot = plan.days?.[dateStr]?.[mealType];
+      const entry = slot?.options?.[0];
+      if (!entry) continue;
+      const source = entry.source || 'recipe';
+      let recipe = null;
+      let recipeId = null;
+      let displayTitle = '';
+      let displayImage = '';
+      if (source === 'takeout') continue;
+      if (source === 'manual') {
+        if (entry.similarToRecipeId) {
+          recipe = getRecipeById(entry.similarToRecipeId);
+          recipeId = entry.similarToRecipeId;
+        }
+        displayTitle = entry.manualName || (recipe?.title) || 'Manual recipe';
+        displayImage = entry.imageUrl || (recipe ? recipeThumb(recipe) : '');
+        if (!recipe) continue;
+      } else if (entry.type === 'combo' || source === 'combo') {
+        const combo = (state.combos || []).find(c => c.id === entry.comboId);
+        if (!combo) continue;
+        recipe = _comboToRecipeShape(combo);
+        if (!recipe || !recipe.ingredientsRows.length) continue;
+        recipeId = combo.id;
+        displayTitle = combo.name || 'Combo';
+        displayImage = '';
+      } else if (entry.recipeId) {
+        recipe = getRecipeById(entry.recipeId);
+        recipeId = entry.recipeId;
+        if (!recipe) continue;
+        displayTitle = recipe.title || 'Recipe';
+        displayImage = recipeThumb(recipe);
+      } else {
+        continue;
+      }
+      if (!recipeIngList(recipe).length) continue;
+      out.push({ dateStr, mealType, recipe, recipeId, mealLabel: mealLabels[mealType], displayTitle, displayImage });
+    }
+  }
+  return out;
+}
+
+function _hasThisWeekPlannedRecipes() {
+  return _getThisWeekPlannedSlots().length > 0;
+}
+
+function showAddFromThisWeekModal() {
+  const slots = _getThisWeekPlannedSlots();
+  if (slots.length === 0) {
+    showToast('No recipes planned for this week', 'info');
+    return;
+  }
+  window._weekPlanPickerSlots = slots;
+  window._weekPlanPickerSelections = new Set(slots.map((_, i) => i));
+
+  const modalHtml = `<div style="color:${CONFIG.text_color};max-height:80vh;display:flex;flex-direction:column;">
+    <h2 style="font-size:17px;font-weight:600;margin-bottom:4px;">Add from this week's plan</h2>
+    <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:12px;">Tap a recipe to deselect it. Selected recipes' ingredients will be added.</div>
+    <div id="weekPlanPickerGrid" style="overflow-y:auto;flex:1;margin:0 -8px;padding:0 8px;min-height:0;"></div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-shrink:0;">
+      <button onclick="closeModal()" style="padding:10px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;flex:1;font-size:14px;">Cancel</button>
+      <button id="weekPlanPickerConfirm" onclick="confirmAddFromThisWeek()" style="padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;cursor:pointer;flex:2;font-size:14px;font-weight:600;">Add Ingredients to Grocery List</button>
+    </div>
+  </div>`;
+
+  openModal(modalHtml);
+  _renderWeekPlanPickerGrid();
+}
+
+function _renderWeekPlanPickerGrid() {
+  const container = document.getElementById('weekPlanPickerGrid');
+  if (!container) return;
+  const slots = window._weekPlanPickerSlots || [];
+  const sel = window._weekPlanPickerSelections;
+
+  container.innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;">
+      ${slots.map((s, i) => {
+        const selected = sel.has(i);
+        const img = s.displayImage;
+        return `
+          <div onclick="_toggleWeekPlanPick(${i})"
+            style="position:relative;border-radius:14px;overflow:hidden;cursor:pointer;background:${CONFIG.surface_color};outline:2px solid ${selected ? CONFIG.primary_action_color : 'transparent'};-webkit-tap-highlight-color:transparent;">
+            <div style="position:relative;aspect-ratio:4/3;background:#0d0d0d;">
+              ${img
+                ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;${selected ? '' : 'opacity:0.45;'}" loading="lazy" onerror="this.style.display='none'"/>`
+                : `<div style="width:100%;height:100%;background:${getPlaceholderGradient(s.recipe)};${selected ? '' : 'opacity:0.45;'}"></div>`
+              }
+              <span style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;color:white;background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:3px 8px;border-radius:6px;">${s.mealLabel}</span>
+              <div style="position:absolute;top:8px;right:8px;width:26px;height:26px;border-radius:50%;background:${selected ? CONFIG.primary_action_color : 'rgba(0,0,0,0.55)'};display:flex;align-items:center;justify-content:center;color:white;border:1.5px solid ${selected ? CONFIG.primary_action_color : 'rgba(255,255,255,0.6)'};">
+                ${selected ? '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+              </div>
+            </div>
+            <div style="padding:8px 10px 10px;">
+              <h3 style="font-size:13px;font-weight:600;color:${CONFIG.text_color};margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;">${esc(s.displayTitle)}</h3>
+            </div>
+          </div>`;
+      }).join('')}
+    </div>
+  `;
+
+  const btn = document.getElementById('weekPlanPickerConfirm');
+  if (btn) {
+    const n = sel.size;
+    btn.disabled = n === 0;
+    btn.style.opacity = n === 0 ? '0.5' : '1';
+    btn.style.cursor = n === 0 ? 'not-allowed' : 'pointer';
+    btn.textContent = n === 0 ? 'Select at least one' : `Add Ingredients to Grocery List (${n})`;
+  }
+}
+
+function _toggleWeekPlanPick(idx) {
+  const sel = window._weekPlanPickerSelections;
+  if (!sel) return;
+  if (sel.has(idx)) sel.delete(idx);
+  else sel.add(idx);
+  _renderWeekPlanPickerGrid();
+}
+
+function _parseQtyToNumber(qty) {
+  if (qty == null) return null;
+  const s = String(qty).trim();
+  if (!s) return null;
+  const mixed = s.match(/^(\d+)\s+(\d+)\/(\d+)$/);
+  if (mixed) {
+    const w = parseInt(mixed[1], 10);
+    const n = parseInt(mixed[2], 10);
+    const d = parseInt(mixed[3], 10);
+    if (d) return w + n / d;
+  }
+  const frac = s.match(/^(\d+)\/(\d+)$/);
+  if (frac) {
+    const n = parseInt(frac[1], 10);
+    const d = parseInt(frac[2], 10);
+    if (d) return n / d;
+  }
+  const num = parseFloat(s);
+  return isNaN(num) ? null : num;
+}
+
+function _formatQty(n) {
+  if (n == null || isNaN(n)) return '';
+  if (Math.abs(n - Math.round(n)) < 0.01) return String(Math.round(n));
+  return String(Math.round(n * 100) / 100);
+}
+
+function confirmAddFromThisWeek() {
+  const slots = window._weekPlanPickerSlots || [];
+  const sel = window._weekPlanPickerSelections || new Set();
+  if (sel.size === 0) return;
+
+  const aggregated = {};
+
+  for (const idx of sel) {
+    const slot = slots[idx];
+    if (!slot || !slot.recipe) continue;
+
+    const ings = recipeIngList(slot.recipe);
+    for (const ing of ings) {
+      if (!ing.name) continue;
+      const canonical = canonicalIngredientName(ing.name);
+      if (!canonical) continue;
+
+      const parsedQty = _parseQtyToNumber(ing.qty);
+      const unit = (ing.unit || '').trim().toLowerCase();
+      const category = mapToGroceryCategory(ing.group || 'Other');
+
+      if (!aggregated[canonical]) {
+        aggregated[canonical] = {
+          name: ing.name,
+          qty: parsedQty,
+          unit: unit,
+          category: category,
+          mealNames: slot.recipe.title ? [slot.recipe.title] : [],
+          unitsCompatible: true
+        };
+      } else {
+        const a = aggregated[canonical];
+        if (a.unit === unit) {
+          if (parsedQty != null && a.qty != null) a.qty += parsedQty;
+          else if (parsedQty != null && a.qty == null) a.qty = parsedQty;
+        } else {
+          a.unitsCompatible = false;
+        }
+        if (slot.recipe.title && !a.mealNames.includes(slot.recipe.title)) {
+          a.mealNames.push(slot.recipe.title);
+        }
+      }
+    }
+  }
+
+  const list = getSmartGroceryList();
+  let added = 0;
+  let updated = 0;
+
+  for (const canonical of Object.keys(aggregated)) {
+    const item = aggregated[canonical];
+    const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
+
+    if (existing) {
+      const existingUnit = (existing.unit || '').trim().toLowerCase();
+      const existingQty = _parseQtyToNumber(existing.qty);
+      if (item.unitsCompatible && existingUnit === item.unit && existingQty != null && item.qty != null) {
+        existing.qty = _formatQty(existingQty + item.qty);
+      } else if (item.qty != null && existingQty == null && (existingUnit === item.unit || !existingUnit)) {
+        existing.qty = _formatQty(item.qty);
+        if (!existingUnit && item.unit) existing.unit = item.unit;
+      }
+      const sm = existing.sourceMeals || [];
+      item.mealNames.forEach(m => { if (m && !sm.includes(m)) sm.push(m); });
+      existing.sourceMeals = sm;
+      updated++;
+    } else {
+      list.push({
+        id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + added,
+        name: toTitleCase(item.name),
+        category: item.category,
+        qty: item.qty != null ? _formatQty(item.qty) : '',
+        unit: item.unit || '',
+        checked: false,
+        manual: false,
+        sourceMeals: item.mealNames.filter(Boolean),
+        store: getLastSelectedStore() || '',
+        addedAt: Date.now()
+      });
+      added++;
+    }
+  }
+
+  saveSmartGroceryList(list);
+  closeModal();
+
+  const msg = added > 0 && updated > 0
+    ? `${added} added, ${updated} updated`
+    : added > 0
+      ? `${added} ingredient${added !== 1 ? 's' : ''} added`
+      : updated > 0
+        ? `${updated} ingredient${updated !== 1 ? 's' : ''} updated`
+        : 'No new ingredients';
+  showToast(msg, 'success');
+  if (typeof render === 'function') render();
 }
 
 function init() {

@@ -469,42 +469,6 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
   margin-bottom: 12px;
 }
 
-/* ===== Shared Swap / Lock buttons (reused by Manage view) ===== */
-.week-plan-swap-btn,
-.week-plan-lock-btn {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 5px 12px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-  font-family: inherit;
-}
-
-.week-plan-swap-btn {
-  background: transparent;
-  border: 1px solid var(--text-tertiary, #5c5c66);
-  color: var(--text-secondary, #8e8e93);
-}
-
-.week-plan-lock-btn {
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.1);
-  color: var(--text-secondary, #8e8e93);
-}
-
-.week-plan-lock-btn.is-locked {
-  background: rgba(50,215,75,0.15);
-  border-color: var(--success, #32d74b);
-  color: var(--success, #32d74b);
-}
-
-.week-plan-swap-btn:active,
-.week-plan-lock-btn:active {
-  transform: scale(0.95);
-}
-
 /* ===== Manage View (week-level) ===== */
 .manage-container {
   display: flex;
@@ -605,132 +569,56 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
   overflow-y: auto;
 }
 
-.manage-meal-group {
-  margin-bottom: 18px;
+.manage-card-grid {
+  padding: 0;
+  margin-bottom: 4px;
 }
 
-.manage-meal-group-header {
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-secondary, #8e8e93);
-  margin-bottom: 8px;
-  padding: 0 2px;
+.manage-card.is-locked {
+  outline: 1px solid rgba(50,215,75,0.45);
 }
 
-.manage-meal-group-body {
-  background: var(--bg-card, #1a1a24);
-  border-radius: 14px;
-  overflow: hidden;
-}
-
-.manage-slot-row {
-  display: grid;
-  grid-template-columns: 56px 56px 1fr auto;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(255,255,255,0.04);
-}
-
-.manage-slot-row:last-child {
-  border-bottom: none;
-}
-
-.manage-slot-row.clickable {
-  cursor: pointer;
-}
-
-.manage-slot-row.locked {
-  background: rgba(50,215,75,0.04);
-}
-
-.manage-slot-row.is-today .manage-slot-day {
-  color: var(--accent, #e85d5d);
-}
-
-.manage-slot-day {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary, #8e8e93);
-}
-
-.manage-today-dot {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
+.manage-card.is-today .wp-card-meal-label {
   background: var(--accent, #e85d5d);
-  margin-left: 2px;
-  vertical-align: middle;
 }
 
-.manage-slot-thumb {
-  position: relative;
-  width: 56px;
-  height: 56px;
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--bg-elevated, #242432);
-}
-
-.manage-slot-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.manage-thumb-placeholder {
-  width: 100%;
-  height: 100%;
-}
-
-.manage-lock-badge {
+.manage-card-actions {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 16px;
-  height: 16px;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 4px;
+  z-index: 2;
+}
+
+.manage-card-icon-btn {
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  background: var(--success, #32d74b);
-  color: white;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: none;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
+  color: white;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.15s ease;
 }
 
-.manage-slot-info {
-  min-width: 0;
+.manage-card-icon-btn:active {
+  transform: scale(0.92);
 }
 
-.manage-slot-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.manage-slot-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary, #f5f5f7);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-}
-
-.manage-similar-caption {
-  font-size: 11px;
-  color: var(--text-tertiary, #5c5c66);
-  margin-top: 2px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.manage-card-icon-btn.is-locked {
+  background: var(--success, #32d74b);
+  color: white;
 }
 
 .manage-takeout-tag {
+  display: inline-block;
   font-size: 9px;
   font-weight: 700;
   text-transform: uppercase;
@@ -739,13 +627,7 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
   background: rgba(232,93,93,0.14);
   padding: 2px 6px;
   border-radius: 5px;
-  flex-shrink: 0;
-}
-
-.manage-slot-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
+  margin-top: 6px;
 }
 
 /* ===== Manage modals ===== */

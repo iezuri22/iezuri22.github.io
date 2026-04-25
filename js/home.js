@@ -3026,6 +3026,7 @@ function renderManageView() {
         <div class="manage-header-actions">
           <button class="manage-action-btn" onclick="showAddManualRecipeModal()">+ Add Manual Recipe</button>
           <button class="manage-action-btn" onclick="showAddTakeoutModal()">+ Add Takeout</button>
+          <button class="manage-action-btn" onclick="showAddComboModal()">+ Add Combo</button>
         </div>
       </div>
 
@@ -3035,36 +3036,29 @@ function renderManageView() {
             <div style="color: ${CONFIG.text_muted}; font-size: 14px; margin-bottom: 16px;">No plan for this week yet.</div>
             <button onclick="generateWeekPlan(false, '${weekStart}'); render();" style="background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 10px 24px; border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer;">Generate Plan</button>
           </div>
-        ` : ['breakfast', 'lunch', 'dinner'].map(mealType =>
-          renderManageMealGroup(plan, weekDates, mealType, todayStr)
-        ).join('')}
+        ` : `
+          <div class="week-plan-grid manage-card-grid">
+            ${(() => {
+              const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
+              const cards = [];
+              for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+                for (const dateStr of weekDates) {
+                  const slot = plan?.days?.[dateStr]?.[mealType];
+                  const entry = slot?.options?.[0];
+                  cards.push(renderManageSlotCard(entry, dateStr, mealType, 0, dateStr === todayStr, mealLabels[mealType]));
+                }
+              }
+              return cards.join('');
+            })()}
+          </div>
+        `}
       </div>
     </div>
   `;
 }
 
-function renderManageMealGroup(plan, weekDates, mealType, todayStr) {
-  const mealLabels = { breakfast: 'Breakfast', lunch: 'Lunch', dinner: 'Dinner' };
-  return `
-    <div class="manage-meal-group">
-      <div class="manage-meal-group-header">${mealLabels[mealType]}</div>
-      <div class="manage-meal-group-body">
-        ${weekDates.map(dateStr => {
-          const slot = plan?.days?.[dateStr]?.[mealType];
-          const entry = slot?.options?.[0];
-          return renderManageSlotRow(entry, dateStr, mealType, 0, dateStr === todayStr);
-        }).join('')}
-      </div>
-    </div>
-  `;
-}
-
-function renderManageSlotRow(slotEntry, dateStr, mealType, optionIndex, isToday) {
-  const d = new Date(dateStr + 'T12:00:00');
-  const dayLabel = MANAGE_DAY_ABBRS[d.getDay()] + ' ' + d.getDate();
-
+function renderManageSlotCard(slotEntry, dateStr, mealType, optionIndex, isToday, mealLabel) {
   let title = '';
-  let caption = '';
   let img = '';
   let tag = '';
   let recipeId = null;
@@ -3073,18 +3067,13 @@ function renderManageSlotRow(slotEntry, dateStr, mealType, optionIndex, isToday)
   const source = slotEntry?.source || 'recipe';
 
   if (!slotEntry) {
-    title = 'Empty slot';
+    title = 'Empty';
   } else if (source === 'takeout') {
-    title = slotEntry.manualName || 'Takeout';
-    if (slotEntry.restaurantName) caption = slotEntry.restaurantName;
+    title = slotEntry.manualName || slotEntry.restaurantName || 'Takeout';
     tag = 'Takeout';
   } else if (source === 'manual') {
     title = slotEntry.manualName || 'Manual recipe';
     img = slotEntry.imageUrl || '';
-    if (slotEntry.similarToRecipeId) {
-      const similar = getRecipeById(slotEntry.similarToRecipeId);
-      if (similar) caption = 'Similar to ' + similar.title;
-    }
   } else if (slotEntry.type === 'combo') {
     const combo = (state.combos || []).find(c => c.id === slotEntry.comboId);
     title = combo?.name || 'Combo';
@@ -3100,30 +3089,34 @@ function renderManageSlotRow(slotEntry, dateStr, mealType, optionIndex, isToday)
     }
   }
 
-  const rowClickAttr = clickable ? `onclick="goToRecipe('${recipeId}')"` : '';
+  const cardClickAttr = clickable ? `onclick="goToRecipe('${recipeId}')"` : '';
+  const placeholderObj = { title: title || mealType };
+  const lockSvg = locked
+    ? '<svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>'
+    : '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 12.75v6.75a2.25 2.25 0 002.25 2.25z"/></svg>';
 
   return `
-    <div class="manage-slot-row ${locked ? 'locked' : ''} ${clickable ? 'clickable' : ''} ${isToday ? 'is-today' : ''}" ${rowClickAttr}>
-      <div class="manage-slot-day">${dayLabel}${isToday ? ' <span class="manage-today-dot"></span>' : ''}</div>
-      <div class="manage-slot-thumb">
+    <div class="recipe-carousel-card manage-card ${locked ? 'is-locked' : ''} ${isToday ? 'is-today' : ''}" ${cardClickAttr}>
+      <div class="carousel-card-media">
         ${img
-          ? `<img src="${esc(img)}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="manage-thumb-placeholder" style="display:none;background:${getPlaceholderGradient({title})}"></div>`
-          : `<div class="manage-thumb-placeholder" style="background:${getPlaceholderGradient({title: title || mealType})}"></div>`
+          ? `<img loading="lazy" src="${esc(img)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div style="display:none;width:100%;height:100%;background:${getPlaceholderGradient(placeholderObj)};align-items:center;justify-content:center;"></div>`
+          : `<div style="width:100%;height:100%;background:${getPlaceholderGradient(placeholderObj)};"></div>`
         }
-        ${locked ? `<span class="manage-lock-badge" aria-label="locked"><svg width="10" height="10" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg></span>` : ''}
-      </div>
-      <div class="manage-slot-info">
-        <div class="manage-slot-title-row">
-          <div class="manage-slot-title">${esc(title)}</div>
-          ${tag ? `<span class="manage-takeout-tag">${esc(tag)}</span>` : ''}
+        <span class="wp-card-meal-label">${mealLabel}</span>
+        <div class="manage-card-actions">
+          <button onclick="event.stopPropagation(); lockWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}); render();"
+            class="manage-card-icon-btn ${locked ? 'is-locked' : ''}" aria-label="${locked ? 'Unlock' : 'Lock'}">
+            ${lockSvg}
+          </button>
+          <button onclick="event.stopPropagation(); handleWeekPlanSwap('${dateStr}', '${mealType}', ${optionIndex})"
+            class="manage-card-icon-btn" aria-label="Swap">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
+          </button>
         </div>
-        ${caption ? `<div class="manage-similar-caption">${esc(caption)}</div>` : ''}
       </div>
-      <div class="manage-slot-actions">
-        <button onclick="event.stopPropagation(); handleWeekPlanSwap('${dateStr}', '${mealType}', ${optionIndex})" class="week-plan-swap-btn">Swap</button>
-        <button onclick="event.stopPropagation(); lockWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}); render();" class="week-plan-lock-btn ${locked ? 'is-locked' : ''}">
-          ${locked ? 'Unlock' : 'Lock'}
-        </button>
+      <div class="carousel-card-info">
+        <h3 class="card-title">${esc(title)}</h3>
+        ${tag ? `<span class="manage-takeout-tag">${esc(tag)}</span>` : ''}
       </div>
     </div>
   `;
@@ -3318,6 +3311,122 @@ async function submitAddTakeout() {
   render();
 }
 
+function showAddComboModal() {
+  const modalId = 'add-combo-modal';
+  const combos = state.combos || [];
+
+  const cardsHtml = combos.length === 0
+    ? `<div style="padding: 32px 16px; text-align: center; color: ${CONFIG.text_muted}; font-size: 14px;">No saved combos yet. Build a plate in Components and save it as a combo.</div>`
+    : `<div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;">
+        ${combos.map(combo => {
+          const slots = combo.slots || [];
+          const compNames = slots.map(s => {
+            const c = (state.components || []).find(x => x.id === s.componentId);
+            return c?.name || '';
+          }).filter(Boolean);
+          const subtitle = compNames.slice(0, 3).join(' + ') + (compNames.length > 3 ? '…' : '');
+          const placeholderObj = { title: combo.name || 'Combo' };
+          const mealBadge = combo.mealType
+            ? `<span style="position:absolute;top:8px;left:8px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.3px;color:white;background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);padding:3px 8px;border-radius:6px;">${esc(combo.mealType)}</span>`
+            : '';
+          return `
+            <div onclick="_pickComboForAdd('${combo.id}')"
+              style="border-radius:14px;overflow:hidden;cursor:pointer;background:${CONFIG.surface_color};-webkit-tap-highlight-color:transparent;">
+              <div style="position:relative;aspect-ratio:4/3;background:${getPlaceholderGradient(placeholderObj)};"></div>
+              ${mealBadge}
+              <div style="padding:8px 10px 10px;">
+                <h3 style="font-size:13px;font-weight:600;color:${CONFIG.text_color};margin:0 0 2px;display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;line-height:1.3;">${esc(combo.name || 'Combo')}</h3>
+                ${subtitle ? `<div style="font-size:11px;color:${CONFIG.text_muted};display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;">${esc(subtitle)}</div>` : ''}
+              </div>
+            </div>`;
+        }).join('')}
+      </div>`;
+
+  const html = `
+    <div id="${modalId}" class="manage-modal-backdrop" onclick="if(event.target.id==='${modalId}') this.remove();">
+      <div class="manage-modal">
+        <div class="manage-modal-header">
+          <div class="manage-modal-title">Add Combo</div>
+          <button class="manage-modal-close" onclick="document.getElementById('${modalId}')?.remove();">&#10005;</button>
+        </div>
+        <div class="manage-modal-body" id="add-combo-body">
+          <div id="add-combo-picker">${cardsHtml}</div>
+        </div>
+      </div>
+    </div>
+  `;
+  document.getElementById(modalId)?.remove();
+  const container = document.createElement('div');
+  container.innerHTML = html;
+  document.body.appendChild(container.firstElementChild);
+}
+
+function _pickComboForAdd(comboId) {
+  const combo = (state.combos || []).find(c => c.id === comboId);
+  if (!combo) return;
+  const body = document.getElementById('add-combo-body');
+  if (!body) return;
+  const defaultMeal = combo.mealType || 'dinner';
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <button onclick="showAddComboModal()" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:4px;display:flex;align-items:center;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+      </button>
+      <div style="font-size:14px;font-weight:600;color:${CONFIG.text_color};">${esc(combo.name || 'Combo')}</div>
+    </div>
+    <input type="hidden" id="combo-pick-id" value="${esc(comboId)}" />
+
+    <label class="manage-field-label">Meal <span class="req">*</span></label>
+    <select id="combo-meal" class="manage-input">
+      <option value="breakfast" ${defaultMeal==='breakfast'?'selected':''}>Breakfast</option>
+      <option value="lunch" ${defaultMeal==='lunch'?'selected':''}>Lunch</option>
+      <option value="dinner" ${defaultMeal==='dinner'?'selected':''}>Dinner</option>
+    </select>
+
+    <label class="manage-field-label">Day <span class="req">*</span></label>
+    <select id="combo-day" class="manage-input">${_manageWeekDayOptions()}</select>
+
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button class="manage-btn-secondary" onclick="document.getElementById('add-combo-modal')?.remove();" style="flex:1;">Cancel</button>
+      <button class="manage-btn-primary" onclick="submitAddCombo()" style="flex:2;">Add to Plan</button>
+    </div>
+  `;
+}
+
+async function submitAddCombo() {
+  const comboId = document.getElementById('combo-pick-id')?.value;
+  const mealType = document.getElementById('combo-meal')?.value;
+  const dateStr = document.getElementById('combo-day')?.value;
+  if (!comboId) { showToast('Pick a combo', 'error'); return; }
+  if (!mealType || !dateStr) { showToast('Meal and day are required', 'error'); return; }
+
+  await saveComboSlot({ comboId, mealType, dateStr });
+  document.getElementById('add-combo-modal')?.remove();
+  showToast('Combo added', 'success');
+  render();
+}
+
+async function saveComboSlot({ comboId, mealType, dateStr }) {
+  const dd = new Date(dateStr + 'T12:00:00');
+  const sun = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() - dd.getDay());
+  const ws = _localDateStr(sun);
+  let plan = getWeekPlan(ws);
+  if (!plan) plan = generateWeekPlan(false, ws);
+  if (!plan?.days) return;
+
+  if (!plan.days[dateStr]) plan.days[dateStr] = {};
+  if (!plan.days[dateStr][mealType]) plan.days[dateStr][mealType] = { options: [] };
+  const slot = plan.days[dateStr][mealType];
+  const wasLocked = !!slot.options?.[0]?.locked;
+  slot.options[0] = {
+    type: 'combo',
+    source: 'combo',
+    comboId: comboId,
+    locked: wasLocked
+  };
+  saveWeekPlanPersist(plan);
+}
+
 async function saveManualSlot({ name, mealType, dateStr, imageUrl, similarToRecipeId }) {
   const dd = new Date(dateStr + 'T12:00:00');
   const sun = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() - dd.getDay());
@@ -3402,51 +3511,81 @@ function _renderSwapModal(filter) {
   if (!ctx) return;
   const { dateStr, mealType, optionIndex, allAlternatives, cookedIds, mealLabel } = ctx;
 
-  let filtered = allAlternatives;
-  if (filter === 'saved') {
-    filtered = allAlternatives.filter(r => typeof isRecipeSaved === 'function' && isRecipeSaved(r.__backendId || r.id));
-  } else if (filter === 'cooked') {
-    filtered = allAlternatives.filter(r => cookedIds.has(r.__backendId || r.id));
-  } else if (filter === 'manual') {
-    filtered = allAlternatives.filter(r => (r.sourceType || 'user') === 'user');
-  } else if (filter === 'chefiq') {
-    filtered = allAlternatives.filter(r => r.sourceType === 'chefiq');
-  }
-
-  // Shuffle for variety
-  filtered = [...filtered].sort(() => Math.random() - 0.5);
-
   let cardsHtml = '';
-  if (filtered.length === 0) {
-    const filterLabel = filter === 'all' ? '' : filter === 'saved' ? ' saved' : filter === 'cooked' ? ' cooked' : filter === 'manual' ? ' manual' : ' Chef IQ';
-    cardsHtml = `<div style="text-align: center; color: ${CONFIG.text_muted}; padding: 32px 16px;">No${filterLabel} recipes available for ${mealLabel.toLowerCase()}</div>`;
-  } else {
-    filtered.forEach(recipe => {
-      const id = recipe.__backendId || recipe.id;
-      const img = recipeThumb(recipe);
-      const title = recipe.title || 'Recipe';
-      const sourceTag = recipe.sourceType === 'chefiq' ? 'ChefIQ' : recipe.sourceType === 'imported' ? 'Imported' : recipe.sourceType === 'claude' ? 'Claude' : '';
-      cardsHtml += `
-        <div onclick="swapWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}, '${id}'); document.getElementById('week-swap-modal')?.remove(); render();"
-          style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid ${CONFIG.divider_color};">
-          <div style="width: 52px; height: 52px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated};">
-            ${img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${getPlaceholderGradient(recipe)}"></div>`}
-          </div>
-          <div style="flex: 1; min-width: 0;">
-            <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(title)}</div>
-            <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
-              ${recipe.cookTime ? `<span style="font-size: 12px; color: ${CONFIG.text_muted};">${esc(recipe.cookTime)}</span>` : ''}
-              ${sourceTag ? `<span style="font-size: 10px; font-weight: 600; color: ${CONFIG.primary_action_color}; background: rgba(232,93,93,0.12); padding: 1px 6px; border-radius: 4px;">${sourceTag}</span>` : ''}
+
+  if (filter === 'combos') {
+    const combos = state.combos || [];
+    if (combos.length === 0) {
+      cardsHtml = `<div style="text-align: center; color: ${CONFIG.text_muted}; padding: 32px 16px;">No saved combos yet. Build a plate in Components and save it as a combo.</div>`;
+    } else {
+      combos.forEach(combo => {
+        const compNames = (combo.slots || []).map(s => {
+          const c = (state.components || []).find(x => x.id === s.componentId);
+          return c?.name || '';
+        }).filter(Boolean);
+        const subtitle = compNames.slice(0, 3).join(' + ') + (compNames.length > 3 ? '…' : '');
+        const placeholderObj = { title: combo.name || 'Combo' };
+        cardsHtml += `
+          <div onclick="swapWeekMealSlotWithCombo('${dateStr}', '${mealType}', ${optionIndex}, '${combo.id}'); document.getElementById('week-swap-modal')?.remove(); window._swapCtx = null; render();"
+            style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid ${CONFIG.divider_color};">
+            <div style="width: 52px; height: 52px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: ${getPlaceholderGradient(placeholderObj)};"></div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(combo.name || 'Combo')}</div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                ${subtitle ? `<span style="font-size: 12px; color: ${CONFIG.text_muted}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(subtitle)}</span>` : ''}
+                <span style="font-size: 10px; font-weight: 600; color: ${CONFIG.primary_action_color}; background: rgba(232,93,93,0.12); padding: 1px 6px; border-radius: 4px;">Combo</span>
+              </div>
             </div>
-          </div>
-        </div>`;
-    });
+          </div>`;
+      });
+    }
+  } else {
+    let filtered = allAlternatives;
+    if (filter === 'saved') {
+      filtered = allAlternatives.filter(r => typeof isRecipeSaved === 'function' && isRecipeSaved(r.__backendId || r.id));
+    } else if (filter === 'cooked') {
+      filtered = allAlternatives.filter(r => cookedIds.has(r.__backendId || r.id));
+    } else if (filter === 'manual') {
+      filtered = allAlternatives.filter(r => (r.sourceType || 'user') === 'user');
+    } else if (filter === 'chefiq') {
+      filtered = allAlternatives.filter(r => r.sourceType === 'chefiq');
+    }
+
+    // Shuffle for variety
+    filtered = [...filtered].sort(() => Math.random() - 0.5);
+
+    if (filtered.length === 0) {
+      const filterLabel = filter === 'all' ? '' : filter === 'saved' ? ' saved' : filter === 'cooked' ? ' cooked' : filter === 'manual' ? ' manual' : ' Chef IQ';
+      cardsHtml = `<div style="text-align: center; color: ${CONFIG.text_muted}; padding: 32px 16px;">No${filterLabel} recipes available for ${mealLabel.toLowerCase()}</div>`;
+    } else {
+      filtered.forEach(recipe => {
+        const id = recipe.__backendId || recipe.id;
+        const img = recipeThumb(recipe);
+        const title = recipe.title || 'Recipe';
+        const sourceTag = recipe.sourceType === 'chefiq' ? 'ChefIQ' : recipe.sourceType === 'imported' ? 'Imported' : recipe.sourceType === 'claude' ? 'Claude' : '';
+        cardsHtml += `
+          <div onclick="swapWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}, '${id}'); document.getElementById('week-swap-modal')?.remove(); render();"
+            style="display: flex; align-items: center; gap: 12px; padding: 10px 16px; cursor: pointer; border-bottom: 1px solid ${CONFIG.divider_color};">
+            <div style="width: 52px; height: 52px; border-radius: 10px; overflow: hidden; flex-shrink: 0; background: ${CONFIG.surface_elevated};">
+              ${img ? `<img src="${esc(img)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy" />` : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:${getPlaceholderGradient(recipe)}"></div>`}
+            </div>
+            <div style="flex: 1; min-width: 0;">
+              <div style="font-size: 14px; font-weight: 600; color: ${CONFIG.text_color}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(title)}</div>
+              <div style="display: flex; align-items: center; gap: 6px; margin-top: 2px;">
+                ${recipe.cookTime ? `<span style="font-size: 12px; color: ${CONFIG.text_muted};">${esc(recipe.cookTime)}</span>` : ''}
+                ${sourceTag ? `<span style="font-size: 10px; font-weight: 600; color: ${CONFIG.primary_action_color}; background: rgba(232,93,93,0.12); padding: 1px 6px; border-radius: 4px;">${sourceTag}</span>` : ''}
+              </div>
+            </div>
+          </div>`;
+      });
+    }
   }
 
   const filters = [
     { id: 'all', label: 'All' },
     { id: 'saved', label: 'Saved' },
     { id: 'cooked', label: 'Cooked' },
+    { id: 'combos', label: 'Combos' },
     { id: 'manual', label: 'Manual' },
     { id: 'chefiq', label: 'Chef IQ' }
   ];
@@ -3467,7 +3606,7 @@ function _renderSwapModal(filter) {
           <div style="display: flex; justify-content: space-between; align-items: center;">
             <div>
               <div style="font-size: 17px; font-weight: 700; color: ${CONFIG.text_color};">Swap ${mealLabel}</div>
-              <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Pick a different recipe</div>
+              <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">Pick a different recipe or combo</div>
             </div>
             <button onclick="document.getElementById('week-swap-modal')?.remove(); window._swapCtx = null;" style="background: none; border: none; cursor: pointer; color: ${CONFIG.text_muted}; font-size: 22px; padding: 4px;">&#10005;</button>
           </div>

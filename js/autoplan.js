@@ -1651,6 +1651,24 @@ function swapWeekMealSlot(dateStr, mealType, optionIndex, newRecipeId) {
 }
 
 /**
+ * Swap a specific option in the week plan with a saved Combo.
+ */
+function swapWeekMealSlotWithCombo(dateStr, mealType, optionIndex, comboId) {
+  const dd = new Date(dateStr + 'T12:00:00');
+  const sun = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() - dd.getDay());
+  const ws = _localDateStr(sun);
+  const plan = getWeekPlan(ws);
+  if (!plan?.days?.[dateStr]?.[mealType]?.options) return;
+  plan.days[dateStr][mealType].options[optionIndex] = {
+    type: 'combo',
+    source: 'combo',
+    comboId,
+    locked: false
+  };
+  saveWeekPlanPersist(plan);
+}
+
+/**
  * Regenerate the week plan, preserving locked slots.
  */
 function regenerateWeekPlan(weekStartOverride) {
