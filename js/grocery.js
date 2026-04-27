@@ -470,6 +470,10 @@ function renderGroceryList() {
             <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
             <span>From Meal</span>
           </button>
+          <button onclick="showIngredientLibraryModal()" class="gro-quick-btn card-press">
+            <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
+            <span>Library</span>
+          </button>
           <button onclick="showRecurringItemsModal()" class="gro-quick-btn card-press">
             <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992"/></svg>
             <span>Recurring</span>
@@ -678,14 +682,8 @@ function _renderGroceryRow(item, isChecked) {
           </div>
           <div class="gro-item-actions">
             ${!isChecked ? `
-              <button class="gro-item-store-btn" onclick="event.stopPropagation();showStorePickerForItem('${escapedId}')" title="Set store">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
-              </button>
-              <button class="gro-item-store-btn" onclick="event.stopPropagation();showEditGroceryItemModal('${escapedId}')" title="Edit / allergic">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
-              </button>
-              <button class="gro-item-delete-btn" onclick="event.stopPropagation();removeSmartGroceryItem('${escapedId}')">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+              <button class="gro-item-more-btn" onclick="event.stopPropagation();showGroceryItemActions('${escapedId}')" aria-label="More actions">
+                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>
               </button>
             ` : ''}
           </div>
@@ -1267,7 +1265,7 @@ async function addManualGroceryItem() {
         return;
       }
 
-      const itemName = cleanIngredientName(rawName) || rawName;
+      const itemName = displayIngredientName(rawName) || rawName;
       const ingredientKey = normalizeIngredient(itemName);
 
       const manualSelId = `mealSel_manual_${Date.now()}`;
@@ -1298,6 +1296,39 @@ async function addManualGroceryItem() {
         render();
       }
     }
+
+// Action sheet that consolidates per-item grocery actions (store, edit,
+// delete) into a single menu so the row stays compact and the item name has
+// room to breathe.
+function showGroceryItemActions(itemId) {
+  const item = getSmartGroceryList().find(i => i.id === itemId);
+  if (!item) return;
+  const eid = escJs(itemId);
+  const storeLabel = item.store ? `Store: ${esc(item.store)}` : 'Set store';
+  openModal(`
+    <div style="color:${CONFIG.text_color};">
+      <div style="font-size:15px;font-weight:600;margin:0 0 4px;line-height:1.3;word-break:break-word;">${esc(item.name)}</div>
+      <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:14px;">${esc(item.category || 'Other')}${item.qty ? ' · ' + esc(item.qty) + (item.unit ? ' ' + esc(item.unit) : '') : ''}</div>
+      <button onclick="closeModal();showStorePickerForItem('${eid}')"
+        style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:${CONFIG.surface_color};border:none;border-radius:12px;color:${CONFIG.text_color};font-size:14px;cursor:pointer;margin-bottom:6px;text-align:left;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
+        <span>${storeLabel}</span>
+      </button>
+      <button onclick="closeModal();showEditGroceryItemModal('${eid}')"
+        style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:${CONFIG.surface_color};border:none;border-radius:12px;color:${CONFIG.text_color};font-size:14px;cursor:pointer;margin-bottom:6px;text-align:left;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+        <span>Edit / allergic</span>
+      </button>
+      <button onclick="closeModal();removeSmartGroceryItem('${eid}')"
+        style="display:flex;align-items:center;gap:12px;width:100%;padding:14px;background:${CONFIG.surface_color};border:none;border-radius:12px;color:${CONFIG.danger_color};font-size:14px;cursor:pointer;margin-bottom:10px;text-align:left;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+        <span>Remove from list</span>
+      </button>
+      <button onclick="closeModal()"
+        style="width:100%;padding:12px;background:${CONFIG.surface_elevated};border:none;border-radius:12px;color:${CONFIG.text_muted};font-size:14px;cursor:pointer;">Cancel</button>
+    </div>
+  `);
+}
 
 // Edit a grocery item (rename) and optionally remove the ingredient from the
 // source recipe(s) it was pulled from. Useful when the user develops an
@@ -1936,12 +1967,14 @@ function _renderIngredientReviewStep() {
   const totalChecked = meals.reduce((sum, m) => sum + m.ingredients.filter(i => i.checked).length, 0);
 
   const modalHtml = `<div style="color:${CONFIG.text_color};max-height:85vh;display:flex;flex-direction:column;">
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;position:sticky;top:0;background:${CONFIG.surface_elevated};z-index:2;padding:4px 0 8px;">
       <button onclick="_renderMealSelectionStep()" aria-label="Back"
-        style="background:none;border:none;color:${CONFIG.text_color};cursor:pointer;padding:4px 6px;display:flex;align-items:center;border-radius:8px;">
+        style="background:none;border:none;color:${CONFIG.text_color};cursor:pointer;padding:4px 6px;display:flex;align-items:center;border-radius:8px;flex-shrink:0;">
         <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
       </button>
-      <h2 style="font-size:17px;font-weight:600;margin:0;">Review ingredients</h2>
+      <h2 style="font-size:16px;font-weight:600;margin:0;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Review ingredients</h2>
+      <button id="ingredientReviewConfirm" onclick="confirmAddFromThisWeek()"
+        style="padding:9px 14px;min-height:36px;background:${totalChecked === 0 ? CONFIG.surface_color : CONFIG.primary_action_color};color:${totalChecked === 0 ? CONFIG.text_muted : 'white'};border:none;border-radius:999px;cursor:${totalChecked === 0 ? 'default' : 'pointer'};font-size:13px;font-weight:600;flex-shrink:0;white-space:nowrap;">${totalChecked === 0 ? 'Add' : `Add (${totalChecked})`}</button>
     </div>
     <div style="font-size:12px;color:${CONFIG.text_muted};margin:0 0 12px 30px;">Uncheck items you don't need (already at home, etc.).</div>
 
@@ -1978,10 +2011,6 @@ function _renderIngredientReviewStep() {
       `).join('')}
     </div>
 
-    <div style="display:flex;gap:8px;margin-top:12px;flex-shrink:0;">
-      <button onclick="_renderMealSelectionStep()" style="padding:10px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;flex:1;font-size:14px;">Back</button>
-      <button id="ingredientReviewConfirm" onclick="confirmAddFromThisWeek()" style="padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;cursor:pointer;flex:2;font-size:14px;font-weight:600;">${totalChecked === 0 ? 'Select at least one' : `Add to Grocery List (${totalChecked})`}</button>
-    </div>
   </div>`;
 
   openModal(modalHtml);
@@ -1994,9 +2023,10 @@ function _updateIngredientReviewConfirm() {
   const btn = document.getElementById('ingredientReviewConfirm');
   if (!btn) return;
   btn.disabled = total === 0;
-  btn.style.opacity = total === 0 ? '0.5' : '1';
-  btn.style.cursor = total === 0 ? 'not-allowed' : 'pointer';
-  btn.textContent = total === 0 ? 'Select at least one' : `Add to Grocery List (${total})`;
+  btn.style.background = total === 0 ? CONFIG.surface_color : CONFIG.primary_action_color;
+  btn.style.color = total === 0 ? CONFIG.text_muted : 'white';
+  btn.style.cursor = total === 0 ? 'default' : 'pointer';
+  btn.textContent = total === 0 ? 'Add' : `Add (${total})`;
 }
 
 // Mutate the row's DOM in place so we don't re-render the whole modal — that
@@ -2084,7 +2114,7 @@ function confirmAddFromThisWeek() {
 
       if (!aggregated[ing.canonical]) {
         aggregated[ing.canonical] = {
-          name: cleanIngredientName(ing.name) || ing.name,
+          name: displayIngredientName(ing.name) || ing.name,
           qty: parsedQty,
           unit,
           category: ing.category,
@@ -2172,6 +2202,594 @@ function confirmAddFromThisWeek() {
         : 'No new ingredients';
   showToast(msg, 'success');
   if (typeof render === 'function') render();
+}
+
+// ============================================================
+// INGREDIENT LIBRARY (deduplicated master list across all recipes)
+// ============================================================
+
+const LIB_ALIASES_KEY = 'ingredientLibraryAliases_v1';
+const LIB_CUSTOM_KEY = 'ingredientLibraryCustom_v1';
+const LIB_MASTER_NAMES_KEY = 'ingredientLibraryMasterNames_v1';
+
+function _libGetAliases() {
+  try { return JSON.parse(localStorage.getItem(LIB_ALIASES_KEY) || '{}') || {}; } catch { return {}; }
+}
+function _libSaveAliases(map) {
+  localStorage.setItem(LIB_ALIASES_KEY, JSON.stringify(map || {}));
+}
+function _libGetMasterNames() {
+  try { return JSON.parse(localStorage.getItem(LIB_MASTER_NAMES_KEY) || '{}') || {}; } catch { return {}; }
+}
+function _libSaveMasterNames(map) {
+  localStorage.setItem(LIB_MASTER_NAMES_KEY, JSON.stringify(map || {}));
+}
+function _libGetCustom() {
+  try { return JSON.parse(localStorage.getItem(LIB_CUSTOM_KEY) || '[]') || []; } catch { return []; }
+}
+function _libSaveCustom(list) {
+  localStorage.setItem(LIB_CUSTOM_KEY, JSON.stringify(list || []));
+}
+
+// Resolve a canonical name through the alias chain (a→b→c) so callers always
+// see the final master, even after multiple merges.
+function _libResolveCanonical(canonical, aliases) {
+  let cur = canonical;
+  const seen = new Set();
+  while (aliases[cur] && !seen.has(cur)) {
+    seen.add(cur);
+    cur = aliases[cur];
+  }
+  return cur;
+}
+
+// Build the deduplicated ingredient library:
+// {
+//   masterCanonical: {
+//     name, canonical, recipeIds:Set, recipeNames:Set,
+//     isCustom, mergedFrom: [{ canonical, name }], category, group
+//   }
+// }
+function buildIngredientLibrary() {
+  const aliases = _libGetAliases();
+  const masterNames = _libGetMasterNames();
+  const map = new Map();
+
+  function getOrCreate(masterCanon, displayName, group) {
+    if (!map.has(masterCanon)) {
+      map.set(masterCanon, {
+        name: masterNames[masterCanon] || displayName,
+        canonical: masterCanon,
+        recipeIds: new Set(),
+        recipeNames: new Set(),
+        isCustom: false,
+        mergedFrom: [],
+        group: group || 'Other'
+      });
+    } else if (masterNames[masterCanon]) {
+      // Always honor an explicit master name override
+      map.get(masterCanon).name = masterNames[masterCanon];
+    }
+    return map.get(masterCanon);
+  }
+
+  (state.recipes || []).forEach(r => {
+    if (!r || r.isDraft || r.isTip) return;
+    const ings = recipeIngList(r);
+    if (!ings.length) return;
+    ings.forEach(ing => {
+      const rawName = ing.name || '';
+      if (!rawName) return;
+      const canonical = canonicalIngredientName(rawName);
+      if (!canonical) return;
+      const masterCanon = _libResolveCanonical(canonical, aliases);
+      const display = toTitleCase(displayIngredientName(rawName) || rawName);
+      const entry = getOrCreate(masterCanon, display, ing.group);
+      if (r.id) entry.recipeIds.add(r.id);
+      if (r.title) entry.recipeNames.add(r.title);
+      // Prefer a non-custom group from a real recipe
+      if ((!entry.group || entry.group === 'Other') && ing.group) entry.group = ing.group;
+    });
+  });
+
+  // Add custom library items (manual additions from user)
+  _libGetCustom().forEach(c => {
+    const rawName = c.name || '';
+    if (!rawName) return;
+    const canonical = canonicalIngredientName(rawName);
+    if (!canonical) return;
+    const masterCanon = _libResolveCanonical(canonical, aliases);
+    const display = toTitleCase(displayIngredientName(rawName) || rawName);
+    const entry = getOrCreate(masterCanon, display, c.group || 'Other');
+    // Only flag as custom-only if no recipe contributed
+    if (entry.recipeIds.size === 0) entry.isCustom = true;
+  });
+
+  // Annotate mergedFrom on each master so the UI can show what was merged
+  Object.entries(aliases).forEach(([alias, master]) => {
+    const finalMaster = _libResolveCanonical(master, aliases);
+    if (!map.has(finalMaster)) return;
+    map.get(finalMaster).mergedFrom.push({
+      canonical: alias,
+      name: toTitleCase(alias)
+    });
+  });
+
+  return Array.from(map.values()).map(e => ({
+    ...e,
+    recipeNames: Array.from(e.recipeNames),
+    recipeIds: Array.from(e.recipeIds),
+    category: mapToGroceryCategory(e.group || 'Other')
+  })).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function _libIsOnGrocery(canonical) {
+  return getSmartGroceryList().some(i => canonicalIngredientName(i.name) === canonical);
+}
+
+function showIngredientLibraryModal() {
+  window._libView = 'list';
+  window._librarySearch = '';
+  window._libraryMergeSource = null;
+  const modalHtml = `
+    <div style="color:${CONFIG.text_color};max-height:85vh;display:flex;flex-direction:column;">
+      <div id="libModalHeader" style="flex-shrink:0;"></div>
+      <div id="libModalBody" style="overflow-y:auto;flex:1;margin:0 -12px;padding:0 12px;min-height:200px;"></div>
+      <div id="libModalFooter" style="flex-shrink:0;padding-top:10px;"></div>
+    </div>
+  `;
+  openModal(modalHtml);
+  _libRender();
+}
+
+function _libRender() {
+  const view = window._libView || 'list';
+  if (view === 'mergePicker') return _libRenderMergePicker();
+  if (view === 'manageMerges') return _libRenderManageMerges();
+  return _libRenderMainList();
+}
+
+function _libRenderMainList() {
+  const header = document.getElementById('libModalHeader');
+  const body = document.getElementById('libModalBody');
+  const footer = document.getElementById('libModalFooter');
+  if (!header || !body || !footer) return;
+
+  const aliases = _libGetAliases();
+  const aliasCount = Object.keys(aliases).length;
+
+  header.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;">
+      <h2 style="font-size:17px;font-weight:600;margin:0;">Ingredient Library</h2>
+      <button onclick="closeModal()" aria-label="Close"
+        style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:4px;">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+      <input id="libSearchInput" type="text" placeholder="Search ingredients..." value="${esc(window._librarySearch || '')}"
+        oninput="window._librarySearch=this.value;_libRenderListResults();"
+        style="flex:1;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;" />
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:${CONFIG.text_muted};">
+      <span>Tap an item to add to your grocery list.</span>
+      ${aliasCount > 0 ? `<button onclick="_libSetView('manageMerges')" style="background:none;border:none;color:${CONFIG.primary_action_color};cursor:pointer;padding:0;font-size:12px;text-decoration:underline;">Manage merges (${aliasCount})</button>` : ''}
+    </div>
+  `;
+
+  footer.innerHTML = `
+    <button onclick="closeModal()" style="width:100%;padding:10px;min-height:44px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;font-size:14px;">Done</button>
+  `;
+
+  _libRenderListResults();
+
+  setTimeout(() => {
+    const inp = document.getElementById('libSearchInput');
+    if (inp && document.activeElement !== inp && !window._librarySearch) inp.focus();
+  }, 50);
+}
+
+function _libRenderListResults() {
+  const body = document.getElementById('libModalBody');
+  if (!body) return;
+  const all = buildIngredientLibrary();
+  const q = (window._librarySearch || '').trim().toLowerCase();
+  const filtered = q ? all.filter(e =>
+    e.name.toLowerCase().includes(q) ||
+    e.mergedFrom.some(m => m.name.toLowerCase().includes(q)) ||
+    e.recipeNames.some(n => n.toLowerCase().includes(q))
+  ) : all;
+
+  // Manual add row appears when search has no exact match (case-insensitive)
+  const exactExists = q && all.some(e =>
+    e.name.toLowerCase() === q ||
+    canonicalIngredientName(e.name) === canonicalIngredientName(q)
+  );
+  const manualAddHtml = (q && !exactExists) ? `
+    <button onclick="_libAddCustomFromSearch()" class="lib-add-custom-row">
+      <div class="lib-add-custom-icon">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+      </div>
+      <div style="flex:1;text-align:left;">
+        <div style="font-size:14px;font-weight:600;color:${CONFIG.text_color};">Add "${esc(toTitleCase(q))}"</div>
+        <div style="font-size:12px;color:${CONFIG.text_muted};">Save to library and grocery list</div>
+      </div>
+    </button>
+  ` : '';
+
+  const emptyHtml = filtered.length === 0 && !manualAddHtml ? `
+    <div style="padding:32px 16px;text-align:center;color:${CONFIG.text_muted};">
+      <div style="font-size:14px;margin-bottom:6px;">No ingredients yet</div>
+      <div style="font-size:12px;">Add recipes with ingredients, or type a name above to add a custom item.</div>
+    </div>
+  ` : '';
+
+  const rowsHtml = filtered.map(e => _libRenderRow(e)).join('');
+
+  body.innerHTML = `
+    ${manualAddHtml}
+    ${emptyHtml}
+    <div class="lib-list">${rowsHtml}</div>
+    ${(!q && all.length > 0) ? `<div style="text-align:center;font-size:12px;color:${CONFIG.text_muted};padding:14px 0 4px;">${all.length} unique ingredient${all.length !== 1 ? 's' : ''}</div>` : ''}
+  `;
+}
+
+function _libRenderRow(entry) {
+  const onList = _libIsOnGrocery(entry.canonical);
+  const photo = findIngredientPhoto(entry.name);
+  const safeCanon = escJs(entry.canonical);
+  const recipeCount = entry.recipeNames.length;
+  let subtitle = '';
+  if (entry.isCustom && recipeCount === 0) {
+    subtitle = 'Custom item';
+  } else if (recipeCount === 1) {
+    subtitle = `In ${esc(entry.recipeNames[0])}`;
+  } else if (recipeCount > 1) {
+    subtitle = `In ${recipeCount} recipes`;
+  }
+  const mergedHtml = entry.mergedFrom.length > 0
+    ? `<div class="lib-row-merged">Merged: ${entry.mergedFrom.slice(0, 3).map(m => esc(m.name)).join(', ')}${entry.mergedFrom.length > 3 ? ` +${entry.mergedFrom.length - 3}` : ''}</div>`
+    : '';
+
+  return `
+    <div class="lib-row" data-lib-canonical="${esc(entry.canonical)}">
+      <div class="lib-row-photo">
+        ${photo
+          ? `<img src="${esc(photo)}" class="lib-row-img" />`
+          : `<div class="lib-row-img-placeholder"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg></div>`
+        }
+      </div>
+      <div class="lib-row-body" onclick="_libToggleAddToGrocery('${safeCanon}')">
+        <div class="lib-row-name">${esc(entry.name)}</div>
+        ${subtitle ? `<div class="lib-row-sub">${subtitle}</div>` : ''}
+        ${mergedHtml}
+      </div>
+      <button class="lib-row-action ${onList ? 'lib-row-action-on' : ''}" onclick="event.stopPropagation();_libToggleAddToGrocery('${safeCanon}')" aria-label="${onList ? 'Remove from list' : 'Add to list'}">
+        ${onList
+          ? `<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
+          : `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>`
+        }
+      </button>
+      <button class="lib-row-more" onclick="event.stopPropagation();_libRowMenu('${safeCanon}')" aria-label="More">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>
+      </button>
+    </div>
+  `;
+}
+
+function _libToggleAddToGrocery(canonical) {
+  const all = buildIngredientLibrary();
+  const entry = all.find(e => e.canonical === canonical);
+  if (!entry) return;
+
+  const list = getSmartGroceryList();
+  const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
+  if (existing) {
+    saveSmartGroceryList(list.filter(i => canonicalIngredientName(i.name) !== canonical));
+    showToast(`${entry.name} removed from list`, 'info');
+  } else {
+    list.push({
+      id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      name: entry.name,
+      category: entry.category || 'Other',
+      qty: '',
+      unit: '',
+      checked: false,
+      manual: entry.isCustom,
+      sourceMeals: entry.recipeNames.slice(0, 5),
+      store: state.groceryStoreFilter || (typeof getLastSelectedStore === 'function' ? getLastSelectedStore() || '' : ''),
+      addedAt: Date.now()
+    });
+    saveSmartGroceryList(list);
+    showToast(`${entry.name} added`, 'success');
+  }
+  _libRenderListResults();
+  _scheduleGroceryRender(150);
+}
+
+function _libRowMenu(canonical) {
+  const all = buildIngredientLibrary();
+  const entry = all.find(e => e.canonical === canonical);
+  if (!entry) return;
+  const safe = escJs(canonical);
+  const isCustomOnly = entry.isCustom && entry.recipeNames.length === 0;
+
+  // Reuse the modal frame; we'll stash + restore the body to return to the list
+  const body = document.getElementById('libModalBody');
+  if (!body) return;
+  window._libCachedListBody = body.innerHTML;
+
+  body.innerHTML = `
+    <div style="padding:4px 0 12px;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px;">${esc(entry.name)}</div>
+      <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:14px;">
+        ${entry.recipeNames.length > 0
+          ? `In ${entry.recipeNames.length} recipe${entry.recipeNames.length !== 1 ? 's' : ''}`
+          : 'Custom item'}
+        ${entry.mergedFrom.length > 0 ? ` · ${entry.mergedFrom.length} merged in` : ''}
+      </div>
+      <button onclick="_libStartMerge('${safe}')" class="lib-menu-btn">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+        <span>Merge into another item…</span>
+      </button>
+      ${entry.mergedFrom.length > 0 ? `
+        <button onclick="_libUnmergeAll('${safe}')" class="lib-menu-btn">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span>Undo all merges into this item</span>
+        </button>
+      ` : ''}
+      ${isCustomOnly ? `
+        <button onclick="_libDeleteCustom('${safe}')" class="lib-menu-btn lib-menu-btn-danger">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79"/></svg>
+          <span>Remove from library</span>
+        </button>
+      ` : ''}
+      <button onclick="_libBackToList()" class="lib-menu-btn lib-menu-btn-cancel">Back</button>
+    </div>
+  `;
+}
+
+function _libBackToList() {
+  const body = document.getElementById('libModalBody');
+  if (!body) return;
+  if (window._libCachedListBody) {
+    body.innerHTML = window._libCachedListBody;
+    window._libCachedListBody = null;
+  } else {
+    _libRenderListResults();
+  }
+}
+
+function _libStartMerge(sourceCanonical) {
+  window._libraryMergeSource = sourceCanonical;
+  window._libView = 'mergePicker';
+  window._libMergeSearch = '';
+  _libRender();
+}
+
+function _libRenderMergePicker() {
+  const header = document.getElementById('libModalHeader');
+  const body = document.getElementById('libModalBody');
+  const footer = document.getElementById('libModalFooter');
+  if (!header || !body || !footer) return;
+
+  const all = buildIngredientLibrary();
+  const source = all.find(e => e.canonical === window._libraryMergeSource);
+  if (!source) { _libSetView('list'); return; }
+
+  header.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <button onclick="_libSetView('list')" aria-label="Back"
+        style="background:none;border:none;color:${CONFIG.text_color};cursor:pointer;padding:4px;display:flex;align-items:center;">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <h2 style="font-size:16px;font-weight:600;margin:0;flex:1;">Merge "${esc(source.name)}" into…</h2>
+      <button onclick="closeModal()" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:4px;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+    <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:10px;">
+      Pick the item to keep. "${esc(source.name)}" will be grouped under it.
+    </div>
+    <input type="text" placeholder="Search items..." value="${esc(window._libMergeSearch || '')}"
+      oninput="window._libMergeSearch=this.value;_libRenderMergePickerList();"
+      style="width:100%;padding:10px 12px;margin-bottom:10px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;" />
+  `;
+
+  footer.innerHTML = `
+    <button onclick="_libSetView('list')" style="width:100%;padding:10px;min-height:44px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;font-size:14px;">Cancel</button>
+  `;
+
+  _libRenderMergePickerList();
+}
+
+function _libRenderMergePickerList() {
+  const body = document.getElementById('libModalBody');
+  if (!body) return;
+  const all = buildIngredientLibrary();
+  const sourceCanon = window._libraryMergeSource;
+  const q = (window._libMergeSearch || '').trim().toLowerCase();
+  const candidates = all.filter(e => e.canonical !== sourceCanon)
+    .filter(e => !q || e.name.toLowerCase().includes(q));
+
+  if (candidates.length === 0) {
+    body.innerHTML = `<div style="padding:24px 16px;text-align:center;color:${CONFIG.text_muted};font-size:13px;">No matching items.</div>`;
+    return;
+  }
+
+  body.innerHTML = `<div class="lib-list">${candidates.map(e => `
+    <button class="lib-merge-target" onclick="_libConfirmMerge('${escJs(e.canonical)}')">
+      <div class="lib-row-body" style="cursor:pointer;">
+        <div class="lib-row-name">${esc(e.name)}</div>
+        ${e.recipeNames.length > 0 ? `<div class="lib-row-sub">In ${e.recipeNames.length} recipe${e.recipeNames.length !== 1 ? 's' : ''}</div>` : ''}
+      </div>
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:${CONFIG.text_muted};flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    </button>
+  `).join('')}</div>`;
+}
+
+function _libConfirmMerge(targetCanonical) {
+  const sourceCanon = window._libraryMergeSource;
+  if (!sourceCanon || !targetCanonical || sourceCanon === targetCanonical) return;
+
+  const all = buildIngredientLibrary();
+  const target = all.find(e => e.canonical === targetCanonical);
+  const source = all.find(e => e.canonical === sourceCanon);
+  if (!target || !source) return;
+
+  const aliases = _libGetAliases();
+  // Map source → target, plus rewrite any existing chains that pointed at source
+  aliases[sourceCanon] = targetCanonical;
+  Object.keys(aliases).forEach(k => {
+    if (aliases[k] === sourceCanon) aliases[k] = targetCanonical;
+  });
+  _libSaveAliases(aliases);
+
+  // Persist preferred display name for the target
+  const masterNames = _libGetMasterNames();
+  masterNames[targetCanonical] = target.name;
+  _libSaveMasterNames(masterNames);
+
+  // If both source & target were on the grocery list, drop the source row
+  const list = getSmartGroceryList();
+  const sourceIdx = list.findIndex(i => canonicalIngredientName(i.name) === sourceCanon);
+  if (sourceIdx >= 0) {
+    const targetExists = list.some(i => canonicalIngredientName(i.name) === targetCanonical);
+    if (targetExists) {
+      list.splice(sourceIdx, 1);
+    } else {
+      list[sourceIdx].name = target.name;
+      list[sourceIdx].category = target.category || list[sourceIdx].category;
+    }
+    saveSmartGroceryList(list);
+  }
+
+  showToast(`Merged "${source.name}" into "${target.name}"`, 'success');
+  window._libraryMergeSource = null;
+  _libSetView('list');
+  _scheduleGroceryRender(150);
+}
+
+function _libRenderManageMerges() {
+  const header = document.getElementById('libModalHeader');
+  const body = document.getElementById('libModalBody');
+  const footer = document.getElementById('libModalFooter');
+  if (!header || !body || !footer) return;
+
+  const aliases = _libGetAliases();
+  const masterNames = _libGetMasterNames();
+  const entries = Object.entries(aliases);
+
+  header.innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+      <button onclick="_libSetView('list')" aria-label="Back"
+        style="background:none;border:none;color:${CONFIG.text_color};cursor:pointer;padding:4px;display:flex;align-items:center;">
+        <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <h2 style="font-size:16px;font-weight:600;margin:0;flex:1;">Manage merges</h2>
+      <button onclick="closeModal()" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:4px;">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </div>
+  `;
+
+  footer.innerHTML = `
+    <button onclick="_libSetView('list')" style="width:100%;padding:10px;min-height:44px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;font-size:14px;">Done</button>
+  `;
+
+  if (entries.length === 0) {
+    body.innerHTML = `<div style="padding:24px 16px;text-align:center;color:${CONFIG.text_muted};font-size:13px;">No merges yet.</div>`;
+    return;
+  }
+
+  body.innerHTML = `<div class="lib-list">${entries.map(([alias, master]) => `
+    <div class="lib-row">
+      <div class="lib-row-body">
+        <div class="lib-row-name" style="font-size:14px;">${esc(toTitleCase(alias))}</div>
+        <div class="lib-row-sub">→ ${esc(masterNames[master] || toTitleCase(master))}</div>
+      </div>
+      <button onclick="_libUnmerge('${escJs(alias)}')" class="lib-row-action" style="background:${CONFIG.surface_elevated};color:${CONFIG.text_color};font-size:12px;padding:0 12px;width:auto;border-radius:14px;">Undo</button>
+    </div>
+  `).join('')}</div>`;
+}
+
+function _libUnmerge(aliasCanonical) {
+  const aliases = _libGetAliases();
+  if (!aliases[aliasCanonical]) return;
+  delete aliases[aliasCanonical];
+  _libSaveAliases(aliases);
+  showToast('Merge undone', 'info');
+  _libRender();
+  _scheduleGroceryRender(150);
+}
+
+function _libUnmergeAll(masterCanonical) {
+  const aliases = _libGetAliases();
+  let changed = false;
+  Object.keys(aliases).forEach(k => {
+    if (_libResolveCanonical(aliases[k], aliases) === masterCanonical) {
+      delete aliases[k];
+      changed = true;
+    }
+  });
+  if (changed) {
+    _libSaveAliases(aliases);
+    showToast('Merges removed', 'info');
+  }
+  _libBackToList();
+  _scheduleGroceryRender(150);
+}
+
+function _libDeleteCustom(canonical) {
+  const list = _libGetCustom().filter(c => canonicalIngredientName(c.name) !== canonical);
+  _libSaveCustom(list);
+  showToast('Removed from library', 'info');
+  _libBackToList();
+}
+
+function _libAddCustomFromSearch() {
+  const raw = (window._librarySearch || '').trim();
+  if (!raw) return;
+  const canonical = canonicalIngredientName(raw);
+  if (!canonical) return;
+  const display = toTitleCase(displayIngredientName(raw) || raw);
+
+  // Save to custom library so it persists across sessions
+  const customs = _libGetCustom();
+  if (!customs.some(c => canonicalIngredientName(c.name) === canonical)) {
+    customs.push({ name: display, group: 'Other', addedAt: Date.now() });
+    _libSaveCustom(customs);
+  }
+
+  // Add to grocery list immediately
+  const list = getSmartGroceryList();
+  if (!list.some(i => canonicalIngredientName(i.name) === canonical)) {
+    list.push({
+      id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      name: display,
+      category: 'Other',
+      qty: '',
+      unit: '',
+      checked: false,
+      manual: true,
+      sourceMeals: [],
+      store: state.groceryStoreFilter || (typeof getLastSelectedStore === 'function' ? getLastSelectedStore() || '' : ''),
+      addedAt: Date.now()
+    });
+    saveSmartGroceryList(list);
+  }
+
+  showToast(`${display} added`, 'success');
+  window._librarySearch = '';
+  const inp = document.getElementById('libSearchInput');
+  if (inp) inp.value = '';
+  _libRenderListResults();
+  _scheduleGroceryRender(150);
+}
+
+function _libSetView(view) {
+  window._libView = view;
+  _libRender();
 }
 
 function init() {

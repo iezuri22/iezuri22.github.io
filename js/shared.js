@@ -449,10 +449,18 @@ const INGREDIENT_SYNONYMS = {
   'apple': 'apples', 'banana': 'bananas', 'orange': 'oranges',
   'lemon': 'lemons', 'lime': 'limes', 'peach': 'peaches',
   'tortilla': 'tortillas', 'bay leaf': 'bay leaves',
-  'onion': 'onions', 'pepper': 'peppers', 'cucumber': 'cucumbers',
+  'onion': 'onions', 'cucumber': 'cucumbers',
   'clove': 'cloves', 'jalapeno pepper': 'jalapeño', 'jalapeño pepper': 'jalapeño',
   'green onion': 'green onions', 'scallion': 'green onions', 'scallions': 'green onions',
   'spring onion': 'green onions', 'spring onions': 'green onions',
+  // Bare "pepper" in a recipe almost always means the seasoning, not bell pepper.
+  'pepper': 'black pepper', 'peppercorn': 'black pepper', 'peppercorns': 'black pepper',
+  'ground pepper': 'black pepper', 'cracked pepper': 'black pepper',
+  // Prevent the cleaner from stripping "crushed"/"shredded" off these — they
+  // describe a distinct product, not just a prep step.
+  'crushed red pepper': 'crushed red pepper',
+  'shredded coconut': 'shredded coconut', 'shredded mozzarella': 'shredded mozzarella',
+  'shredded cheddar': 'shredded cheddar', 'whole milk': 'whole milk',
   'strawberry': 'strawberries', 'blueberry': 'blueberries', 'raspberry': 'raspberries',
   'sweet potato': 'sweet potatoes', 'baby potato': 'baby potatoes',
   'baby carrot': 'baby carrots', 'bell peppers': 'bell pepper',
@@ -469,27 +477,58 @@ const INGREDIENT_SYNONYMS = {
   'granulated sugar': 'sugar', 'all-purpose flour': 'flour', 'all purpose flour': 'flour'
 };
 
-// Modifiers describing how an ingredient is prepped, not what it is.
-// Stripped from both ends of an ingredient phrase before canonicalization so
-// "roasted sweet potatoes" and "boiled eggs, halved" collapse to "sweet
-// potatoes" and "eggs" respectively.
-const PREP_MODIFIERS = new Set([
-  // cooking methods
-  'roasted','baked','fried','grilled','broiled','sauteed','sautéed','steamed','boiled','poached',
-  'blanched','smoked','pickled','fermented','toasted','seared','braised','stewed','charred','caramelized',
-  'pan-fried','deep-fried','stir-fried','hard-boiled','soft-boiled','scrambled',
-  // states
-  'raw','fresh','frozen','dried','cooked','uncooked','cured','melted','softened','beaten','whisked',
-  'overripe','unripe','ripe','warm','cold','hot','room-temperature','lukewarm','chilled',
-  // cuts / shapes
-  'chopped','diced','sliced','minced','peeled','halved','quartered','shredded','grated','crushed',
-  'mashed','packed','divided','drained','rinsed','cubed','julienned','torn','smashed','pitted',
-  'seeded','trimmed','deveined','butterflied','rolled','crumbled','whole',
-  // adverbs of degree
-  'finely','coarsely','thinly','thickly','roughly','lightly','heavily','well',
-  // notes
-  'optional','reserved','separated','unsweetened','sweetened','salted','unsalted','homemade','store-bought'
+// Phrases where what looks like a prep word is actually part of the product
+// name (you'd ask for it that way at the store). Direct match short-circuits
+// the rule-based cleaner so these don't get shortened.
+const PRODUCT_PREP_PHRASES = new Set([
+  'crushed red pepper',
+  'shredded coconut','shredded mozzarella','shredded cheddar','shredded parmesan',
+  'whole milk','whole wheat','whole grain',
+  'rolled oats','steel-cut oats','cut oats',
+  'ground beef','ground turkey','ground chicken','ground pork','ground lamb','ground veal',
+  'roasted red pepper','roasted red peppers','roasted garlic','roasted nori','roasted seaweed',
+  'sliced almonds','slivered almonds',
+  'crushed tomatoes','diced tomatoes','stewed tomatoes','sun-dried tomatoes','crushed pineapple',
+  'frozen peas','frozen corn','frozen spinach','frozen berries','frozen fruit',
+  'dried oregano','dried basil','dried thyme','dried parsley','dried cranberries','dried apricots',
+  'dried mushrooms','dried beans',
+  'powdered sugar','brown sugar','granulated sugar','confectioners sugar',
+  'condensed milk','evaporated milk','sweetened condensed milk',
+  'pickled jalapeños','pickled onions','pickled ginger',
+  'smoked salmon','smoked turkey','smoked paprika','smoked sausage',
+  'cured ham','baked beans',
+  'iced tea','iced coffee',
+  'creamed corn','creamed spinach',
 ]);
+
+// Small set of irregular state/size words that don't fit the suffix patterns
+// below (-ed past participles and -ly adverbs). Adding a new -ed or -ly word
+// to a recipe doesn't require touching this set.
+const _PREP_IRREGULARS = new Set([
+  // size — no suffix pattern
+  'large','small','medium','big','jumbo','mini','tiny','huge','xl',
+  // states that aren't -ed/-ly
+  'raw','fresh','frozen','ground','beaten','ripe','overripe','unripe',
+  'warm','cold','hot','whole','plain','optional','homemade'
+]);
+
+// Decide whether a token is describing prep/state vs. naming the product.
+// Suffix rules cover most cases automatically; the irregular set fills gaps.
+function _isPrepToken(t) {
+  if (!t) return false;
+  // Past participle: -ed (roasted, halved, sliced, chopped, peeled, mashed,
+  // grilled, baked, sauteed, simmered, glazed, charred, caramelized, blistered,
+  // shredded, drained, rinsed, packed, divided, salted, sweetened, cooked…).
+  // Length > 3 keeps "red" and "iced" out of accidental matches.
+  if (t.length > 3 && t.endsWith('ed')) return true;
+  // Adverb: -ly (freshly, finely, coarsely, thinly, thickly, lightly, heavily,
+  // roughly, generously…).
+  if (t.length > 4 && t.endsWith('ly')) return true;
+  // Hyphenated: split on hyphen and check parts (hard-boiled, pan-fried,
+  // oven-roasted, room-temperature, store-bought, extra-large…).
+  if (t.includes('-')) return t.split('-').some(_isPrepToken);
+  return _PREP_IRREGULARS.has(t);
+}
 
 // Strip prep modifiers and qualifying clauses so the name reflects the product
 // you'd actually look for at the store.
@@ -497,17 +536,41 @@ function cleanIngredientName(name) {
   if (!name) return '';
   let s = String(name).toLowerCase().trim();
   s = s.replace(/\([^)]*\)/g, ' ');           // drop "(diced)" / "(about 2 cups)"
-  s = s.split(',')[0].trim();                 // drop ", halved" trailing clauses
+  s = s.split(',')[0].trim();                 // drop trailing clauses after comma
   s = s.replace(/\s+/g, ' ');
+  if (PRODUCT_PREP_PHRASES.has(s)) return s;  // preserve compound product names
   let tokens = s.split(' ').filter(Boolean);
-  while (tokens.length > 1 && PREP_MODIFIERS.has(tokens[0])) tokens.shift();
-  while (tokens.length > 1 && PREP_MODIFIERS.has(tokens[tokens.length - 1])) tokens.pop();
+  while (tokens.length > 1 && _isPrepToken(tokens[0])) tokens.shift();
+  while (tokens.length > 1 && _isPrepToken(tokens[tokens.length - 1])) tokens.pop();
   return tokens.join(' ').trim();
 }
 
-function canonicalIngredientName(name) {
+// Crude singular stem so trivial plural variants ("eggs"/"egg",
+// "tomatoes"/"tomato", "berries"/"berry") collapse into the same dedup bucket.
+// Used only as a key — display still shows the user's preferred form.
+function _stem(t) {
+  if (!t || t.length < 4) return t;
+  if (t.endsWith('ies')) return t.slice(0, -3) + 'y';      // berries → berry
+  if (t.endsWith('ves')) return t.slice(0, -3) + 'f';      // leaves → leaf
+  if (t.endsWith('oes') || t.endsWith('ches') || t.endsWith('shes') || t.endsWith('xes')) return t.slice(0, -2);
+  if (t.endsWith('s') && !t.endsWith('ss') && !t.endsWith('us') && !t.endsWith('is')) return t.slice(0, -1);
+  return t;
+}
+
+// Display form of a name: cleaned + synonym-resolved. This is what the user
+// sees on their grocery list ("Eggs", "Black Pepper", "Sweet Potatoes").
+function displayIngredientName(name) {
+  const lower = (name || '').toLowerCase().trim();
+  if (INGREDIENT_SYNONYMS[lower]) return INGREDIENT_SYNONYMS[lower];
   const cleaned = cleanIngredientName(name);
   return INGREDIENT_SYNONYMS[cleaned] || cleaned;
+}
+
+// Dedup key: display form with each token stemmed to its singular root. Two
+// ingredients are "the same item" iff their canonical keys match. Display
+// names can stay plural or capitalized differently and still merge.
+function canonicalIngredientName(name) {
+  return displayIngredientName(name).split(' ').map(_stem).join(' ');
 }
 
 // ITEM_MAPPINGS for receipt scanning
@@ -2644,13 +2707,18 @@ function showMealIngredientPicker(recipeId) {
   window._pickerIngredients = ingData;
   window._pickerRecipeId = recipeId;
 
+  const initialChecked = ingData.filter(i => i.checked).length;
   const modalHtml = `<div style="color: ${CONFIG.text_color}; max-height: 80vh; display: flex; flex-direction: column;">
-    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 12px; position: sticky; top: 0; background: ${CONFIG.surface_elevated}; z-index: 2; padding: 4px 0 8px;">
       ${imgHtml}
       <div style="flex: 1; min-width: 0;">
-        <div style="font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(recipe.title)}</div>
-        <div style="font-size: 12px; color: ${CONFIG.text_muted}; margin-top: 2px;">${ingredients.length} ingredient${ingredients.length !== 1 ? 's' : ''}</div>
+        <div style="font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc(recipe.title)}</div>
+        <div style="font-size: 11px; color: ${CONFIG.text_muted}; margin-top: 2px;">${ingredients.length} ingredient${ingredients.length !== 1 ? 's' : ''}</div>
       </div>
+      <button id="pickerSubmitBtn" onclick="submitPickerIngredients()"
+        style="padding: 9px 14px; min-height: 36px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0; white-space: nowrap;">
+        Add${initialChecked > 0 ? ` (${initialChecked})` : ''}
+      </button>
     </div>
     <div style="display: flex; gap: 8px; margin-bottom: 10px;">
       <button onclick="pickerSelectAll(true)" style="flex: 1; padding: 8px; min-height: 36px; background: ${CONFIG.surface_color}; border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; color: ${CONFIG.text_color}; font-size: 12px; cursor: pointer;">Select all</button>
@@ -2659,7 +2727,6 @@ function showMealIngredientPicker(recipeId) {
     <div style="overflow-y: auto; flex: 1; margin: 0 -16px; padding: 0 16px; max-height: 50vh;">
       ${ingRowsHtml}
     </div>
-    <button onclick="submitPickerIngredients()" style="margin-top: 12px; padding: 12px; min-height: 44px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%;">Add selected to grocery list</button>
   </div>`;
 
   openModal(modalHtml);
@@ -2675,6 +2742,7 @@ function togglePickerIngredient(idx) {
     cb.style.borderColor = ing.checked ? CONFIG.primary_action_color : CONFIG.text_muted;
     cb.innerHTML = ing.checked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '';
   }
+  _updatePickerSubmitCount();
 }
 
 function pickerSelectAll(selectAll) {
@@ -2688,6 +2756,15 @@ function pickerSelectAll(selectAll) {
       cb.innerHTML = selectAll ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '';
     }
   });
+  _updatePickerSubmitCount();
+}
+
+function _updatePickerSubmitCount() {
+  const btn = document.getElementById('pickerSubmitBtn');
+  if (!btn || !window._pickerIngredients) return;
+  const count = window._pickerIngredients.filter(i => i.checked).length;
+  btn.textContent = count > 0 ? `Add (${count})` : 'Add';
+  btn.style.opacity = count > 0 ? '1' : '0.5';
 }
 
 function submitPickerIngredients() {
@@ -2703,10 +2780,9 @@ function submitPickerIngredients() {
   const list = getSmartGroceryList();
   let added = 0;
   selected.forEach(ing => {
-    const cleaned = cleanIngredientName(ing.name);
-    if (!cleaned) return;
-    const titleName = toTitleCase(cleaned);
-    const canonical = canonicalIngredientName(titleName);
+    const canonical = canonicalIngredientName(ing.name);
+    if (!canonical) return;
+    const titleName = toTitleCase(displayIngredientName(ing.name) || ing.name);
     const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
     if (existing) {
       if (!existing.sourceMeals.includes(recipe.title)) existing.sourceMeals.push(recipe.title);
@@ -2810,14 +2886,13 @@ function submitBatchPickerIngredients() {
 
   const list = getSmartGroceryList();
   selected.forEach(ing => {
-    const cleaned = cleanIngredientName(ing.name);
     const canonical = canonicalIngredientName(ing.name);
     if (!canonical) return;
     const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
     if (existing) {
       if (!existing.sourceMeals.includes(batch.name)) existing.sourceMeals.push(batch.name);
     } else {
-      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: toTitleCase(cleaned || ing.name), category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], store: getLastSelectedStore() || '', addedAt: Date.now() });
+      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: toTitleCase(displayIngredientName(ing.name) || ing.name), category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], store: getLastSelectedStore() || '', addedAt: Date.now() });
     }
   });
   saveSmartGroceryList(list);
@@ -2829,10 +2904,10 @@ function submitBatchPickerIngredients() {
 function addManualGroceryItemSmart() {
   const input = document.getElementById('groceryManualInput'); if (!input) return;
   const rawName = input.value.trim(); if (!rawName) return;
-  const cleaned = cleanIngredientName(rawName);
-  const name = toTitleCase(cleaned || rawName);
+  const canonical = canonicalIngredientName(rawName);
+  const name = toTitleCase(displayIngredientName(rawName) || rawName);
   const list = getSmartGroceryList();
-  if (list.find(i => canonicalIngredientName(i.name) === canonicalIngredientName(name))) { showToast('Already on your list', 'info'); input.value = ''; return; }
+  if (list.find(i => canonicalIngredientName(i.name) === canonical)) { showToast('Already on your list', 'info'); input.value = ''; return; }
   const catInput = document.getElementById('groceryManualCategory');
   const category = (catInput && catInput.value) ? catInput.value : 'Other';
   list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name, category, qty: '', unit: '', checked: false, manual: true, sourceMeals: [], store: state.groceryStoreFilter || getLastSelectedStore() || '', addedAt: Date.now() });
