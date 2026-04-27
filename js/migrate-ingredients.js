@@ -56,6 +56,16 @@
         rowsChanged: [], // [{ recipeId, recipeTitle, before: [...], after: [...] }]
         rowsDropped: 0,
         recipesUpdated: 0
+      },
+      inventory: {
+        scanned: (state.inventory || []).length,
+        renamed: [],     // [{ id, oldName, newName }]
+        orphaned: []     // [{ id, oldName }]
+      },
+      customImages: {
+        scanned: 0,
+        renamed: [],     // [{ oldKey, newKey }]
+        orphaned: []     // [oldKey]
       }
     };
 
@@ -148,6 +158,45 @@
       }
     }
 
+    // --- Inventory pass ------------------------------------------------
+    const inventoryUpdates = [];   // { item, newName }
+    const inventoryDeletes = [];   // item
+    for (const item of (state.inventory || [])) {
+      const oldName = item.name || '';
+      const newName = normalizeIngredientName(oldName);
+      if (!newName) {
+        report.inventory.orphaned.push({ id: item.id, oldName });
+        inventoryDeletes.push(item);
+        continue;
+      }
+      if (newName !== oldName) {
+        report.inventory.renamed.push({ id: item.id, oldName, newName });
+        inventoryUpdates.push({ item, newName });
+      }
+    }
+
+    // --- customIngredientImages pass -----------------------------------
+    // Key/value object {name -> imageUrl}, persisted via saveCustomIngredientImages.
+    const customImagesNew = {};
+    const customImagesObj = (typeof customIngredientImages !== 'undefined' && customIngredientImages) ? customIngredientImages : {};
+    report.customImages.scanned = Object.keys(customImagesObj).length;
+    let customImagesChanged = false;
+    for (const [oldKey, url] of Object.entries(customImagesObj)) {
+      const newKey = normalizeIngredientName(oldKey);
+      if (!newKey) {
+        report.customImages.orphaned.push(oldKey);
+        customImagesChanged = true;
+        continue;
+      }
+      const lookupKey = newKey.toLowerCase();
+      if (lookupKey !== oldKey) {
+        report.customImages.renamed.push({ oldKey, newKey: lookupKey });
+        customImagesChanged = true;
+      }
+      // Last-write-wins on collision; keys are lowercased to match existing convention.
+      customImagesNew[lookupKey] = url;
+    }
+
     // --- Print summary -------------------------------------------------
     const tag = dryRun ? '[DRY-RUN]' : '[APPLY]';
     console.log(`${tag} Ingredient migration scan complete`);
@@ -157,6 +206,8 @@
     console.log(`    - merge groups: ${report.library.merged.length}`);
     console.log(`    - unchanged: ${report.library.unchanged}`);
     console.log(`  Recipes: ${report.recipes.scanned} scanned, ${report.recipes.rowsChanged.length} need ingredient row updates, ${report.recipes.rowsDropped} rows dropped`);
+    console.log(`  Inventory: ${report.inventory.scanned} scanned, ${report.inventory.renamed.length} rename, ${report.inventory.orphaned.length} orphan/delete`);
+    console.log(`  Custom images: ${report.customImages.scanned} scanned, ${report.customImages.renamed.length} rename, ${report.customImages.orphaned.length} orphan/delete`);
 
     if (report.library.renamed.length) {
       console.log('\nRenames:');
@@ -181,6 +232,23 @@
       if (report.recipes.rowsChanged.length > 30) {
         console.log(`  ... and ${report.recipes.rowsChanged.length - 30} more recipes`);
       }
+    }
+    if (report.inventory.renamed.length) {
+      console.log('\nInventory renames:');
+      report.inventory.renamed.slice(0, 50).forEach(r => console.log(`  "${r.oldName}" -> "${r.newName}"`));
+      if (report.inventory.renamed.length > 50) console.log(`  ... and ${report.inventory.renamed.length - 50} more`);
+    }
+    if (report.inventory.orphaned.length) {
+      console.log('\nInventory orphans to delete:');
+      report.inventory.orphaned.forEach(r => console.log(`  "${r.oldName}" (id=${r.id})`));
+    }
+    if (report.customImages.renamed.length) {
+      console.log('\nCustom-image key renames:');
+      report.customImages.renamed.forEach(r => console.log(`  "${r.oldKey}" -> "${r.newKey}"`));
+    }
+    if (report.customImages.orphaned.length) {
+      console.log('\nCustom-image orphan keys:');
+      report.customImages.orphaned.forEach(k => console.log(`  "${k}"`));
     }
 
     if (dryRun) {
@@ -212,12 +280,73 @@
       catch (e) { console.error('Recipe update failed for', recipe.id, e); }
     }
 
+    // 4. Inventory: delete orphans, rename survivors
+    for (const item of inventoryDeletes) {
+      try { await storage.delete(item); }
+      catch (e) { console.error('Inventory delete failed for', item.id, e); }
+    }
+    for (const { item, newName } of inventoryUpdates) {
+      item.name = newName;
+      try { await storage.update(item); }
+      catch (e) { console.error('Inventory update failed for', item.id, e); }
+    }
+
+    // 5. Custom images: replace whole map and persist
+    if (customImagesChanged) {
+      try {
+        // Mutate in place so other modules holding a reference see the new keys.
+        for (const k of Object.keys(customImagesObj)) delete customImagesObj[k];
+        Object.assign(customImagesObj, customImagesNew);
+        if (typeof saveCustomIngredientImages === 'function') saveCustomIngredientImages();
+      } catch (e) { console.error('Custom images update failed', e); }
+    }
+
     console.log('Migration applied.');
     if (typeof render === 'function') render();
     return report;
   }
 
+  // Diagnostic: where do bad-looking ingredient names actually live? Run this
+  // from the console if a name shows up in your UI but the dry-run report
+  // doesn't mention it — it'll point you at the right table to migrate.
+  function whereDoesIngredientLive(needle) {
+    const hits = { recipes: [], inventory: [], ingredientKnowledge: [], customIngredientImages: [] };
+    const matches = (s) => {
+      if (!s) return false;
+      if (needle) return String(s).toLowerCase().includes(String(needle).toLowerCase());
+      return /^[\-:–—]/.test(s) || /^\d+$/.test(s) || /-Oz|–\d|^\:/i.test(s);
+    };
+    for (const r of (state.recipes || [])) {
+      for (const row of (r.ingredientsRows || [])) {
+        if (matches(row.name)) hits.recipes.push({ recipeId: r.id, recipeTitle: r.title, name: row.name });
+      }
+    }
+    for (const i of (state.inventory || [])) {
+      if (matches(i.name)) hits.inventory.push({ id: i.id, name: i.name });
+    }
+    for (const k of (state.ingredientKnowledge || [])) {
+      if (matches(k.name)) hits.ingredientKnowledge.push({ id: k.id, name: k.name });
+    }
+    if (typeof customIngredientImages !== 'undefined' && customIngredientImages) {
+      for (const key of Object.keys(customIngredientImages)) {
+        if (matches(key)) hits.customIngredientImages.push(key);
+      }
+    }
+    console.log(`Hits${needle ? ' for "' + needle + '"' : ' (default: malformed names)'}:`);
+    console.log(`  recipes: ${hits.recipes.length}`);
+    hits.recipes.slice(0, 20).forEach(h => console.log(`    [${h.recipeTitle}] "${h.name}"`));
+    if (hits.recipes.length > 20) console.log(`    ... and ${hits.recipes.length - 20} more`);
+    console.log(`  inventory: ${hits.inventory.length}`);
+    hits.inventory.slice(0, 20).forEach(h => console.log(`    "${h.name}" (id=${h.id})`));
+    console.log(`  ingredientKnowledge: ${hits.ingredientKnowledge.length}`);
+    hits.ingredientKnowledge.slice(0, 20).forEach(h => console.log(`    "${h.name}" (id=${h.id})`));
+    console.log(`  customIngredientImages: ${hits.customIngredientImages.length}`);
+    hits.customIngredientImages.slice(0, 20).forEach(k => console.log(`    "${k}"`));
+    return hits;
+  }
+
   window.migrateIngredients = migrateIngredients;
+  window.whereDoesIngredientLive = whereDoesIngredientLive;
   // Convenience aliases
   window.dryRunIngredientMigration = () => migrateIngredients({ dryRun: true });
   window.runIngredientMigration = () => migrateIngredients({ dryRun: false });

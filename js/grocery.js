@@ -2365,6 +2365,7 @@ function confirmAddFromThisWeek() {
 const LIB_ALIASES_KEY = 'ingredientLibraryAliases_v1';
 const LIB_CUSTOM_KEY = 'ingredientLibraryCustom_v1';
 const LIB_MASTER_NAMES_KEY = 'ingredientLibraryMasterNames_v1';
+const LIB_HIDDEN_KEY = 'ingredientLibraryHidden_v1';
 
 function _libGetAliases() {
   try { return JSON.parse(localStorage.getItem(LIB_ALIASES_KEY) || '{}') || {}; } catch { return {}; }
@@ -2383,6 +2384,15 @@ function _libGetCustom() {
 }
 function _libSaveCustom(list) {
   localStorage.setItem(LIB_CUSTOM_KEY, JSON.stringify(list || []));
+}
+// Hidden canonicals — items the user has "deleted" from the library. Recipe-
+// derived entries can't be truly removed (the recipe still references them),
+// so we suppress them here. Stored as an array; treated as a Set in code.
+function _libGetHidden() {
+  try { return new Set(JSON.parse(localStorage.getItem(LIB_HIDDEN_KEY) || '[]') || []); } catch { return new Set(); }
+}
+function _libSaveHidden(set) {
+  localStorage.setItem(LIB_HIDDEN_KEY, JSON.stringify(Array.from(set || [])));
 }
 
 // Resolve a canonical name through the alias chain (a→b→c) so callers always
@@ -2469,12 +2479,27 @@ function buildIngredientLibrary() {
     });
   });
 
-  return Array.from(map.values()).map(e => ({
-    ...e,
-    recipeNames: Array.from(e.recipeNames),
-    recipeIds: Array.from(e.recipeIds),
-    category: mapToGroceryCategory(e.group || 'Other')
-  })).sort((a, b) => a.name.localeCompare(b.name));
+  // Annotate each entry with inPantry (true if the same canonical is in the
+  // user's inventory) so the row can show a "Pantry" badge.
+  const pantryCanonicals = new Set(
+    (state.inventory || [])
+      .map(it => canonicalIngredientName(it.name || ''))
+      .filter(Boolean)
+  );
+
+  // Hidden canonicals get filtered out entirely. The user can recover them
+  // via the "Show hidden" toggle (TODO) — for now they're suppressed.
+  const hidden = _libGetHidden();
+
+  return Array.from(map.values())
+    .filter(e => !hidden.has(e.canonical))
+    .map(e => ({
+      ...e,
+      recipeNames: Array.from(e.recipeNames),
+      recipeIds: Array.from(e.recipeIds),
+      inPantry: pantryCanonicals.has(e.canonical),
+      category: mapToGroceryCategory(e.group || 'Other')
+    })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function _libIsOnGrocery(canonical) {
@@ -2594,13 +2619,20 @@ function _libRenderRow(entry) {
   const safeCanon = escJs(entry.canonical);
   const recipeCount = entry.recipeNames.length;
   let subtitle = '';
-  if (entry.isCustom && recipeCount === 0) {
-    subtitle = 'Custom item';
-  } else if (recipeCount === 1) {
+  if (recipeCount === 1) {
     subtitle = `In ${esc(entry.recipeNames[0])}`;
   } else if (recipeCount > 1) {
     subtitle = `In ${recipeCount} recipes`;
   }
+  // Source-type badges: an item can be in multiple sources (e.g. used by a
+  // recipe AND in the pantry). Keep the chips small and inline.
+  const badges = [];
+  if (recipeCount > 0) badges.push({ label: 'Recipe', bg: 'rgba(59,130,246,0.18)', fg: '#7eb4ff' });
+  if (entry.inPantry) badges.push({ label: 'Pantry', bg: 'rgba(16,185,129,0.18)', fg: '#5fd9a8' });
+  if (entry.isCustom && recipeCount === 0) badges.push({ label: 'Custom', bg: 'rgba(234,179,8,0.18)', fg: '#f1c84a' });
+  const badgeHtml = badges.length
+    ? `<div class="lib-row-badges">${badges.map(b => `<span class="lib-row-badge" style="background:${b.bg};color:${b.fg};">${b.label}</span>`).join('')}</div>`
+    : '';
   const mergedHtml = entry.mergedFrom.length > 0
     ? `<div class="lib-row-merged">Merged: ${entry.mergedFrom.slice(0, 3).map(m => esc(m.name)).join(', ')}${entry.mergedFrom.length > 3 ? ` +${entry.mergedFrom.length - 3}` : ''}</div>`
     : '';
@@ -2615,6 +2647,7 @@ function _libRenderRow(entry) {
       </div>
       <div class="lib-row-body" onclick="_libToggleAddToGrocery('${safeCanon}')">
         <div class="lib-row-name">${esc(entry.name)}</div>
+        ${badgeHtml}
         ${subtitle ? `<div class="lib-row-sub">${subtitle}</div>` : ''}
         ${mergedHtml}
       </div>
@@ -2699,6 +2732,10 @@ function _libRowMenuModal(canonical) {
           : 'Custom item'}
         ${entry.mergedFrom.length > 0 ? ` · ${entry.mergedFrom.length} merged in` : ''}
       </div>
+      <button onclick="_libPromptRename('${safe}')" class="lib-menu-btn">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"/></svg>
+        <span>Rename…</span>
+      </button>
       <button onclick="_libStartMergeFromPage('${safe}')" class="lib-menu-btn">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
         <span>Merge into another item…</span>
@@ -2709,12 +2746,10 @@ function _libRowMenuModal(canonical) {
           <span>Undo all merges into this item</span>
         </button>
       ` : ''}
-      ${isCustomOnly ? `
-        <button onclick="closeModal();_libDeleteCustomFromPage('${safe}')" class="lib-menu-btn lib-menu-btn-danger">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79"/></svg>
-          <span>Remove from library</span>
-        </button>
-      ` : ''}
+      <button onclick="_libConfirmHide('${safe}')" class="lib-menu-btn lib-menu-btn-danger">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79"/></svg>
+        <span>${isCustomOnly ? 'Delete from library' : 'Hide from library'}</span>
+      </button>
       <button onclick="closeModal()" class="lib-menu-btn lib-menu-btn-cancel">Cancel</button>
     </div>
   `);
@@ -2959,6 +2994,11 @@ function renderGroceryLibrary() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
         <h2 style="font-size:20px;font-weight:700;color:${CONFIG.text_color};margin:0;flex:1;">Ingredient Library</h2>
         ${aliasCount > 0 ? `<button onclick="_libOpenManageMergesModal()" style="background:none;border:none;color:${CONFIG.primary_action_color};cursor:pointer;font-size:12px;padding:4px;">Merges (${aliasCount})</button>` : ''}
+        <button onclick="_libShowAddItemModal()"
+          style="display:inline-flex;align-items:center;gap:4px;padding:8px 12px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          Add
+        </button>
       </div>
       <input id="libSearchInput" type="text" placeholder="Search ingredients..." value="${esc(window._librarySearch || '')}"
         oninput="window._librarySearch=this.value;render();"
@@ -2994,6 +3034,10 @@ function _libRowMenu(canonical) {
           : 'Custom item'}
         ${entry.mergedFrom.length > 0 ? ` · ${entry.mergedFrom.length} merged in` : ''}
       </div>
+      <button onclick="_libPromptRename('${safe}')" class="lib-menu-btn">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"/></svg>
+        <span>Rename…</span>
+      </button>
       <button onclick="_libStartMerge('${safe}')" class="lib-menu-btn">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
         <span>Merge into another item…</span>
@@ -3004,12 +3048,10 @@ function _libRowMenu(canonical) {
           <span>Undo all merges into this item</span>
         </button>
       ` : ''}
-      ${isCustomOnly ? `
-        <button onclick="_libDeleteCustom('${safe}')" class="lib-menu-btn lib-menu-btn-danger">
-          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79"/></svg>
-          <span>Remove from library</span>
-        </button>
-      ` : ''}
+      <button onclick="_libConfirmHide('${safe}')" class="lib-menu-btn lib-menu-btn-danger">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79"/></svg>
+        <span>${isCustomOnly ? 'Delete from library' : 'Hide from library'}</span>
+      </button>
       <button onclick="_libBackToList()" class="lib-menu-btn lib-menu-btn-cancel">Back</button>
     </div>
   `;
@@ -3211,6 +3253,140 @@ function _libDeleteCustom(canonical) {
   _libSaveCustom(list);
   showToast('Removed from library', 'info');
   _libBackToList();
+}
+
+// Universal "delete" — works for both custom items (truly remove from custom
+// list) and recipe-derived items (add to hidden set so they're suppressed
+// from the library and won't auto-add to the grocery list). Also pulls the
+// item off the grocery list if it's currently there.
+function _libConfirmHide(canonical) {
+  const all = buildIngredientLibrary();
+  const entry = all.find(e => e.canonical === canonical);
+  if (!entry) return;
+  const isCustomOnly = entry.isCustom && entry.recipeNames.length === 0;
+  const verb = isCustomOnly ? 'delete' : 'hide';
+  if (!confirm(`${verb === 'delete' ? 'Delete' : 'Hide'} "${entry.name}" from the library?${verb === 'hide' ? '\n\nIt\'s used by recipes, so it can\'t be deleted, but it\'ll be suppressed from this list.' : ''}`)) return;
+
+  if (isCustomOnly) {
+    const list = _libGetCustom().filter(c => canonicalIngredientName(c.name) !== canonical);
+    _libSaveCustom(list);
+  }
+  // Always add to hidden so recipe-derived ones disappear too.
+  const hidden = _libGetHidden();
+  hidden.add(canonical);
+  _libSaveHidden(hidden);
+
+  // Remove from grocery list as well — keeping it there after deletion
+  // confuses users since they can't get back to its library entry.
+  const groList = getSmartGroceryList();
+  const filtered = groList.filter(i => canonicalIngredientName(i.name) !== canonical);
+  if (filtered.length !== groList.length) saveSmartGroceryList(filtered);
+
+  showToast(verb === 'delete' ? 'Deleted from library' : 'Hidden from library', 'info');
+  closeModal();
+  _libRefreshSurface();
+  _scheduleGroceryRender(150);
+}
+
+// Rename: store an override in LIB_MASTER_NAMES_KEY (already honored by
+// buildIngredientLibrary's getOrCreate). The canonical key doesn't change —
+// only the display name — so existing aliases/merges keep working.
+function _libPromptRename(canonical) {
+  const all = buildIngredientLibrary();
+  const entry = all.find(e => e.canonical === canonical);
+  if (!entry) return;
+  const safe = escJs(canonical);
+  openModal(`
+    <div style="color:${CONFIG.text_color};padding:4px 0 8px;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:10px;">Rename ingredient</div>
+      <input id="libRenameInput" type="text" value="${esc(entry.name)}"
+        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:12px;" />
+      <div style="display:flex;gap:8px;">
+        <button onclick="closeModal()" class="lib-menu-btn lib-menu-btn-cancel" style="flex:1;">Cancel</button>
+        <button onclick="_libDoRename('${safe}')" class="lib-menu-btn" style="flex:1;background:${CONFIG.primary_action_color};color:white;">Save</button>
+      </div>
+    </div>
+  `);
+  setTimeout(() => {
+    const inp = document.getElementById('libRenameInput');
+    if (inp) { inp.focus(); inp.select(); }
+  }, 50);
+}
+
+function _libDoRename(canonical) {
+  const inp = document.getElementById('libRenameInput');
+  const newName = (inp?.value || '').trim();
+  if (!newName) { showError('Name cannot be empty'); return; }
+  const display = toTitleCase(newName);
+  const masterNames = _libGetMasterNames();
+  masterNames[canonical] = display;
+  _libSaveMasterNames(masterNames);
+
+  // If the item is currently on the grocery list, update its name too so the
+  // displayed text matches. The canonical doesn't change, so identity holds.
+  const list = getSmartGroceryList();
+  let groChanged = false;
+  list.forEach(i => {
+    if (canonicalIngredientName(i.name) === canonical && i.name !== display) {
+      i.name = display;
+      groChanged = true;
+    }
+  });
+  if (groChanged) saveSmartGroceryList(list);
+
+  showToast('Renamed', 'success');
+  closeModal();
+  _libRefreshSurface();
+  _scheduleGroceryRender(150);
+}
+
+// Add a brand-new custom item from a small modal (separate from the
+// search-no-match flow, which only triggers when the user has typed
+// something that doesn't already exist).
+function _libShowAddItemModal() {
+  const groups = (typeof GROCERY_CATEGORIES !== 'undefined' ? GROCERY_CATEGORIES : ['Other']);
+  openModal(`
+    <div style="color:${CONFIG.text_color};padding:4px 0 8px;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:12px;">Add ingredient to library</div>
+      <label style="display:block;font-size:12px;color:${CONFIG.text_muted};margin-bottom:4px;">Name</label>
+      <input id="libAddItemName" type="text" placeholder="e.g., Sriracha"
+        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:10px;" />
+      <label style="display:block;font-size:12px;color:${CONFIG.text_muted};margin-bottom:4px;">Category</label>
+      <select id="libAddItemCategory"
+        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:14px;">
+        ${groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:8px;">
+        <button onclick="closeModal()" class="lib-menu-btn lib-menu-btn-cancel" style="flex:1;">Cancel</button>
+        <button onclick="_libDoAddItem()" class="lib-menu-btn" style="flex:1;background:${CONFIG.primary_action_color};color:white;">Add</button>
+      </div>
+    </div>
+  `);
+  setTimeout(() => document.getElementById('libAddItemName')?.focus(), 50);
+}
+
+function _libDoAddItem() {
+  const raw = (document.getElementById('libAddItemName')?.value || '').trim();
+  const group = document.getElementById('libAddItemCategory')?.value || 'Other';
+  if (!raw) { showError('Name is required'); return; }
+  const canonical = canonicalIngredientName(raw);
+  if (!canonical) { showError('Name is invalid'); return; }
+  const display = toTitleCase(displayIngredientName(raw) || raw);
+
+  // If it was previously hidden, unhide so the user sees it again.
+  const hidden = _libGetHidden();
+  if (hidden.has(canonical)) { hidden.delete(canonical); _libSaveHidden(hidden); }
+
+  const customs = _libGetCustom();
+  if (!customs.some(c => canonicalIngredientName(c.name) === canonical)) {
+    customs.push({ name: display, group, addedAt: Date.now() });
+    _libSaveCustom(customs);
+  }
+
+  showToast(`${display} added`, 'success');
+  closeModal();
+  _libRefreshSurface();
+  _scheduleGroceryRender(150);
 }
 
 function _libAddCustomFromSearch() {

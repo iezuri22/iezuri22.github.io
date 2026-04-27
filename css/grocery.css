@@ -1005,6 +1005,22 @@
   text-overflow: ellipsis;
 }
 
+.lib-row-badges {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
+.lib-row-badge {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  line-height: 1.2;
+}
+
 .lib-row-action {
   width: 32px;
   height: 32px;
