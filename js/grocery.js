@@ -1646,7 +1646,7 @@ function showEditGroceryItemModal(itemId) {
 
       <label style="display:block;font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Name</label>
       <input type="text" id="editGroItemName" value="${esc(item.name)}"
-        style="width:100%;padding:10px 12px;background:${CONFIG.surface_color};border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:${CONFIG.text_color};font-size:14px;margin-bottom:16px;" />
+        style="width:100%;padding:10px 12px;background:${CONFIG.surface_color};border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:${CONFIG.text_color};font-size:16px;margin-bottom:16px;" />
 
       <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Allergic? Remove from these recipes too:</div>
       ${recipeChecksHtml}
@@ -2761,6 +2761,25 @@ function _libRenderListResults() {
   `;
 }
 
+// Per-category palette for the library row badge. Soft, low-chroma fills with
+// a brighter foreground so the chip stays readable on the dark surface.
+const _LIB_CATEGORY_BADGE_COLORS = {
+  'Produce':              { bg: 'rgba(76,217,100,0.18)',  fg: '#7ee399' },
+  'Meat & Seafood':       { bg: 'rgba(232,93,93,0.18)',   fg: '#f08a8a' },
+  'Dairy & Eggs':         { bg: 'rgba(255,209,102,0.18)', fg: '#ffd166' },
+  'Pantry & Dry Goods':   { bg: 'rgba(217,158,98,0.18)',  fg: '#e0b07a' },
+  'Spices & Seasonings':  { bg: 'rgba(255,138,76,0.18)',  fg: '#ff9d6e' },
+  'Frozen':               { bg: 'rgba(94,180,232,0.18)',  fg: '#7ec0ee' },
+  'Bakery':               { bg: 'rgba(214,168,124,0.18)', fg: '#dcb491' },
+  'Beverages':            { bg: 'rgba(140,180,255,0.18)', fg: '#a8c4ff' },
+  'Snacks':               { bg: 'rgba(241,200,74,0.18)',  fg: '#f1c84a' },
+  'Household':            { bg: 'rgba(160,160,180,0.18)', fg: '#b8b8c8' },
+  'Other':                { bg: 'rgba(140,140,150,0.18)', fg: '#a8a8b0' },
+};
+function _libCategoryBadgeStyle(category) {
+  return _LIB_CATEGORY_BADGE_COLORS[category] || _LIB_CATEGORY_BADGE_COLORS['Other'];
+}
+
 function _libRenderRow(entry) {
   const onList = _libIsOnGrocery(entry.canonical);
   const photo = findIngredientPhoto(entry.name);
@@ -2772,15 +2791,14 @@ function _libRenderRow(entry) {
   } else if (recipeCount > 1) {
     subtitle = `In ${recipeCount} recipes`;
   }
-  // Source-type badges: an item can be in multiple sources (e.g. used by a
-  // recipe AND in the pantry). Keep the chips small and inline.
-  const badges = [];
-  if (recipeCount > 0) badges.push({ label: 'Recipe', bg: 'rgba(59,130,246,0.18)', fg: '#7eb4ff' });
-  if (entry.inPantry) badges.push({ label: 'Pantry', bg: 'rgba(16,185,129,0.18)', fg: '#5fd9a8' });
-  if (entry.isCustom && recipeCount === 0) badges.push({ label: 'Custom', bg: 'rgba(234,179,8,0.18)', fg: '#f1c84a' });
-  const badgeHtml = badges.length
-    ? `<div class="lib-row-badges">${badges.map(b => `<span class="lib-row-badge" style="background:${b.bg};color:${b.fg};">${b.label}</span>`).join('')}</div>`
-    : '';
+  // Category badge — shows the food group (Produce, Meat, Dairy, etc.) so the
+  // user can scan the library by type. Replaces the old "Recipe" source flag,
+  // which was redundant with the "In N recipes" subtitle.
+  const cat = entry.category || 'Other';
+  const catStyle = _libCategoryBadgeStyle(cat);
+  const badgeHtml = `<div class="lib-row-badges">
+    <span class="lib-row-badge" style="background:${catStyle.bg};color:${catStyle.fg};">${esc(cat)}</span>
+  </div>`;
   const mergedHtml = entry.mergedFrom.length > 0
     ? `<div class="lib-row-merged">Merged: ${entry.mergedFrom.slice(0, 3).map(m => esc(m.name)).join(', ')}${entry.mergedFrom.length > 3 ? ` +${entry.mergedFrom.length - 3}` : ''}</div>`
     : '';
@@ -3461,7 +3479,7 @@ function _libPromptRename(canonical) {
     <div style="color:${CONFIG.text_color};padding:4px 0 8px;">
       <div style="font-size:15px;font-weight:600;margin-bottom:10px;">Rename ingredient</div>
       <input id="libRenameInput" type="text" value="${esc(entry.name)}"
-        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:12px;" />
+        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:12px;" />
       <div style="display:flex;gap:8px;">
         <button onclick="closeModal()" class="lib-menu-btn lib-menu-btn-cancel" style="flex:1;">Cancel</button>
         <button onclick="_libDoRename('${safe}')" class="lib-menu-btn" style="flex:1;background:${CONFIG.primary_action_color};color:white;">Save</button>
@@ -3511,10 +3529,10 @@ function _libShowAddItemModal() {
       <div style="font-size:15px;font-weight:600;margin-bottom:12px;">Add ingredient to library</div>
       <label style="display:block;font-size:12px;color:${CONFIG.text_muted};margin-bottom:4px;">Name</label>
       <input id="libAddItemName" type="text" placeholder="e.g., Sriracha"
-        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:10px;" />
+        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:10px;" />
       <label style="display:block;font-size:12px;color:${CONFIG.text_muted};margin-bottom:4px;">Category</label>
       <select id="libAddItemCategory"
-        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:14px;">
+        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:16px;outline:none;box-sizing:border-box;margin-bottom:14px;">
         ${groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('')}
       </select>
       <div style="display:flex;gap:8px;">
