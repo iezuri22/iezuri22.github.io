@@ -4334,25 +4334,128 @@ function processBulkIngredients() {
   closeModal(); if (typeof render === 'function') render(); showToast(`Imported ${parsedIngredients.length} ingredients!`, 'success');
 }
 
+// Words that name a unit OR a packaging/count form. Anything in here is treated
+// as a prefix to strip from the ingredient name (e.g. "12-oz can crushed tomatoes"
+// \u2192 "Crushed Tomatoes"). Keep aligned with INGREDIENT_UNIT_REGEX below.
+const INGREDIENT_UNITS_AND_COUNT_WORDS = [
+  // weight / volume
+  'lb','lbs','pound','pounds','oz','ounce','ounces',
+  'g','gram','grams','kg','kilogram','kilograms',
+  'tsp','teaspoon','teaspoons','tbsp','tablespoon','tablespoons',
+  'cup','cups','ml','milliliter','milliliters','l','liter','liters',
+  'pint','pints','quart','quarts','gallon','gallons','fl',
+  // size descriptors that show up in front of a product
+  'inch','inches',
+  // packaging / count words
+  'can','cans','piece','pieces','slice','slices','clove','cloves',
+  'bag','bags','box','boxes','package','packages','pkg','pkgs',
+  'bone','bones','bunch','bunches','head','heads','sprig','sprigs',
+  'stalk','stalks','jar','jars','bottle','bottles','container','containers',
+  'stick','sticks','carton','cartons','loaf','loaves','sheet','sheets'
+];
+
+const _INGREDIENT_LEADING_UNIT_RE = new RegExp(
+  '^(?:' + INGREDIENT_UNITS_AND_COUNT_WORDS.join('|') + ')\\b\\.?\\s*',
+  'i'
+);
+
+// Leading size / cut / bone-state descriptors. Stripped because they describe
+// the cut, not the product ("thick boneless strip steak" → "strip steak").
+// Excludes things like "frozen"/"toasted"/"canned" — those mark a distinct
+// product you'd buy in a different aisle, so they stay.
+const _INGREDIENT_LEADING_DESCRIPTOR_RE = /^(?:thick|thin|large|small|medium|big|jumbo|mini|tiny|huge|xl|extra-large|extra|boneless|bone-in|skinless|skin-on|lean|fatty)\b\.?\s*/i;
+// First-recognized-unit only (for the parser's qty/unit fields). Excludes
+// pure count words so "12 cans" gets unit="cans", but "12 oz can ..." still
+// captures unit="oz" and lets the count-word strip below remove "can".
+const _INGREDIENT_FIRST_UNIT_RE = /^(lb|lbs|pound|pounds|oz|ounce|ounces|g|gram|grams|kg|kilogram|kilograms|tsp|teaspoon|teaspoons|tbsp|tablespoon|tablespoons|cup|cups|ml|milliliter|milliliters|l|liter|liters|pint|pints|quart|quarts|gallon|gallons|inch|inches|can|cans|piece|pieces|slice|slices|clove|cloves|bag|bags|box|boxes|package|packages|pkg|pkgs|bunch|bunches|head|heads|sprig|sprigs|stalk|stalks|jar|jars|bottle|bottles|container|containers|stick|sticks|carton|cartons)\b\.?\s*/i;
+
+const _TITLE_CASE_LOWER = new Set(['of','and','or','with','in','on','the','a','an','to','for']);
+
+// Title-case an ingredient name, keeping connector words ("of"/"and"/"or"/...)
+// lowercase except in the leading position. "rack of lamb" \u2192 "Rack of Lamb".
+function _titleCaseIngredient(s) {
+  if (!s) return '';
+  return String(s).split(/\s+/).filter(Boolean).map((w, i) => {
+    const wl = w.toLowerCase();
+    if (i > 0 && _TITLE_CASE_LOWER.has(wl)) return wl;
+    return wl.charAt(0).toUpperCase() + wl.slice(1);
+  }).join(' ');
+}
+
+// Strip every recognizable qty/unit/count-word prefix from a raw string and
+// return just the ingredient name (title-cased, "of" lowercase). Returns ''
+// for orphans like "1" or "-Oz" that have no real product after stripping.
+//
+// "-Oz Bag Frozen Edamame"  \u2192 "Frozen Edamame"
+// "\u20133 Slices Turkey Bacon"   \u2192 "Turkey Bacon"
+// "8-Bone Rack Of Lamb"     \u2192 "Rack of Lamb"
+// ": Hot Sauce"             \u2192 "Hot Sauce"
+// "1" / "2" / ":"           \u2192 ""
+function normalizeIngredientName(raw) {
+  if (raw == null) return '';
+  let s = String(raw).trim();
+  if (!s) return '';
+  // Drop anything inside parens and anything after the first comma \u2014 those are
+  // qualifiers, not part of the product name.
+  s = s.replace(/\([^)]*\)/g, ' ').split(',')[0].trim();
+  // Drop the alternative half of an "X or Y" form. The product is X; Y is just
+  // a substitution suggestion ("turkey bacon or pancetta" \u2192 "turkey bacon").
+  s = s.replace(/\s+or\s+.*$/i, '').trim();
+  // Glue "1-inch" / "8-bone" so leading-token stripping below picks them up.
+  s = s.replace(/(\d)-([A-Za-z])/g, '$1 $2');
+  // Repeatedly peel off leading punctuation \u2192 number \u2192 unit/count word \u2192
+  // size/cut descriptor until nothing more matches. Capped to avoid
+  // pathological loops on weird input.
+  for (let i = 0; i < 12; i++) {
+    const before = s;
+    s = s.replace(/^[\s\u2022\u2013\u2014\-\*\:\.\u00b7]+/, '');                                     // bullets/dashes/colons
+    s = s.replace(/^\d+(?:[\/\.]\d+)?(?:\s*[\u2013\u2014\-]\s*\d+(?:[\/\.]\d+)?)?\s*/, ''); // qty incl. ranges
+    s = s.replace(_INGREDIENT_LEADING_UNIT_RE, '');                              // unit / count word
+    s = s.replace(_INGREDIENT_LEADING_DESCRIPTOR_RE, '');                        // thick/boneless/etc.
+    if (s === before) break;
+  }
+  s = s.replace(/\s+/g, ' ').trim();
+  // Nothing meaningful left? Caller drops orphan entries.
+  if (!s || /^[\s\d\u2013\u2014\-\:\.\*\u00b7]+$/.test(s)) return '';
+  return _titleCaseIngredient(s);
+}
+
+// Parse a raw ingredient line ("12 oz can crushed tomatoes") into a row for
+// the recipe form: { qty, unit, name, group }. Uses normalizeIngredientName
+// to guarantee the name field never carries leading qty/unit/punctuation
+// junk \u2014 the bug that produced library entries like "-Oz Bag Frozen Edamame".
 function parseIngredientLine(line) {
-  line = line.trim().replace(/^[\u2022\-\*]\s*/, '');
-  // Normalize hyphenated dimensions ("1-inch" \u2192 "1 inch") so the unit detector below can pick them up
-  // instead of leaving a stray "-inch" glued to the product name.
-  line = line.replace(/(\d)-(inch(?:es)?|cm|mm|lb|lbs|pound|pounds|oz|ounce|ounces)\b/gi, '$1 $2');
-  const units = ['lb','lbs','pound','pounds','oz','ounce','ounces','g','gram','grams','kg','kilogram','kilograms','tsp','teaspoon','teaspoons','tbsp','tablespoon','tablespoons','cup','cups','ml','milliliter','milliliters','l','liter','liters','can','cans','piece','pieces','slice','slices','clove','cloves','inch','inches'];
-  const regex = /^([\d\/\.\s]+)?\s*([a-zA-Z\-]+)?\s*(.*)$/;
-  const match = line.match(regex);
-  if (!match) return { qty: '', unit: '', name: capitalize(line), group: 'Other' };
-  let [, quantity, possibleUnit, rest] = match;
-  quantity = (quantity || '').trim(); possibleUnit = (possibleUnit || '').trim(); rest = (rest || '').trim();
-  let unit = '', name = '';
-  if (possibleUnit && units.includes(possibleUnit.toLowerCase())) { unit = possibleUnit.toLowerCase(); name = rest; }
-  else if (possibleUnit) { name = rest ? possibleUnit + ' ' + rest : possibleUnit; }
-  else { name = rest; }
-  const cleanName = name.replace(/\([^)]*\)$/g, '').trim();
-  const finalName = cleanName.replace(/,\s*$/, '').trim();
-  const group = detectIngredientGroup(finalName);
-  return { qty: quantity, unit, name: capitalize(finalName), group };
+  if (line == null) return { qty: '', unit: '', name: '', group: 'Other' };
+  let s = String(line).trim();
+  // Strip leading bullets / dashes (incl. en/em U+2013/U+2014) / colons / asterisks
+  // before qty extraction so "\u20133 slices ..." \u2192 qty="3", not qty="" with "\u2013" eating the digit.
+  s = s.replace(/^[\s\u2022\u2013\u2014\-\*\:\.\u00b7]+/, '');
+  s = s.replace(/(\d)-(inch(?:es)?|cm|mm|lb|lbs|pound|pounds|oz|ounce|ounces|bone|bones)\b/gi, '$1 $2');
+
+  // Pull off qty (digits, fractions, decimals, optional "1-2" range).
+  let qty = '';
+  const qtyMatch = s.match(/^(\d+(?:[\/\.]\d+)?(?:\s*[\u2013\u2014\-]\s*\d+(?:[\/\.]\d+)?)?)\s*/);
+  if (qtyMatch) {
+    qty = qtyMatch[1].trim();
+    s = s.slice(qtyMatch[0].length).replace(/^[\u2013\u2014\-\:\s]+/, '');
+  }
+
+  // First measurement unit (oz/lb/cup/...) becomes the row's unit. Pure count
+  // words ("can"/"bag") fall through to the strip pass and won't be reported
+  // as the unit (they're not really measurements).
+  let unit = '';
+  const unitMatch = s.match(_INGREDIENT_FIRST_UNIT_RE);
+  if (unitMatch) {
+    const candidate = unitMatch[1].toLowerCase();
+    const measurementUnits = new Set(['lb','lbs','pound','pounds','oz','ounce','ounces','g','gram','grams','kg','kilogram','kilograms','tsp','teaspoon','teaspoons','tbsp','tablespoon','tablespoons','cup','cups','ml','milliliter','milliliters','l','liter','liters','pint','pints','quart','quarts','gallon','gallons','inch','inches']);
+    if (measurementUnits.has(candidate)) {
+      unit = candidate;
+      s = s.slice(unitMatch[0].length);
+    }
+  }
+
+  const name = normalizeIngredientName(s);
+  return { qty, unit, name, group: detectIngredientGroup(name) };
 }
 
 function detectIngredientGroup(name) {
@@ -4446,9 +4549,10 @@ async function addInventoryItem(item) {
   const purchaseDate = item.purchaseDate || getToday();
   const category = item.category || 'Uncategorized';
   const isFromReceipt = item.fromReceipt || false;
-  const inventoryItem = { id: `inventory_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: item.name, quantity: item.quantity || 1, unit: item.unit || '', category, purchaseDate, expirationDate: item.expirationDate || suggestExpirationDate(item.name, category, purchaseDate), price: item.price || null, image_url: item.image_url || null, isFrozen: item.isFrozen || false, fromReceipt: isFromReceipt, expirationVerified: !isFromReceipt };
+  const cleanName = normalizeIngredientName(item.name) || item.name;
+  const inventoryItem = { id: `inventory_${Date.now()}_${Math.random().toString(36).slice(2)}`, name: cleanName, quantity: item.quantity || 1, unit: item.unit || '', category, purchaseDate, expirationDate: item.expirationDate || suggestExpirationDate(cleanName, category, purchaseDate), price: item.price || null, image_url: item.image_url || null, isFrozen: item.isFrozen || false, fromReceipt: isFromReceipt, expirationVerified: !isFromReceipt };
   await storage.create(inventoryItem);
-  trackFrequentItem(item.name, item.category);
+  trackFrequentItem(cleanName, item.category);
   return inventoryItem;
 }
 
@@ -4597,7 +4701,8 @@ async function addReceiptItemsToInventory() {
     const item = items[i]; const quantity = item.quantity || 1; const pricePerItem = (item.price || 0) / quantity;
     let expirationDate = null;
     if (item.daysUntilExpiration) { const expDate = new Date(purchaseDateObj); expDate.setDate(expDate.getDate() + item.daysUntilExpiration); expirationDate = _localDateStr(expDate); }
-    for (let q = 0; q < quantity; q++) { itemsToAdd.push({ id: `inventory_${Date.now()}_${i}_${q}_${Math.random().toString(36).slice(2)}`, type: 'inventory', name: item.name, category: item.category || 'Other', quantity: 1, unit: '', purchasePrice: pricePerItem, purchaseDate, expirationDate, store: receiptScanState.store || '', image_url: getIngredientImage(item.name, item.category) || '', fromReceipt: true, expirationVerified: false }); }
+    const cleanItemName = normalizeIngredientName(item.name) || item.name;
+    for (let q = 0; q < quantity; q++) { itemsToAdd.push({ id: `inventory_${Date.now()}_${i}_${q}_${Math.random().toString(36).slice(2)}`, type: 'inventory', name: cleanItemName, category: item.category || 'Other', quantity: 1, unit: '', purchasePrice: pricePerItem, purchaseDate, expirationDate, store: receiptScanState.store || '', image_url: getIngredientImage(item.name, item.category) || '', fromReceipt: true, expirationVerified: false }); }
   }
   showToast(`Adding ${itemsToAdd.length} items...`, 'info');
   for (const inventoryItem of itemsToAdd) { try { await storage.create(inventoryItem); state.inventory.push(inventoryItem); } catch (e) { console.error('Failed to add item:', e); } }
@@ -4867,6 +4972,7 @@ function createDefaultIngredientKnowledge(name) {
 
 async function saveIngredientKnowledge(knowledge) {
   try {
+    if (knowledge && knowledge.name) knowledge.name = normalizeIngredientName(knowledge.name) || knowledge.name;
     const existing = state.ingredientKnowledge.find(k => k.id === knowledge.id);
     if (existing) { Object.assign(existing, knowledge); await storage.update(knowledge); }
     else { state.ingredientKnowledge.push(knowledge); await storage.create(knowledge); }
@@ -4888,9 +4994,11 @@ async function syncIngredientImagesToKnowledge() {
   const existingNames = new Set((state.ingredientKnowledge || []).map(k => k.name.toLowerCase()));
   const deletedNames = new Set(state.deletedIngredients || []);
   for (const [name, imageUrl] of Object.entries(allImages)) {
-    const normalizedName = name.toLowerCase();
-    if (existingNames.has(normalizedName) || deletedNames.has(normalizedName)) continue;
-    const knowledge = { id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`, type: 'ingredient_knowledge', name: normalizedName, category: guessIngredientCategory(normalizedName), season: 'Year-round', image_url: imageUrl, storage: { location: 'Fridge', duration: '' }, freezable: null, freezingInfo: { blanch: '', duration: '', instructions: '' }, cookingMethods: [], techniques: [], pairings: [], notes: [], createdAt: new Date().toISOString() };
+    const cleanName = normalizeIngredientName(name);
+    if (!cleanName) continue;
+    const lookupKey = cleanName.toLowerCase();
+    if (existingNames.has(lookupKey) || deletedNames.has(lookupKey)) continue;
+    const knowledge = { id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`, type: 'ingredient_knowledge', name: cleanName, category: guessIngredientCategory(lookupKey), season: 'Year-round', image_url: imageUrl, storage: { location: 'Fridge', duration: '' }, freezable: null, freezingInfo: { blanch: '', duration: '', instructions: '' }, cookingMethods: [], techniques: [], pairings: [], notes: [], createdAt: new Date().toISOString() };
     state.ingredientKnowledge.push(knowledge); await storage.create(knowledge); addedCount++;
     if (addedCount % 10 === 0) await new Promise(resolve => setTimeout(resolve, 100));
   }
@@ -6840,10 +6948,11 @@ async function confirmAddIngredientToInventory(ingredientName) {
                    knowledge?.category === 'Dairy' ? 'Dairy & Eggs' :
                    knowledge?.category === 'Grains' ? 'Pantry' : 'Other';
 
+  const cleanName = normalizeIngredientName(ingredientName) || ingredientName;
   const newItem = {
     id: `inv_${Date.now()}_${Math.random().toString(36).slice(2)}`,
     type: 'inventory',
-    name: capitalize(ingredientName),
+    name: cleanName,
     category: category,
     quantity: quantity,
     unit: unit,

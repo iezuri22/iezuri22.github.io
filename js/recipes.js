@@ -130,7 +130,7 @@ async function saveRecipeForm() {
     .map(r => ({
       qty: (r.qty || '').trim(),
       unit: (r.unit || '').trim(),
-      name: (r.name || '').trim(),
+      name: normalizeIngredientName(r.name || ''),
       group: r.group || 'Other'
     }))
     .filter(r => r.name);

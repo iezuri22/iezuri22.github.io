@@ -1318,16 +1318,18 @@ function renderAllIngredients() {
   }
 
 function viewIngredientInfo(ingredientName) {
-    const name = ingredientName.toLowerCase().trim();
-    let knowledge = (state.ingredientKnowledge || []).find(k => k.name.toLowerCase() === name);
+    const cleanName = normalizeIngredientName(ingredientName);
+    if (!cleanName) return;
+    const lookupKey = cleanName.toLowerCase();
+    let knowledge = (state.ingredientKnowledge || []).find(k => k.name.toLowerCase() === lookupKey);
 
     if (!knowledge) {
-      knowledge = createDefaultIngredientKnowledge(name);
+      knowledge = createDefaultIngredientKnowledge(cleanName);
       state.ingredientKnowledge.push(knowledge);
       storage.create(knowledge);
     }
 
-    state.selectedIngredientId = name;
+    state.selectedIngredientId = lookupKey;
     state.currentView = 'ingredient-detail';
     render();
   }
@@ -1389,11 +1391,12 @@ function showAddIngredientKnowledgeModal() {
   }
 
 async function saveNewIngredientKnowledge() {
-    const name = document.getElementById('newIngName')?.value.trim();
+    const rawName = document.getElementById('newIngName')?.value.trim();
     const category = document.getElementById('newIngCategory')?.value;
     const expDays = document.getElementById('newIngExpDays')?.value;
     const imageUrl = document.getElementById('newIngImage')?.value.trim();
 
+    const name = normalizeIngredientName(rawName);
     if (!name) {
       showError('Please enter an ingredient name');
       return;
@@ -1411,7 +1414,7 @@ async function saveNewIngredientKnowledge() {
     const ingredient = {
       id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       type: 'ingredient_knowledge',
-      name: name.toLowerCase(),
+      name: name,
       category: category || 'Other',
       defaultExpirationDays: expDays ? parseInt(expDays) : null,
       image_url: imageUrl || null,
@@ -3331,19 +3334,20 @@ function showAddIngredientModal() {
   }
 
 async function saveNewIngredient() {
-    const name = document.getElementById('newIngredientName')?.value.trim();
+    const rawName = document.getElementById('newIngredientName')?.value.trim();
     const category = document.getElementById('newIngredientCategory')?.value;
     const imageUrl = document.getElementById('newIngredientImage')?.value.trim();
     const notes = document.getElementById('newIngredientNotes')?.value.trim();
 
-    if (!name) {
+    const cleanName = normalizeIngredientName(rawName);
+    if (!cleanName) {
       showError('Please enter an ingredient name');
       return;
     }
 
-    const normalizedName = name.toLowerCase();
+    const lookupKey = cleanName.toLowerCase();
 
-    const existing = state.ingredientKnowledge.find(k => k.name.toLowerCase() === normalizedName);
+    const existing = state.ingredientKnowledge.find(k => k.name.toLowerCase() === lookupKey);
     if (existing) {
       showError('This ingredient already exists');
       return;
@@ -3352,7 +3356,7 @@ async function saveNewIngredient() {
     const knowledge = {
       id: `ingredient_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       type: 'ingredient_knowledge',
-      name: normalizedName,
+      name: cleanName,
       category: category || 'Other',
       image_url: imageUrl || '',
       notes: notes ? [notes] : [],
@@ -3366,10 +3370,10 @@ async function saveNewIngredient() {
       await storage.create(knowledge);
       state.ingredientKnowledge.push(knowledge);
       if (imageUrl) {
-        INGREDIENT_IMAGES[normalizedName] = imageUrl;
+        INGREDIENT_IMAGES[lookupKey] = imageUrl;
       }
       closeModal();
-      showToast(`${name} added!`, 'success');
+      showToast(`${cleanName} added!`, 'success');
       render();
     } catch (error) {
       console.error('saveNewIngredient failed:', error);
@@ -3417,6 +3421,7 @@ function openIngredientDetail(name) {
 
 async function saveIngredientKnowledge(knowledge) {
     try {
+      if (knowledge && knowledge.name) knowledge.name = normalizeIngredientName(knowledge.name) || knowledge.name;
       const existing = state.ingredientKnowledge.find(k => k.id === knowledge.id);
       if (existing) {
         Object.assign(existing, knowledge);
