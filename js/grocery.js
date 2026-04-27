@@ -657,39 +657,181 @@ function _renderGroceryRow(item, isChecked) {
       const escapedId = escJs(item.id);
       const store = item.store || '';
 
+      // Wrapper hosts swipe action backgrounds and the swipe gesture handler.
+      // Tapping the row body opens the actions sheet (set store, edit, etc.).
+      // Swipe right toggles checked, swipe left removes the item — wired in
+      // _initGrocerySwipeGestures().
       return `
-        <div data-gro-id="${esc(item.id)}" class="gro-item ${isChecked ? 'gro-item-checked' : ''}">
-          <div class="gro-item-check" onclick="toggleSmartGroceryItem('${escapedId}')">
-            <div class="gro-checkbox ${isChecked ? 'checked' : ''}">
-              ${isChecked ? '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+        <div data-gro-id="${esc(item.id)}" class="gro-swipe-wrapper">
+          <div class="gro-swipe-action gro-swipe-action-check" aria-hidden="true">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>${isChecked ? 'Uncheck' : 'Done'}</span>
+          </div>
+          <div class="gro-swipe-action gro-swipe-action-delete" aria-hidden="true">
+            <span>Delete</span>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+          </div>
+          <div class="gro-item ${isChecked ? 'gro-item-checked' : ''}">
+            <div class="gro-item-check">
+              <div class="gro-checkbox ${isChecked ? 'checked' : ''}">
+                ${isChecked ? '<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
+              </div>
             </div>
-          </div>
-          <div class="gro-item-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);_scheduleGroceryRender(100);})`}">
-            ${photo
-              ? `<img src="${esc(photo)}" class="gro-item-img" />`
-              : `<div class="gro-item-img-placeholder">
-                  <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
-                </div>`
-            }
-          </div>
-          <div class="gro-item-body" onclick="toggleSmartGroceryItem('${escapedId}')">
-            <div class="gro-item-name ${isChecked ? 'checked' : ''}">${esc(name)}</div>
-            <div class="gro-item-meta">
-              ${qtyLabel ? `<span class="gro-item-qty">${esc(qtyLabel)}</span>` : ''}
-              ${sourceLabel ? `<span class="gro-item-source">from ${esc(sourceLabel)}</span>` : ''}
+            <div class="gro-item-photo" onclick="event.stopPropagation();${photo ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedItemName}')` : `openPhotoSearch('${escapedItemName}',function(url){setIngredientPhoto('${escapedItemName}',url);_scheduleGroceryRender(100);})`}">
+              ${photo
+                ? `<img src="${esc(photo)}" class="gro-item-img" />`
+                : `<div class="gro-item-img-placeholder">
+                    <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
+                  </div>`
+              }
             </div>
-            ${store ? `<span class="gro-item-store-tag">${esc(store)}</span>` : ''}
-          </div>
-          <div class="gro-item-actions">
-            ${!isChecked ? `
-              <button class="gro-item-more-btn" onclick="event.stopPropagation();showGroceryItemActions('${escapedId}')" aria-label="More actions">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>
-              </button>
-            ` : ''}
+            <div class="gro-item-body">
+              <div class="gro-item-name ${isChecked ? 'checked' : ''}">${esc(name)}</div>
+              <div class="gro-item-meta">
+                ${qtyLabel ? `<span class="gro-item-qty">${esc(qtyLabel)}</span>` : ''}
+                ${sourceLabel ? `<span class="gro-item-source">from ${esc(sourceLabel)}</span>` : ''}
+              </div>
+              ${store ? `<span class="gro-item-store-tag">${esc(store)}</span>` : ''}
+            </div>
           </div>
         </div>
       `;
     }
+
+// Wire up swipe gestures + tap-to-open-actions on rendered grocery rows.
+// Swipe right → toggle checked. Swipe left → delete. Tap anywhere on the
+// row body (other than the photo) → open the per-item action sheet.
+// Idempotent per-element via _swipeInit flag.
+function _initGrocerySwipeGestures() {
+  const wrappers = document.querySelectorAll('.gro-swipe-wrapper');
+  const COMMIT_PX = 90;
+  const REVEAL_PX = 24;
+  const DECIDE_PX = 6;
+
+  wrappers.forEach(wrapper => {
+    if (wrapper._swipeInit) return;
+    wrapper._swipeInit = true;
+
+    const row = wrapper.querySelector('.gro-item');
+    const itemId = wrapper.getAttribute('data-gro-id');
+    if (!row || !itemId) return;
+
+    let startX = 0, startY = 0, dx = 0;
+    let active = false;
+    let decided = false;
+    let isHorizontal = false;
+    let touchActive = false;
+
+    const isInteractive = (el) =>
+      !!(el && (el.closest('.gro-item-photo')));
+
+    const reset = () => {
+      row.style.transition = 'transform 0.2s ease';
+      row.style.transform = '';
+      wrapper.classList.remove('swipe-right', 'swipe-left', 'swipe-commit-right', 'swipe-commit-left', 'swiping');
+    };
+
+    wrapper.addEventListener('touchstart', (e) => {
+      if (e.touches.length !== 1) return;
+      if (isInteractive(e.target)) return;
+      const t = e.touches[0];
+      startX = t.clientX; startY = t.clientY;
+      dx = 0; active = true; decided = false; isHorizontal = false;
+      touchActive = true;
+      row.style.transition = 'none';
+    }, { passive: true });
+
+    wrapper.addEventListener('touchmove', (e) => {
+      if (!active) return;
+      const t = e.touches[0];
+      const dxRaw = t.clientX - startX;
+      const dyRaw = t.clientY - startY;
+      if (!decided) {
+        if (Math.abs(dxRaw) < DECIDE_PX && Math.abs(dyRaw) < DECIDE_PX) return;
+        if (Math.abs(dyRaw) > Math.abs(dxRaw)) {
+          // Vertical scroll wins — bail out so the page can scroll.
+          active = false;
+          reset();
+          return;
+        }
+        decided = true;
+        isHorizontal = true;
+        wrapper.classList.add('swiping');
+      }
+      e.preventDefault();
+      dx = dxRaw;
+      row.style.transform = `translateX(${dx}px)`;
+      wrapper.classList.toggle('swipe-right', dx > REVEAL_PX);
+      wrapper.classList.toggle('swipe-left', dx < -REVEAL_PX);
+      wrapper.classList.toggle('swipe-commit-right', dx > COMMIT_PX);
+      wrapper.classList.toggle('swipe-commit-left', dx < -COMMIT_PX);
+    }, { passive: false });
+
+    const onEnd = (e) => {
+      if (!active) {
+        // touchcancel during vertical scroll — clear touch flag so a real
+        // tap later still works.
+        if (e && e.type === 'touchcancel') touchActive = false;
+        return;
+      }
+      active = false;
+      const wasSwipe = isHorizontal;
+      const movedDx = dx;
+      wrapper.classList.remove('swiping');
+      row.style.transition = 'transform 0.2s ease';
+
+      if (movedDx > COMMIT_PX) {
+        // Toggle data ourselves + render directly. Calling
+        // toggleSmartGroceryItem would also schedule a render 1.2s out,
+        // leaving the off-screen wrapper visible as a colored strip.
+        row.style.transform = `translateX(110%)`;
+        setTimeout(() => {
+          const list = getSmartGroceryList();
+          const it = list.find(i => i.id === itemId);
+          if (it) { it.checked = !it.checked; saveSmartGroceryList(list); }
+          if (typeof _updateGroceryBadge === 'function') _updateGroceryBadge();
+          if (typeof render === 'function') render();
+        }, 180);
+        if (e && e.cancelable) e.preventDefault();
+      } else if (movedDx < -COMMIT_PX) {
+        // Mutate data ourselves and re-render — calling removeSmartGroceryItem
+        // would re-set transform/opacity on this same wrapper and snap it
+        // back from -110% to -20px before fading.
+        row.style.transform = `translateX(-110%)`;
+        setTimeout(() => {
+          const list = getSmartGroceryList().filter(i => i.id !== itemId);
+          saveSmartGroceryList(list);
+          if (typeof _updateGroceryBadge === 'function') _updateGroceryBadge();
+          if (typeof render === 'function') render();
+        }, 180);
+        if (e && e.cancelable) e.preventDefault();
+      } else if (!wasSwipe && e && e.type === 'touchend' && !isInteractive(e.target)) {
+        // Treat as tap → open the action sheet. preventDefault suppresses the
+        // synthetic click that would otherwise follow on mobile.
+        reset();
+        if (e.cancelable) e.preventDefault();
+        showGroceryItemActions(itemId);
+      } else {
+        reset();
+      }
+      // Clear the touch flag after the click that may follow.
+      setTimeout(() => { touchActive = false; }, 350);
+    };
+
+    wrapper.addEventListener('touchend', onEnd);
+    wrapper.addEventListener('touchcancel', (e) => {
+      if (active) { active = false; reset(); }
+      touchActive = false;
+    });
+
+    // Desktop / non-touch fallback: regular click opens the action sheet.
+    wrapper.addEventListener('click', (e) => {
+      if (touchActive) return;
+      if (isInteractive(e.target)) return;
+      showGroceryItemActions(itemId);
+    });
+  });
+}
 
 function _renderGroceryGridCard(item, isChecked) {
       const name = toTitleCase(item.name);
@@ -1473,6 +1615,7 @@ function render() {
     </div>
   `;
 
+  if (state.currentView === 'grocery-list') _initGrocerySwipeGestures();
 }
 
 // ============================================================

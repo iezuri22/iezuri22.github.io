@@ -3155,6 +3155,13 @@ function openModal(content) {
   const modal = document.getElementById('modal');
   const modalContent = document.getElementById('modal-content');
   if (modal && modalContent) {
+    // Cancel any in-flight close so we don't hide ourselves after reopening.
+    // Why: closeModal() schedules a setTimeout/transitionend that flips
+    // display:none. If a button calls closeModal() then openModal() in
+    // sequence (e.g. action sheet → next modal), the stale close fires after
+    // the new modal is visible and hides it.
+    if (modal._closeTimeoutId) { clearTimeout(modal._closeTimeoutId); modal._closeTimeoutId = null; }
+    if (modal._closeOnEnd) { modalContent.removeEventListener('transitionend', modal._closeOnEnd); modal._closeOnEnd = null; }
     modalContent.innerHTML = content;
     modal.style.display = 'flex';
     requestAnimationFrame(() => { modal.classList.add('modal-open'); });
@@ -3165,11 +3172,17 @@ function closeModal() {
   const modal = document.getElementById('modal');
   if (!modal) return;
   modal.classList.remove('modal-open');
-  const onEnd = () => { modal.style.display = 'none'; modal.removeEventListener('transitionend', onEnd); };
   const content = document.getElementById('modal-content');
+  const onEnd = () => {
+    modal.style.display = 'none';
+    if (content) content.removeEventListener('transitionend', onEnd);
+    modal._closeTimeoutId = null;
+    modal._closeOnEnd = null;
+  };
   if (content && getComputedStyle(content).transitionDuration !== '0s') {
+    modal._closeOnEnd = onEnd;
     content.addEventListener('transitionend', onEnd, { once: true });
-    setTimeout(onEnd, 400); // Fallback if transitionend doesn't fire
+    modal._closeTimeoutId = setTimeout(onEnd, 400); // Fallback if transitionend doesn't fire
   } else {
     modal.style.display = 'none';
   }

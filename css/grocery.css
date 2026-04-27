@@ -210,6 +210,50 @@
   gap: 4px;
 }
 
+/* ===== SWIPEABLE ROW WRAPPER ===== */
+/* Hosts the colored "Done" / "Delete" backgrounds revealed during a swipe.
+   The .gro-item inside translates X under finger; the wrapper clips overflow
+   so the action labels appear from behind. */
+.gro-swipe-wrapper {
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+
+.gro-swipe-action {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.gro-swipe-action-check {
+  background: var(--accent-green, #34c759);
+  justify-content: flex-start;
+}
+
+.gro-swipe-action-delete {
+  background: var(--accent, #e85d5d);
+  justify-content: flex-end;
+}
+
+.gro-swipe-wrapper.swipe-right .gro-swipe-action-check { opacity: 1; }
+.gro-swipe-wrapper.swipe-left  .gro-swipe-action-delete { opacity: 1; }
+.gro-swipe-wrapper.swipe-commit-right .gro-swipe-action-check,
+.gro-swipe-wrapper.swipe-commit-left  .gro-swipe-action-delete {
+  filter: brightness(1.1);
+}
+
 /* ===== GROCERY ITEM ROW (Large Vertical) ===== */
 .gro-item {
   display: flex;
@@ -221,6 +265,8 @@
   border-radius: var(--radius-xl);
   -webkit-tap-highlight-color: transparent;
   transition: opacity 0.15s ease, transform 0.15s ease;
+  position: relative;
+  z-index: 1;
 }
 
 .gro-item:active {
