@@ -618,6 +618,13 @@
   border-color: var(--accent);
 }
 
+.gro-sort-toggle .gro-view-btn {
+  width: auto;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
 /* ===== INSTAGRAM GRID VIEW ===== */
 .gro-grid-category {
   margin-bottom: 16px;

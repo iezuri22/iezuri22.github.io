@@ -449,6 +449,10 @@ const INGREDIENT_SYNONYMS = {
   'apple': 'apples', 'banana': 'bananas', 'orange': 'oranges',
   'lemon': 'lemons', 'lime': 'limes', 'peach': 'peaches',
   'tortilla': 'tortillas', 'bay leaf': 'bay leaves',
+  'onion': 'onions', 'pepper': 'peppers', 'cucumber': 'cucumbers',
+  'clove': 'cloves', 'jalapeno pepper': 'jalapeño', 'jalapeño pepper': 'jalapeño',
+  'green onion': 'green onions', 'scallion': 'green onions', 'scallions': 'green onions',
+  'spring onion': 'green onions', 'spring onions': 'green onions',
   'strawberry': 'strawberries', 'blueberry': 'blueberries', 'raspberry': 'raspberries',
   'sweet potato': 'sweet potatoes', 'baby potato': 'baby potatoes',
   'baby carrot': 'baby carrots', 'bell peppers': 'bell pepper',
@@ -465,9 +469,45 @@ const INGREDIENT_SYNONYMS = {
   'granulated sugar': 'sugar', 'all-purpose flour': 'flour', 'all purpose flour': 'flour'
 };
 
+// Modifiers describing how an ingredient is prepped, not what it is.
+// Stripped from both ends of an ingredient phrase before canonicalization so
+// "roasted sweet potatoes" and "boiled eggs, halved" collapse to "sweet
+// potatoes" and "eggs" respectively.
+const PREP_MODIFIERS = new Set([
+  // cooking methods
+  'roasted','baked','fried','grilled','broiled','sauteed','sautéed','steamed','boiled','poached',
+  'blanched','smoked','pickled','fermented','toasted','seared','braised','stewed','charred','caramelized',
+  'pan-fried','deep-fried','stir-fried','hard-boiled','soft-boiled','scrambled',
+  // states
+  'raw','fresh','frozen','dried','cooked','uncooked','cured','melted','softened','beaten','whisked',
+  'overripe','unripe','ripe','warm','cold','hot','room-temperature','lukewarm','chilled',
+  // cuts / shapes
+  'chopped','diced','sliced','minced','peeled','halved','quartered','shredded','grated','crushed',
+  'mashed','packed','divided','drained','rinsed','cubed','julienned','torn','smashed','pitted',
+  'seeded','trimmed','deveined','butterflied','rolled','crumbled','whole',
+  // adverbs of degree
+  'finely','coarsely','thinly','thickly','roughly','lightly','heavily','well',
+  // notes
+  'optional','reserved','separated','unsweetened','sweetened','salted','unsalted','homemade','store-bought'
+]);
+
+// Strip prep modifiers and qualifying clauses so the name reflects the product
+// you'd actually look for at the store.
+function cleanIngredientName(name) {
+  if (!name) return '';
+  let s = String(name).toLowerCase().trim();
+  s = s.replace(/\([^)]*\)/g, ' ');           // drop "(diced)" / "(about 2 cups)"
+  s = s.split(',')[0].trim();                 // drop ", halved" trailing clauses
+  s = s.replace(/\s+/g, ' ');
+  let tokens = s.split(' ').filter(Boolean);
+  while (tokens.length > 1 && PREP_MODIFIERS.has(tokens[0])) tokens.shift();
+  while (tokens.length > 1 && PREP_MODIFIERS.has(tokens[tokens.length - 1])) tokens.pop();
+  return tokens.join(' ').trim();
+}
+
 function canonicalIngredientName(name) {
-  const lower = (name || '').toLowerCase().trim();
-  return INGREDIENT_SYNONYMS[lower] || lower;
+  const cleaned = cleanIngredientName(name);
+  return INGREDIENT_SYNONYMS[cleaned] || cleaned;
 }
 
 // ITEM_MAPPINGS for receipt scanning
@@ -2663,9 +2703,9 @@ function submitPickerIngredients() {
   const list = getSmartGroceryList();
   let added = 0;
   selected.forEach(ing => {
-    const titleName = toTitleCase(ing.name);
-    const nameLower = titleName.toLowerCase().trim();
-    if (!nameLower) return;
+    const cleaned = cleanIngredientName(ing.name);
+    if (!cleaned) return;
+    const titleName = toTitleCase(cleaned);
     const canonical = canonicalIngredientName(titleName);
     const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
     if (existing) {
@@ -2770,13 +2810,14 @@ function submitBatchPickerIngredients() {
 
   const list = getSmartGroceryList();
   selected.forEach(ing => {
+    const cleaned = cleanIngredientName(ing.name);
     const canonical = canonicalIngredientName(ing.name);
     if (!canonical) return;
     const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
     if (existing) {
       if (!existing.sourceMeals.includes(batch.name)) existing.sourceMeals.push(batch.name);
     } else {
-      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: toTitleCase(ing.name), category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], store: getLastSelectedStore() || '', addedAt: Date.now() });
+      list.push({ id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8), name: toTitleCase(cleaned || ing.name), category: mapToGroceryCategory(ing.group || 'Other'), qty: ing.qty || '', unit: ing.unit || '', checked: false, manual: false, sourceMeals: [batch.name], store: getLastSelectedStore() || '', addedAt: Date.now() });
     }
   });
   saveSmartGroceryList(list);
@@ -2788,7 +2829,8 @@ function submitBatchPickerIngredients() {
 function addManualGroceryItemSmart() {
   const input = document.getElementById('groceryManualInput'); if (!input) return;
   const rawName = input.value.trim(); if (!rawName) return;
-  const name = toTitleCase(rawName);
+  const cleaned = cleanIngredientName(rawName);
+  const name = toTitleCase(cleaned || rawName);
   const list = getSmartGroceryList();
   if (list.find(i => canonicalIngredientName(i.name) === canonicalIngredientName(name))) { showToast('Already on your list', 'info'); input.value = ''; return; }
   const catInput = document.getElementById('groceryManualCategory');

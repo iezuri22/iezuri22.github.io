@@ -519,26 +519,17 @@ function renderGroceryList() {
           ${clearHtml}
           ${emptyHtml}
 
-          <!-- View toggle -->
+          <!-- Sort selector -->
           ${(filteredUnchecked.length + filteredChecked.length) > 0 ? `
-            <div class="gro-view-toggle">
-              <button class="gro-view-btn ${state.groceryViewMode !== 'grid' ? 'active' : ''}" onclick="state.groceryViewMode='list';render();" title="List view">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5"/></svg>
-              </button>
-              <button class="gro-view-btn ${state.groceryViewMode === 'grid' ? 'active' : ''}" onclick="state.groceryViewMode='grid';render();" title="Grid view">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3.75v4.5h4.5v-4.5h-4.5zm0 12v4.5h4.5v-4.5h-4.5zm12-12v4.5h4.5v-4.5h-4.5zm0 12v4.5h4.5v-4.5h-4.5z"/></svg>
-              </button>
+            <div class="gro-view-toggle gro-sort-toggle">
+              <button class="gro-view-btn ${_groSortMode() === 'category' ? 'active' : ''}" onclick="state.groceryViewMode='category';render();">By type</button>
+              <button class="gro-view-btn ${_groSortMode() === 'meal' ? 'active' : ''}" onclick="state.groceryViewMode='meal';render();">By meal</button>
+              <button class="gro-view-btn ${_groSortMode() === 'default' ? 'active' : ''}" onclick="state.groceryViewMode='default';render();">Default</button>
             </div>
           ` : ''}
 
           <!-- Main Grocery List -->
-          ${state.groceryViewMode === 'grid' ? `
-            ${_renderGridByCategory(filteredUnchecked, false)}
-          ` : `
-            <div class="gro-list">
-              ${filteredUnchecked.map(item => _renderGroceryRow(item, false)).join('')}
-            </div>
-          `}
+          ${_renderGroceryItems(filteredUnchecked, false)}
 
           <!-- Checked Items -->
           ${filteredChecked.length > 0 ? `
@@ -547,15 +538,9 @@ function renderGroceryList() {
                 <span class="gro-chev" style="transform:rotate(90deg);">&#9656;</span>
                 <span>Completed (${filteredChecked.length})</span>
               </div>
-              ${state.groceryViewMode === 'grid' ? `
-                <div style="opacity:0.5;">
-                  ${_renderGridByCategory(filteredChecked, true)}
-                </div>
-              ` : `
-                <div class="gro-list">
-                  ${filteredChecked.map(item => _renderGroceryRow(item, true)).join('')}
-                </div>
-              `}
+              <div style="opacity:0.5;">
+                ${_renderGroceryItems(filteredChecked, true)}
+              </div>
             </div>
           ` : ''}
 
@@ -570,6 +555,67 @@ function renderGroceryList() {
 
       `;
     }
+
+function _groSortMode() {
+  const m = state.groceryViewMode;
+  if (m === 'category' || m === 'meal' || m === 'default') return m;
+  if (m === 'grid') return 'category';
+  return 'default';
+}
+
+function _renderGroceryItems(items, isChecked) {
+  if (items.length === 0) return '';
+  const mode = _groSortMode();
+  if (mode === 'category') return _renderGridByCategory(items, isChecked);
+  if (mode === 'meal') return _renderGridByMeal(items, isChecked);
+  return `<div class="gro-list">${items.map(item => _renderGroceryRow(item, isChecked)).join('')}</div>`;
+}
+
+// Group items by the recipe/meal they came from. Items in the same source meal
+// stay together; multi-source items appear under their first listed meal.
+// Order of meal sections follows the recipe order in this week's plan, so the
+// list matches the meal sequence the user will actually cook through.
+function _renderGridByMeal(items, isChecked) {
+  const MANUAL_KEY = '__manual__';
+  const byMeal = {};
+  items.forEach(item => {
+    const meal = (Array.isArray(item.sourceMeals) && item.sourceMeals[0]) || MANUAL_KEY;
+    if (!byMeal[meal]) byMeal[meal] = [];
+    byMeal[meal].push(item);
+  });
+
+  const planOrder = (() => {
+    try {
+      const slots = (typeof _getThisWeekPlannedSlots === 'function') ? _getThisWeekPlannedSlots() : [];
+      const seen = new Set();
+      const order = [];
+      slots.forEach(s => {
+        const t = s && s.recipe && s.recipe.title;
+        if (t && !seen.has(t)) { seen.add(t); order.push(t); }
+      });
+      return order;
+    } catch { return []; }
+  })();
+
+  const orderedMeals = [];
+  planOrder.forEach(t => { if (byMeal[t]) orderedMeals.push(t); });
+  Object.keys(byMeal).forEach(t => {
+    if (t !== MANUAL_KEY && !orderedMeals.includes(t)) orderedMeals.push(t);
+  });
+  if (byMeal[MANUAL_KEY]) orderedMeals.push(MANUAL_KEY);
+
+  return orderedMeals.map(meal => {
+    const label = meal === MANUAL_KEY ? 'Added manually' : meal;
+    return `
+      <div class="gro-grid-category">
+        <div class="gro-grid-category-header">${esc(label)}</div>
+        <div class="gro-list">
+          ${byMeal[meal].map(item => _renderGroceryRow(item, isChecked)).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
 
 function _renderGridByCategory(items, isChecked) {
   const byCategory = {};
@@ -1213,14 +1259,15 @@ async function addManualGroceryItem() {
       const nameInput = document.getElementById('manualItemName');
       const groupSelect = document.getElementById('manualItemGroup');
 
-      const itemName = nameInput.value.trim();
+      const rawName = nameInput.value.trim();
       const itemGroup = groupSelect.value;
 
-      if (!itemName) {
+      if (!rawName) {
         showError('Please enter an item name');
         return;
       }
 
+      const itemName = cleanIngredientName(rawName) || rawName;
       const ingredientKey = normalizeIngredient(itemName);
 
       const manualSelId = `mealSel_manual_${Date.now()}`;
@@ -2037,7 +2084,7 @@ function confirmAddFromThisWeek() {
 
       if (!aggregated[ing.canonical]) {
         aggregated[ing.canonical] = {
-          name: ing.name,
+          name: cleanIngredientName(ing.name) || ing.name,
           qty: parsedQty,
           unit,
           category: ing.category,
