@@ -470,7 +470,7 @@ function renderGroceryList() {
             <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
             <span>From Meal</span>
           </button>
-          <button onclick="showIngredientLibraryModal()" class="gro-quick-btn card-press">
+          <button onclick="openIngredientLibraryPage()" class="gro-quick-btn card-press">
             <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/></svg>
             <span>Library</span>
           </button>
@@ -1575,7 +1575,8 @@ function selectGroceryCategory(btn, cat) {
 const VIEW_RENDERERS = {
   'grocery-list': renderGroceryList,
   'grocery-select-meals': renderGrocerySelectMeals,
-  'grocery-ingredients': renderGroceryIngredients
+  'grocery-ingredients': renderGroceryIngredients,
+  'grocery-library': renderGroceryLibrary
 };
 
 function render() {
@@ -2623,7 +2624,7 @@ function _libRenderRow(entry) {
           : `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>`
         }
       </button>
-      <button class="lib-row-more" onclick="event.stopPropagation();_libRowMenu('${safeCanon}')" aria-label="More">
+      <button class="lib-row-more" onclick="event.stopPropagation();_libRowAction('${safeCanon}')" aria-label="More">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>
       </button>
     </div>
@@ -2656,8 +2657,320 @@ function _libToggleAddToGrocery(canonical) {
     saveSmartGroceryList(list);
     showToast(`${entry.name} added`, 'success');
   }
-  _libRenderListResults();
+  _libRefreshSurface();
   _scheduleGroceryRender(150);
+}
+
+// Refresh whichever surface is showing the library: the modal sub-views
+// (when invoked via showIngredientLibraryModal) or the full grocery-library
+// page (when invoked via openIngredientLibraryPage).
+function _libRefreshSurface() {
+  if (document.getElementById('libModalBody')) {
+    _libRenderListResults();
+  }
+  if (state.currentView === 'grocery-library') {
+    render();
+  }
+}
+
+// Dispatch the row "more" action — keep the modal sub-view flow intact when
+// the library modal is open, but use a transient action-sheet modal when the
+// user is on the full page (no shared modal frame to overwrite).
+function _libRowAction(canonical) {
+  if (document.getElementById('libModalBody')) {
+    _libRowMenu(canonical);
+  } else {
+    _libRowMenuModal(canonical);
+  }
+}
+
+function _libRowMenuModal(canonical) {
+  const all = buildIngredientLibrary();
+  const entry = all.find(e => e.canonical === canonical);
+  if (!entry) return;
+  const safe = escJs(canonical);
+  const isCustomOnly = entry.isCustom && entry.recipeNames.length === 0;
+  openModal(`
+    <div style="color:${CONFIG.text_color};padding:4px 0 12px;">
+      <div style="font-size:15px;font-weight:600;margin-bottom:4px;">${esc(entry.name)}</div>
+      <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:14px;">
+        ${entry.recipeNames.length > 0
+          ? `In ${entry.recipeNames.length} recipe${entry.recipeNames.length !== 1 ? 's' : ''}`
+          : 'Custom item'}
+        ${entry.mergedFrom.length > 0 ? ` · ${entry.mergedFrom.length} merged in` : ''}
+      </div>
+      <button onclick="_libStartMergeFromPage('${safe}')" class="lib-menu-btn">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
+        <span>Merge into another item…</span>
+      </button>
+      ${entry.mergedFrom.length > 0 ? `
+        <button onclick="closeModal();_libUnmergeAllFromPage('${safe}')" class="lib-menu-btn">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span>Undo all merges into this item</span>
+        </button>
+      ` : ''}
+      ${isCustomOnly ? `
+        <button onclick="closeModal();_libDeleteCustomFromPage('${safe}')" class="lib-menu-btn lib-menu-btn-danger">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79"/></svg>
+          <span>Remove from library</span>
+        </button>
+      ` : ''}
+      <button onclick="closeModal()" class="lib-menu-btn lib-menu-btn-cancel">Cancel</button>
+    </div>
+  `);
+}
+
+function _libUnmergeAllFromPage(masterCanonical) {
+  const aliases = _libGetAliases();
+  let changed = false;
+  Object.keys(aliases).forEach(k => {
+    if (_libResolveCanonical(aliases[k], aliases) === masterCanonical) {
+      delete aliases[k];
+      changed = true;
+    }
+  });
+  if (changed) {
+    _libSaveAliases(aliases);
+    showToast('Merges removed', 'info');
+  }
+  _libRefreshSurface();
+  _scheduleGroceryRender(150);
+}
+
+function _libDeleteCustomFromPage(canonical) {
+  const list = _libGetCustom().filter(c => canonicalIngredientName(c.name) !== canonical);
+  _libSaveCustom(list);
+  showToast('Removed from library', 'info');
+  _libRefreshSurface();
+}
+
+function _libStartMergeFromPage(sourceCanonical) {
+  closeModal();
+  // Slight delay so the close transition completes before we open the picker;
+  // openModal cancels in-flight close timers, but action sheet → next modal
+  // looks smoother with a microtask gap.
+  setTimeout(() => _libOpenMergePickerModal(sourceCanonical), 0);
+}
+
+function _libOpenMergePickerModal(sourceCanonical) {
+  const all = buildIngredientLibrary();
+  const source = all.find(e => e.canonical === sourceCanonical);
+  if (!source) return;
+  window._libraryMergeSource = sourceCanonical;
+  window._libMergeSearch = '';
+  window._libMergeContext = 'page';
+  openModal(`
+    <div style="color:${CONFIG.text_color};max-height:75vh;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <h2 style="font-size:16px;font-weight:600;margin:0;flex:1;">Merge "${esc(source.name)}" into…</h2>
+        <button onclick="closeModal()" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:4px;">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:10px;">
+        Pick the item to keep. "${esc(source.name)}" will be grouped under it.
+      </div>
+      <input type="text" placeholder="Search items..." value=""
+        oninput="window._libMergeSearch=this.value;_libRenderMergePickerModalList();"
+        style="width:100%;padding:10px 12px;margin-bottom:10px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;" />
+      <div id="libMergePickerModalBody" style="overflow-y:auto;flex:1;margin:0 -4px;padding:0 4px;"></div>
+      <button onclick="closeModal()" style="margin-top:10px;width:100%;padding:10px;min-height:44px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;font-size:14px;">Cancel</button>
+    </div>
+  `);
+  _libRenderMergePickerModalList();
+}
+
+function _libRenderMergePickerModalList() {
+  const body = document.getElementById('libMergePickerModalBody');
+  if (!body) return;
+  const all = buildIngredientLibrary();
+  const sourceCanon = window._libraryMergeSource;
+  const q = (window._libMergeSearch || '').trim().toLowerCase();
+  const candidates = all.filter(e => e.canonical !== sourceCanon)
+    .filter(e => !q || e.name.toLowerCase().includes(q));
+
+  if (candidates.length === 0) {
+    body.innerHTML = `<div style="padding:24px 16px;text-align:center;color:${CONFIG.text_muted};font-size:13px;">No matching items.</div>`;
+    return;
+  }
+
+  body.innerHTML = `<div class="lib-list">${candidates.map(e => `
+    <button class="lib-merge-target" onclick="_libConfirmMergeFromPage('${escJs(e.canonical)}')">
+      <div class="lib-row-body" style="cursor:pointer;">
+        <div class="lib-row-name">${esc(e.name)}</div>
+        ${e.recipeNames.length > 0 ? `<div class="lib-row-sub">In ${e.recipeNames.length} recipe${e.recipeNames.length !== 1 ? 's' : ''}</div>` : ''}
+      </div>
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="color:${CONFIG.text_muted};flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+    </button>
+  `).join('')}</div>`;
+}
+
+function _libConfirmMergeFromPage(targetCanonical) {
+  const sourceCanon = window._libraryMergeSource;
+  if (!sourceCanon || !targetCanonical || sourceCanon === targetCanonical) return;
+  const all = buildIngredientLibrary();
+  const target = all.find(e => e.canonical === targetCanonical);
+  const source = all.find(e => e.canonical === sourceCanon);
+  if (!target || !source) return;
+
+  const aliases = _libGetAliases();
+  aliases[sourceCanon] = targetCanonical;
+  Object.keys(aliases).forEach(k => {
+    if (aliases[k] === sourceCanon) aliases[k] = targetCanonical;
+  });
+  _libSaveAliases(aliases);
+  const masterNames = _libGetMasterNames();
+  masterNames[targetCanonical] = target.name;
+  _libSaveMasterNames(masterNames);
+
+  const list = getSmartGroceryList();
+  const sourceIdx = list.findIndex(i => canonicalIngredientName(i.name) === sourceCanon);
+  if (sourceIdx >= 0) {
+    const targetExists = list.some(i => canonicalIngredientName(i.name) === targetCanonical);
+    if (targetExists) {
+      list.splice(sourceIdx, 1);
+    } else {
+      list[sourceIdx].name = target.name;
+      list[sourceIdx].category = target.category || list[sourceIdx].category;
+    }
+    saveSmartGroceryList(list);
+  }
+
+  showToast(`Merged "${source.name}" into "${target.name}"`, 'success');
+  window._libraryMergeSource = null;
+  closeModal();
+  _libRefreshSurface();
+  _scheduleGroceryRender(150);
+}
+
+function _libOpenManageMergesModal() {
+  const aliases = _libGetAliases();
+  const masterNames = _libGetMasterNames();
+  const entries = Object.entries(aliases);
+  const rows = entries.length === 0
+    ? `<div style="padding:24px 16px;text-align:center;color:${CONFIG.text_muted};font-size:13px;">No merges yet.</div>`
+    : `<div class="lib-list">${entries.map(([alias, master]) => `
+        <div class="lib-row">
+          <div class="lib-row-body">
+            <div class="lib-row-name" style="font-size:14px;">${esc(toTitleCase(alias))}</div>
+            <div class="lib-row-sub">→ ${esc(masterNames[master] || toTitleCase(master))}</div>
+          </div>
+          <button onclick="_libUnmergeFromPage('${escJs(alias)}')" class="lib-row-action" style="background:${CONFIG.surface_elevated};color:${CONFIG.text_color};font-size:12px;padding:0 12px;width:auto;border-radius:14px;">Undo</button>
+        </div>
+      `).join('')}</div>`;
+  openModal(`
+    <div style="color:${CONFIG.text_color};max-height:75vh;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">
+        <h2 style="font-size:16px;font-weight:600;margin:0;flex:1;">Manage merges</h2>
+        <button onclick="closeModal()" style="background:none;border:none;color:${CONFIG.text_muted};cursor:pointer;padding:4px;">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <div id="libManageMergesBody" style="overflow-y:auto;flex:1;">${rows}</div>
+      <button onclick="closeModal()" style="margin-top:10px;width:100%;padding:10px;min-height:44px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;font-size:14px;">Done</button>
+    </div>
+  `);
+}
+
+function _libUnmergeFromPage(aliasCanonical) {
+  const aliases = _libGetAliases();
+  if (!aliases[aliasCanonical]) return;
+  delete aliases[aliasCanonical];
+  _libSaveAliases(aliases);
+  showToast('Merge undone', 'info');
+  // Re-render the modal body in place rather than closing the sheet.
+  closeModal();
+  _libOpenManageMergesModal();
+  _libRefreshSurface();
+  _scheduleGroceryRender(150);
+}
+
+function openIngredientLibraryPage() {
+  window._librarySearch = '';
+  window._libCategoryFilter = 'All';
+  navigateTo('grocery-library');
+}
+
+function renderGroceryLibrary() {
+  const all = buildIngredientLibrary();
+  const q = (window._librarySearch || '').trim().toLowerCase();
+  const activeCat = window._libCategoryFilter || 'All';
+  const aliases = _libGetAliases();
+  const aliasCount = Object.keys(aliases).length;
+
+  // Apply search first so category counts reflect the search-narrowed set.
+  const searchedAll = q ? all.filter(e =>
+    e.name.toLowerCase().includes(q) ||
+    e.mergedFrom.some(m => m.name.toLowerCase().includes(q)) ||
+    e.recipeNames.some(n => n.toLowerCase().includes(q))
+  ) : all;
+
+  // Only show category chips that have at least one item in the full library
+  // (so the chip set is stable across searches).
+  const presentCats = new Set();
+  all.forEach(e => presentCats.add(e.category || 'Other'));
+  const cats = ['All', ...GROCERY_CATEGORIES.filter(c => presentCats.has(c))];
+  const counts = {};
+  cats.forEach(c => {
+    counts[c] = c === 'All' ? searchedAll.length : searchedAll.filter(e => (e.category || 'Other') === c).length;
+  });
+
+  const filtered = activeCat === 'All'
+    ? searchedAll
+    : searchedAll.filter(e => (e.category || 'Other') === activeCat);
+
+  const exactExists = q && all.some(e =>
+    e.name.toLowerCase() === q ||
+    canonicalIngredientName(e.name) === canonicalIngredientName(q)
+  );
+  const manualAddHtml = (q && !exactExists) ? `
+    <button onclick="_libAddCustomFromSearch()" class="lib-add-custom-row">
+      <div class="lib-add-custom-icon">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+      </div>
+      <div style="flex:1;text-align:left;">
+        <div style="font-size:14px;font-weight:600;color:${CONFIG.text_color};">Add "${esc(toTitleCase(q))}"</div>
+        <div style="font-size:12px;color:${CONFIG.text_muted};">Save to library and grocery list</div>
+      </div>
+    </button>
+  ` : '';
+
+  const rowsHtml = filtered.map(e => _libRenderRow(e)).join('');
+  const emptyHtml = filtered.length === 0 && !manualAddHtml ? `
+    <div style="padding:32px 16px;text-align:center;color:${CONFIG.text_muted};">
+      <div style="font-size:14px;margin-bottom:6px;">No ingredients ${q || activeCat !== 'All' ? 'match' : 'yet'}</div>
+      <div style="font-size:12px;">${q || activeCat !== 'All' ? 'Try a different search or filter.' : 'Add recipes with ingredients to get started.'}</div>
+    </div>
+  ` : '';
+
+  const chipsHtml = `
+    <div class="lib-cat-chips">
+      ${cats.map(c => `
+        <button class="lib-cat-chip ${activeCat === c ? 'active' : ''}"
+          onclick="window._libCategoryFilter='${escJs(c)}'; render();">
+          <span>${esc(c)}</span>${counts[c] > 0 ? `<span class="lib-cat-count">${counts[c]}</span>` : ''}
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  return `
+    <div class="p-3 max-w-4xl mx-auto" style="padding-bottom:96px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+        <h2 style="font-size:20px;font-weight:700;color:${CONFIG.text_color};margin:0;flex:1;">Ingredient Library</h2>
+        ${aliasCount > 0 ? `<button onclick="_libOpenManageMergesModal()" style="background:none;border:none;color:${CONFIG.primary_action_color};cursor:pointer;font-size:12px;padding:4px;">Merges (${aliasCount})</button>` : ''}
+      </div>
+      <input id="libSearchInput" type="text" placeholder="Search ingredients..." value="${esc(window._librarySearch || '')}"
+        oninput="window._librarySearch=this.value;render();"
+        style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:10px;" />
+      ${chipsHtml}
+      <div style="font-size:12px;color:${CONFIG.text_muted};margin:8px 0 8px;">Tap an item to add to your grocery list.</div>
+      ${manualAddHtml}
+      ${emptyHtml}
+      <div class="lib-list">${rowsHtml}</div>
+      ${(!q && activeCat === 'All' && all.length > 0) ? `<div style="text-align:center;font-size:12px;color:${CONFIG.text_muted};padding:14px 0 4px;">${all.length} unique ingredient${all.length !== 1 ? 's' : ''}</div>` : ''}
+    </div>
+  `;
 }
 
 function _libRowMenu(canonical) {
@@ -2936,7 +3249,7 @@ function _libAddCustomFromSearch() {
   window._librarySearch = '';
   const inp = document.getElementById('libSearchInput');
   if (inp) inp.value = '';
-  _libRenderListResults();
+  _libRefreshSurface();
   _scheduleGroceryRender(150);
 }
 

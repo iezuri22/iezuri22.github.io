@@ -4922,7 +4922,7 @@ function navigateTo(view) {
     'kitchen': '/kitchen.html', 'inventory': '/kitchen.html', 'ingredients': '/kitchen.html', 'ingredient-detail': '/kitchen.html',
     'kitchen-detail': '/kitchen-detail.html', 'kitchen-ingredient-meals': '/kitchen-detail.html',
     'recipe-detail': '/recipe-detail.html',
-    'grocery-list': '/grocery.html', 'grocery-select-meals': '/grocery.html', 'grocery-ingredients': '/grocery.html',
+    'grocery-list': '/grocery.html', 'grocery-select-meals': '/grocery.html', 'grocery-ingredients': '/grocery.html', 'grocery-library': '/grocery.html',
     'saved': '/saved.html',
     'components': '/components.html', 'component-detail': '/components.html', 'build-plate': '/components.html', 'cook-mode': '/components.html', 'combos': '/components.html'
   };
@@ -4957,20 +4957,20 @@ function navigateTo(view) {
 // SECTION 19: NAV RENDERING
 // ============================================================
 function renderDesktopPageTitle() {
-  const pageTitles = { 'recipes': 'Recipes', 'my-picks': 'My Picks', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home', 'saved': 'Cooking Journal', 'components': 'Components', 'component-detail': 'Component', 'build-plate': 'Build a Plate', 'cook-mode': 'Cook Mode', 'combos': 'Combos' };
+  const pageTitles = { 'recipes': 'Recipes', 'my-picks': 'My Picks', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'grocery-library': 'Ingredient Library', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'home': 'Home', 'saved': 'Cooking Journal', 'components': 'Components', 'component-detail': 'Component', 'build-plate': 'Build a Plate', 'cook-mode': 'Cook Mode', 'combos': 'Combos' };
   const title = pageTitles[state.currentView] || 'PotLuck';
   return `<div class="desktop-page-title-bar" style="display: none; padding-bottom: 24px;"><h1 style="font-size: 28px; font-weight: 700; color: ${CONFIG.text_color}; margin: 0;">${title}</h1></div>`;
 }
 
 function renderNav() {
   if (state.currentView === 'home' || state.currentView === 'kitchen-detail' || state.currentView === 'kitchen-ingredient-meals' || state.currentView === 'recipe-view' || state.currentView === 'week-plan') return '';
-  const pageTitles = { 'recipes': 'Recipes', 'my-picks': 'My Picks', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'saved': 'Cooking Journal', 'components': 'Components', 'component-detail': 'Component', 'build-plate': 'Build a Plate', 'cook-mode': 'Cook Mode', 'combos': 'Combos' };
+  const pageTitles = { 'recipes': 'Recipes', 'my-picks': 'My Picks', 'my-meals': 'Home', 'food-log-detail': 'Meal Detail', 'recipe-edit': 'Edit Recipe', 'recipe-view': 'Recipe', 'freestyle-edit': 'Freestyle', 'batch-edit': 'Build a Plate', 'batch-view': 'Plate', 'grocery-list': 'Grocery', 'grocery-select-meals': 'Select Meals', 'grocery-ingredients': 'Ingredients', 'grocery-library': 'Ingredient Library', 'inventory': 'Pantry', 'ingredients': 'Ingredients', 'ingredient-detail': 'Ingredient', 'kitchen': 'My Kitchen', 'kitchen-detail': 'Ingredient', 'saved': 'Cooking Journal', 'components': 'Components', 'component-detail': 'Component', 'build-plate': 'Build a Plate', 'cook-mode': 'Cook Mode', 'combos': 'Combos' };
   const pageTitle = pageTitles[state.currentView] || 'PotLuck';
   const expiringItems = getExpiringItems(); const expiringCount = expiringItems.length;
   // Main nav pages don't get a back arrow (they're reachable from bottom nav)
   const mainNavPages = ['home', 'recipes', 'my-picks', 'kitchen', 'grocery-list', 'components'];
   const isMainNavPage = mainNavPages.includes(state.currentView);
-  const backTarget = state.currentView === 'food-log-detail' ? 'home' : state.currentView === 'kitchen-detail' ? 'kitchen' : state.currentView === 'batch-edit' || state.currentView === 'batch-view' ? 'recipes' : 'home';
+  const backTarget = state.currentView === 'food-log-detail' ? 'home' : state.currentView === 'kitchen-detail' ? 'kitchen' : state.currentView === 'batch-edit' || state.currentView === 'batch-view' ? 'recipes' : state.currentView === 'grocery-library' || state.currentView === 'grocery-select-meals' || state.currentView === 'grocery-ingredients' ? 'grocery-list' : 'home';
   const directNavViews = ['batch-view', 'batch-edit', 'food-log-detail'];
   const useDirectNav = directNavViews.includes(state.currentView);
   const backAction = state.currentView === 'food-log-detail'
