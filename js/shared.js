@@ -113,6 +113,11 @@ async function checkAuthAndInit() {
       if (!state.dataLoaded) loadAllState();
     }
     try {
+      await pushLocalOnlyDataToSupabase();
+    } catch (pushErr) {
+      console.error('[AUTH] Pushing pending local data failed (non-fatal):', pushErr);
+    }
+    try {
       subscribeToChanges(user.id);
     } catch (subErr) {
       console.error('[AUTH] Realtime subscription failed (non-fatal):', subErr);
@@ -1599,31 +1604,21 @@ function saveIngredientPhotos() {
 
 function setIngredientPhoto(name, url) {
   if (!name || !url) return;
-  const key = name.toLowerCase().trim();
+  // Store ONLY under the canonical (synonym-normalized) name. Previously this
+  // also fanned out a photo under every word-substring of the name (e.g. "olive
+  // oil" → also "olive", "oil"), which caused cross-contamination: setting a
+  // photo for "olive oil" would then appear on "coconut oil", "vegetable oil",
+  // etc. via substring fuzzy match. Strict canonical-only keys fix that.
+  const key = canonicalIngredientName(name);
+  if (!key) return;
   ingredientPhotos[key] = url;
-  // Also store under simplified versions for fuzzy reuse
-  // e.g. "Boneless Skinless Chicken Breast" → also store "chicken breast", "chicken"
-  const words = key.split(/\s+/);
-  for (let start = 0; start < words.length; start++) {
-    for (let end = start + 1; end <= words.length; end++) {
-      const sub = words.slice(start, end).join(' ');
-      if (sub !== key && sub.length >= 3 && !ingredientPhotos[sub]) {
-        ingredientPhotos[sub] = url;
-      }
-    }
-  }
-  console.log('Saved photo for:', name);
   saveIngredientPhotos();
 }
 
 function removeIngredientPhoto(name) {
   if (!name) return;
-  const key = name.toLowerCase().trim();
+  const key = canonicalIngredientName(name);
   delete ingredientPhotos[key];
-  // Also remove fuzzy matches
-  for (const k of Object.keys(ingredientPhotos)) {
-    if (key.includes(k) || k.includes(key)) delete ingredientPhotos[k];
-  }
   saveIngredientPhotos();
 }
 
@@ -1633,26 +1628,10 @@ function getIngredientPhotoFromLibrary(name) {
 
 function findIngredientPhoto(itemName) {
   if (!itemName) return null;
-  const name = itemName.toLowerCase().trim();
-  const photos = ingredientPhotos;
-  // 1. Exact match
-  if (photos[name]) return photos[name];
-  // 2. Fuzzy match — longest matching key wins
-  let bestMatch = null;
-  let bestLength = 0;
-  for (const key of Object.keys(photos)) {
-    // stored key is contained in the item name
-    if (name.includes(key) && key.length > bestLength) {
-      bestMatch = photos[key];
-      bestLength = key.length;
-    }
-    // item name is contained in stored key
-    if (key.includes(name) && name.length > bestLength) {
-      bestMatch = photos[key];
-      bestLength = name.length;
-    }
-  }
-  return bestMatch;
+  // Canonical-only lookup. No substring fallback — that's what caused the
+  // wrong photo to appear on unrelated items that happened to share a word.
+  const key = canonicalIngredientName(itemName);
+  return key && ingredientPhotos[key] ? ingredientPhotos[key] : null;
 }
 
 // Load on startup
@@ -2161,6 +2140,32 @@ async function syncEffortLevelsToSupabase(levels) {
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   } catch (e) { console.error('Sync effort levels failed:', e); }
+}
+
+// Push every localStorage-only blob up to Supabase. Safe to run any time after
+// loadDataFromSupabase(): if the load already pulled remote data into
+// localStorage, this is a no-op; if the load was skipped (recent local edit) or
+// the remote row was missing, this persists the user's pending changes so they
+// don't get lost on the next reload/device switch. Fixes the "I added items
+// before Supabase finished loading and they vanished" race.
+async function pushLocalOnlyDataToSupabase() {
+  if (!window.supabaseClient) return;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return;
+  } catch (e) { return; }
+  const tasks = [
+    syncGroceryListToSupabase(getSmartGroceryList()),
+    syncIngredientPhotosToSupabase(),
+    syncCustomImagestoSupabase(),
+    syncFoodLogToSupabase(getFoodLog()),
+    syncSavedRecipesToSupabase(getSavedRecipes()),
+    syncEffortLevelsToSupabase(getRecipeEffortLevels()),
+    syncGroceryStoresToSupabase(getGroceryStores()),
+    syncFrequencyItemsToSupabase(getFrequencyItems()),
+  ];
+  try { await Promise.allSettled(tasks); }
+  catch (e) { console.error('[push pending] failed:', e); }
 }
 
 function getFoodLog() { try { return JSON.parse(localStorage.getItem(FOOD_LOG_KEY) || '[]'); } catch { return []; } }
@@ -5063,6 +5068,8 @@ async function handleLogin() {
 
     // Load data and render
     await loadDataFromSupabase();
+    try { await pushLocalOnlyDataToSupabase(); }
+    catch (e) { console.error('[login] push pending failed:', e); }
     const { data: { user } } = await window.supabaseClient.auth.getUser();
     if (user) {
       subscribeToChanges(user.id);

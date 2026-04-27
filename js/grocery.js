@@ -635,6 +635,9 @@ function _renderGroceryRow(item, isChecked) {
               <button class="gro-item-store-btn" onclick="event.stopPropagation();showStorePickerForItem('${escapedId}')" title="Set store">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
               </button>
+              <button class="gro-item-store-btn" onclick="event.stopPropagation();showEditGroceryItemModal('${escapedId}')" title="Edit / allergic">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125"/></svg>
+              </button>
               <button class="gro-item-delete-btn" onclick="event.stopPropagation();removeSmartGroceryItem('${escapedId}')">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
               </button>
@@ -1249,6 +1252,90 @@ async function addManualGroceryItem() {
       }
     }
 
+// Edit a grocery item (rename) and optionally remove the ingredient from the
+// source recipe(s) it was pulled from. Useful when the user develops an
+// allergy or just wants to stop seeing this ingredient in a recipe.
+function showEditGroceryItemModal(itemId) {
+  const item = getSmartGroceryList().find(i => i.id === itemId);
+  if (!item) return;
+  const sourceMeals = Array.isArray(item.sourceMeals) ? item.sourceMeals : [];
+  const sourceRecipes = sourceMeals
+    .map(title => findRecipeByTitle(title))
+    .filter(Boolean);
+
+  const recipeChecksHtml = sourceRecipes.length === 0
+    ? `<div style="font-size:12px;color:${CONFIG.text_muted};padding:8px 0;">This item isn't linked to a recipe.</div>`
+    : sourceRecipes.map(r => `
+        <label style="display:flex;align-items:center;gap:10px;padding:10px;background:${CONFIG.surface_color};border-radius:10px;margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" data-edit-recipe-id="${esc(r.id)}" style="width:18px;height:18px;accent-color:${CONFIG.primary_action_color};flex-shrink:0;" />
+          <span style="font-size:13px;color:${CONFIG.text_color};line-height:1.3;">${esc(r.title)}</span>
+        </label>
+      `).join('');
+
+  openModal(`
+    <div style="color:${CONFIG.text_color};">
+      <h2 style="font-size:17px;font-weight:600;margin:0 0 12px;">Edit Item</h2>
+
+      <label style="display:block;font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Name</label>
+      <input type="text" id="editGroItemName" value="${esc(item.name)}"
+        style="width:100%;padding:10px 12px;background:${CONFIG.surface_color};border:1px solid rgba(255,255,255,0.08);border-radius:10px;color:${CONFIG.text_color};font-size:14px;margin-bottom:16px;" />
+
+      <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Allergic? Remove from these recipes too:</div>
+      ${recipeChecksHtml}
+
+      <div style="display:flex;gap:8px;margin-top:16px;">
+        <button onclick="closeModal()"
+          style="padding:10px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:10px;cursor:pointer;flex:1;font-size:14px;">Cancel</button>
+        <button onclick="saveEditGroceryItem('${escJs(itemId)}')"
+          style="padding:10px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;cursor:pointer;flex:2;font-size:14px;font-weight:600;">Save</button>
+      </div>
+    </div>
+  `);
+}
+
+async function saveEditGroceryItem(itemId) {
+  const nameInput = document.getElementById('editGroItemName');
+  const newName = (nameInput?.value || '').trim();
+  if (!newName) { showError('Name cannot be empty'); return; }
+
+  // 1. Update the grocery list entry.
+  const list = getSmartGroceryList();
+  const item = list.find(i => i.id === itemId);
+  if (!item) { closeModal(); return; }
+  const oldCanonical = canonicalIngredientName(item.name);
+  item.name = toTitleCase(newName);
+  saveSmartGroceryList(list);
+
+  // 2. Remove the ingredient from any recipes the user ticked.
+  const checks = document.querySelectorAll('[data-edit-recipe-id]');
+  const recipeIdsToEdit = Array.from(checks)
+    .filter(cb => cb.checked)
+    .map(cb => cb.getAttribute('data-edit-recipe-id'));
+
+  let editedCount = 0;
+  for (const rid of recipeIdsToEdit) {
+    const recipe = getRecipeById(rid);
+    if (!recipe || !Array.isArray(recipe.ingredientsRows)) continue;
+    const before = recipe.ingredientsRows.length;
+    recipe.ingredientsRows = recipe.ingredientsRows.filter(row =>
+      canonicalIngredientName(row.name) !== oldCanonical
+    );
+    if (recipe.ingredientsRows.length !== before) {
+      try { await storage.update(recipe); editedCount++; }
+      catch (e) { console.error('[edit grocery] update recipe failed:', e); }
+    }
+  }
+
+  closeModal();
+  showToast(
+    editedCount > 0
+      ? `Updated · removed from ${editedCount} recipe${editedCount !== 1 ? 's' : ''}`
+      : 'Item updated',
+    'success'
+  );
+  if (typeof render === 'function') render();
+}
+
 function selectGroceryCategory(btn, cat) {
   document.getElementById('groceryManualCategory').value = cat;
   const row = document.getElementById('groceryCategoryRow');
@@ -1816,7 +1903,7 @@ function _renderIngredientReviewStep() {
         <div style="margin-bottom:14px;">
           <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 4px 8px;border-bottom:1px solid rgba(255,255,255,0.06);margin-bottom:6px;">
             <div style="min-width:0;">
-              <div style="font-size:14px;font-weight:600;color:${CONFIG.text_color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(m.slot.displayTitle)}</div>
+              <div style="font-size:14px;font-weight:600;color:${CONFIG.text_color};line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;">${esc(m.slot.displayTitle)}</div>
               <div style="font-size:11px;color:${CONFIG.text_muted};margin-top:1px;">${esc(m.slot.mealLabel)}${m.slot.dateStr ? ' · ' + esc(formatDateDisplay(m.slot.dateStr)) : ''}</div>
             </div>
             <div style="display:flex;gap:6px;flex-shrink:0;margin-left:8px;">
@@ -1827,14 +1914,14 @@ function _renderIngredientReviewStep() {
           ${m.ingredients.length === 0 ? `<div style="padding:10px;color:${CONFIG.text_muted};font-size:12px;">No ingredients on this recipe.</div>` : m.ingredients.map((ing, ii) => {
             const qtyLabel = ing.qty ? `${esc(ing.qty)}${ing.unit ? ' ' + esc(ing.unit) : ''} · ` : '';
             return `
-              <div onclick="_toggleReviewIngredient(${mi},${ii})"
-                style="display:flex;align-items:center;gap:10px;padding:10px;margin-bottom:4px;background:${ing.checked ? 'rgba(232,93,93,0.08)' : CONFIG.surface_color};border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;${ing.alreadyOnList && !ing.checked ? 'opacity:0.7;' : ''}">
-                <div style="width:22px;height:22px;border-radius:6px;border:2px solid ${ing.checked ? CONFIG.primary_action_color : CONFIG.text_muted};background:${ing.checked ? CONFIG.primary_action_color : 'transparent'};display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;">
+              <div data-review-row data-mi="${mi}" data-ii="${ii}" onclick="_toggleReviewIngredient(${mi},${ii})"
+                style="display:flex;align-items:flex-start;gap:10px;padding:10px;margin-bottom:4px;background:${ing.checked ? 'rgba(232,93,93,0.08)' : CONFIG.surface_color};border-radius:10px;cursor:pointer;-webkit-tap-highlight-color:transparent;${ing.alreadyOnList && !ing.checked ? 'opacity:0.7;' : ''}">
+                <div data-review-checkbox style="width:22px;height:22px;border-radius:6px;border:2px solid ${ing.checked ? CONFIG.primary_action_color : CONFIG.text_muted};background:${ing.checked ? CONFIG.primary_action_color : 'transparent'};display:flex;align-items:center;justify-content:center;color:white;flex-shrink:0;margin-top:2px;">
                   ${ing.checked ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>' : ''}
                 </div>
                 <div style="flex:1;min-width:0;">
-                  <div style="font-size:13px;color:${CONFIG.text_color};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(toTitleCase(ing.name))}</div>
-                  <div style="font-size:11px;color:${CONFIG.text_muted};margin-top:1px;">
+                  <div style="font-size:13px;color:${CONFIG.text_color};line-height:1.35;word-break:break-word;">${esc(toTitleCase(ing.name))}</div>
+                  <div style="font-size:11px;color:${CONFIG.text_muted};margin-top:2px;">
                     ${qtyLabel}${ing.alreadyOnList ? '<span style="color:#30d158;font-weight:500;">Already added</span>' : ing.staple ? '<span style="font-weight:500;">Pantry staple</span>' : esc(ing.category)}
                   </div>
                 </div>
@@ -1865,19 +1952,41 @@ function _updateIngredientReviewConfirm() {
   btn.textContent = total === 0 ? 'Select at least one' : `Add to Grocery List (${total})`;
 }
 
+// Mutate the row's DOM in place so we don't re-render the whole modal — that
+// was resetting scroll to the top on every tap.
+function _applyReviewRowState(row, ing) {
+  if (!row) return;
+  row.style.background = ing.checked ? 'rgba(232,93,93,0.08)' : CONFIG.surface_color;
+  row.style.opacity = (ing.alreadyOnList && !ing.checked) ? '0.7' : '1';
+  const cb = row.querySelector('[data-review-checkbox]');
+  if (cb) {
+    cb.style.borderColor = ing.checked ? CONFIG.primary_action_color : CONFIG.text_muted;
+    cb.style.background = ing.checked ? CONFIG.primary_action_color : 'transparent';
+    cb.innerHTML = ing.checked
+      ? '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      : '';
+  }
+}
+
 function _toggleReviewIngredient(mealIdx, ingIdx) {
   const meals = window._weekPlanIngredientReview;
   if (!meals || !meals[mealIdx] || !meals[mealIdx].ingredients[ingIdx]) return;
   const ing = meals[mealIdx].ingredients[ingIdx];
   ing.checked = !ing.checked;
-  _renderIngredientReviewStep();
+  const row = document.querySelector(`[data-review-row][data-mi="${mealIdx}"][data-ii="${ingIdx}"]`);
+  _applyReviewRowState(row, ing);
+  _updateIngredientReviewConfirm();
 }
 
 function _setMealReviewAll(mealIdx, value) {
   const meals = window._weekPlanIngredientReview;
   if (!meals || !meals[mealIdx]) return;
-  meals[mealIdx].ingredients.forEach(ing => { ing.checked = !!value; });
-  _renderIngredientReviewStep();
+  meals[mealIdx].ingredients.forEach((ing, ii) => {
+    ing.checked = !!value;
+    const row = document.querySelector(`[data-review-row][data-mi="${mealIdx}"][data-ii="${ii}"]`);
+    _applyReviewRowState(row, ing);
+  });
+  _updateIngredientReviewConfirm();
 }
 
 function _parseQtyToNumber(qty) {
