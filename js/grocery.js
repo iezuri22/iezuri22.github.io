@@ -1661,48 +1661,51 @@ function showStorePickerForItem(itemId) {
   const currentStore = item ? (item.store || '') : '';
   const safeId = escJs(itemId);
 
-  const groceryListForPicker = getSmartGroceryList();
-  const pickerStoresFromItems = [...new Set(groceryListForPicker.map(i => i.store).filter(Boolean))];
+  const pickerStoresFromItems = [...new Set(list.map(i => i.store).filter(Boolean))];
   const pickerFreqStores = [...new Set(getFrequencyItems().map(i => i.store).filter(Boolean))];
   const pickerAllKnown = [...new Set([...DEFAULT_STORES, ...pickerStoresFromItems, ...pickerFreqStores])];
   const pickerQuickAdd = pickerAllKnown.filter(s => !stores.some(st => st.toLowerCase() === s.toLowerCase()));
 
-  const defaultStoresHtml = pickerQuickAdd.length > 0
-    ? `<div style="margin-top:12px;">
-        <div style="font-size:12px;color:${CONFIG.text_muted};margin-bottom:6px;">Suggested stores</div>
-        <div style="display:flex;flex-wrap:wrap;gap:6px;">
-          ${pickerQuickAdd.slice(0, 6).map(s => `
-            <button onclick="addGroceryStore('${escJs(s)}');setGroceryItemStore('${safeId}','${escJs(s)}');setLastSelectedStore('${escJs(s)}');closeModal();showToast('Assigned to ${escJs(s)}','success');render();"
-              style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.1);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
-          `).join('')}
-        </div>
-      </div>`
-    : '';
+  // Saved stores render as filled pills with an inline ✕ remove. Tapping the
+  // name assigns; tapping ✕ removes the store from the saved list.
+  const savedPillsHtml = stores.map(s => {
+    const active = currentStore === s;
+    return `
+      <span style="display:inline-flex;align-items:stretch;background:${active ? 'rgba(232,93,93,0.18)' : CONFIG.surface_color};border:1px solid ${active ? CONFIG.primary_action_color : 'transparent'};border-radius:20px;overflow:hidden;">
+        <button onclick="setGroceryItemStore('${safeId}','${escJs(s)}');setLastSelectedStore('${escJs(s)}');closeModal();showToast('Assigned to ${escJs(s)}','success');render();"
+          style="padding:8px 6px 8px 14px;background:none;border:none;color:${CONFIG.text_color};font-size:13px;cursor:pointer;">${esc(s)}</button>
+        <button onclick="event.stopPropagation();removeStoreFromPicker('${escJs(s)}','${safeId}');"
+          aria-label="Remove ${esc(s)}"
+          style="padding:8px 12px 8px 6px;background:none;border:none;color:${CONFIG.text_muted};font-size:14px;line-height:1;cursor:pointer;">✕</button>
+      </span>
+    `;
+  }).join('');
+
+  // Suggested (not yet saved) — dashed pills, tap to save+assign in one go.
+  const suggestedPillsHtml = pickerQuickAdd.slice(0, 8).map(s => `
+    <button onclick="addGroceryStore('${escJs(s)}');setGroceryItemStore('${safeId}','${escJs(s)}');setLastSelectedStore('${escJs(s)}');closeModal();showToast('Assigned to ${escJs(s)}','success');render();"
+      style="padding:8px 14px;background:${CONFIG.surface_color};border:1px dashed rgba(255,255,255,0.18);border-radius:20px;color:${CONFIG.text_muted};font-size:13px;cursor:pointer;">+ ${esc(s)}</button>
+  `).join('');
+
+  const allPillsHtml = (savedPillsHtml + suggestedPillsHtml) ||
+    `<span style="font-size:13px;color:${CONFIG.text_muted};">No stores yet — add one below.</span>`;
 
   openModal(`
     <div style="color:${CONFIG.text_color};">
-      <div style="font-size:17px;font-weight:600;margin-bottom:16px;">Assign Store</div>
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <button onclick="setGroceryItemStore('${safeId}','');closeModal();render();"
-          style="padding:14px 16px;background:${!currentStore ? 'rgba(232,93,93,0.15)' : CONFIG.surface_color};border:1px solid ${!currentStore ? CONFIG.primary_action_color : 'transparent'};border-radius:12px;color:${CONFIG.text_color};font-size:15px;text-align:left;cursor:pointer;">
-          No store assigned
-        </button>
-        ${stores.map(s => `
-          <button onclick="setGroceryItemStore('${safeId}','${escJs(s)}');closeModal();render();"
-            style="padding:14px 16px;background:${currentStore === s ? 'rgba(232,93,93,0.15)' : CONFIG.surface_color};border:1px solid ${currentStore === s ? CONFIG.primary_action_color : 'transparent'};border-radius:12px;color:${CONFIG.text_color};font-size:15px;text-align:left;cursor:pointer;">
-            ${esc(s)}
-          </button>
-        `).join('')}
+      <div style="font-size:17px;font-weight:600;margin-bottom:14px;">Assign Store</div>
+      <button onclick="setGroceryItemStore('${safeId}','');closeModal();render();"
+        style="margin-bottom:14px;padding:8px 14px;background:${!currentStore ? 'rgba(232,93,93,0.18)' : CONFIG.surface_color};border:1px solid ${!currentStore ? CONFIG.primary_action_color : 'transparent'};border-radius:20px;color:${CONFIG.text_color};font-size:13px;cursor:pointer;">
+        No store
+      </button>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">
+        ${allPillsHtml}
       </div>
-      ${defaultStoresHtml}
-      <div style="margin-top:16px;">
-        <div style="display:flex;gap:8px;">
-          <input type="text" id="newStoreInput" placeholder="Add a new store..."
-            onkeydown="if(event.key==='Enter'){addNewStoreAndAssign(this.value,'${safeId}');}"
-            style="flex:1;padding:12px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:${CONFIG.text_color};font-size:14px;outline:none;" />
-          <button onclick="addNewStoreAndAssign(document.getElementById('newStoreInput').value,'${safeId}');"
-            style="padding:12px 16px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Add</button>
-        </div>
+      <div style="margin-top:16px;display:flex;gap:8px;">
+        <input type="text" id="newStoreInput" placeholder="Add a new store..."
+          onkeydown="if(event.key==='Enter'){addNewStoreAndAssign(this.value,'${safeId}');}"
+          style="flex:1;padding:12px;background:${CONFIG.background_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:${CONFIG.text_color};font-size:14px;outline:none;" />
+        <button onclick="addNewStoreAndAssign(document.getElementById('newStoreInput').value,'${safeId}');"
+          style="padding:12px 16px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;">Add</button>
       </div>
     </div>
   `);
@@ -1717,6 +1720,13 @@ function addNewStoreAndAssign(storeName, itemId) {
   closeModal();
   showToast(`Assigned to ${trimmed}`, 'success');
   if (typeof render === 'function') render();
+}
+
+// Remove a saved store from inside the picker, then re-render the picker so
+// the pill disappears in place (no jarring close + reopen).
+function removeStoreFromPicker(storeName, itemId) {
+  removeGroceryStore(storeName);
+  showStorePickerForItem(itemId);
 }
 
 function showManageStoresModal() {

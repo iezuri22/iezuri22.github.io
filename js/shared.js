@@ -537,7 +537,14 @@ function cleanIngredientName(name) {
   let s = String(name).toLowerCase().trim();
   s = s.replace(/\([^)]*\)/g, ' ');           // drop "(diced)" / "(about 2 cups)"
   s = s.split(',')[0].trim();                 // drop trailing clauses after comma
-  s = s.replace(/\s+/g, ' ');
+  // Strip dimension/size descriptors that aren't part of the product name:
+  //   "1-inch cod fillets" / "6 inch tortillas" / "1/4-inch cubes".
+  s = s.replace(/\b\d+(?:[\.\/]\d+)?[-\s]*(?:inch(?:es)?|cm|mm)\b/gi, ' ');
+  // Leftover after upstream parser ate the leading qty: "-inch cod fillets".
+  s = s.replace(/^-\s*(?:inch(?:es)?|cm|mm)\b\s*/i, '');
+  // Also drop "X-pound" / "X lb" style size prefixes that aren't really the product.
+  s = s.replace(/\b\d+(?:[\.\/]\d+)?[-\s]*(?:lb|lbs|pound|pounds|oz|ounce|ounces|gram|grams|kg)\b/gi, ' ');
+  s = s.replace(/\s+/g, ' ').trim();
   if (PRODUCT_PREP_PHRASES.has(s)) return s;  // preserve compound product names
   let tokens = s.split(' ').filter(Boolean);
   while (tokens.length > 1 && _isPrepToken(tokens[0])) tokens.shift();
@@ -4329,6 +4336,9 @@ function processBulkIngredients() {
 
 function parseIngredientLine(line) {
   line = line.trim().replace(/^[\u2022\-\*]\s*/, '');
+  // Normalize hyphenated dimensions ("1-inch" \u2192 "1 inch") so the unit detector below can pick them up
+  // instead of leaving a stray "-inch" glued to the product name.
+  line = line.replace(/(\d)-(inch(?:es)?|cm|mm|lb|lbs|pound|pounds|oz|ounce|ounces)\b/gi, '$1 $2');
   const units = ['lb','lbs','pound','pounds','oz','ounce','ounces','g','gram','grams','kg','kilogram','kilograms','tsp','teaspoon','teaspoons','tbsp','tablespoon','tablespoons','cup','cups','ml','milliliter','milliliters','l','liter','liters','can','cans','piece','pieces','slice','slices','clove','cloves','inch','inches'];
   const regex = /^([\d\/\.\s]+)?\s*([a-zA-Z\-]+)?\s*(.*)$/;
   const match = line.match(regex);
