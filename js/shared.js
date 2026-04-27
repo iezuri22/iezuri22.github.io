@@ -1708,8 +1708,29 @@ function loadIngredientPhotos() {
 }
 
 function saveIngredientPhotos() {
-  localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos));
-  syncIngredientPhotosToSupabase();
+  try {
+    localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos));
+  } catch (e) {
+    console.error('[ingredientPhotos] localStorage write failed (likely quota):', e);
+    if (typeof showToast === 'function') showToast('Photo storage full — old photos may be evicted', 'error');
+  }
+  // Same guard the grocery list uses: prevents an in-flight realtime echo from
+  // pulling stale ingredientPhotos_data back over the new photo before our
+  // upsert lands. Without this, a photo added on phone could vanish seconds
+  // later when applySupabaseData runs against the not-yet-updated remote row.
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncIngredientPhotosToSupabase().then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[ingredientPhotos] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    if (typeof showToast === 'function') {
+      showToast('Photo saved on device — sync will retry', 'info');
+    }
+    setTimeout(() => {
+      syncIngredientPhotosToSupabase().catch(err => console.error('[ingredientPhotos] retry sync failed:', err));
+    }, 4000);
+  });
 }
 
 function setIngredientPhoto(name, url) {
@@ -2206,26 +2227,30 @@ async function syncFoodLogToSupabase(log) {
 
 async function syncGroceryListToSupabase(list) {
   if (!window.supabaseClient) return;
-  try {
-    const { data: { session } } = await window.supabaseClient.auth.getSession();
-    if (!session?.user) return;
-    const item = { id: 'groceryList_list', type: 'groceryList', entries: list };
-    await window.supabaseClient
-      .from('meal_planner_data')
-      .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
-  } catch (e) { console.error('Sync grocery list failed:', e); }
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'groceryList_list', type: 'groceryList', entries: list };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) {
+    console.error('Sync grocery list failed:', error);
+    throw error;
+  }
 }
 
 async function syncIngredientPhotosToSupabase() {
   if (!window.supabaseClient) return;
-  try {
-    const { data: { session } } = await window.supabaseClient.auth.getSession();
-    if (!session?.user) return;
-    const item = { id: 'ingredientPhotos_data', type: 'ingredientPhotos', photos: ingredientPhotos };
-    await window.supabaseClient
-      .from('meal_planner_data')
-      .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
-  } catch (e) { console.error('Sync ingredient photos failed:', e); }
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'ingredientPhotos_data', type: 'ingredientPhotos', photos: ingredientPhotos };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) {
+    console.error('Sync ingredient photos failed:', error);
+    throw error;
+  }
 }
 
 async function syncCustomImagestoSupabase() {
@@ -2581,14 +2606,27 @@ function mapToGroceryCategory(group) {
 
 function getSmartGroceryList() { try { return JSON.parse(localStorage.getItem(GROCERY_KEY) || '[]'); } catch { return []; } }
 function saveSmartGroceryList(list) {
-  localStorage.setItem(GROCERY_KEY, JSON.stringify(list));
+  try { localStorage.setItem(GROCERY_KEY, JSON.stringify(list)); }
+  catch (e) { console.error('[grocery] localStorage write failed:', e); }
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncGroceryListToSupabase(list).then(() => {
     // Extend ignore window after sync to catch the echo event
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil, Date.now() + 3000);
   }).catch(e => {
     console.error('[grocery] sync failed:', e);
-    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil, Date.now() + 2000);
+    // Keep the realtime block long enough for one retry to land; without this,
+    // a transient upsert failure (e.g. offline blip after assigning a store)
+    // would let the next applySupabaseData wipe the local change before we get
+    // another chance to sync.
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil, Date.now() + 30000);
+    if (typeof showToast === 'function') {
+      showToast('Saved on this device — sync will retry', 'info');
+    }
+    // Best-effort retry once after a short backoff. If it succeeds, the echo
+    // path will refresh remote-derived state on the next loadDataFromSupabase.
+    setTimeout(() => {
+      syncGroceryListToSupabase(list).catch(err => console.error('[grocery] retry sync failed:', err));
+    }, 4000);
   });
 }
 function getGroceryBadgeCount() { return getSmartGroceryList().filter(i => !i.checked).length; }
@@ -5550,6 +5588,7 @@ async function loadDataFromSupabase() {
 
   const items = data.map(row => ({ id: row.id, ...row.data }));
   applySupabaseData(items);
+  _lastSupabaseFetchAt = Date.now();
 }
 
 function applySupabaseData(data) {
@@ -5646,11 +5685,15 @@ function applySupabaseData(data) {
     }
   }
 
-  // Load ingredient photos from Supabase
+  // Load ingredient photos from Supabase. Merge rather than replace: if a photo
+  // exists locally but failed to sync (network blip, transient upsert error),
+  // we don't want a subsequent fetch to wipe it. Remote wins for keys present
+  // in both — this keeps cross-device syncs honest while protecting in-flight
+  // local additions.
   const ingredientPhotosRow = data.find(d => d.id === 'ingredientPhotos_data');
   if (ingredientPhotosRow && ingredientPhotosRow.photos && typeof ingredientPhotosRow.photos === 'object') {
-    ingredientPhotos = ingredientPhotosRow.photos;
-    localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos));
+    ingredientPhotos = { ...ingredientPhotos, ...ingredientPhotosRow.photos };
+    try { localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos)); } catch (e) {}
   }
 
   // Load custom ingredient images from Supabase
@@ -5707,6 +5750,13 @@ function applySupabaseData(data) {
 let _realtimeDebounceTimer = null;
 let _realtimeChannel = null;
 let _groceryRenderTimer = null;
+let _lastSupabaseFetchAt = 0;
+let _revalidateInFlight = false;
+let _hiddenAt = 0;
+let _syncPollTimer = null;
+const REVALIDATE_THROTTLE_MS = 5000;
+const SYNC_POLL_INTERVAL_MS = 60000;
+const RESUBSCRIBE_AFTER_HIDDEN_MS = 30000;
 
 function _scheduleGroceryRender(delayMs) {
   clearTimeout(_groceryRenderTimer);
@@ -5755,6 +5805,69 @@ function subscribeToChanges(userId) {
       }
     )
     .subscribe();
+}
+
+// Backgrounded tabs throttle the realtime websocket and Supabase doesn't
+// replay missed events, so we revalidate on focus/visibility/online and
+// poll while visible as a safety net.
+async function revalidateFromSupabase(reason, forceResubscribe) {
+  if (!window.supabaseClient) return;
+  if (_revalidateInFlight) return;
+  if (!forceResubscribe && Date.now() - _lastSupabaseFetchAt < REVALIDATE_THROTTLE_MS) return;
+
+  _revalidateInFlight = true;
+  try {
+    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    if (!session?.user) return;
+    debugLog('[Revalidate]', reason);
+    await loadDataFromSupabase();
+    if (typeof render === 'function') {
+      const scrollEl = document.getElementById('app');
+      const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
+      render();
+      requestAnimationFrame(() => {
+        if (scrollEl) scrollEl.scrollTop = scrollPos;
+        else window.scrollTo(0, scrollPos);
+      });
+    }
+    if (forceResubscribe) {
+      try { subscribeToChanges(session.user.id); }
+      catch (e) { console.error('[Revalidate] resubscribe failed:', e); }
+    }
+  } catch (e) {
+    console.error('[Revalidate] failed:', e);
+  } finally {
+    _revalidateInFlight = false;
+  }
+}
+
+function _startSyncPolling() {
+  if (_syncPollTimer) return;
+  _syncPollTimer = setInterval(() => {
+    if (document.visibilityState === 'visible') revalidateFromSupabase('poll');
+  }, SYNC_POLL_INTERVAL_MS);
+}
+
+function _stopSyncPolling() {
+  if (_syncPollTimer) { clearInterval(_syncPollTimer); _syncPollTimer = null; }
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    const wasHiddenFor = _hiddenAt ? Date.now() - _hiddenAt : 0;
+    _hiddenAt = 0;
+    revalidateFromSupabase('visibilitychange', wasHiddenFor > RESUBSCRIBE_AFTER_HIDDEN_MS);
+    _startSyncPolling();
+  } else {
+    _hiddenAt = Date.now();
+    _stopSyncPolling();
+  }
+});
+window.addEventListener('focus', () => revalidateFromSupabase('focus'));
+window.addEventListener('online', () => revalidateFromSupabase('online', true));
+
+if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+  _startSyncPolling();
 }
 
 function showClearDataModal() {

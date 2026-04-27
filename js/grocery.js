@@ -501,13 +501,15 @@ function renderGroceryList() {
               <div class="search-icon">
                 <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
               </div>
-              <input type="text" id="groceryManualInput" placeholder="Add an item..."
-                onkeydown="if(event.key==='Enter') addManualGroceryItemSmart();"
-                onfocus="document.getElementById('groceryCategoryRow').style.display='flex';"
+              <input type="text" id="groceryManualInput" placeholder="Add an item..." autocomplete="off"
+                oninput="_renderGrocerySuggestions(this.value);"
+                onkeydown="if(event.key==='Enter'){_groAddManualThenClear();}else if(event.key==='Escape'){this.value='';_renderGrocerySuggestions('');}"
+                onfocus="document.getElementById('groceryCategoryRow').style.display='flex';_renderGrocerySuggestions(this.value);"
               />
             </div>
-            <button onclick="addManualGroceryItemSmart()" class="gro-add-btn">Add</button>
+            <button onclick="_groAddManualThenClear()" class="gro-add-btn">Add</button>
           </div>
+          <div id="grocerySuggestionsBox" class="gro-suggest-box" style="display:none;"></div>
           <div id="groceryCategoryRow" class="filter-pill-row" style="display:none;flex-wrap:wrap;padding:2px 0;margin-bottom:12px;">
             ${GROCERY_CATEGORIES.map(cat => `
               <button onclick="selectGroceryCategory(this, '${esc(cat)}')" data-cat="${esc(cat)}"
@@ -1394,6 +1396,152 @@ function showAddManualItemModal() {
         </div>
       `);
     }
+
+// Autocomplete for the manual-add input. Splits library matches into two
+// groups: exact/starts-with on the full name (or any merged alias), and a
+// looser similarity bucket that catches token-level prefix hits, substring,
+// and stem-canonical containment (so "tomato" surfaces "Cherry Tomatoes",
+// "Sun-Dried Tomatoes", "Tomato Paste", etc.). Items already on the list are
+// excluded — the user can see them in the main list above.
+function _groSearchLibrary(query) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return { byName: [], bySimilarity: [] };
+  const all = (typeof buildIngredientLibrary === 'function') ? buildIngredientLibrary() : [];
+  const onListCanonicals = new Set(getSmartGroceryList().map(i => canonicalIngredientName(i.name)));
+  const qCanon = canonicalIngredientName(q);
+
+  const byName = [];
+  const bySimilarity = [];
+
+  all.forEach(entry => {
+    if (onListCanonicals.has(entry.canonical)) return;
+    const lower = (entry.name || '').toLowerCase();
+    const eCanon = entry.canonical || '';
+
+    const isExact = lower === q;
+    const isStarts = lower.startsWith(q);
+    const aliasMatch = (entry.mergedFrom || []).some(m => {
+      const ml = (m.name || '').toLowerCase();
+      return ml === q || ml.startsWith(q);
+    });
+
+    if (isExact || isStarts || aliasMatch) {
+      byName.push({ entry, score: isExact ? 0 : (isStarts ? 1 : 2) });
+      return;
+    }
+
+    const tokens = lower.split(/[\s\-]+/).filter(Boolean);
+    const tokenStarts = tokens.some(t => t.startsWith(q));
+    const containsQ = lower.includes(q);
+    const canonContains = qCanon && eCanon && (eCanon.includes(qCanon) || qCanon.includes(eCanon));
+
+    if (tokenStarts || containsQ || canonContains) {
+      bySimilarity.push({ entry, score: tokenStarts ? 1 : (containsQ ? 2 : 3) });
+    }
+  });
+
+  byName.sort((a, b) => a.score - b.score || a.entry.name.localeCompare(b.entry.name));
+  bySimilarity.sort((a, b) => a.score - b.score || a.entry.name.length - b.entry.name.length);
+
+  return {
+    byName: byName.slice(0, 5).map(x => x.entry),
+    bySimilarity: bySimilarity.slice(0, 5).map(x => x.entry),
+  };
+}
+
+function _renderGrocerySuggestions(query) {
+  const box = document.getElementById('grocerySuggestionsBox');
+  if (!box) return;
+  const q = String(query || '').trim();
+  if (!q) { box.innerHTML = ''; box.style.display = 'none'; return; }
+
+  const { byName, bySimilarity } = _groSearchLibrary(q);
+  const titled = toTitleCase(q);
+
+  if (byName.length === 0 && bySimilarity.length === 0) {
+    box.innerHTML = `<div class="gro-suggest-empty">No library matches. Press Enter to add &ldquo;${esc(titled)}&rdquo; as a new item.</div>`;
+    box.style.display = 'block';
+    return;
+  }
+
+  const renderRow = (entry) => {
+    const photo = (typeof findIngredientPhoto === 'function') ? findIngredientPhoto(entry.name) : null;
+    const recipeCount = (entry.recipeNames || []).length;
+    let subtitle = '';
+    if (recipeCount === 1) subtitle = `In ${entry.recipeNames[0]}`;
+    else if (recipeCount > 1) subtitle = `In ${recipeCount} recipes`;
+    else if (entry.isCustom) subtitle = 'Custom';
+    else if (entry.category) subtitle = entry.category;
+    const safe = escJs(entry.canonical);
+    return `
+      <button type="button" class="gro-suggest-row" onmousedown="event.preventDefault();" onclick="_groSelectSuggestion('${safe}')">
+        <div class="gro-suggest-thumb">
+          ${photo
+            ? `<img src="${esc(photo)}" alt="" />`
+            : `<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 00-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 00-16.536-1.84M7.5 14.25L5.106 5.272"/></svg>`
+          }
+        </div>
+        <div class="gro-suggest-body">
+          <div class="gro-suggest-name">${esc(entry.name)}</div>
+          ${subtitle ? `<div class="gro-suggest-sub">${esc(subtitle)}</div>` : ''}
+        </div>
+        <svg class="gro-suggest-add" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+      </button>
+    `;
+  };
+
+  const sectionHtml = (label, list) => list.length === 0 ? '' : `
+    <div class="gro-suggest-section">
+      <div class="gro-suggest-section-label">${label}</div>
+      ${list.map(renderRow).join('')}
+    </div>
+  `;
+
+  box.innerHTML = `
+    ${sectionHtml('Matches', byName)}
+    ${sectionHtml('Similar items', bySimilarity)}
+    <div class="gro-suggest-footer">Press Enter to add &ldquo;${esc(titled)}&rdquo; as a new item.</div>
+  `;
+  box.style.display = 'block';
+}
+
+function _groSelectSuggestion(canonical) {
+  const all = (typeof buildIngredientLibrary === 'function') ? buildIngredientLibrary() : [];
+  const entry = all.find(e => e.canonical === canonical);
+  if (!entry) return;
+
+  const list = getSmartGroceryList();
+  if (list.some(i => canonicalIngredientName(i.name) === canonical)) {
+    showToast(`${entry.name} is already on your list`, 'info');
+  } else {
+    list.push({
+      id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      name: entry.name,
+      category: entry.category || 'Other',
+      qty: '',
+      unit: '',
+      checked: false,
+      manual: !!entry.isCustom,
+      sourceMeals: (entry.recipeNames || []).slice(0, 5),
+      store: state.groceryStoreFilter || (typeof getLastSelectedStore === 'function' ? getLastSelectedStore() || '' : ''),
+      addedAt: Date.now()
+    });
+    saveSmartGroceryList(list);
+    showToast(`${entry.name} added`, 'success');
+  }
+
+  const input = document.getElementById('groceryManualInput');
+  if (input) input.value = '';
+  _renderGrocerySuggestions('');
+  _scheduleGroceryRender(150);
+}
+
+// Adds whatever is currently typed (existing manual flow) and dismisses the
+// suggestion dropdown so it doesn't linger across the upcoming rerender.
+function _groAddManualThenClear() {
+  if (typeof addManualGroceryItemSmart === 'function') addManualGroceryItemSmart();
+  _renderGrocerySuggestions('');
+}
 
 async function addManualGroceryItem() {
       const nameInput = document.getElementById('manualItemName');
@@ -2551,7 +2699,7 @@ function _libRenderMainList() {
         style="flex:1;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;" />
     </div>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:12px;color:${CONFIG.text_muted};">
-      <span>Tap an item to add to your grocery list.</span>
+      <span>Tap the + to add to grocery, or tap an item for more actions.</span>
       ${aliasCount > 0 ? `<button onclick="_libSetView('manageMerges')" style="background:none;border:none;color:${CONFIG.primary_action_color};cursor:pointer;padding:0;font-size:12px;text-decoration:underline;">Manage merges (${aliasCount})</button>` : ''}
     </div>
   `;
@@ -2645,7 +2793,7 @@ function _libRenderRow(entry) {
           : `<div class="lib-row-img-placeholder"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg></div>`
         }
       </div>
-      <div class="lib-row-body" onclick="_libToggleAddToGrocery('${safeCanon}')">
+      <div class="lib-row-body" onclick="_libRowAction('${safeCanon}')">
         <div class="lib-row-name">${esc(entry.name)}</div>
         ${badgeHtml}
         ${subtitle ? `<div class="lib-row-sub">${subtitle}</div>` : ''}
@@ -2656,9 +2804,6 @@ function _libRenderRow(entry) {
           ? `<svg width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>`
           : `<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>`
         }
-      </button>
-      <button class="lib-row-more" onclick="event.stopPropagation();_libRowAction('${safeCanon}')" aria-label="More">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></svg>
       </button>
     </div>
   `;
@@ -2723,6 +2868,7 @@ function _libRowMenuModal(canonical) {
   if (!entry) return;
   const safe = escJs(canonical);
   const isCustomOnly = entry.isCustom && entry.recipeNames.length === 0;
+  const onList = _libIsOnGrocery(canonical);
   openModal(`
     <div style="color:${CONFIG.text_color};padding:4px 0 12px;">
       <div style="font-size:15px;font-weight:600;margin-bottom:4px;">${esc(entry.name)}</div>
@@ -2732,9 +2878,16 @@ function _libRowMenuModal(canonical) {
           : 'Custom item'}
         ${entry.mergedFrom.length > 0 ? ` · ${entry.mergedFrom.length} merged in` : ''}
       </div>
+      <button onclick="closeModal();_libToggleAddToGrocery('${safe}')" class="lib-menu-btn">
+        ${onList
+          ? `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15"/></svg>`
+          : `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>`
+        }
+        <span>${onList ? 'Remove from grocery list' : 'Add to grocery list'}</span>
+      </button>
       <button onclick="_libPromptRename('${safe}')" class="lib-menu-btn">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"/></svg>
-        <span>Rename…</span>
+        <span>Edit name…</span>
       </button>
       <button onclick="_libStartMergeFromPage('${safe}')" class="lib-menu-btn">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
@@ -2748,7 +2901,7 @@ function _libRowMenuModal(canonical) {
       ` : ''}
       <button onclick="_libConfirmHide('${safe}')" class="lib-menu-btn lib-menu-btn-danger">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79"/></svg>
-        <span>${isCustomOnly ? 'Delete from library' : 'Hide from library'}</span>
+        <span>${isCustomOnly ? 'Delete entirely' : 'Hide from library'}</span>
       </button>
       <button onclick="closeModal()" class="lib-menu-btn lib-menu-btn-cancel">Cancel</button>
     </div>
@@ -3004,7 +3157,7 @@ function renderGroceryLibrary() {
         oninput="window._librarySearch=this.value;render();"
         style="width:100%;padding:10px 12px;background:${CONFIG.background_color};color:${CONFIG.text_color};border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-size:14px;outline:none;box-sizing:border-box;margin-bottom:10px;" />
       ${chipsHtml}
-      <div style="font-size:12px;color:${CONFIG.text_muted};margin:8px 0 8px;">Tap an item to add to your grocery list.</div>
+      <div style="font-size:12px;color:${CONFIG.text_muted};margin:8px 0 8px;">Tap the + to add to grocery, or tap an item for more actions.</div>
       ${manualAddHtml}
       ${emptyHtml}
       <div class="lib-list">${rowsHtml}</div>
@@ -3025,6 +3178,7 @@ function _libRowMenu(canonical) {
   if (!body) return;
   window._libCachedListBody = body.innerHTML;
 
+  const onList = _libIsOnGrocery(canonical);
   body.innerHTML = `
     <div style="padding:4px 0 12px;">
       <div style="font-size:15px;font-weight:600;margin-bottom:4px;">${esc(entry.name)}</div>
@@ -3034,9 +3188,16 @@ function _libRowMenu(canonical) {
           : 'Custom item'}
         ${entry.mergedFrom.length > 0 ? ` · ${entry.mergedFrom.length} merged in` : ''}
       </div>
+      <button onclick="_libToggleAddToGrocery('${safe}');_libBackToList();" class="lib-menu-btn">
+        ${onList
+          ? `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 12h-15"/></svg>`
+          : `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>`
+        }
+        <span>${onList ? 'Remove from grocery list' : 'Add to grocery list'}</span>
+      </button>
       <button onclick="_libPromptRename('${safe}')" class="lib-menu-btn">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"/></svg>
-        <span>Rename…</span>
+        <span>Edit name…</span>
       </button>
       <button onclick="_libStartMerge('${safe}')" class="lib-menu-btn">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5"/></svg>
@@ -3050,7 +3211,7 @@ function _libRowMenu(canonical) {
       ` : ''}
       <button onclick="_libConfirmHide('${safe}')" class="lib-menu-btn lib-menu-btn-danger">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79"/></svg>
-        <span>${isCustomOnly ? 'Delete from library' : 'Hide from library'}</span>
+        <span>${isCustomOnly ? 'Delete entirely' : 'Hide from library'}</span>
       </button>
       <button onclick="_libBackToList()" class="lib-menu-btn lib-menu-btn-cancel">Back</button>
     </div>
