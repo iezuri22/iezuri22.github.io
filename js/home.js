@@ -472,6 +472,11 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
   const img = recipe.image || (typeof recipeThumb === 'function' ? recipeThumb(recipe) : '');
   const name = recipe.title || '';
   const hasSwap = dateStr && mealType;
+  const sourceLabel = recipe.sourceType === 'chefiq' ? 'Chef IQ'
+    : recipe.sourceType === 'claude' ? 'Chef Claude'
+    : recipe.sourceType === 'imported' ? 'Imported'
+    : recipe.sourceType === 'user' ? 'PotLuck'
+    : '';
   return `
     <div class="recipe-carousel-card" onclick="openRecipeView('${id}')">
       <div class="carousel-card-media">
@@ -490,6 +495,7 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
         ` : ''}
       </div>
       <div class="carousel-card-info">
+        ${sourceLabel ? `<span class="card-source">${esc(sourceLabel)}</span>` : ''}
         <h3 class="card-title">${esc(name)}</h3>
       </div>
     </div>
