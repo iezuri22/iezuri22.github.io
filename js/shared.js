@@ -4351,7 +4351,8 @@ const INGREDIENT_UNITS_AND_COUNT_WORDS = [
   'bag','bags','box','boxes','package','packages','pkg','pkgs',
   'bone','bones','bunch','bunches','head','heads','sprig','sprigs',
   'stalk','stalks','jar','jars','bottle','bottles','container','containers',
-  'stick','sticks','carton','cartons','loaf','loaves','sheet','sheets'
+  'stick','sticks','carton','cartons','loaf','loaves','sheet','sheets',
+  'packet','packets','pinch','pinches','dash','dashes','handful','handfuls','sprinkle','splash'
 ];
 
 const _INGREDIENT_LEADING_UNIT_RE = new RegExp(
@@ -4395,9 +4396,16 @@ function normalizeIngredientName(raw) {
   if (raw == null) return '';
   let s = String(raw).trim();
   if (!s) return '';
-  // Drop anything inside parens and anything after the first comma \u2014 those are
-  // qualifiers, not part of the product name.
-  s = s.replace(/\([^)]*\)/g, ' ').split(',')[0].trim();
+  // Drop anything inside parens \u2014 those are qualifiers, not part of the name.
+  s = s.replace(/\([^)]*\)/g, ' ');
+  // Strip compound bone/skin descriptors anywhere in the string, including any
+  // surrounding whitespace and trailing comma. Without this, an input like
+  // "bone-in, skin-on chicken thighs" gets lopped at the comma to "bone-in",
+  // and the unit-strip pass then eats "bone" leaving "-in" / "In". This pass
+  // collapses them out cleanly so what's left is just the noun.
+  s = s.replace(/\s*\b(?:bone-(?:in|out)|skin-(?:on|off)|boneless|skinless)\b\s*,?\s*/gi, ' ');
+  // Drop everything after the first comma \u2014 those are prep instructions.
+  s = s.split(',')[0].trim();
   // Drop the alternative half of an "X or Y" form. The product is X; Y is just
   // a substitution suggestion ("turkey bacon or pancetta" \u2192 "turkey bacon").
   s = s.replace(/\s+or\s+.*$/i, '').trim();
@@ -4410,8 +4418,10 @@ function normalizeIngredientName(raw) {
     const before = s;
     s = s.replace(/^[\s\u2022\u2013\u2014\-\*\:\.\u00b7]+/, '');                                     // bullets/dashes/colons
     s = s.replace(/^\d+(?:[\/\.]\d+)?(?:\s*[\u2013\u2014\-]\s*\d+(?:[\/\.]\d+)?)?\s*/, ''); // qty incl. ranges
+    // Descriptor must come BEFORE unit, otherwise "bone" eats the start of
+    // "bone-in chicken thighs" and the descriptor regex never gets a shot.
+    s = s.replace(_INGREDIENT_LEADING_DESCRIPTOR_RE, '');                        // thick/boneless/bone-in/etc.
     s = s.replace(_INGREDIENT_LEADING_UNIT_RE, '');                              // unit / count word
-    s = s.replace(_INGREDIENT_LEADING_DESCRIPTOR_RE, '');                        // thick/boneless/etc.
     if (s === before) break;
   }
   s = s.replace(/\s+/g, ' ').trim();
