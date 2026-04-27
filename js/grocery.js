@@ -2119,7 +2119,17 @@ function getWeekAddedTracking() {
 }
 
 function _saveWeekAddedTracking(tracking) {
-  localStorage.setItem(GROCERY_WEEK_TRACKING_KEY, JSON.stringify(tracking));
+  try { localStorage.setItem(GROCERY_WEEK_TRACKING_KEY, JSON.stringify(tracking)); }
+  catch (e) { console.error('[groceryWeekTracking] localStorage write failed:', e); }
+  if (typeof syncGroceryWeekTrackingToSupabase !== 'function') return;
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncGroceryWeekTrackingToSupabase(tracking).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[groceryWeekTracking] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncGroceryWeekTrackingToSupabase(tracking).catch(err => console.error('[groceryWeekTracking] retry failed:', err)), 4000);
+  });
 }
 
 function _getMealAddedCanonicals(mealId) {
@@ -2515,23 +2525,31 @@ const LIB_CUSTOM_KEY = 'ingredientLibraryCustom_v1';
 const LIB_MASTER_NAMES_KEY = 'ingredientLibraryMasterNames_v1';
 const LIB_HIDDEN_KEY = 'ingredientLibraryHidden_v1';
 
+// All four library overrides go through Supabase via persistIngredientLibraryOverrides
+// so renames/merges/custom-adds/hidden-items survive a refresh and propagate
+// across the user's devices. Without this, applySupabaseData rebuilds the
+// library from recipe data on the next load and the override appears to "come
+// back" — see "rename of -oz bag edamame reverts" report.
 function _libGetAliases() {
   try { return JSON.parse(localStorage.getItem(LIB_ALIASES_KEY) || '{}') || {}; } catch { return {}; }
 }
 function _libSaveAliases(map) {
   localStorage.setItem(LIB_ALIASES_KEY, JSON.stringify(map || {}));
+  if (typeof persistIngredientLibraryOverrides === 'function') persistIngredientLibraryOverrides();
 }
 function _libGetMasterNames() {
   try { return JSON.parse(localStorage.getItem(LIB_MASTER_NAMES_KEY) || '{}') || {}; } catch { return {}; }
 }
 function _libSaveMasterNames(map) {
   localStorage.setItem(LIB_MASTER_NAMES_KEY, JSON.stringify(map || {}));
+  if (typeof persistIngredientLibraryOverrides === 'function') persistIngredientLibraryOverrides();
 }
 function _libGetCustom() {
   try { return JSON.parse(localStorage.getItem(LIB_CUSTOM_KEY) || '[]') || []; } catch { return []; }
 }
 function _libSaveCustom(list) {
   localStorage.setItem(LIB_CUSTOM_KEY, JSON.stringify(list || []));
+  if (typeof persistIngredientLibraryOverrides === 'function') persistIngredientLibraryOverrides();
 }
 // Hidden canonicals — items the user has "deleted" from the library. Recipe-
 // derived entries can't be truly removed (the recipe still references them),
@@ -2541,6 +2559,7 @@ function _libGetHidden() {
 }
 function _libSaveHidden(set) {
   localStorage.setItem(LIB_HIDDEN_KEY, JSON.stringify(Array.from(set || [])));
+  if (typeof persistIngredientLibraryOverrides === 'function') persistIngredientLibraryOverrides();
 }
 
 // Resolve a canonical name through the alias chain (a→b→c) so callers always

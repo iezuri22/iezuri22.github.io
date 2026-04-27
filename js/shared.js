@@ -143,6 +143,9 @@ async function checkAuthAndInit() {
 }
 
 function clearAuthCache() {
+  // Vestigial localStorage shadows of Supabase Auth state. Removed during the
+  // localStorage→Supabase migration; Supabase Auth's own session is the
+  // source of truth. Kept as removeItem-only so existing devices clean up.
   localStorage.removeItem('yummy_auth_user_id');
   localStorage.removeItem('yummy_auth_user_email');
   localStorage.removeItem('yummy_isLoggedIn');
@@ -941,7 +944,7 @@ function renderEffortPill(level, size) {
 }
 
 // ============================================================
-// RATINGS & COMMENTS (localStorage per-recipe)
+// RATINGS & COMMENTS — Supabase is source of truth; localStorage is cache.
 // ============================================================
 const RATINGS_KEY = 'yummy_ratings';
 const COMMENTS_KEY = 'yummy_comments';
@@ -973,6 +976,14 @@ function saveRecipeRating(recipeId, stars) {
   const sum = dist.reduce((a, b, i) => a + b * (i + 1), 0);
   data.averageRating = total > 0 ? (sum / total).toFixed(1) : 0;
   localStorage.setItem(RATINGS_KEY, JSON.stringify(all));
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncRecipeRatingsToSupabase(all).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[ratings] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncRecipeRatingsToSupabase(all).catch(err => console.error('[ratings] retry failed:', err)), 4000);
+  });
   return data;
 }
 
@@ -995,7 +1006,295 @@ function addRecipeComment(recipeId, text, photoUrl) {
     likes: 0
   });
   localStorage.setItem(COMMENTS_KEY, JSON.stringify(all));
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncRecipeCommentsToSupabase(all).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[comments] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncRecipeCommentsToSupabase(all).catch(err => console.error('[comments] retry failed:', err)), 4000);
+  });
   return all[recipeId];
+}
+
+async function syncRecipeRatingsToSupabase(ratings) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'recipeRatings_data', type: 'recipeRatings', ratings: ratings || {} };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync ratings failed:', error); throw error; }
+}
+
+async function syncRecipeCommentsToSupabase(comments) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'recipeComments_data', type: 'recipeComments', comments: comments || {} };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync comments failed:', error); throw error; }
+}
+
+async function syncAutoPlanToSupabase(plan) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'autoplan_data', type: 'autoplan', plan: plan || null };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync autoplan failed:', error); throw error; }
+}
+
+// ============================================================
+// PLATE NOTES & COVERS — Supabase is source of truth; localStorage is cache.
+// Notes: per-logId text annotations on photos in the journal/plates view.
+// Covers: per-recipeName chosen cover photo (logId of the chosen entry).
+// ============================================================
+const PLATE_NOTES_KEY = 'myPlatesNotes';
+const PLATE_COVERS_KEY = 'myPlatesCovers';
+
+function getPlateNotes() {
+  try { return JSON.parse(localStorage.getItem(PLATE_NOTES_KEY) || '{}') || {}; } catch { return {}; }
+}
+function _persistPlateNotes(notes) {
+  try { localStorage.setItem(PLATE_NOTES_KEY, JSON.stringify(notes)); }
+  catch (e) { console.error('[plateNotes] localStorage write failed:', e); }
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncPlateNotesToSupabase(notes).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[plateNotes] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncPlateNotesToSupabase(notes).catch(err => console.error('[plateNotes] retry failed:', err)), 4000);
+  });
+}
+function setPlateNote(logId, text) {
+  const notes = getPlateNotes();
+  if (text) notes[logId] = text; else delete notes[logId];
+  _persistPlateNotes(notes);
+}
+function deletePlateNote(logId) {
+  const notes = getPlateNotes();
+  if (notes[logId]) { delete notes[logId]; _persistPlateNotes(notes); }
+}
+
+function getPlateCovers() {
+  try { return JSON.parse(localStorage.getItem(PLATE_COVERS_KEY) || '{}') || {}; } catch { return {}; }
+}
+function _persistPlateCovers(covers) {
+  try { localStorage.setItem(PLATE_COVERS_KEY, JSON.stringify(covers)); }
+  catch (e) { console.error('[plateCovers] localStorage write failed:', e); }
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncPlateCoversToSupabase(covers).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[plateCovers] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncPlateCoversToSupabase(covers).catch(err => console.error('[plateCovers] retry failed:', err)), 4000);
+  });
+}
+function setPlateCover(coverKey, logId) {
+  const covers = getPlateCovers();
+  covers[coverKey] = logId;
+  _persistPlateCovers(covers);
+}
+// Drop any cover entries pointing at a logId we just deleted.
+function removePlateCoversForLogId(logId) {
+  const covers = getPlateCovers();
+  const keysToRemove = Object.keys(covers).filter(k => covers[k] === logId);
+  if (!keysToRemove.length) return;
+  keysToRemove.forEach(k => delete covers[k]);
+  _persistPlateCovers(covers);
+}
+
+async function syncPlateNotesToSupabase(notes) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'plateNotes_data', type: 'plateNotes', notes: notes || {} };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync plate notes failed:', error); throw error; }
+}
+
+async function syncPlateCoversToSupabase(covers) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'plateCovers_data', type: 'plateCovers', covers: covers || {} };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync plate covers failed:', error); throw error; }
+}
+
+// ============================================================
+// KITCHEN HELPERS — Supabase is source of truth; localStorage is cache.
+// custom: array of user-added ingredients
+// hidden: array of hardcoded names the user has hidden
+// links:  per-ingredient {recipeId: 'included' | 'excluded'}
+// tips:   per-ingredient custom tips object
+// ============================================================
+const CUSTOM_KITCHEN_KEY = 'customKitchenIngredients';
+const HIDDEN_KITCHEN_KEY = 'hiddenKitchenIngredients';
+const KITCHEN_LINKS_KEY = 'kitchenRecipeLinks_data';
+const KITCHEN_TIPS_KEY = 'kitchenCustomTips_data';
+
+function getCustomKitchenIngredientsList() {
+  try { return JSON.parse(localStorage.getItem(CUSTOM_KITCHEN_KEY) || '[]') || []; } catch { return []; }
+}
+function setCustomKitchenIngredientsList(list) {
+  try { localStorage.setItem(CUSTOM_KITCHEN_KEY, JSON.stringify(list || [])); }
+  catch (e) { console.error('[kitchen-custom] localStorage write failed:', e); }
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncCustomKitchenToSupabase(list).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[kitchen-custom] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncCustomKitchenToSupabase(list).catch(err => console.error('[kitchen-custom] retry failed:', err)), 4000);
+  });
+}
+
+function getHiddenKitchenList() {
+  try { return JSON.parse(localStorage.getItem(HIDDEN_KITCHEN_KEY) || '[]') || []; } catch { return []; }
+}
+function setHiddenKitchenList(list) {
+  try { localStorage.setItem(HIDDEN_KITCHEN_KEY, JSON.stringify(list || [])); }
+  catch (e) { console.error('[kitchen-hidden] localStorage write failed:', e); }
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncHiddenKitchenToSupabase(list).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[kitchen-hidden] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncHiddenKitchenToSupabase(list).catch(err => console.error('[kitchen-hidden] retry failed:', err)), 4000);
+  });
+}
+
+function getAllKitchenRecipeLinks() {
+  try { return JSON.parse(localStorage.getItem(KITCHEN_LINKS_KEY) || '{}') || {}; } catch { return {}; }
+}
+function getKitchenLinksFor(ingredientName) {
+  const all = getAllKitchenRecipeLinks();
+  return all[ingredientName] || {};
+}
+function setKitchenLinksFor(ingredientName, links) {
+  const all = getAllKitchenRecipeLinks();
+  if (!links || Object.keys(links).length === 0) delete all[ingredientName];
+  else all[ingredientName] = links;
+  _persistKitchenLinks(all);
+}
+function deleteKitchenLinksFor(ingredientName) {
+  const all = getAllKitchenRecipeLinks();
+  if (!(ingredientName in all)) return;
+  delete all[ingredientName];
+  _persistKitchenLinks(all);
+}
+function _persistKitchenLinks(all) {
+  try { localStorage.setItem(KITCHEN_LINKS_KEY, JSON.stringify(all)); }
+  catch (e) { console.error('[kitchen-links] localStorage write failed:', e); }
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncKitchenLinksToSupabase(all).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[kitchen-links] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncKitchenLinksToSupabase(all).catch(err => console.error('[kitchen-links] retry failed:', err)), 4000);
+  });
+}
+
+function getAllKitchenTips() {
+  try { return JSON.parse(localStorage.getItem(KITCHEN_TIPS_KEY) || '{}') || {}; } catch { return {}; }
+}
+function getKitchenTipsFor(ingredientName) {
+  const all = getAllKitchenTips();
+  return all[ingredientName] || null;
+}
+function setKitchenTipsFor(ingredientName, tips) {
+  const all = getAllKitchenTips();
+  if (tips == null) delete all[ingredientName];
+  else all[ingredientName] = tips;
+  _persistKitchenTips(all);
+}
+function deleteKitchenTipsFor(ingredientName) {
+  const all = getAllKitchenTips();
+  if (!(ingredientName in all)) return;
+  delete all[ingredientName];
+  _persistKitchenTips(all);
+}
+function _persistKitchenTips(all) {
+  try { localStorage.setItem(KITCHEN_TIPS_KEY, JSON.stringify(all)); }
+  catch (e) { console.error('[kitchen-tips] localStorage write failed:', e); }
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncKitchenTipsToSupabase(all).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[kitchen-tips] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncKitchenTipsToSupabase(all).catch(err => console.error('[kitchen-tips] retry failed:', err)), 4000);
+  });
+}
+
+async function syncCustomKitchenToSupabase(list) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'customKitchenIngredients_data', type: 'customKitchenIngredients', items: list || [] };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync custom kitchen failed:', error); throw error; }
+}
+
+async function syncHiddenKitchenToSupabase(list) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'hiddenKitchenIngredients_data', type: 'hiddenKitchenIngredients', names: list || [] };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync hidden kitchen failed:', error); throw error; }
+}
+
+async function syncKitchenLinksToSupabase(linksByIngredient) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'kitchenRecipeLinks_data', type: 'kitchenRecipeLinks', links: linksByIngredient || {} };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync kitchen links failed:', error); throw error; }
+}
+
+async function syncKitchenTipsToSupabase(tipsByIngredient) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'kitchenCustomTips_data', type: 'kitchenCustomTips', tips: tipsByIngredient || {} };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync kitchen tips failed:', error); throw error; }
+}
+
+async function syncGroceryWeekTrackingToSupabase(tracking) {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  const item = { id: 'groceryAddedThisWeek_data', type: 'groceryAddedThisWeek', tracking: tracking || null };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) { console.error('Sync grocery week tracking failed:', error); throw error; }
 }
 
 // ============================================================
@@ -2253,6 +2552,51 @@ async function syncIngredientPhotosToSupabase() {
   }
 }
 
+// Bundles the four ingredient-library override blobs into a single Supabase
+// row. These were previously localStorage-only, which meant a rename / merge /
+// hide / custom-add would silently revert on refresh whenever applySupabaseData
+// rebuilt the recipe-derived view (because the override was never persisted
+// anywhere durable). Keeping them in one row keeps the load path simple and
+// lets us land cross-device sync in one upsert per change.
+async function syncIngredientLibraryOverridesToSupabase() {
+  if (!window.supabaseClient) return;
+  const { data: { session } } = await window.supabaseClient.auth.getSession();
+  if (!session?.user) return;
+  let aliases = {}, masterNames = {}, custom = [], hidden = [];
+  try { aliases = JSON.parse(localStorage.getItem('ingredientLibraryAliases_v1') || '{}') || {}; } catch {}
+  try { masterNames = JSON.parse(localStorage.getItem('ingredientLibraryMasterNames_v1') || '{}') || {}; } catch {}
+  try { custom = JSON.parse(localStorage.getItem('ingredientLibraryCustom_v1') || '[]') || []; } catch {}
+  try { hidden = JSON.parse(localStorage.getItem('ingredientLibraryHidden_v1') || '[]') || []; } catch {}
+  const item = {
+    id: 'ingredientLibrary_overrides',
+    type: 'ingredientLibraryOverrides',
+    aliases, masterNames, custom, hidden
+  };
+  const { error } = await window.supabaseClient
+    .from('meal_planner_data')
+    .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+  if (error) {
+    console.error('Sync ingredient library overrides failed:', error);
+    throw error;
+  }
+}
+
+// Save+sync wrapper used by grocery.js _libSave* helpers. Sets the realtime
+// guard so an in-flight echo can't pull stale overrides over our write before
+// the upsert lands.
+function persistIngredientLibraryOverrides() {
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncIngredientLibraryOverridesToSupabase().then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[libOverrides] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => {
+      syncIngredientLibraryOverridesToSupabase().catch(err => console.error('[libOverrides] retry failed:', err));
+    }, 4000);
+  });
+}
+
 async function syncCustomImagestoSupabase() {
   if (!window.supabaseClient) return;
   try {
@@ -2298,6 +2642,7 @@ async function pushLocalOnlyDataToSupabase() {
     syncEffortLevelsToSupabase(getRecipeEffortLevels()),
     syncGroceryStoresToSupabase(getGroceryStores()),
     syncFrequencyItemsToSupabase(getFrequencyItems()),
+    syncIngredientLibraryOverridesToSupabase(),
   ];
   try { await Promise.allSettled(tasks); }
   catch (e) { console.error('[push pending] failed:', e); }
@@ -5552,6 +5897,154 @@ async function migrateSavedAndPlatesToSupabase() {
       }
     }
     if (combos.length > 0) debugLog('[migrate] Synced', combos.length, 'combos to Supabase');
+
+    // Migrate recipe ratings (one-time pull from local-only storage)
+    try {
+      const localRatings = JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}');
+      if (localRatings && Object.keys(localRatings).length > 0) {
+        const item = { id: 'recipeRatings_data', type: 'recipeRatings', ratings: localRatings };
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+        debugLog('[migrate] Synced', Object.keys(localRatings).length, 'recipe ratings to Supabase');
+      }
+    } catch (e) { console.error('[migrate] ratings failed:', e); }
+
+    // Migrate recipe comments (one-time pull from local-only storage)
+    try {
+      const localComments = JSON.parse(localStorage.getItem(COMMENTS_KEY) || '{}');
+      if (localComments && Object.keys(localComments).length > 0) {
+        const item = { id: 'recipeComments_data', type: 'recipeComments', comments: localComments };
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+        debugLog('[migrate] Synced', Object.keys(localComments).length, 'recipe comment threads to Supabase');
+      }
+    } catch (e) { console.error('[migrate] comments failed:', e); }
+
+    // Migrate auto-plan (one-time pull from local-only storage)
+    try {
+      const localPlanRaw = localStorage.getItem('yummy_autoplan');
+      if (localPlanRaw) {
+        const plan = JSON.parse(localPlanRaw);
+        if (plan && plan.days) {
+          const item = { id: 'autoplan_data', type: 'autoplan', plan };
+          await window.supabaseClient.from('meal_planner_data')
+            .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+          debugLog('[migrate] Synced auto-plan to Supabase');
+        }
+      }
+    } catch (e) { console.error('[migrate] autoplan failed:', e); }
+
+    // Migrate plate notes
+    try {
+      const notes = JSON.parse(localStorage.getItem(PLATE_NOTES_KEY) || '{}');
+      if (notes && Object.keys(notes).length > 0) {
+        const item = { id: 'plateNotes_data', type: 'plateNotes', notes };
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+        debugLog('[migrate] Synced', Object.keys(notes).length, 'plate notes to Supabase');
+      }
+    } catch (e) { console.error('[migrate] plate notes failed:', e); }
+
+    // Migrate plate covers
+    try {
+      const covers = JSON.parse(localStorage.getItem(PLATE_COVERS_KEY) || '{}');
+      if (covers && Object.keys(covers).length > 0) {
+        const item = { id: 'plateCovers_data', type: 'plateCovers', covers };
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+        debugLog('[migrate] Synced', Object.keys(covers).length, 'plate covers to Supabase');
+      }
+    } catch (e) { console.error('[migrate] plate covers failed:', e); }
+
+    // Migrate custom kitchen ingredients
+    try {
+      const list = JSON.parse(localStorage.getItem(CUSTOM_KITCHEN_KEY) || '[]');
+      if (Array.isArray(list) && list.length > 0) {
+        const item = { id: 'customKitchenIngredients_data', type: 'customKitchenIngredients', items: list };
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+        debugLog('[migrate] Synced', list.length, 'custom kitchen ingredients to Supabase');
+      }
+    } catch (e) { console.error('[migrate] custom kitchen failed:', e); }
+
+    // Migrate hidden kitchen ingredients
+    try {
+      const list = JSON.parse(localStorage.getItem(HIDDEN_KITCHEN_KEY) || '[]');
+      if (Array.isArray(list) && list.length > 0) {
+        const item = { id: 'hiddenKitchenIngredients_data', type: 'hiddenKitchenIngredients', names: list };
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+        debugLog('[migrate] Synced', list.length, 'hidden kitchen ingredients to Supabase');
+      }
+    } catch (e) { console.error('[migrate] hidden kitchen failed:', e); }
+
+    // Consolidate per-ingredient kitchenRecipeLinks_<name> + kitchenCustomTips_<name>
+    // + kitchenIngredientPhoto_<name> entries into single rows. Iterate localStorage
+    // looking for the prefixes, then clear individual keys after upsert succeeds.
+    try {
+      const linksConsolidated = getAllKitchenRecipeLinks();
+      const tipsConsolidated = getAllKitchenTips();
+      const localKeys = Object.keys(localStorage);
+      const linkKeys = [];
+      const tipKeys = [];
+      const photoKeys = [];
+      for (const k of localKeys) {
+        if (k.startsWith('kitchenRecipeLinks_') && k !== KITCHEN_LINKS_KEY) {
+          const ing = k.slice('kitchenRecipeLinks_'.length);
+          try { linksConsolidated[ing] = JSON.parse(localStorage.getItem(k) || '{}'); } catch {}
+          linkKeys.push(k);
+        } else if (k.startsWith('kitchenCustomTips_') && k !== KITCHEN_TIPS_KEY) {
+          const ing = k.slice('kitchenCustomTips_'.length);
+          try { tipsConsolidated[ing] = JSON.parse(localStorage.getItem(k) || 'null'); } catch {}
+          tipKeys.push(k);
+        } else if (k.startsWith('kitchenIngredientPhoto_')) {
+          photoKeys.push(k);
+        }
+      }
+      if (linkKeys.length > 0) {
+        const item = { id: 'kitchenRecipeLinks_data', type: 'kitchenRecipeLinks', links: linksConsolidated };
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+        localStorage.setItem(KITCHEN_LINKS_KEY, JSON.stringify(linksConsolidated));
+        linkKeys.forEach(k => localStorage.removeItem(k));
+        debugLog('[migrate] Consolidated', linkKeys.length, 'kitchen recipe-link keys to Supabase');
+      }
+      if (tipKeys.length > 0) {
+        const item = { id: 'kitchenCustomTips_data', type: 'kitchenCustomTips', tips: tipsConsolidated };
+        await window.supabaseClient.from('meal_planner_data')
+          .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+        localStorage.setItem(KITCHEN_TIPS_KEY, JSON.stringify(tipsConsolidated));
+        tipKeys.forEach(k => localStorage.removeItem(k));
+        debugLog('[migrate] Consolidated', tipKeys.length, 'kitchen tip keys to Supabase');
+      }
+      if (photoKeys.length > 0) {
+        // Fold each per-ingredient photo into the global ingredientPhotos library
+        // so the existing photo-library sync handles cross-device replication.
+        for (const k of photoKeys) {
+          const name = k.slice('kitchenIngredientPhoto_'.length);
+          const dataUrl = localStorage.getItem(k);
+          if (name && dataUrl && typeof setIngredientPhoto === 'function') {
+            setIngredientPhoto(name, dataUrl);
+          }
+          localStorage.removeItem(k);
+        }
+        debugLog('[migrate] Consolidated', photoKeys.length, 'kitchen photo keys into ingredient photo library');
+      }
+    } catch (e) { console.error('[migrate] kitchen per-ingredient keys failed:', e); }
+
+    // Migrate grocery week-added tracking
+    try {
+      const raw = localStorage.getItem('groceryAddedThisWeek_v1');
+      if (raw) {
+        const tracking = JSON.parse(raw);
+        if (tracking && tracking.weekStart) {
+          const item = { id: 'groceryAddedThisWeek_data', type: 'groceryAddedThisWeek', tracking };
+          await window.supabaseClient.from('meal_planner_data')
+            .upsert({ id: item.id, user_id: userId, data: item }, { onConflict: 'id' });
+          debugLog('[migrate] Synced grocery week-added tracking to Supabase');
+        }
+      }
+    } catch (e) { console.error('[migrate] grocery week tracking failed:', e); }
   } catch (e) { console.error('Migration of saved/plates failed (non-fatal):', e); }
 }
 
@@ -5696,6 +6189,29 @@ function applySupabaseData(data) {
     try { localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos)); } catch (e) {}
   }
 
+  // Load ingredient-library overrides (rename/merge/custom/hidden) from
+  // Supabase. Remote is authoritative once it exists — the four blobs were
+  // written together, so we don't need a per-key merge. Only restore from
+  // remote if the row exists; otherwise leave localStorage as-is so a brand-
+  // new fetch doesn't wipe pre-sync state.
+  const libOverridesRow = data.find(d => d.id === 'ingredientLibrary_overrides');
+  if (libOverridesRow) {
+    try {
+      if (libOverridesRow.aliases && typeof libOverridesRow.aliases === 'object') {
+        localStorage.setItem('ingredientLibraryAliases_v1', JSON.stringify(libOverridesRow.aliases));
+      }
+      if (libOverridesRow.masterNames && typeof libOverridesRow.masterNames === 'object') {
+        localStorage.setItem('ingredientLibraryMasterNames_v1', JSON.stringify(libOverridesRow.masterNames));
+      }
+      if (Array.isArray(libOverridesRow.custom)) {
+        localStorage.setItem('ingredientLibraryCustom_v1', JSON.stringify(libOverridesRow.custom));
+      }
+      if (Array.isArray(libOverridesRow.hidden)) {
+        localStorage.setItem('ingredientLibraryHidden_v1', JSON.stringify(libOverridesRow.hidden));
+      }
+    } catch (e) { console.error('[libOverrides] load failed:', e); }
+  }
+
   // Load custom ingredient images from Supabase
   const customImagesRow = data.find(d => d.id === 'customImages_data');
   if (customImagesRow && customImagesRow.images && typeof customImagesRow.images === 'object') {
@@ -5719,6 +6235,66 @@ function applySupabaseData(data) {
   const groceryFreqRow = data.find(d => d.id === 'groceryFrequency_data');
   if (groceryFreqRow && Array.isArray(groceryFreqRow.items)) {
     localStorage.setItem(GROCERY_FREQUENCY_KEY, JSON.stringify(groceryFreqRow.items));
+  }
+
+  // Load recipe ratings from Supabase
+  const ratingsRow = data.find(d => d.id === 'recipeRatings_data');
+  if (ratingsRow && ratingsRow.ratings && typeof ratingsRow.ratings === 'object') {
+    localStorage.setItem(RATINGS_KEY, JSON.stringify(ratingsRow.ratings));
+  }
+
+  // Load recipe comments from Supabase
+  const commentsRow = data.find(d => d.id === 'recipeComments_data');
+  if (commentsRow && commentsRow.comments && typeof commentsRow.comments === 'object') {
+    localStorage.setItem(COMMENTS_KEY, JSON.stringify(commentsRow.comments));
+  }
+
+  // Load auto-plan from Supabase
+  const autoplanRow = data.find(d => d.id === 'autoplan_data');
+  if (autoplanRow && autoplanRow.plan) {
+    localStorage.setItem('yummy_autoplan', JSON.stringify(autoplanRow.plan));
+  }
+
+  // Load plate notes from Supabase
+  const plateNotesRow = data.find(d => d.id === 'plateNotes_data');
+  if (plateNotesRow && plateNotesRow.notes && typeof plateNotesRow.notes === 'object') {
+    localStorage.setItem(PLATE_NOTES_KEY, JSON.stringify(plateNotesRow.notes));
+  }
+
+  // Load plate covers from Supabase
+  const plateCoversRow = data.find(d => d.id === 'plateCovers_data');
+  if (plateCoversRow && plateCoversRow.covers && typeof plateCoversRow.covers === 'object') {
+    localStorage.setItem(PLATE_COVERS_KEY, JSON.stringify(plateCoversRow.covers));
+  }
+
+  // Load custom kitchen ingredients from Supabase
+  const customKitchenRow = data.find(d => d.id === 'customKitchenIngredients_data');
+  if (customKitchenRow && Array.isArray(customKitchenRow.items)) {
+    localStorage.setItem(CUSTOM_KITCHEN_KEY, JSON.stringify(customKitchenRow.items));
+  }
+
+  // Load hidden kitchen ingredients from Supabase
+  const hiddenKitchenRow = data.find(d => d.id === 'hiddenKitchenIngredients_data');
+  if (hiddenKitchenRow && Array.isArray(hiddenKitchenRow.names)) {
+    localStorage.setItem(HIDDEN_KITCHEN_KEY, JSON.stringify(hiddenKitchenRow.names));
+  }
+
+  // Load kitchen recipe links from Supabase
+  const kitchenLinksRow = data.find(d => d.id === 'kitchenRecipeLinks_data');
+  if (kitchenLinksRow && kitchenLinksRow.links && typeof kitchenLinksRow.links === 'object') {
+    localStorage.setItem(KITCHEN_LINKS_KEY, JSON.stringify(kitchenLinksRow.links));
+  }
+
+  // Load kitchen custom tips from Supabase
+  const kitchenTipsRow = data.find(d => d.id === 'kitchenCustomTips_data');
+  if (kitchenTipsRow && kitchenTipsRow.tips && typeof kitchenTipsRow.tips === 'object') {
+    localStorage.setItem(KITCHEN_TIPS_KEY, JSON.stringify(kitchenTipsRow.tips));
+  }
+
+  // Load grocery week-added tracking from Supabase
+  const groceryWeekRow = data.find(d => d.id === 'groceryAddedThisWeek_data');
+  if (groceryWeekRow && groceryWeekRow.tracking) {
+    localStorage.setItem('groceryAddedThisWeek_v1', JSON.stringify(groceryWeekRow.tracking));
   }
 
   // Load mealDays (last 90 days)
@@ -5881,7 +6457,6 @@ async function clearAllData() {
   keysToRemove.forEach(key => localStorage.removeItem(key));
   localStorage.removeItem(FOOD_LOG_KEY); localStorage.removeItem(GROCERY_KEY); localStorage.removeItem(SAVED_RECIPES_KEY);
   localStorage.removeItem('custom_ingredient_images'); localStorage.removeItem(EFFORT_LEVELS_KEY);
-  localStorage.removeItem('weeklyBudgetsBackup');
   // Also clear Supabase data
   if (window.supabaseClient) {
     try {
@@ -5995,7 +6570,13 @@ function getExternalMealType(name) {
 // ============================================================
 
 async function showSettingsMenu() {
-  const userEmail = localStorage.getItem('yummy_auth_user_email') || 'Not logged in';
+  let userEmail = 'Not logged in';
+  if (window.supabaseClient) {
+    try {
+      const { data: { session } } = await window.supabaseClient.auth.getSession();
+      if (session?.user?.email) userEmail = session.user.email;
+    } catch (e) { /* fall through to "Not logged in" */ }
+  }
 
   const settingRow = (onclick, icon, label, desc, color) => `
     <button onclick="${onclick}" style="display: flex; align-items: center; gap: 12px; width: 100%; height: 44px; padding: 0 12px; border: none; background: transparent; cursor: pointer; border-radius: 8px; text-align: left;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='transparent'">

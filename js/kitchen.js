@@ -115,8 +115,9 @@ const KITCHEN_INGREDIENT_VARIANTS = {
 // ===== KITCHEN INGREDIENT FUNCTIONS =====
 
 function getIngredientPhoto(ingredientName) {
-  const custom = localStorage.getItem('kitchenIngredientPhoto_' + ingredientName);
-  if (custom) return custom;
+  // Custom kitchen photos used to live under per-name `kitchenIngredientPhoto_<name>`
+  // localStorage keys; they're now folded into the global ingredient photo library
+  // (synced via syncIngredientPhotosToSupabase). Lookup falls through to that library.
   const customIngs = getCustomKitchenIngredients();
   const ci = customIngs.find(i => i.name === ingredientName);
   if (ci && ci.photo && ci.photo.startsWith('data:')) return ci.photo;
@@ -147,7 +148,8 @@ function getIngredientPhoto(ingredientName) {
 }
 
 function saveIngredientPhoto(ingredientName, dataUrl) {
-  localStorage.setItem('kitchenIngredientPhoto_' + ingredientName, dataUrl);
+  // Goes through the global ingredient-photo library, which already syncs to Supabase.
+  if (typeof setIngredientPhoto === 'function') setIngredientPhoto(ingredientName, dataUrl);
 }
 
 function handleIngredientPhotoUpload(ingredientName, input) {
@@ -186,12 +188,11 @@ function getIngredientGradient(ingredientName) {
 }
 
 function getCustomKitchenIngredients() {
-  try { return JSON.parse(localStorage.getItem('customKitchenIngredients') || '[]'); }
-  catch { return []; }
+  return getCustomKitchenIngredientsList();
 }
 
 function saveCustomKitchenIngredients(items) {
-  localStorage.setItem('customKitchenIngredients', JSON.stringify(items));
+  setCustomKitchenIngredientsList(items);
 }
 
 function addCustomKitchenIngredient(name, category, photoDataUrl) {
@@ -212,9 +213,9 @@ function deleteKitchenIngredient(ingredientName) {
   const customs = getCustomKitchenIngredients();
   const updated = customs.filter(ci => ci.name !== ingredientName);
   saveCustomKitchenIngredients(updated);
-  localStorage.removeItem('kitchenRecipeLinks_' + ingredientName);
-  localStorage.removeItem('kitchenCustomTips_' + ingredientName);
-  localStorage.removeItem('kitchenIngredientPhoto_' + ingredientName);
+  deleteKitchenLinksFor(ingredientName);
+  deleteKitchenTipsFor(ingredientName);
+  if (typeof removeIngredientPhoto === 'function') removeIngredientPhoto(ingredientName);
   state._showDeleteIngredientModal = false;
   state.kitchenSelectedIngredient = null;
   showToast(ingredientName + ' deleted from Kitchen');
@@ -246,17 +247,16 @@ function renderDeleteIngredientModal(ingredientName) {
 }
 
 function getHiddenIngredients() {
-  try { return JSON.parse(localStorage.getItem('hiddenKitchenIngredients') || '[]'); }
-  catch { return []; }
+  return getHiddenKitchenList();
 }
 
 function hideHardcodedIngredient(ingredientName) {
   const hidden = getHiddenIngredients();
   if (!hidden.includes(ingredientName)) hidden.push(ingredientName);
-  localStorage.setItem('hiddenKitchenIngredients', JSON.stringify(hidden));
-  localStorage.removeItem('kitchenRecipeLinks_' + ingredientName);
-  localStorage.removeItem('kitchenCustomTips_' + ingredientName);
-  localStorage.removeItem('kitchenIngredientPhoto_' + ingredientName);
+  setHiddenKitchenList(hidden);
+  deleteKitchenLinksFor(ingredientName);
+  deleteKitchenTipsFor(ingredientName);
+  if (typeof removeIngredientPhoto === 'function') removeIngredientPhoto(ingredientName);
   state._showDeleteIngredientModal = false;
   state.kitchenSelectedIngredient = null;
   showToast(ingredientName + ' removed from Kitchen');
@@ -264,12 +264,11 @@ function hideHardcodedIngredient(ingredientName) {
 }
 
 function getKitchenRecipeLinks(ingredientName) {
-  try { return JSON.parse(localStorage.getItem('kitchenRecipeLinks_' + ingredientName) || '{}'); }
-  catch { return {}; }
+  return getKitchenLinksFor(ingredientName);
 }
 
 function saveKitchenRecipeLinks(ingredientName, links) {
-  localStorage.setItem('kitchenRecipeLinks_' + ingredientName, JSON.stringify(links));
+  setKitchenLinksFor(ingredientName, links);
 }
 
 function removeRecipeFromIngredient(ingredientName, recipeId) {
@@ -558,12 +557,11 @@ function openKitchenIngredient(name) {
 // ===== KITCHEN DETAIL: CUSTOM TIPS =====
 
 function getKitchenCustomTips(ingredientName) {
-  try { return JSON.parse(localStorage.getItem('kitchenCustomTips_' + ingredientName) || 'null'); }
-  catch { return null; }
+  return getKitchenTipsFor(ingredientName);
 }
 
 function saveKitchenCustomTips(ingredientName, tips) {
-  localStorage.setItem('kitchenCustomTips_' + ingredientName, JSON.stringify(tips));
+  setKitchenTipsFor(ingredientName, tips);
 }
 
 function _toTipArray(val) {

@@ -740,12 +740,12 @@ function showJournalFullscreen(logId) {
     (e.myPhoto || (e.photo && e.photo.startsWith('data:')))
   );
   const hasMultiple = sameName.length > 1;
-  const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
+  const coverPrefs = getPlateCovers();
   const coverKey = (entry.recipeName || '').toLowerCase().trim();
   const isCover = coverPrefs[coverKey] === logId;
 
   // Per-photo notes
-  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
+  const photoNotes = getPlateNotes();
   const existingNote = photoNotes[logId] || '';
 
   // Recipe link button
@@ -824,17 +824,9 @@ function confirmDeleteJournalEntry(logId) {
 function deleteJournalEntry(logId) {
   // Remove from food log
   deleteFoodLogEntry(logId);
-  // Clean up associated notes
-  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
-  if (photoNotes[logId]) {
-    delete photoNotes[logId];
-    localStorage.setItem('myPlatesNotes', JSON.stringify(photoNotes));
-  }
-  // Clean up cover photo references
-  const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
-  const keysToRemove = Object.keys(coverPrefs).filter(k => coverPrefs[k] === logId);
-  keysToRemove.forEach(k => delete coverPrefs[k]);
-  if (keysToRemove.length) localStorage.setItem('myPlatesCovers', JSON.stringify(coverPrefs));
+  // Clean up associated notes and cover-photo refs
+  deletePlateNote(logId);
+  removePlateCoversForLogId(logId);
 
   closeModal();
   showToast('Entry deleted', 'success');
@@ -912,7 +904,7 @@ function initJournalContextMenus() {
 }
 
 function editJournalNote(logId) {
-  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
+  const photoNotes = getPlateNotes();
   const existingNote = photoNotes[logId] || '';
   const section = document.getElementById('journalNoteSection');
   if (!section) return;
@@ -938,13 +930,7 @@ function saveJournalNote(logId) {
   const input = document.getElementById('journalNoteInput');
   if (!input) return;
   const note = input.value.trim();
-  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
-  if (note) {
-    photoNotes[logId] = note;
-  } else {
-    delete photoNotes[logId];
-  }
-  localStorage.setItem('myPlatesNotes', JSON.stringify(photoNotes));
+  setPlateNote(logId, note);
   showToast('Note saved!', 'success');
   showJournalFullscreen(logId);
 }
@@ -953,9 +939,7 @@ function saveJournalNote(logId) {
 function savePlateNote(logId) { saveJournalNote(logId); }
 
 function setAsCoverPhoto(logId, coverKey) {
-  const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
-  coverPrefs[coverKey] = logId;
-  localStorage.setItem('myPlatesCovers', JSON.stringify(coverPrefs));
+  setPlateCover(coverKey, logId);
   showToast('Set as cover photo!', 'success');
   closeModal();
 }

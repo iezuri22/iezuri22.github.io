@@ -988,12 +988,12 @@ function showPlateFullscreen(logId) {
     (e.myPhoto || (e.photo && e.photo.startsWith('data:')))
   );
   const hasMultiple = sameName.length > 1;
-  const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
+  const coverPrefs = getPlateCovers();
   const coverKey = (entry.recipeName || '').toLowerCase().trim();
   const isCover = coverPrefs[coverKey] === logId;
 
   // Per-photo notes
-  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
+  const photoNotes = getPlateNotes();
   const existingNote = photoNotes[logId] || '';
 
   // Recipe link button
@@ -1040,7 +1040,7 @@ function showPlateFullscreen(logId) {
 }
 
 function editPlateNote(logId) {
-  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
+  const photoNotes = getPlateNotes();
   const existingNote = photoNotes[logId] || '';
   const section = document.getElementById('plateNoteSection');
   if (!section) return;
@@ -1063,21 +1063,13 @@ function savePlateNote(logId) {
   const input = document.getElementById('plateNoteInput');
   if (!input) return;
   const note = input.value.trim();
-  const photoNotes = JSON.parse(localStorage.getItem('myPlatesNotes') || '{}');
-  if (note) {
-    photoNotes[logId] = note;
-  } else {
-    delete photoNotes[logId];
-  }
-  localStorage.setItem('myPlatesNotes', JSON.stringify(photoNotes));
+  setPlateNote(logId, note);
   showToast('Note saved!', 'success');
   showPlateFullscreen(logId);
 }
 
 function setAsCoverPhoto(logId, coverKey) {
-  const coverPrefs = JSON.parse(localStorage.getItem('myPlatesCovers') || '{}');
-  coverPrefs[coverKey] = logId;
-  localStorage.setItem('myPlatesCovers', JSON.stringify(coverPrefs));
+  setPlateCover(coverKey, logId);
   showToast('Set as cover photo!', 'success');
   closeModal();
 }

@@ -122,8 +122,9 @@ function usesExpiringIngredients(recipe) {
 }
 
 /**
- * Load or generate the auto-plan from localStorage
- * Ensures fresh plan at midnight
+ * Load or generate the auto-plan. Source of truth is Supabase
+ * (`autoplan_data` row); localStorage is a write-through cache populated by
+ * applySupabaseData on load.
  */
 function getAutoPlan() {
   const stored = localStorage.getItem('yummy_autoplan');
@@ -143,6 +144,22 @@ function getAutoPlan() {
 
   // Generate new plan
   return generateAutoPlan();
+}
+
+// Persist an auto-plan: write the localStorage cache and fire-and-forget
+// the Supabase upsert. Mirrors saveSmartGroceryList / persistIngredientLibraryOverrides.
+function saveAutoPlan(plan) {
+  try { localStorage.setItem('yummy_autoplan', JSON.stringify(plan)); }
+  catch (e) { console.error('[autoplan] localStorage write failed:', e); }
+  if (typeof syncAutoPlanToSupabase !== 'function') return;
+  state.ignoreRealtimeUntil = Date.now() + 10000;
+  syncAutoPlanToSupabase(plan).then(() => {
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
+  }).catch(e => {
+    console.error('[autoplan] sync failed:', e);
+    state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 30000);
+    setTimeout(() => syncAutoPlanToSupabase(plan).catch(err => console.error('[autoplan] retry failed:', err)), 4000);
+  });
 }
 
 /**
@@ -413,7 +430,7 @@ function generateAutoPlan() {
   };
 
   // Save to localStorage
-  localStorage.setItem('yummy_autoplan', JSON.stringify(plan));
+  saveAutoPlan(plan);
 
   return plan;
 }
@@ -430,7 +447,7 @@ function lockMealSlot(dateStr, slot) {
 
   if (plan.days && plan.days[dateStr] && plan.days[dateStr][slot]) {
     plan.days[dateStr][slot].locked = true;
-    localStorage.setItem('yummy_autoplan', JSON.stringify(plan));
+    saveAutoPlan(plan);
   }
 }
 
@@ -444,7 +461,7 @@ function swapMealSlot(dateStr, slot, newRecipeId) {
   if (plan.days && plan.days[dateStr] && plan.days[dateStr][slot]) {
     plan.days[dateStr][slot].recipeId = newRecipeId;
     // Don't lock it by default - user can swap again if desired
-    localStorage.setItem('yummy_autoplan', JSON.stringify(plan));
+    saveAutoPlan(plan);
   }
 }
 
@@ -1159,7 +1176,7 @@ function selectSwapCombo(comboId, dateStr, mealType) {
   const plan = getAutoPlan();
   if (plan.days && plan.days[dateStr] && plan.days[dateStr][mealType]) {
     plan.days[dateStr][mealType] = { comboId: comboId, type: 'combo', locked: false };
-    localStorage.setItem('yummy_autoplan', JSON.stringify(plan));
+    saveAutoPlan(plan);
   }
   closeSwapModal();
   if (typeof render === 'function') render();
