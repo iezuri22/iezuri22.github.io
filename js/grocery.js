@@ -2803,6 +2803,10 @@ function _libRenderRow(entry) {
   const onList = _libIsOnGrocery(entry.canonical);
   const photo = findIngredientPhoto(entry.name);
   const safeCanon = escJs(entry.canonical);
+  const escapedName = escJs(entry.name);
+  const photoOnClick = photo
+    ? `openPhotoExpandOverlay('${escJs(photo)}','${escapedName}')`
+    : `openPhotoSearch('${escapedName}',function(url){setIngredientPhoto('${escapedName}',url);render();})`;
   const recipeCount = entry.recipeNames.length;
   let subtitle = '';
   if (recipeCount === 1) {
@@ -2824,7 +2828,7 @@ function _libRenderRow(entry) {
 
   return `
     <div class="lib-row" data-lib-canonical="${esc(entry.canonical)}">
-      <div class="lib-row-photo">
+      <div class="lib-row-photo" style="cursor:pointer;" onclick="event.stopPropagation();${photoOnClick}" title="${photo ? 'View photo' : 'Add photo'}">
         ${photo
           ? `<img src="${esc(photo)}" class="lib-row-img" />`
           : `<div class="lib-row-img-placeholder"><svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg></div>`
@@ -2904,6 +2908,8 @@ function _libRowMenuModal(canonical) {
   const entry = all.find(e => e.canonical === canonical);
   if (!entry) return;
   const safe = escJs(canonical);
+  const safeName = escJs(entry.name);
+  const hasPhoto = !!findIngredientPhoto(entry.name);
   const isCustomOnly = entry.isCustom && entry.recipeNames.length === 0;
   const onList = _libIsOnGrocery(canonical);
   openModal(`
@@ -2922,6 +2928,16 @@ function _libRowMenuModal(canonical) {
         }
         <span>${onList ? 'Remove from grocery list' : 'Add to grocery list'}</span>
       </button>
+      <button onclick="closeModal();openPhotoSearch('${safeName}',function(url){setIngredientPhoto('${safeName}',url);render();});" class="lib-menu-btn">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+        <span>${hasPhoto ? 'Change photo…' : 'Add photo…'}</span>
+      </button>
+      ${hasPhoto ? `
+        <button onclick="closeModal();removeIngredientPhoto('${safeName}');render();" class="lib-menu-btn">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          <span>Remove photo</span>
+        </button>
+      ` : ''}
       <button onclick="_libPromptRename('${safe}')" class="lib-menu-btn">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"/></svg>
         <span>Edit name…</span>
@@ -3216,6 +3232,8 @@ function _libRowMenu(canonical) {
   window._libCachedListBody = body.innerHTML;
 
   const onList = _libIsOnGrocery(canonical);
+  const safeName = escJs(entry.name);
+  const hasPhoto = !!findIngredientPhoto(entry.name);
   body.innerHTML = `
     <div style="padding:4px 0 12px;">
       <div style="font-size:15px;font-weight:600;margin-bottom:4px;">${esc(entry.name)}</div>
@@ -3232,6 +3250,16 @@ function _libRowMenu(canonical) {
         }
         <span>${onList ? 'Remove from grocery list' : 'Add to grocery list'}</span>
       </button>
+      <button onclick="_libBackToList();openPhotoSearch('${safeName}',function(url){setIngredientPhoto('${safeName}',url);render();});" class="lib-menu-btn">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+        <span>${hasPhoto ? 'Change photo…' : 'Add photo…'}</span>
+      </button>
+      ${hasPhoto ? `
+        <button onclick="removeIngredientPhoto('${safeName}');_libBackToList();render();" class="lib-menu-btn">
+          <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+          <span>Remove photo</span>
+        </button>
+      ` : ''}
       <button onclick="_libPromptRename('${safe}')" class="lib-menu-btn">
         <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13l-2.685.8.8-2.685a4.5 4.5 0 011.13-1.897L16.863 4.487zm0 0L19.5 7.125"/></svg>
         <span>Edit name…</span>
