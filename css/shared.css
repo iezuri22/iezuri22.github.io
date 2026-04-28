@@ -902,13 +902,25 @@
     ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
     /* ===== INPUT STYLING ===== */
+    /* font-size: 16px is the iOS Safari threshold — anything below triggers auto-zoom on focus.
+       Keep this baseline ≥16px and rely on the iOS-only defensive rule below to catch overrides. */
     input, select, textarea {
       background: #1a1a24;
       color: #f5f5f7;
       border: 1px solid rgba(255,255,255,0.08);
       border-radius: 10px;
       font-family: inherit;
-      font-size: 14px;
+      font-size: 16px;
+    }
+
+    /* iOS Safari auto-zooms any focused input/textarea/select with computed font-size < 16px,
+       which also makes sticky/floating search bars visually overlap short result lists.
+       This rule forces ≥16px on iOS only, overriding inline styles and per-page CSS so the
+       fix can't regress when new inputs are added. Desktop typography is untouched. */
+    @supports (-webkit-touch-callout: none) {
+      input, select, textarea {
+        font-size: 16px !important;
+      }
     }
 
     input::placeholder, textarea::placeholder {
@@ -1592,7 +1604,7 @@
       color: var(--text-primary);
       border: 1px solid var(--border-subtle);
       border-radius: 100px;
-      font-size: 14px;
+      font-size: 16px;
       font-family: var(--font-sans);
       outline: none;
     }
