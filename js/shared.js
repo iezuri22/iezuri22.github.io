@@ -2006,7 +2006,7 @@ function loadIngredientPhotos() {
   } catch (e) { ingredientPhotos = {}; }
 }
 
-function saveIngredientPhotos() {
+function saveIngredientPhotos(opts = null) {
   try {
     localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos));
   } catch (e) {
@@ -2018,7 +2018,7 @@ function saveIngredientPhotos() {
   // upsert lands. Without this, a photo added on phone could vanish seconds
   // later when applySupabaseData runs against the not-yet-updated remote row.
   state.ignoreRealtimeUntil = Date.now() + 10000;
-  syncIngredientPhotosToSupabase().then(() => {
+  syncIngredientPhotosToSupabase(opts).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
   }).catch(e => {
     console.error('[ingredientPhotos] sync failed:', e);
@@ -2027,7 +2027,7 @@ function saveIngredientPhotos() {
       showToast('Photo saved on device — sync will retry', 'info');
     }
     setTimeout(() => {
-      syncIngredientPhotosToSupabase().catch(err => console.error('[ingredientPhotos] retry sync failed:', err));
+      syncIngredientPhotosToSupabase(opts).catch(err => console.error('[ingredientPhotos] retry sync failed:', err));
     }, 4000);
   });
 }
@@ -2042,14 +2042,14 @@ function setIngredientPhoto(name, url) {
   const key = canonicalIngredientName(name);
   if (!key) return;
   ingredientPhotos[key] = url;
-  saveIngredientPhotos();
+  saveIngredientPhotos({ editedKey: key });
 }
 
 function removeIngredientPhoto(name) {
   if (!name) return;
   const key = canonicalIngredientName(name);
   delete ingredientPhotos[key];
-  saveIngredientPhotos();
+  saveIngredientPhotos({ removedKey: key });
 }
 
 function getIngredientPhotoFromLibrary(name) {
@@ -2538,11 +2538,52 @@ async function syncGroceryListToSupabase(list) {
   }
 }
 
-async function syncIngredientPhotosToSupabase() {
+// Photos are stored as one big blob row. A blind upsert of `ingredientPhotos`
+// would overwrite remote with whatever this device has — which silently wiped
+// laptop-added photos when a phone with a stale local cache hit "Sync now"
+// (the manual sync pushes before pulling). Fix: read remote first, merge, then
+// write. Remote wins on conflict (so a fresh write from another device isn't
+// clobbered by a stale local copy); local wins only for the specific key the
+// user just edited or removed (`opts.editedKey` / `opts.removedKey`), since
+// that's an explicit user intent for THAT key.
+async function syncIngredientPhotosToSupabase(opts = null) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
-  const item = { id: 'ingredientPhotos_data', type: 'ingredientPhotos', photos: ingredientPhotos };
+
+  const editedKey = opts?.editedKey || null;
+  const removedKey = opts?.removedKey || null;
+
+  let remotePhotos = {};
+  try {
+    const { data: remoteRow } = await window.supabaseClient
+      .from('meal_planner_data')
+      .select('data')
+      .eq('id', 'ingredientPhotos_data')
+      .eq('user_id', session.user.id)
+      .maybeSingle();
+    if (remoteRow?.data?.photos && typeof remoteRow.data.photos === 'object') {
+      remotePhotos = remoteRow.data.photos;
+    }
+  } catch (e) {
+    console.error('[ingredientPhotos] pre-upsert fetch failed; pushing local-only:', e);
+  }
+
+  const merged = { ...ingredientPhotos, ...remotePhotos };
+  if (editedKey && ingredientPhotos[editedKey] !== undefined) {
+    merged[editedKey] = ingredientPhotos[editedKey];
+  }
+  if (removedKey) {
+    delete merged[removedKey];
+  }
+
+  // Fold the merged set back into local so this device picks up any
+  // remote-newer photos immediately, even if the realtime guard skips the
+  // next applySupabaseData pass.
+  ingredientPhotos = merged;
+  try { localStorage.setItem('yummy_ingredientPhotos', JSON.stringify(ingredientPhotos)); } catch (e) {}
+
+  const item = { id: 'ingredientPhotos_data', type: 'ingredientPhotos', photos: merged };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
