@@ -786,6 +786,32 @@
   letter-spacing: 0.3px;
 }
 
+.gro-grid-category-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.gro-grid-category-remove {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary, #5c5c66);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.gro-grid-category-remove:hover,
+.gro-grid-category-remove:active {
+  color: #e85d5d;
+  background: rgba(232, 93, 93, 0.1);
+}
+
 .gro-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
