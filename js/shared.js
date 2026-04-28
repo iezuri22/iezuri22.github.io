@@ -3966,12 +3966,43 @@ function _selectPhotoResult(idx) {
   _updatePhotoSearchResults();
 }
 
-function _confirmPhotoSelection() {
+async function _confirmPhotoSelection() {
   const s = _photoSearchState;
-  if (s.selectedUrl && s.callback) {
-    s.callback(s.selectedUrl);
+  if (s.selectedIdx < 0 || !s.callback) { _closePhotoSearch(); return; }
+  const result = s.results[s.selectedIdx];
+  if (!result) { _closePhotoSearch(); return; }
+
+  // Previously we saved the original imageUrl directly. That string "worked"
+  // on the device that ran the search (browser cache hit from the modal),
+  // but failed on every other device — most of those hosts send Cross-Origin-
+  // Resource-Policy headers that block cross-origin loading, and many are
+  // HTTP-only (mixed content from our HTTPS page). Fix: download the bytes
+  // via the gstatic/imgix thumbnail URL (CORS-friendly), upload to our
+  // Supabase Storage bucket, save the public Supabase URL. That URL renders
+  // on every device and survives cache eviction.
+  const actionDiv = document.getElementById('photoSearchAction');
+  const btn = actionDiv?.querySelector('button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving photo…'; }
+
+  try {
+    const sourceUrl = result.thumb || result.full;
+    if (!sourceUrl) throw new Error('No source URL on result');
+    const resp = await fetch(sourceUrl);
+    if (!resp.ok) throw new Error('Image fetch failed: ' + resp.status);
+    const blob = await resp.blob();
+    const file = new File([blob], `ingredient_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
+    const compressed = await compressImage(file, 800, 0.8);
+    const url = await uploadPhoto(compressed);
+    if (!url) throw new Error('Upload returned no URL');
+    s.callback(url);
+    _closePhotoSearch();
+  } catch (e) {
+    console.error('Photo save failed:', e);
+    if (typeof showToast === 'function') {
+      showToast('Could not save photo — try another or use Upload', 'error');
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Use this photo'; }
   }
-  _closePhotoSearch();
 }
 
 function _handlePhotoSearchUpload(input) {
