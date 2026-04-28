@@ -483,6 +483,10 @@ function renderGroceryList() {
             <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 21v-7.5a.75.75 0 01.75-.75h3a.75.75 0 01.75.75V21m-4.5 0H2.36m11.14 0H18m0 0h3.64m-1.39 0V9.349m-16.5 11.65V9.35m0 0a3.001 3.001 0 003.75-.615A2.993 2.993 0 009.75 9.75c.896 0 1.7-.393 2.25-1.016a2.993 2.993 0 002.25 1.016c.896 0 1.7-.393 2.25-1.016a3.001 3.001 0 003.75.614m-16.5 0a3.004 3.004 0 01-.621-4.72L4.318 3.44A1.5 1.5 0 015.378 3h13.243a1.5 1.5 0 011.06.44l1.19 1.189a3 3 0 01-.621 4.72m-13.5 8.65h3.75a.75.75 0 00.75-.75V13.5a.75.75 0 00-.75-.75H6.75a.75.75 0 00-.75.75v3.15c0 .415.336.75.75.75z"/></svg>
             <span>Stores</span>
           </button>
+          <button onclick="manualSyncRefresh()" class="gro-quick-btn card-press" aria-label="Refresh sync">
+            <svg width="16" height="16" fill="none" stroke="${CONFIG.primary_action_color}" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992"/></svg>
+            <span>Sync</span>
+          </button>
         </div>`;
 
       // Clear actions
@@ -2986,11 +2990,11 @@ function _libDeleteCustomFromPage(canonical) {
 }
 
 function _libStartMergeFromPage(sourceCanonical) {
-  closeModal();
-  // Slight delay so the close transition completes before we open the picker;
-  // openModal cancels in-flight close timers, but action sheet → next modal
-  // looks smoother with a microtask gap.
-  setTimeout(() => _libOpenMergePickerModal(sourceCanonical), 0);
+  // Open the picker directly. openModal() replaces modal content and cancels
+  // any in-flight close transition, so there's no need to closeModal() first —
+  // doing so introduced a race where the close timeout could hide the modal
+  // after the picker had already been swapped in, leaving the user stuck.
+  _libOpenMergePickerModal(sourceCanonical);
 }
 
 function _libOpenMergePickerModal(sourceCanonical) {
@@ -3200,6 +3204,10 @@ function renderGroceryLibrary() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
         <h2 style="font-size:20px;font-weight:700;color:${CONFIG.text_color};margin:0;flex:1;">Ingredient Library</h2>
         ${aliasCount > 0 ? `<button onclick="_libOpenManageMergesModal()" style="background:none;border:none;color:${CONFIG.primary_action_color};cursor:pointer;font-size:12px;padding:4px;">Merges (${aliasCount})</button>` : ''}
+        <button onclick="manualSyncRefresh()" aria-label="Refresh sync"
+          style="display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;background:${CONFIG.surface_elevated};color:${CONFIG.text_color};border:none;border-radius:8px;cursor:pointer;">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992"/></svg>
+        </button>
         <button onclick="_libShowAddItemModal()"
           style="display:inline-flex;align-items:center;gap:4px;padding:8px 12px;background:${CONFIG.primary_action_color};color:white;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>

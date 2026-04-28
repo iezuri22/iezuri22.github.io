@@ -2648,6 +2648,35 @@ async function pushLocalOnlyDataToSupabase() {
   catch (e) { console.error('[push pending] failed:', e); }
 }
 
+// Manual two-way sync the user can trigger when they suspect data is stale —
+// e.g. they added a photo on phone and don't see it on desktop yet. Pushes any
+// local-only blobs (so a recent local edit isn't lost), then pulls the latest
+// from Supabase and re-renders. Sets a temporary realtime guard so the pull
+// isn't clobbered mid-flight by an in-flight echo of our own push.
+async function manualSyncRefresh() {
+  if (!window.supabaseClient) {
+    if (typeof showToast === 'function') showToast('Sync unavailable', 'error');
+    return;
+  }
+  if (window._manualSyncInFlight) return;
+  window._manualSyncInFlight = true;
+  if (typeof showToast === 'function') showToast('Syncing…', 'info');
+  try {
+    state.ignoreRealtimeUntil = Date.now() + 8000;
+    await pushLocalOnlyDataToSupabase();
+    state.ignoreRealtimeUntil = 0;
+    await loadDataFromSupabase();
+    loadIngredientPhotos();
+    if (typeof render === 'function') render();
+    if (typeof showToast === 'function') showToast('Synced', 'success');
+  } catch (e) {
+    console.error('[manual sync] failed:', e);
+    if (typeof showToast === 'function') showToast('Sync failed — try again', 'error');
+  } finally {
+    window._manualSyncInFlight = false;
+  }
+}
+
 function getFoodLog() { try { return JSON.parse(localStorage.getItem(FOOD_LOG_KEY) || '[]'); } catch { return []; } }
 function saveFoodLog(log) { localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(log)); syncFoodLogToSupabase(log); }
 
@@ -3597,7 +3626,7 @@ const SERPER_API_KEY = 'baa03e69b94509f224023258927f66385c2e261a';
 // Photo search state
 let _photoSearchState = {
   query: '',
-  tab: 'unsplash', // 'unsplash' | 'google'
+  tab: 'google', // 'unsplash' | 'google'
   results: [],
   selectedIdx: -1,
   selectedUrl: '',
@@ -3615,7 +3644,7 @@ let _photoSearchState = {
 function openPhotoSearch(defaultQuery, callback) {
   _photoSearchState = {
     query: defaultQuery || '',
-    tab: 'unsplash',
+    tab: 'google',
     results: [],
     selectedIdx: -1,
     selectedUrl: '',
@@ -3627,7 +3656,7 @@ function openPhotoSearch(defaultQuery, callback) {
   _renderPhotoSearchModal();
   // Auto-search on open
   if (defaultQuery) {
-    _photoSearchFetch(defaultQuery, 'unsplash');
+    _photoSearchFetch(defaultQuery, 'google');
   }
 }
 
