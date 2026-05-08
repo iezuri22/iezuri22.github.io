@@ -3343,23 +3343,77 @@ function renderPrepItemCard(dateStr, mealType, item) {
   `;
 }
 
-// Find the soonest planned-meal slot referencing this recipeId across today + tomorrow.
+// Find the soonest planned-meal slot referencing this recipe (any upcoming day).
+// Looks across state.mealDays (selected/pending meals) AND the week plan
+// (yummy_weekplan localStorage). Matches against both __backendId and id.
 // Returns { dateStr, mealType, meal } or null.
 function findPlannedMealForRecipe(recipeId) {
-  if (!recipeId || !state.mealDays) return null;
+  if (!recipeId) return null;
   const today = getToday();
-  const tomorrow = getTomorrow();
-  for (const dateStr of [today, tomorrow]) {
-    const day = state.mealDays[dateStr];
-    if (!day || !day.meals) continue;
-    for (const mealType of ['breakfast', 'lunch', 'dinner']) {
-      const meal = day.meals[mealType];
-      if (!meal) continue;
-      if (meal.status === 'logged') continue;
-      const rid = meal.plannedRecipeId || meal.actualRecipeId;
-      if (rid === recipeId) return { dateStr, mealType, meal };
+  const recipe = getRecipeById(recipeId);
+  const acceptableIds = new Set([recipeId]);
+  if (recipe) {
+    if (recipe.__backendId) acceptableIds.add(recipe.__backendId);
+    if (recipe.id) acceptableIds.add(recipe.id);
+  }
+
+  // 1) state.mealDays — selected/pending meals already live here.
+  if (state.mealDays) {
+    const dates = Object.keys(state.mealDays).filter(d => d >= today).sort();
+    for (const dateStr of dates) {
+      const day = state.mealDays[dateStr];
+      if (!day || !day.meals) continue;
+      for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+        const meal = day.meals[mealType];
+        if (!meal) continue;
+        if (meal.status === 'logged') continue;
+        const rid = meal.plannedRecipeId || meal.actualRecipeId;
+        if (rid && acceptableIds.has(rid)) return { dateStr, mealType, meal };
+      }
     }
   }
+
+  // 2) Week plan — recipes shown on home as "This Week's Plan" live here as options
+  //    until the user explicitly selects them. Promote the match to state.mealDays
+  //    so the prep flow has a real meal slot to anchor prep_state on.
+  const weekStarts = [];
+  if (state.currentWeekStartDate) weekStarts.push(state.currentWeekStartDate);
+  // Also peek next week
+  if (state.currentWeekStartDate) {
+    const d = new Date(state.currentWeekStartDate + 'T12:00:00');
+    d.setDate(d.getDate() + 7);
+    weekStarts.push(_localDateStr(d));
+  }
+  for (const ws of weekStarts) {
+    const key = ws === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + ws;
+    let plan;
+    try { plan = JSON.parse(localStorage.getItem(key) || 'null'); } catch { plan = null; }
+    if (!plan || !plan.days) continue;
+    const dates = Object.keys(plan.days).filter(d => d >= today).sort();
+    for (const dateStr of dates) {
+      const dayPlan = plan.days[dateStr];
+      if (!dayPlan) continue;
+      for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+        const slot = dayPlan[mealType];
+        const opts = slot && Array.isArray(slot.options) ? slot.options : [];
+        const matches = opts.some(o => o && o.recipeId && acceptableIds.has(o.recipeId));
+        if (!matches) continue;
+        // Promote into state.mealDays so prep_state has a home.
+        const day = getDayData(dateStr);
+        const meal = day.meals[mealType];
+        if (meal.status === 'logged') continue;
+        const rid = meal.plannedRecipeId || meal.actualRecipeId;
+        if (!rid || !acceptableIds.has(rid)) {
+          meal.plannedRecipeId = (recipe && (recipe.__backendId || recipe.id)) || recipeId;
+          if (meal.status === 'none') meal.status = 'selected';
+          meal.selectedAt = meal.selectedAt || new Date().toISOString();
+          if (meal.source === undefined) meal.source = 'week-plan';
+        }
+        return { dateStr, mealType, meal };
+      }
+    }
+  }
+
   return null;
 }
 
