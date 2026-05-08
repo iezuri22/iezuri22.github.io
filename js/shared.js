@@ -1933,6 +1933,12 @@ const dataHandler = {
 
 async function saveMealDay(dateStr) {
   dateStr = dateStr || state.viewingDate;
+  // Orphan recipe-detail prep slots live under synthetic dates and persist
+  // locally only — never sync them to Supabase as todayMeals rows.
+  if (dateStr && dateStr.startsWith('__')) {
+    try { localStorage.setItem('orphanPrep_' + dateStr, JSON.stringify(state.mealDays[dateStr] || null)); } catch {}
+    return;
+  }
   const day = getDayData(dateStr);
   const record = {
     id: `todayMeals_${dateStr}`,
@@ -3341,6 +3347,41 @@ function renderPrepItemCard(dateStr, mealType, item) {
       <button onclick="startFreshnessCheck(${args})" style="background: rgba(232,93,93,0.12); color: ${CONFIG.primary_action_color}; border: 1px solid rgba(232,93,93,0.3); border-radius: 16px; padding: 5px 12px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;">Check freshness</button>
     </div>
   `;
+}
+
+// Pick a meal slot to anchor prep state on for the given recipe view.
+// Returns { dateStr, mealType, meal, fromPlan } where fromPlan is true if the
+// slot was already a planned meal (week plan or selected). When no plan is
+// found, anchors prep on a per-recipe orphan slot so the prep block is always
+// available without clobbering an unrelated planned meal.
+function resolvePrepContext(recipeId, recipe) {
+  const planned = findPlannedMealForRecipe(recipeId);
+  if (planned) return Object.assign({ fromPlan: true }, planned);
+
+  // Orphan slot — keyed by recipe so prep state lives independently of any
+  // calendar slot. Persisted to localStorage only (saveMealDay routes
+  // synthetic dates to orphanPrep_<date> instead of Supabase).
+  const synthDate = '__recipe_' + recipeId;
+  if (!state.mealDays[synthDate]) {
+    let restored = null;
+    try { restored = JSON.parse(localStorage.getItem('orphanPrep_' + synthDate) || 'null'); } catch {}
+    state.mealDays[synthDate] = restored || {
+      date: synthDate,
+      meals: { breakfast: freshMealSlot(), lunch: freshMealSlot(), dinner: freshMealSlot(), snacks: [] }
+    };
+  }
+  const category = (recipe && recipe.category || '').toLowerCase();
+  let mealType = 'dinner';
+  if (category === 'breakfast') mealType = 'breakfast';
+  else if (category === 'lunch') mealType = 'lunch';
+  else if (category === 'dinner') mealType = 'dinner';
+  const meal = state.mealDays[synthDate].meals[mealType];
+  if (!meal.plannedRecipeId) {
+    meal.plannedRecipeId = (recipe && (recipe.__backendId || recipe.id)) || recipeId;
+    meal.status = 'selected';
+    meal.source = 'recipe-detail-orphan';
+  }
+  return { dateStr: synthDate, mealType, meal, fromPlan: false };
 }
 
 // Find the soonest planned-meal slot referencing this recipe (any upcoming day).
@@ -8360,20 +8401,24 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
 
   const relatedRecipes = getRelatedRecipes();
 
-  // If this recipe is planned for a meal slot today/tomorrow, prep state lives on that slot.
-  const plannedCtx = findPlannedMealForRecipe(id);
-  if (plannedCtx) {
-    const inited = initPrepState(plannedCtx.meal, r);
-    if (inited) saveMealDay(plannedCtx.dateStr);
+  // Prep block: surface freshness check on the recipe-detail page.
+  // Prefer a real planned meal slot; fall back to today's slot derived from recipe.category.
+  const prepCtx = resolvePrepContext(id, r);
+  if (prepCtx) {
+    const inited = initPrepState(prepCtx.meal, r);
+    if (inited) saveMealDay(prepCtx.dateStr);
   }
-  const prepBlockHtml = plannedCtx
+  const prepBlockHtml = prepCtx
     ? (() => {
-        const dateLabel = plannedCtx.dateStr === getToday() ? 'today' : (plannedCtx.dateStr === getTomorrow() ? 'tomorrow' : plannedCtx.dateStr);
+        const dateLabel = prepCtx.dateStr === getToday() ? 'today' : (prepCtx.dateStr === getTomorrow() ? 'tomorrow' : prepCtx.dateStr);
+        const headerLabel = prepCtx.fromPlan
+          ? `Planned · ${capitalize(prepCtx.mealType)} ${dateLabel}`
+          : `Prep check · ${capitalize(prepCtx.mealType)} ${dateLabel}`;
         const banner = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:${CONFIG.space_sm};">
-          <span style="font-size:${CONFIG.type_micro}; font-weight:600; letter-spacing:0.5px; color:${CONFIG.primary_action_color}; text-transform:uppercase;">Planned · ${capitalize(plannedCtx.mealType)} ${dateLabel}</span>
+          <span style="font-size:${CONFIG.type_micro}; font-weight:600; letter-spacing:0.5px; color:${CONFIG.primary_action_color}; text-transform:uppercase;">${esc(headerLabel)}</span>
         </div>`;
-        const block = renderPrepBlock(plannedCtx.mealType, plannedCtx.meal, r, plannedCtx.dateStr);
-        const blocked = isPrepBlocked(plannedCtx.meal);
+        const block = renderPrepBlock(prepCtx.mealType, prepCtx.meal, r, prepCtx.dateStr);
+        const blocked = isPrepBlocked(prepCtx.meal);
         const blockedNote = blocked
           ? `<div style="background: rgba(255,214,10,0.1); border: 1px solid rgba(255,214,10,0.25); border-radius: 10px; padding: 10px 12px; margin-bottom: ${CONFIG.space_md}; color: ${CONFIG.warning_color}; font-size: ${CONFIG.type_caption};">Resolve missing ingredients to mark this meal ready.</div>`
           : '';
