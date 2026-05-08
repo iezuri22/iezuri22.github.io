@@ -522,15 +522,23 @@ function renderWeekPlanPrepStatus(recipeId, dateStr, mealType) {
   const blockedItem = items.find(i => i.needs_replacement);
   const status = (meal && meal.prep_status) || 'not_started';
 
-  // Step counts (when the recipe has video clips). Mirrors the modal stats.
+  // Step counts. Mirrors the modal: prefer video clips, fall back to text
+  // steps parsed from the recipe's instructions so the line stays accurate
+  // even for recipes that don't have any uploaded prep videos.
   let stepTotal = 0;
   let stepDone = 0;
   if (typeof getRecipeVideoClips === 'function') {
     const clips = getRecipeVideoClips(recipeId) || [];
     stepTotal = clips.length;
-    if (ps && ps.steps_done) {
-      for (let i = 0; i < stepTotal; i++) if (ps.steps_done[i]) stepDone++;
+  }
+  if (stepTotal === 0) {
+    const recipe = (typeof getRecipeById === 'function') ? getRecipeById(recipeId) : null;
+    if (recipe && typeof parseInstructionStepEntries === 'function') {
+      stepTotal = parseInstructionStepEntries(recipe).length;
     }
+  }
+  if (ps && ps.steps_done) {
+    for (let i = 0; i < stepTotal; i++) if (ps.steps_done[i]) stepDone++;
   }
 
   if (blockedItem) {

@@ -3437,11 +3437,17 @@ function renderPrepReelsOverlay(currentRecipeId, recipe, prepCtx) {
     return renderPrepReelIngredientCard(item, idx, prepCtx, recipe, amount);
   });
 
+  // Step cards: prefer Cloudflare video clips when present, otherwise fall
+  // back to text-only cards parsed from the recipe's instructions so the
+  // user always gets a "prepping" half of the carousel.
   const clips = (typeof getRecipeVideoClips === 'function') ? getRecipeVideoClips(currentRecipeId) : [];
-  const stepTotal = clips.length;
+  const stepEntries = clips.length
+    ? clips.map(c => ({ cloudflareVideoId: c.cloudflareVideoId, caption: c.caption || '', instructions: c.instructions || '' }))
+    : parseInstructionStepEntries(recipe);
+  const stepTotal = stepEntries.length;
   const stepDone = readPrepStepDoneCount(meal, currentRecipeId, stepTotal);
   const stepPct = stepTotal > 0 ? (stepDone / stepTotal) * 50 : 0;
-  const stepCards = clips.map((clip, idx) => renderPrepReelStepCard(clip, idx, clips.length, prepCtx, currentRecipeId));
+  const stepCards = stepEntries.map((entry, idx) => renderPrepReelStepCard(entry, idx, stepTotal, prepCtx, currentRecipeId));
 
   const allCards = ingredientCards.concat(stepCards);
   const activeIdx = Math.max(0, Math.min((state.prepReels.cardIdx | 0), Math.max(0, allCards.length - 1)));
@@ -3478,10 +3484,20 @@ function renderPrepReelsOverlay(currentRecipeId, recipe, prepCtx) {
           <div class="prep-reels-progress-seg steps" style="width:${stepPct}%;"></div>
         </div>
       </div>
-      <div class="prep-reels-stack" id="prepReelsStack" data-restore-idx="${activeIdx}" onscroll="onPrepReelsScroll(event)">
-        ${allCards.length ? allCards.join('') : `<div class="prep-reel-card prep-reel-empty"><div class="prep-reel-bottom"><div class="prep-reel-name">Nothing to prep</div><div class="prep-reel-amount">This recipe has no ingredients or steps yet.</div></div></div>`}
-        <!-- 1x1 transparent GIF whose onload fires after innerHTML inserts the modal — used to snap scrollLeft back to the card the user was on so re-renders don't lose their place. -->
-        <img alt="" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" onload="restorePrepReelsCardScroll()">
+      <div class="prep-reels-body">
+        <div class="prep-reels-stack" id="prepReelsStack" data-restore-idx="${activeIdx}" onscroll="onPrepReelsScroll(event)">
+          ${allCards.length ? allCards.join('') : `<div class="prep-reel-card prep-reel-empty"><div class="prep-reel-bottom"><div class="prep-reel-name">Nothing to prep</div><div class="prep-reel-amount">This recipe has no ingredients or steps yet.</div></div></div>`}
+          <!-- 1x1 transparent GIF whose onload fires after innerHTML inserts the modal — used to snap scrollLeft back to the card the user was on so re-renders don't lose their place. -->
+          <img alt="" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" onload="restorePrepReelsCardScroll()">
+        </div>
+        ${allCards.length > 1 ? `
+          <button class="prep-reels-nav prev" onclick="rotatePrepReels(-1)" aria-label="Previous card" ${activeIdx === 0 ? 'disabled' : ''}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <button class="prep-reels-nav next" onclick="rotatePrepReels(1)" aria-label="Next card" ${activeIdx === allCards.length - 1 ? 'disabled' : ''}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
+        ` : ''}
       </div>
       ${allCards.length > 1 ? `<div class="prep-reels-dots" aria-hidden="true">${dotsHtml}</div>` : `<div style="height: calc(12px + env(safe-area-inset-bottom, 0px));"></div>`}
       ${photoPickerHtml}
@@ -3506,6 +3522,29 @@ function restorePrepReelsCardScroll() {
   });
 }
 
+// Programmatic rotation via prev/next buttons. Smooth-scrolls one card-
+// width at a time; the snap engine pins it neatly into place.
+function rotatePrepReels(dir) {
+  const stack = document.getElementById('prepReelsStack');
+  if (!stack) return;
+  const cardW = stack.clientWidth;
+  if (cardW <= 0) return;
+  const cards = stack.querySelectorAll('.prep-reel-card');
+  if (cards.length === 0) return;
+  const cur = state.prepReels && typeof state.prepReels.cardIdx === 'number' ? state.prepReels.cardIdx : Math.round(stack.scrollLeft / cardW);
+  const next = Math.max(0, Math.min(cards.length - 1, cur + dir));
+  if (state.prepReels) state.prepReels.cardIdx = next;
+  stack.scrollTo({ left: next * cardW, behavior: 'smooth' });
+  // Update dots immediately so the indicator doesn't lag the smooth scroll.
+  const dots = document.querySelectorAll('.prep-reels-dots .prep-reels-dot');
+  dots.forEach((d, i) => d.classList.toggle('active', i === next));
+  // Update prev/next disabled states without a full re-render.
+  const prevBtn = document.querySelector('.prep-reels-nav.prev');
+  const nextBtn = document.querySelector('.prep-reels-nav.next');
+  if (prevBtn) prevBtn.disabled = next === 0;
+  if (nextBtn) nextBtn.disabled = next === cards.length - 1;
+}
+
 // Track the active card so dots stay in sync with horizontal scroll.
 function onPrepReelsScroll(e) {
   const stack = e.currentTarget;
@@ -3520,6 +3559,31 @@ function onPrepReelsScroll(e) {
     const dots = document.querySelectorAll('.prep-reels-dots .prep-reels-dot');
     dots.forEach((d, i) => d.classList.toggle('active', i === idx));
   }
+}
+
+// Parse a recipe's `instructions` field into ordered step entries for the
+// prep carousel. Used when the recipe has no videoClips — every recipe
+// should still expose a prepping side, even if it's just text.
+function parseInstructionStepEntries(recipe) {
+  const raw = Array.isArray(recipe?.instructions) ? recipe.instructions.join('\n') : (recipe?.instructions || '').trim();
+  if (!raw) return [];
+  const lines = raw.split('\n');
+  const steps = [];
+  let current = null;
+  lines.forEach(line => {
+    const t = line.trim();
+    if (!t) return;
+    if (/^\d+[\.\)]\s*/.test(t)) {
+      if (current) steps.push(current);
+      current = { cloudflareVideoId: '', caption: t.replace(/^\d+[\.\)]\s*/, '').slice(0, 60), instructions: t.replace(/^\d+[\.\)]\s*/, '') };
+    } else if (current) {
+      current.instructions = (current.instructions ? current.instructions + ' ' : '') + t;
+    } else {
+      steps.push({ cloudflareVideoId: '', caption: t.slice(0, 60), instructions: t });
+    }
+  });
+  if (current) steps.push(current);
+  return steps;
 }
 
 function readPrepStepDoneCount(meal, recipeId, stepTotal) {
@@ -3545,14 +3609,15 @@ function togglePrepStepDone(stepIdx) {
 }
 
 function _prepReelImageFor(item, recipe) {
+  // Photos for prep cards come from the recipe ingredient row's own
+  // image_url — fetched via Serper on first open, or set by the user via
+  // the change-photo picker. We deliberately skip the legacy static
+  // INGREDIENT_IMAGES library so cards always reflect the per-recipe
+  // override and Google-search results, not stale hardcoded URLs.
   if (!item) return null;
   if (Array.isArray(recipe?.ingredientsRows)) {
     const match = recipe.ingredientsRows.find(x => (x?.name || '').toLowerCase().trim() === (item.name || '').toLowerCase().trim());
     if (match && match.image_url) return match.image_url;
-  }
-  if (typeof getIngredientImage === 'function') {
-    const url = getIngredientImage(item.name, item.group);
-    if (url) return url;
   }
   return null;
 }
@@ -3949,8 +4014,9 @@ async function prefetchPrepReelImages(recipeId) {
     const row = rows[i];
     if (!row || !row.name) continue;
     if (row.image_url) continue;
-    // Library lookups already serve as cache — only hit Serper when truly missing.
-    if (typeof getIngredientImage === 'function' && getIngredientImage(row.name, row.group)) continue;
+    // Always fetch from Google via Serper — the static INGREDIENT_IMAGES
+    // library is intentionally bypassed so every card reflects a real
+    // per-recipe photo, not a generic stock URL.
 
     try {
       const resp = await fetch('https://google.serper.dev/images', {

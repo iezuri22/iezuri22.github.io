@@ -958,6 +958,13 @@
 
 .prep-reels-close:active { transform: scale(0.95); }
 
+.prep-reels-body {
+  position: relative;
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
 .prep-reels-stack {
   flex: 1;
   display: flex;
@@ -969,6 +976,31 @@
 }
 
 .prep-reels-stack::-webkit-scrollbar { display: none; }
+
+.prep-reels-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.prep-reels-nav:active { transform: translateY(-50%) scale(0.93); }
+.prep-reels-nav.prev { left: 12px; }
+.prep-reels-nav.next { right: 12px; }
+.prep-reels-nav[disabled] { opacity: 0.3; pointer-events: none; }
 
 .prep-reels-dots {
   display: flex;
@@ -1394,51 +1426,3 @@ body.prep-reels-locked {
   font-size: 13px;
 }
 
-/* Status line on This Week's Meals card */
-.wp-prep-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-tertiary);
-  margin-top: 4px;
-  line-height: 1.3;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.wp-prep-status.is-progress { color: var(--text-secondary); }
-.wp-prep-status.is-ready { color: #32d74b; }
-.wp-prep-status.is-blocked { color: #ffd60a; }
-
-.wp-prep-status .status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  flex-shrink: 0;
-}
-
-.wp-prep-bars {
-  display: flex;
-  gap: 3px;
-  margin-top: 6px;
-  height: 3px;
-}
-
-.wp-prep-bars .bar {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.wp-prep-bars .bar .fill {
-  height: 100%;
-  background: var(--accent, #e85d5d);
-  border-radius: 2px;
-}
-
-.wp-prep-bars .bar.steps .fill { background: rgba(232, 93, 93, 0.5); }
