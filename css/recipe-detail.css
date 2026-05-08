@@ -812,3 +812,296 @@
   font-weight: 500;
   padding: 0 20px 16px;
 }
+
+/* ===== LET'S COOK CTA BUTTON ===== */
+.lets-cook-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 18px;
+  background: var(--accent, #e85d5d);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  letter-spacing: 0.2px;
+  box-shadow: 0 4px 14px rgba(232, 93, 93, 0.25);
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+.lets-cook-btn:active {
+  transform: scale(0.98);
+  opacity: 0.92;
+}
+
+/* ===== PREP REELS OVERLAY (fullscreen, vertical scroll-snap) ===== */
+.prep-reels-overlay {
+  position: fixed;
+  inset: 0;
+  background: #000;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.prep-reels-progress {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.12);
+  z-index: 4;
+}
+
+.prep-reels-progress-fill {
+  height: 100%;
+  background: var(--accent, #e85d5d);
+  transition: width 0.25s ease;
+}
+
+.prep-reels-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+}
+
+.prep-reels-stack {
+  flex: 1;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.prep-reels-stack::-webkit-scrollbar { display: none; }
+
+.prep-reel-card {
+  position: relative;
+  width: 100%;
+  height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  overflow: hidden;
+  background: #111;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.prep-reel-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.prep-reel-bg-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 38px;
+  font-weight: 800;
+  text-align: center;
+  padding: 24px;
+}
+
+.prep-reel-bg-fallback span {
+  max-width: 80%;
+  letter-spacing: -0.5px;
+  line-height: 1.05;
+}
+
+.prep-reel-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 40%, rgba(0, 0, 0, 0.85));
+  pointer-events: none;
+  z-index: 1;
+}
+
+.prep-reel-card.is-checked .prep-reel-bg,
+.prep-reel-card.is-checked .prep-reel-bg-fallback {
+  filter: brightness(0.55);
+}
+
+.prep-reel-card.is-checked {
+  animation: prepReelTap 0.22s ease;
+}
+
+.prep-reel-card.is-expired .prep-reel-bg,
+.prep-reel-card.is-expired .prep-reel-bg-fallback {
+  filter: grayscale(1) brightness(0.6);
+}
+
+@keyframes prepReelTap {
+  0% { transform: scale(1); }
+  40% { transform: scale(0.98); }
+  100% { transform: scale(1); }
+}
+
+.prep-reel-check {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(50, 215, 75, 0.95);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.prep-reel-tag {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-radius: 999px;
+  z-index: 3;
+}
+
+.prep-reel-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  padding: 24px 22px calc(28px + env(safe-area-inset-bottom, 0px));
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prep-reel-pill {
+  align-self: flex-start;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.prep-reel-name {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+
+.prep-reel-amount {
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.78);
+  line-height: 1.45;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.45);
+}
+
+.prep-reel-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.prep-reel-actions.stacked {
+  flex-direction: column;
+}
+
+.prep-reel-btn {
+  flex: 1;
+  padding: 13px 14px;
+  border-radius: 12px;
+  border: none;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: transform 0.1s ease, opacity 0.12s ease;
+}
+
+.prep-reel-btn:active { transform: scale(0.97); opacity: 0.9; }
+
+.prep-reel-btn.primary {
+  background: #fff;
+  color: #111;
+}
+
+.prep-reel-btn.danger {
+  background: rgba(255, 69, 58, 0.16);
+  color: #ff453a;
+  border: 1px solid rgba(255, 69, 58, 0.45);
+}
+
+.prep-reel-btn.ghost {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.prep-reel-btn.link {
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: underline;
+  padding: 6px 0;
+  font-weight: 600;
+  flex: none;
+  align-self: center;
+}
+
+.prep-reel-hint {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  letter-spacing: 0.2px;
+}
+
+.prep-reel-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1a1a24;
+}
+
+body.prep-reels-locked {
+  overflow: hidden;
+}

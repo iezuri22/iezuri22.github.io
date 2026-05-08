@@ -12,21 +12,27 @@
   <title>PotLuck - Recipe Detail</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍽️</text></svg>" />
   <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
   <link rel="stylesheet" href="css/shared.css?v=12">
   <link rel="stylesheet" href="css/recipes.css?v=4">
-  <link rel="stylesheet" href="css/recipe-detail.css?v=4">
+  <link rel="stylesheet" href="css/recipe-detail.css?v=5">
 </head>
 <body>
   <div id="app"></div>
   <div id="modal" style="display: none; background: rgba(0,0,0,0.6);" class="fixed inset-0 flex items-center justify-center z-50">
     <div id="modal-content" style="background: #242432; border-radius: 16px 16px 0 0; padding: 12px; color: #f5f5f7;" class="max-w-2xl w-full mx-4 max-h-[85dvh] overflow-auto"></div>
   </div>
-  <script src="js/shared.js?v=43"></script>
+  <script src="js/shared.js?v=44"></script>
+  <script src="js/video-preview.js?v=4"></script>
   <script>
     const urlParams = new URLSearchParams(window.location.search);
     const recipeId = urlParams.get('id');
     const fromPage = urlParams.get('from');
     const fromIngredient = urlParams.get('ingredient');
+    const fromPlan = fromPage === 'plan';
+    if (fromPlan && typeof state !== 'undefined') {
+      state.prepAutoOpenContext = 'plan';
+    }
 
     loadAllState();
 
@@ -71,7 +77,8 @@
 
       const content = renderRecipeDetailV2(recipeId, {
         onBack: 'goBackSafe()',
-        standalone: true
+        standalone: true,
+        fromPlan: fromPlan
       });
 
       app.innerHTML = `
@@ -83,9 +90,27 @@
           ${renderBottomNav()}
         </div>
       `;
+
+      // Init video preview observer after each render so prep step videos
+      // play when their card is on-screen inside the reels modal.
+      if (typeof initVideoPreviewObserver === 'function') {
+        initVideoPreviewObserver();
+      }
     }
 
     render();
+
+    // Context A — arrived from This Week's Meals: auto-open the prep modal
+    // if prep_state.status is "not_started". Otherwise the CTA shows
+    // "Continue prep (X/Y ready)" so the user can pick up where they left off.
+    if (fromPlan && recipeId) {
+      const r = typeof getRecipeById === 'function' ? getRecipeById(recipeId) : null;
+      const prepCtx = (r && typeof resolvePrepContext === 'function') ? resolvePrepContext(recipeId, r) : null;
+      const status = prepCtx?.meal?.prep_status || 'not_started';
+      if (status === 'not_started') {
+        openPrepReels(recipeId);
+      }
+    }
   </script>
 </body>
 </html>

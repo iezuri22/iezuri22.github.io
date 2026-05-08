@@ -3349,6 +3349,261 @@ function renderPrepItemCard(dateStr, mealType, item) {
   `;
 }
 
+// ============================================================
+// PREP REELS — fullscreen, vertical-snap card stack
+// ============================================================
+
+function renderLetsCookButton(recipeId, prepCtx, fromPlan) {
+  if (!prepCtx) return '';
+  const meal = prepCtx.meal;
+  const items = (meal.prep_state && meal.prep_state.items) || [];
+  const total = items.length;
+  const done = items.filter(i => i.checked).length;
+  const status = meal.prep_status || 'not_started';
+  const scheduledHere = !!prepCtx.fromPlan;
+  const dayLabel = scheduledHere && typeof getDateLabel === 'function' ? getDateLabel(prepCtx.dateStr) : '';
+
+  let label;
+  if (fromPlan) {
+    label = (status === 'not_started' || total === 0)
+      ? 'Start prep'
+      : `Continue prep (${done}/${total} ready)`;
+  } else if (scheduledHere) {
+    label = `Let's Cook · scheduled ${dayLabel}`;
+  } else {
+    label = "Let's Cook";
+  }
+
+  const onclick = `openPrepReels('${esc(recipeId)}')`;
+  return `
+    <div style="padding: 0 20px 16px;">
+      <button class="lets-cook-btn" onclick="${onclick}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 12h18M5 12V8a4 4 0 014-4h6a4 4 0 014 4v4M7 12v6a2 2 0 002 2h6a2 2 0 002-2v-6"/>
+        </svg>
+        <span>${esc(label)}</span>
+      </button>
+    </div>
+  `;
+}
+
+function openPrepReels(recipeId) {
+  const r = getRecipeById(recipeId);
+  if (!r) return;
+  const prepCtx = resolvePrepContext(recipeId, r);
+  if (prepCtx) initPrepState(prepCtx.meal, r);
+
+  state.prepReels = { open: true, recipeId };
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.style.overflow = 'hidden';
+    document.body.classList.add('prep-reels-locked');
+  }
+  if (typeof render === 'function') render();
+  // Re-init the video-preview observer so prep step videos auto-play when
+  // their card snaps into view. The home page only inits this for its own
+  // views, so we trigger it ourselves here.
+  setTimeout(() => {
+    if (typeof initVideoPreviewObserver === 'function') initVideoPreviewObserver();
+  }, 50);
+  // Background-fetch missing ingredient photos. Each resolved photo triggers a re-render.
+  prefetchPrepReelImages(recipeId);
+}
+
+function closePrepReels() {
+  state.prepReels = { open: false, recipeId: null };
+  state.prepAutoOpenContext = null;
+  if (typeof document !== 'undefined' && document.body) {
+    document.body.style.overflow = '';
+    document.body.classList.remove('prep-reels-locked');
+  }
+  if (typeof render === 'function') render();
+}
+
+function renderPrepReelsOverlay(currentRecipeId, recipe, prepCtx) {
+  if (!state.prepReels || !state.prepReels.open) return '';
+  if (state.prepReels.recipeId !== currentRecipeId) return '';
+  if (!prepCtx || !recipe) return '';
+
+  const meal = prepCtx.meal;
+  const items = (meal.prep_state && meal.prep_state.items) || [];
+  const total = items.length;
+  const done = items.filter(i => i.checked).length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const recipeRows = recipeIngList(recipe);
+  const ingredientCards = items.map((item, idx) => {
+    const row = recipeRows[idx] || {};
+    const amount = [row.qty || '', row.unit || ''].filter(Boolean).join(' ').trim();
+    return renderPrepReelIngredientCard(item, idx, prepCtx, recipe, amount);
+  });
+
+  const clips = (typeof getRecipeVideoClips === 'function') ? getRecipeVideoClips(currentRecipeId) : [];
+  const stepCards = clips.map((clip, idx) => renderPrepReelStepCard(clip, idx, clips.length));
+
+  const allCards = ingredientCards.concat(stepCards);
+
+  return `
+    <div class="prep-reels-overlay" id="prepReelsOverlay" role="dialog" aria-modal="true">
+      <div class="prep-reels-progress">
+        <div class="prep-reels-progress-fill" style="width:${pct}%;"></div>
+      </div>
+      <button class="prep-reels-close" onclick="closePrepReels()" aria-label="Close">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+      <div class="prep-reels-stack">
+        ${allCards.length ? allCards.join('') : `<div class="prep-reel-card prep-reel-empty"><div class="prep-reel-bottom"><div class="prep-reel-name">Nothing to prep</div><div class="prep-reel-amount">This recipe has no ingredients or steps yet.</div></div></div>`}
+      </div>
+    </div>
+  `;
+}
+
+function _prepReelImageFor(item, recipe) {
+  if (!item) return null;
+  if (Array.isArray(recipe?.ingredientsRows)) {
+    const match = recipe.ingredientsRows.find(x => (x?.name || '').toLowerCase().trim() === (item.name || '').toLowerCase().trim());
+    if (match && match.image_url) return match.image_url;
+  }
+  if (typeof getIngredientImage === 'function') {
+    const url = getIngredientImage(item.name, item.group);
+    if (url) return url;
+  }
+  return null;
+}
+
+function renderPrepReelIngredientCard(item, idx, prepCtx, recipe, amount) {
+  const photo = _prepReelImageFor(item, recipe);
+  const args = `'${prepCtx.dateStr}','${prepCtx.mealType}','${item.id}'`;
+  const isExpired = item.freshness === 'expired' || item.needs_replacement;
+  const isChecked = !!item.checked;
+  const cardClass = ['prep-reel-card', 'prep-reel-ingredient', isChecked ? 'is-checked' : '', isExpired ? 'is-expired' : ''].filter(Boolean).join(' ');
+
+  let bgHtml;
+  if (photo) {
+    bgHtml = `<img class="prep-reel-bg" src="${esc(photo)}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';">
+              <div class="prep-reel-bg prep-reel-bg-fallback" style="display:none;background:${getPlaceholderGradient({ title: item.name })};"><span>${esc(capitalize(item.name))}</span></div>`;
+  } else {
+    bgHtml = `<div class="prep-reel-bg prep-reel-bg-fallback" style="background:${getPlaceholderGradient({ title: item.name })};"><span>${esc(capitalize(item.name))}</span></div>`;
+  }
+
+  const checkBadge = isChecked
+    ? `<div class="prep-reel-check"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 11 8 15 16 6"/></svg></div>`
+    : '';
+
+  // Action area depends on perishable + state.
+  let actionsHtml = '';
+  if (item.perishable) {
+    if (isExpired) {
+      actionsHtml = `
+        <div class="prep-reel-actions stacked">
+          <button class="prep-reel-btn primary" onclick="event.stopPropagation();addExpiredToGrocery(${args})">Add to grocery</button>
+          <button class="prep-reel-btn ghost" onclick="event.stopPropagation();substituteIngredient(${args})">Substitute</button>
+          <button class="prep-reel-btn link" onclick="event.stopPropagation();undoIngredientCheck(${args})">Undo</button>
+        </div>`;
+    } else if (isChecked) {
+      actionsHtml = `<div class="prep-reel-actions"><button class="prep-reel-btn ghost" onclick="event.stopPropagation();undoIngredientCheck(${args})">Undo</button></div>`;
+    } else {
+      actionsHtml = `
+        <div class="prep-reel-actions">
+          <button class="prep-reel-btn primary" onclick="event.stopPropagation();markIngredientFresh(${args})">Fresh</button>
+          <button class="prep-reel-btn danger" onclick="event.stopPropagation();markIngredientExpired(${args})">Expired / out</button>
+        </div>`;
+    }
+  } else {
+    if (isChecked) {
+      actionsHtml = `<div class="prep-reel-hint">Tap card to undo</div>`;
+    } else {
+      actionsHtml = `<div class="prep-reel-hint">Tap card when ready</div>`;
+    }
+  }
+
+  // Tap target: only non-perishable cards toggle on full-card tap.
+  // Perishable expects an explicit Fresh/Expired choice (no full-card tap).
+  const cardOnclick = item.perishable
+    ? ''
+    : (isChecked ? `onclick="undoIngredientCheck(${args})"` : `onclick="toggleNonPerishableCheck(${args})"`);
+
+  return `
+    <div class="${cardClass}" data-prep-idx="${idx}" ${cardOnclick}>
+      ${bgHtml}
+      <div class="prep-reel-overlay"></div>
+      ${checkBadge}
+      <div class="prep-reel-bottom">
+        <div class="prep-reel-pill">${esc(item.group || 'Other')}${item.perishable ? ' · perishable' : ''}</div>
+        <div class="prep-reel-name">${esc(capitalize(item.name))}</div>
+        ${amount ? `<div class="prep-reel-amount">${esc(amount)}</div>` : ''}
+        ${actionsHtml}
+      </div>
+    </div>
+  `;
+}
+
+function renderPrepReelStepCard(clip, idx, total) {
+  const stepNum = idx + 1;
+  const hasVideo = !!clip.cloudflareVideoId;
+  const dayBefore = !!clip.day_before;
+
+  let bgHtml;
+  if (hasVideo) {
+    const videoId = clip.cloudflareVideoId;
+    const poster = (typeof getStreamThumbnail === 'function') ? getStreamThumbnail(videoId) : '';
+    bgHtml = `<video class="prep-reel-bg prep-reel-bg-video" data-video-card data-video-preview="${esc(videoId)}" muted autoplay loop playsinline preload="metadata" ${poster ? `poster="${esc(poster)}"` : ''}></video>`;
+  } else {
+    bgHtml = `<div class="prep-reel-bg prep-reel-bg-fallback" style="background:${getPlaceholderGradient({ title: 'Step ' + stepNum })};"><span>Step ${stepNum}</span></div>`;
+  }
+
+  const caption = (clip.caption || `Step ${stepNum}`).trim();
+  const instructions = (clip.instructions || '').trim();
+
+  return `
+    <div class="prep-reel-card prep-reel-step" data-video-card>
+      ${bgHtml}
+      <div class="prep-reel-overlay"></div>
+      ${dayBefore ? `<div class="prep-reel-tag">Night before</div>` : ''}
+      <div class="prep-reel-bottom">
+        <div class="prep-reel-pill">Step ${stepNum} of ${total}</div>
+        <div class="prep-reel-name">${esc(caption)}</div>
+        ${instructions ? `<div class="prep-reel-amount">${esc(instructions)}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+// Background-fetch ingredient photos for items missing one. Caches into the
+// recipe's ingredientsRows so future opens hit the cache. Each resolution
+// triggers a render so cards swap in their photos as they arrive.
+async function prefetchPrepReelImages(recipeId) {
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+  const rows = Array.isArray(recipe.ingredientsRows) ? recipe.ingredientsRows : null;
+  if (!rows || rows.length === 0) return;
+  if (!SERPER_API_KEY || SERPER_API_KEY === 'YOUR_SERPER_KEY') return;
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || !row.name) continue;
+    if (row.image_url) continue;
+    // Library lookups already serve as cache — only hit Serper when truly missing.
+    if (typeof getIngredientImage === 'function' && getIngredientImage(row.name, row.group)) continue;
+
+    try {
+      const resp = await fetch('https://google.serper.dev/images', {
+        method: 'POST',
+        headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ q: row.name + ' ingredient food', num: 1 })
+      });
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      const url = (data.images && data.images[0]) ? (data.images[0].imageUrl || data.images[0].thumbnailUrl) : null;
+      if (!url) continue;
+      row.image_url = url;
+      try { if (typeof storage !== 'undefined' && storage.update) await storage.update(recipe); } catch {}
+      if (state.prepReels && state.prepReels.open && state.prepReels.recipeId === recipeId) {
+        if (typeof render === 'function') render();
+      }
+    } catch {}
+  }
+}
+
 // Pick a meal slot to anchor prep state on for the given recipe view.
 // Returns { dateStr, mealType, meal, fromPlan } where fromPlan is true if the
 // slot was already a planned meal (week plan or selected). When no plan is
@@ -8401,30 +8656,18 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
 
   const relatedRecipes = getRelatedRecipes();
 
-  // Prep block: surface freshness check on the recipe-detail page.
-  // Prefer a real planned meal slot; fall back to today's slot derived from recipe.category.
+  // Prep modal CTA: anchor prep_state to either a planned meal slot or an
+  // orphan recipe-detail slot. The inline section is gone — all prep work
+  // happens in the fullscreen reels modal launched by the CTA.
   const prepCtx = resolvePrepContext(id, r);
   if (prepCtx) {
     const inited = initPrepState(prepCtx.meal, r);
     if (inited) saveMealDay(prepCtx.dateStr);
   }
-  const prepBlockHtml = prepCtx
-    ? (() => {
-        const dateLabel = prepCtx.dateStr === getToday() ? 'today' : (prepCtx.dateStr === getTomorrow() ? 'tomorrow' : prepCtx.dateStr);
-        const headerLabel = prepCtx.fromPlan
-          ? `Planned · ${capitalize(prepCtx.mealType)} ${dateLabel}`
-          : `Prep check · ${capitalize(prepCtx.mealType)} ${dateLabel}`;
-        const banner = `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:${CONFIG.space_sm};">
-          <span style="font-size:${CONFIG.type_micro}; font-weight:600; letter-spacing:0.5px; color:${CONFIG.primary_action_color}; text-transform:uppercase;">${esc(headerLabel)}</span>
-        </div>`;
-        const block = renderPrepBlock(prepCtx.mealType, prepCtx.meal, r, prepCtx.dateStr);
-        const blocked = isPrepBlocked(prepCtx.meal);
-        const blockedNote = blocked
-          ? `<div style="background: rgba(255,214,10,0.1); border: 1px solid rgba(255,214,10,0.25); border-radius: 10px; padding: 10px 12px; margin-bottom: ${CONFIG.space_md}; color: ${CONFIG.warning_color}; font-size: ${CONFIG.type_caption};">Resolve missing ingredients to mark this meal ready.</div>`
-          : '';
-        return block ? `<div style="padding: 0 16px 0 16px;">${banner}${block}${blockedNote}</div>` : '';
-      })()
-    : '';
+  const fromPlan = opts.fromPlan === true
+    || (typeof state !== 'undefined' && state.prepAutoOpenContext === 'plan')
+    || (typeof state !== 'undefined' && !!state.viewingFromPlan);
+  const letsCookBtnHtml = prepCtx ? renderLetsCookButton(id, prepCtx, fromPlan) : '';
 
   return `
     <div style="flex:1;overflow-x:hidden;max-width:100vw;box-sizing:border-box;">
@@ -8482,6 +8725,9 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244"/></svg>
         View original recipe &rarr;
       </a>` : ''}
+
+      <!-- LET'S COOK CTA -->
+      ${letsCookBtnHtml}
 
       <!-- DELIVERY PROMPT CARD -->
       ${rows.length > 0 ? `
@@ -8545,7 +8791,6 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
 
       <!-- INGREDIENTS PANEL -->
       <div id="rd-tab-ingredients" style="display:${activeTab === 'ingredients' ? 'block' : 'none'};">
-        ${prepBlockHtml}
         ${groupOrder.length ? `
           <div class="ingredient-list">
             ${groupOrder.map(g => `
@@ -8643,6 +8888,9 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
       ` : ''}
 
       <div style="height:24px;"></div>
+
+      <!-- PREP REELS OVERLAY (rendered when state.prepReels.open && recipeId matches) -->
+      ${renderPrepReelsOverlay(id, r, prepCtx)}
     </div>
   `;
 }
