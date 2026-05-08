@@ -510,10 +510,25 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
 // Compute a normalized prep summary for any recipe + meal slot. Both the
 // week-plan card (badge + status line) and the recipe-detail page (status
 // panel) consume this so they tell exactly the same story.
+//
+// The card is rendered for a specific (dateStr, mealType) but the modal may
+// have anchored prep_state on a different slot for the same recipe (e.g.
+// the recipe appears Tue and Fri in the week plan; card shows Tue, modal
+// writes to Fri because findPlannedMealForRecipe iterates `today`-onwards).
+// Fall back to findPrepAnchoredSlot so the card reads from wherever prep
+// actually lives.
 function computeWeekPlanPrepSummary(recipeId, dateStr, mealType) {
   let meal = null;
+  let resolvedFrom = 'slot';
   if (dateStr && mealType && state.mealDays && state.mealDays[dateStr] && state.mealDays[dateStr].meals) {
     meal = state.mealDays[dateStr].meals[mealType];
+  }
+  if ((!meal || !meal.prep_state) && typeof findPrepAnchoredSlot === 'function') {
+    const anchored = findPrepAnchoredSlot(recipeId);
+    if (anchored && anchored.meal && anchored.meal.prep_state) {
+      meal = anchored.meal;
+      resolvedFrom = `anchor:${anchored.dateStr}/${anchored.mealType}`;
+    }
   }
   const ps = meal && meal.prep_state;
   const items = ps && Array.isArray(ps.items) ? ps.items : [];
@@ -550,6 +565,10 @@ function computeWeekPlanPrepSummary(recipeId, dateStr, mealType) {
     bucket = 'not_started';
   } else {
     bucket = 'in_progress';
+  }
+
+  if (typeof console !== 'undefined') {
+    console.log('[weekPlanCard read]', { recipeId, dateStr, mealType, resolvedFrom, total, done, stepTotal, stepDone, bucket, prep_status: status });
   }
 
   return {
@@ -590,9 +609,10 @@ function renderWeekPlanPrepStatusLine(prep) {
   if (prep.bucket === 'not_started') {
     return `<div class="wp-prep-status">Get ready</div>`;
   }
-  const parts = [`${prep.done}/${prep.total} ingredients`];
+  const parts = [];
+  if (prep.total > 0) parts.push(`${prep.done}/${prep.total} ingredients`);
   if (prep.stepTotal > 0) {
-    parts.push(prep.stepDone === prep.stepTotal ? 'prep done' : (prep.stepDone === 0 ? 'prep pending' : `prep ${prep.stepDone}/${prep.stepTotal}`));
+    parts.push(prep.stepDone === prep.stepTotal ? 'prep done' : `prep ${prep.stepDone}/${prep.stepTotal}`);
   }
   const ingPct = prep.total > 0 ? Math.round((prep.done / prep.total) * 100) : 0;
   const stepPct = prep.stepTotal > 0 ? Math.round((prep.stepDone / prep.stepTotal) * 100) : 0;

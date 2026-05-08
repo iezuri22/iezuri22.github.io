@@ -1937,6 +1937,16 @@ async function saveMealDay(dateStr) {
   // locally only — never sync them to Supabase as todayMeals rows.
   if (dateStr && dateStr.startsWith('__')) {
     try { localStorage.setItem('orphanPrep_' + dateStr, JSON.stringify(state.mealDays[dateStr] || null)); } catch {}
+    if (typeof console !== 'undefined') {
+      const day = state.mealDays[dateStr];
+      const meals = day && day.meals ? day.meals : {};
+      const snap = {};
+      for (const mt of ['breakfast', 'lunch', 'dinner']) {
+        const m = meals[mt];
+        if (m) snap[mt] = { plannedRecipeId: m.plannedRecipeId, prep_status: m.prep_status, prep_state: m.prep_state };
+      }
+      console.log('[saveMealDay:orphan]', dateStr, snap);
+    }
     return;
   }
   const day = getDayData(dateStr);
@@ -1946,6 +1956,14 @@ async function saveMealDay(dateStr) {
     date: dateStr,
     meals: day.meals
   };
+  if (typeof console !== 'undefined') {
+    const snap = {};
+    for (const mt of ['breakfast', 'lunch', 'dinner']) {
+      const m = day.meals[mt];
+      if (m) snap[mt] = { plannedRecipeId: m.plannedRecipeId, prep_status: m.prep_status, prep_state: m.prep_state };
+    }
+    console.log('[saveMealDay] row=' + record.id, snap);
+  }
   state.ignoreRealtimeUntil = Date.now() + 3000;
   const result = await storage.update(record);
   if (!result?.isOk) {
@@ -3361,21 +3379,21 @@ function renderLetsCookButton(recipeId, prepCtx, fromPlan) {
   const done = items.filter(i => i.checked).length;
   const status = meal.prep_status || 'not_started';
   const scheduledHere = !!prepCtx.fromPlan;
-  const dayLabel = scheduledHere && typeof getDateLabel === 'function' ? getDateLabel(prepCtx.dateStr) : '';
+  const dayLabel = scheduledHere ? getScheduleSuffix(prepCtx.dateStr) : null;
 
   let label;
   if (fromPlan) {
     label = (status === 'not_started' || total === 0)
       ? 'Start prep'
       : `Continue prep (${done}/${total} ready)`;
-  } else if (scheduledHere) {
+  } else if (scheduledHere && dayLabel) {
     label = `Let's Cook · scheduled ${dayLabel}`;
   } else {
     label = "Let's Cook";
   }
 
   const onclick = `openPrepReels('${esc(recipeId)}')`;
-  const statsPanel = renderRecipeDetailPrepStats(recipeId, prepCtx);
+  const statsPanel = renderRecipeDetailPrepStats(recipeId, prepCtx, fromPlan || scheduledHere);
   return `
     <div style="padding: 0 20px 16px;">
       <button class="lets-cook-btn" onclick="${onclick}">
@@ -3389,17 +3407,18 @@ function renderLetsCookButton(recipeId, prepCtx, fromPlan) {
   `;
 }
 
-// Inline progress panel on the recipe-detail page. Same numbers as the
-// modal header so users see prep state without needing to open the sheet.
-function renderRecipeDetailPrepStats(recipeId, prepCtx) {
-  if (!prepCtx) return '';
+// Compact one-line stats directly under the Let's Cook button — only shown
+// when the recipe is open in plan context (anchored to a real plan slot or a
+// "scheduled" fromPlan slot). Browse/search views don't get this line.
+// Format: "4/8 ingredients · 0/2 prep · last updated 2:15 PM".
+function renderRecipeDetailPrepStats(recipeId, prepCtx, inPlanContext) {
+  if (!prepCtx || !inPlanContext) return '';
   const meal = prepCtx.meal;
   const items = (meal && meal.prep_state && meal.prep_state.items) || [];
   const total = items.length;
   const done = items.filter(i => i.checked).length;
   const blockedItem = items.find(i => i.needs_replacement);
 
-  // Steps — match the modal: clips first, fall back to instruction parsing.
   let stepTotal = 0;
   let stepDone = 0;
   const recipe = getRecipeById(recipeId);
@@ -3410,42 +3429,33 @@ function renderRecipeDetailPrepStats(recipeId, prepCtx) {
   if (stepTotal === 0 && recipe && typeof parseInstructionStepEntries === 'function') {
     stepTotal = parseInstructionStepEntries(recipe).length;
   }
-  if (meal.prep_state && meal.prep_state.steps_done) {
+  if (meal && meal.prep_state && meal.prep_state.steps_done) {
     for (let i = 0; i < stepTotal; i++) if (meal.prep_state.steps_done[i]) stepDone++;
   }
 
   if (total === 0 && stepTotal === 0) return '';
 
-  const ingPct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const stepPct = stepTotal > 0 ? Math.round((stepDone / stepTotal) * 100) : 0;
-
-  let statusLine;
+  const parts = [];
   if (blockedItem) {
-    statusLine = `<span class="rd-prep-status is-blocked"><span class="dot"></span>Missing: ${esc(capitalize(blockedItem.name || 'an ingredient'))}</span>`;
+    parts.push(`Missing: ${capitalize(blockedItem.name || 'an ingredient')}`);
   } else if (total > 0 && done === total && (stepTotal === 0 || stepDone === stepTotal)) {
-    statusLine = `<span class="rd-prep-status is-ready"><span class="dot"></span>Ready to cook</span>`;
-  } else if (done === 0 && stepDone === 0) {
-    statusLine = `<span class="rd-prep-status">Get ready</span>`;
+    parts.push('Ready to cook');
   } else {
-    const parts = [`${done}/${total} ingredients`];
-    if (stepTotal > 0) parts.push(stepDone === stepTotal ? 'prep done' : `prep ${stepDone}/${stepTotal}`);
-    statusLine = `<span class="rd-prep-status is-progress">${esc(parts.join(' · '))}</span>`;
+    if (total > 0) parts.push(`${done}/${total} ingredients`);
+    if (stepTotal > 0) parts.push(`${stepDone}/${stepTotal} prep`);
+  }
+
+  const updatedAt = meal && meal.prep_state && meal.prep_state.updated_at;
+  if (updatedAt) {
+    const t = new Date(updatedAt);
+    if (!isNaN(t.getTime())) {
+      parts.push('last updated ' + t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+    }
   }
 
   return `
-    <div class="rd-prep-stats" onclick="openPrepReels('${esc(recipeId)}')">
-      <div class="rd-prep-stats-row">
-        <div class="rd-prep-stats-label">Prep status</div>
-        ${statusLine}
-      </div>
-      <div class="rd-prep-progress">
-        <div class="rd-prep-progress-seg ingredients" style="width:${ingPct / 2}%;"></div>
-        <div class="rd-prep-progress-seg steps" style="width:${stepPct / 2}%;"></div>
-      </div>
-      <div class="rd-prep-counts">
-        <span><strong>${done}</strong>/${total} ingredients${total === 0 ? '' : ` · ${ingPct}%`}</span>
-        ${stepTotal > 0 ? `<span><strong>${stepDone}</strong>/${stepTotal} prep steps · ${stepPct}%</span>` : ''}
-      </div>
+    <div class="rd-prep-stats-line" onclick="openPrepReels('${esc(recipeId)}')" style="margin-top: 8px; font-size: 12px; color: ${CONFIG.text_muted}; cursor: pointer;">
+      ${esc(parts.join(' · '))}
     </div>
   `;
 }
@@ -4150,8 +4160,11 @@ function findPlannedMealForRecipe(recipeId) {
   }
 
   // 1) state.mealDays — selected/pending meals already live here.
+  // Skip synthetic orphan dates (`__recipe_*`) — those aren't real plan slots.
   if (state.mealDays) {
-    const dates = Object.keys(state.mealDays).filter(d => d >= today).sort();
+    const dates = Object.keys(state.mealDays)
+      .filter(d => !d.startsWith('__') && d >= today)
+      .sort();
     for (const dateStr of dates) {
       const day = state.mealDays[dateStr];
       if (!day || !day.meals) continue;
@@ -4207,6 +4220,45 @@ function findPlannedMealForRecipe(recipeId) {
   }
 
   return null;
+}
+
+// Read-only lookup of any meal slot in state.mealDays whose plannedRecipeId or
+// actualRecipeId matches this recipe — used by the week-plan card render to
+// read whatever slot the modal actually anchored prep_state on. The card and
+// the modal can pick different slots for the same recipe (the card shows the
+// first occurrence in the week; the modal anchors on `today`-or-later), so
+// reading by recipe id avoids the mismatch that left cards stuck on "Get
+// ready" while the modal had progress saved on a different slot.
+//
+// Preference order: real plan dates (earliest first), then synthetic orphan
+// slots (`__recipe_*`) as a last resort. Never mutates state.
+function findPrepAnchoredSlot(recipeId) {
+  if (!recipeId || !state.mealDays) return null;
+  const recipe = (typeof getRecipeById === 'function') ? getRecipeById(recipeId) : null;
+  const acceptable = new Set([recipeId]);
+  if (recipe) {
+    if (recipe.__backendId) acceptable.add(recipe.__backendId);
+    if (recipe.id) acceptable.add(recipe.id);
+  }
+  let realMatch = null;
+  let synthMatch = null;
+  for (const dateStr of Object.keys(state.mealDays)) {
+    const day = state.mealDays[dateStr];
+    if (!day || !day.meals) continue;
+    for (const mealType of ['breakfast', 'lunch', 'dinner']) {
+      const meal = day.meals[mealType];
+      if (!meal) continue;
+      const rid = meal.plannedRecipeId || meal.actualRecipeId;
+      if (!rid || !acceptable.has(rid)) continue;
+      const candidate = { dateStr, mealType, meal };
+      if (dateStr.startsWith('__')) {
+        if (!synthMatch) synthMatch = candidate;
+      } else if (!realMatch || dateStr < realMatch.dateStr) {
+        realMatch = candidate;
+      }
+    }
+  }
+  return realMatch || synthMatch;
 }
 
 function getFrequentMeals() {
@@ -6497,6 +6549,20 @@ function getDateLabel(dateStr) {
   if (dateStr === getYesterday()) return 'Yesterday';
   if (dateStr === getTomorrow()) return 'Tomorrow';
   return formatDateShort(dateStr);
+}
+
+// Compact suffix for "Let's Cook · scheduled X". Returns null when the date
+// can't be rendered as a real day (synthetic orphan slots, malformed strings)
+// so callers can drop the suffix entirely instead of printing "Invalid Date".
+function getScheduleSuffix(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return null;
+  if (dateStr.startsWith('__')) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+  const d = new Date(dateStr + 'T12:00:00');
+  if (isNaN(d.getTime())) return null;
+  if (dateStr === getToday()) return 'today';
+  if (dateStr === getTomorrow()) return 'tomorrow';
+  return d.toLocaleDateString('en-US', { weekday: 'short' });
 }
 
 function formatDateShort(dateStr) { const d = new Date(dateStr + 'T12:00:00'); return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }); }
