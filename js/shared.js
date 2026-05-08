@@ -693,6 +693,7 @@ const DEFAULT_EXPIRATION_DAYS = {
 };
 
 const GROCERY_KEY = 'smartGroceryList_v1';
+const GROCERY_DIRTY_KEY = 'smartGroceryList_v1_dirty';
 const GROCERY_CATEGORIES = [
   'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Pantry & Dry Goods',
   'Spices & Seasonings', 'Frozen', 'Household', 'Other'
@@ -1933,12 +1934,13 @@ const dataHandler = {
 
 async function saveMealDay(dateStr) {
   dateStr = dateStr || state.viewingDate;
-  // Orphan recipe-detail prep slots live under synthetic dates and persist
-  // locally only — never sync them to Supabase as todayMeals rows.
+  // Orphan recipe-detail prep slots live under synthetic dates (`__recipe_*`)
+  // — they don't belong in todayMeals rows, but they DO need to sync across
+  // devices so prep work started on phone shows up on laptop.
   if (dateStr && dateStr.startsWith('__')) {
-    try { localStorage.setItem('orphanPrep_' + dateStr, JSON.stringify(state.mealDays[dateStr] || null)); } catch {}
+    const day = state.mealDays[dateStr] || null;
+    try { localStorage.setItem('orphanPrep_' + dateStr, JSON.stringify(day)); } catch {}
     if (typeof console !== 'undefined') {
-      const day = state.mealDays[dateStr];
       const meals = day && day.meals ? day.meals : {};
       const snap = {};
       for (const mt of ['breakfast', 'lunch', 'dinner']) {
@@ -1946,6 +1948,19 @@ async function saveMealDay(dateStr) {
         if (m) snap[mt] = { plannedRecipeId: m.plannedRecipeId, prep_status: m.prep_status, prep_state: m.prep_state };
       }
       console.log('[saveMealDay:orphan]', dateStr, snap);
+    }
+    if (window.supabaseClient && day) {
+      try {
+        const { data: { session } } = await window.supabaseClient.auth.getSession();
+        if (session?.user) {
+          const item = { id: 'orphanPrep_' + dateStr, type: 'orphanPrep', date: dateStr, meals: day.meals };
+          state.ignoreRealtimeUntil = Date.now() + 3000;
+          const { error } = await window.supabaseClient
+            .from('meal_planner_data')
+            .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+          if (error) console.error('[saveMealDay:orphan] supabase upsert failed:', error);
+        }
+      } catch (e) { console.error('[saveMealDay:orphan] supabase sync failed:', e); }
     }
     return;
   }
@@ -2566,6 +2581,7 @@ async function syncGroceryListToSupabase(list) {
     console.error('Sync grocery list failed:', error);
     throw error;
   }
+  try { localStorage.removeItem(GROCERY_DIRTY_KEY); } catch {}
 }
 
 // Photos are stored as one big blob row. A blind upsert of `ingredientPhotos`
@@ -2700,8 +2716,10 @@ async function syncEffortLevelsToSupabase(levels) {
 // before Supabase finished loading and they vanished" race.
 async function pushLocalOnlyDataToSupabase() {
   if (!window.supabaseClient) return;
+  let session;
   try {
-    const { data: { session } } = await window.supabaseClient.auth.getSession();
+    const sessRes = await window.supabaseClient.auth.getSession();
+    session = sessRes?.data?.session;
     if (!session?.user) return;
   } catch (e) { return; }
   const tasks = [
@@ -2715,6 +2733,25 @@ async function pushLocalOnlyDataToSupabase() {
     syncFrequencyItemsToSupabase(getFrequencyItems()),
     syncIngredientLibraryOverridesToSupabase(),
   ];
+  // Push any orphan prep slots that only exist in localStorage. Catches
+  // (a) entries written before orphan-prep cross-device sync landed, and
+  // (b) edits that failed to upsert at the time (offline / network blip).
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('orphanPrep_')) continue;
+      const dateStr = key.slice('orphanPrep_'.length);
+      if (!dateStr || !dateStr.startsWith('__')) continue;
+      let day;
+      try { day = JSON.parse(localStorage.getItem(key) || 'null'); } catch { day = null; }
+      if (!day || !day.meals) continue;
+      const item = { id: 'orphanPrep_' + dateStr, type: 'orphanPrep', date: dateStr, meals: day.meals };
+      tasks.push(window.supabaseClient
+        .from('meal_planner_data')
+        .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' })
+        .then(({ error }) => { if (error) console.error('[push pending orphan]', dateStr, error); }));
+    }
+  } catch (e) { console.error('[push pending orphan] enumeration failed:', e); }
   try { await Promise.allSettled(tasks); }
   catch (e) { console.error('[push pending] failed:', e); }
 }
@@ -3053,6 +3090,10 @@ function getSmartGroceryList() { try { return JSON.parse(localStorage.getItem(GR
 function saveSmartGroceryList(list) {
   try { localStorage.setItem(GROCERY_KEY, JSON.stringify(list)); }
   catch (e) { console.error('[grocery] localStorage write failed:', e); }
+  // Mark dirty so applySupabaseData can't clobber unsaved local edits if the
+  // upsert below races with an in-flight initial load or revalidation.
+  // Cleared inside syncGroceryListToSupabase on success.
+  try { localStorage.setItem(GROCERY_DIRTY_KEY, '1'); } catch {}
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncGroceryListToSupabase(list).then(() => {
     // Extend ignore window after sync to catch the echo event
@@ -7699,8 +7740,12 @@ function applySupabaseData(data) {
     localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(foodLogRow.entries));
   }
 
-  // Load grocery list from Supabase (skip if local changes are in-flight)
-  if (!(state.ignoreRealtimeUntil && Date.now() < state.ignoreRealtimeUntil)) {
+  // Load grocery list from Supabase. Skip when local has pending unsynced
+  // edits (dirty flag) — otherwise a slow upsert + reload race would let the
+  // pull overwrite local changes that haven't reached Supabase yet. The
+  // pending edits will be pushed by pushLocalOnlyDataToSupabase() right after
+  // this load, then the dirty flag clears.
+  if (!localStorage.getItem(GROCERY_DIRTY_KEY)) {
     const groceryListRow = data.find(d => d.id === 'groceryList_list');
     if (groceryListRow && Array.isArray(groceryListRow.entries)) {
       localStorage.setItem(GROCERY_KEY, JSON.stringify(groceryListRow.entries));
@@ -7842,6 +7887,21 @@ function applySupabaseData(data) {
       if (!Array.isArray(day.meals.snacks)) day.meals.snacks = [];
       state.mealDays[record.date] = day;
     }
+  });
+  // Load orphan prep rows (recipe-detail "Let's Cook" prep without a planned
+  // meal). The wipe above clears in-memory orphan slots; this rehydrates them
+  // from Supabase so prep work syncs across devices. Also mirror to
+  // localStorage so resolvePrepContext picks them up offline.
+  const orphanPrepRecords = data.filter(d => d.id && d.id.startsWith('orphanPrep_'));
+  orphanPrepRecords.forEach(record => {
+    if (!record.date || !record.meals) return;
+    const day = { date: record.date, meals: record.meals };
+    ['breakfast', 'lunch', 'dinner'].forEach(m => {
+      if (!day.meals[m]) day.meals[m] = freshMealSlot();
+    });
+    if (!Array.isArray(day.meals.snacks)) day.meals.snacks = [];
+    state.mealDays[record.date] = day;
+    try { localStorage.setItem('orphanPrep_' + record.date, JSON.stringify(day)); } catch {}
   });
   if (!state.mealDays[todayDate]) {
     state.mealDays[todayDate] = { date: todayDate, meals: { breakfast: freshMealSlot(), lunch: freshMealSlot(), dinner: freshMealSlot(), snacks: [] } };
