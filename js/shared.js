@@ -3407,12 +3407,19 @@ function renderLetsCookButton(recipeId, prepCtx, fromPlan) {
   `;
 }
 
-// Compact one-line stats directly under the Let's Cook button — only shown
-// when the recipe is open in plan context (anchored to a real plan slot or a
-// "scheduled" fromPlan slot). Browse/search views don't get this line.
-// Format: "4/8 ingredients · 0/2 prep · last updated 2:15 PM".
+// Prominent two-row stats panel rendered directly under the Let's Cook
+// button on recipe-detail. Always shown when there's a prep slot with any
+// progress to surface (items or steps), so the user sees the same numbers
+// the modal shows — without needing to open it.
+//
+// Layout:
+//   [INGREDIENTS]  4/8 ready                       50%
+//   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//   [PREP STEPS]   0/2 done                        0%
+//   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+//   updated 2:15 PM
 function renderRecipeDetailPrepStats(recipeId, prepCtx, inPlanContext) {
-  if (!prepCtx || !inPlanContext) return '';
+  if (!prepCtx) return '';
   const meal = prepCtx.meal;
   const items = (meal && meal.prep_state && meal.prep_state.items) || [];
   const total = items.length;
@@ -3435,27 +3442,63 @@ function renderRecipeDetailPrepStats(recipeId, prepCtx, inPlanContext) {
 
   if (total === 0 && stepTotal === 0) return '';
 
-  const parts = [];
+  const ingPct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const stepPct = stepTotal > 0 ? Math.round((stepDone / stepTotal) * 100) : 0;
+
+  let headline;
+  let headlineColor = CONFIG.text_color;
   if (blockedItem) {
-    parts.push(`Missing: ${capitalize(blockedItem.name || 'an ingredient')}`);
+    headline = `Missing: ${capitalize(blockedItem.name || 'an ingredient')}`;
+    headlineColor = CONFIG.warning_color;
   } else if (total > 0 && done === total && (stepTotal === 0 || stepDone === stepTotal)) {
-    parts.push('Ready to cook');
+    headline = 'Ready to cook';
+    headlineColor = CONFIG.success_color;
+  } else if (done === 0 && stepDone === 0) {
+    headline = 'Prep not started';
   } else {
-    if (total > 0) parts.push(`${done}/${total} ingredients`);
-    if (stepTotal > 0) parts.push(`${stepDone}/${stepTotal} prep`);
+    headline = 'Prep in progress';
   }
 
   const updatedAt = meal && meal.prep_state && meal.prep_state.updated_at;
+  let updatedLine = '';
   if (updatedAt) {
     const t = new Date(updatedAt);
     if (!isNaN(t.getTime())) {
-      parts.push('last updated ' + t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }));
+      updatedLine = `<div style="font-size: 11px; color: ${CONFIG.text_tertiary}; margin-top: 8px;">Updated ${esc(t.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }))}</div>`;
     }
   }
 
+  const ingRow = total > 0 ? `
+    <div class="rd-prep-row">
+      <div class="rd-prep-row-label">
+        <span class="rd-prep-row-tag">INGREDIENTS</span>
+        <span class="rd-prep-row-count">${done}/${total} ready</span>
+      </div>
+      <div class="rd-prep-row-pct">${ingPct}%</div>
+    </div>
+    <div class="rd-prep-bar"><div class="rd-prep-bar-fill ingredients" style="width:${ingPct}%;"></div></div>
+  ` : '';
+
+  const stepRow = stepTotal > 0 ? `
+    <div class="rd-prep-row" style="margin-top: 12px;">
+      <div class="rd-prep-row-label">
+        <span class="rd-prep-row-tag">PREP STEPS</span>
+        <span class="rd-prep-row-count">${stepDone}/${stepTotal} done</span>
+      </div>
+      <div class="rd-prep-row-pct">${stepPct}%</div>
+    </div>
+    <div class="rd-prep-bar"><div class="rd-prep-bar-fill steps" style="width:${stepPct}%;"></div></div>
+  ` : '';
+
   return `
-    <div class="rd-prep-stats-line" onclick="openPrepReels('${esc(recipeId)}')" style="margin-top: 8px; font-size: 12px; color: ${CONFIG.text_muted}; cursor: pointer;">
-      ${esc(parts.join(' · '))}
+    <div class="rd-prep-panel" onclick="openPrepReels('${esc(recipeId)}')" style="margin-top: 12px; padding: 14px; background: ${CONFIG.surface_elevated}; border-radius: 12px; cursor: pointer;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+        <div style="font-size: ${CONFIG.type_header}; font-weight: 600; color: ${headlineColor};">${esc(headline)}</div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${CONFIG.text_muted}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      ${ingRow}
+      ${stepRow}
+      ${updatedLine}
     </div>
   `;
 }
@@ -4240,7 +4283,12 @@ function findPrepAnchoredSlot(recipeId) {
     if (recipe.__backendId) acceptable.add(recipe.__backendId);
     if (recipe.id) acceptable.add(recipe.id);
   }
-  let realMatch = null;
+  // Two-pass preference: any slot with populated prep_state wins over a bare
+  // plannedRecipeId match. Autoplan pre-populates multiple days with the same
+  // plannedRecipeId, so without this we'd return the earliest empty one and
+  // lose the modal's saved progress.
+  let realWithPrep = null;
+  let realBare = null;
   let synthMatch = null;
   for (const dateStr of Object.keys(state.mealDays)) {
     const day = state.mealDays[dateStr];
@@ -4250,15 +4298,21 @@ function findPrepAnchoredSlot(recipeId) {
       if (!meal) continue;
       const rid = meal.plannedRecipeId || meal.actualRecipeId;
       if (!rid || !acceptable.has(rid)) continue;
+      const hasPrep = !!(meal.prep_state && Array.isArray(meal.prep_state.items) && meal.prep_state.items.length > 0);
       const candidate = { dateStr, mealType, meal };
       if (dateStr.startsWith('__')) {
         if (!synthMatch) synthMatch = candidate;
-      } else if (!realMatch || dateStr < realMatch.dateStr) {
-        realMatch = candidate;
+      } else if (hasPrep) {
+        // Prefer the most recently updated prep_state when multiple slots have one
+        const myUpdated = (meal.prep_state.updated_at) || 0;
+        const cur = realWithPrep && realWithPrep.meal.prep_state ? (realWithPrep.meal.prep_state.updated_at || 0) : -1;
+        if (myUpdated >= cur) realWithPrep = candidate;
+      } else if (!realBare || dateStr < realBare.dateStr) {
+        realBare = candidate;
       }
     }
   }
-  return realMatch || synthMatch;
+  return realWithPrep || realBare || synthMatch;
 }
 
 function getFrequentMeals() {

@@ -609,20 +609,23 @@ function renderWeekPlanPrepStatusLine(prep) {
   if (prep.bucket === 'not_started') {
     return '';
   }
-  const parts = [];
-  if (prep.total > 0) parts.push(`${prep.done}/${prep.total} ingredients`);
-  if (prep.stepTotal > 0) {
-    parts.push(prep.stepDone === prep.stepTotal ? 'prep done' : `prep ${prep.stepDone}/${prep.stepTotal}`);
-  }
   const ingPct = prep.total > 0 ? Math.round((prep.done / prep.total) * 100) : 0;
   const stepPct = prep.stepTotal > 0 ? Math.round((prep.stepDone / prep.stepTotal) * 100) : 0;
-  return `
-    <div class="wp-prep-status is-progress">${esc(parts.join(' · '))}</div>
-    <div class="wp-prep-bars">
-      <div class="bar"><div class="fill" style="width:${ingPct}%;"></div></div>
-      ${prep.stepTotal > 0 ? `<div class="bar steps"><div class="fill" style="width:${stepPct}%;"></div></div>` : ''}
+  const ingRow = prep.total > 0 ? `
+    <div class="wp-prep-row">
+      <span class="wp-prep-row-tag">Ingredients</span>
+      <span class="wp-prep-row-val">${prep.done}/${prep.total}</span>
+      <div class="wp-prep-row-bar"><div class="fill ingredients" style="width:${ingPct}%;"></div></div>
     </div>
-  `;
+  ` : '';
+  const stepRow = prep.stepTotal > 0 ? `
+    <div class="wp-prep-row">
+      <span class="wp-prep-row-tag">Prep</span>
+      <span class="wp-prep-row-val">${prep.stepDone}/${prep.stepTotal}</span>
+      <div class="wp-prep-row-bar"><div class="fill steps" style="width:${stepPct}%;"></div></div>
+    </div>
+  ` : '';
+  return `<div class="wp-prep-status-stack">${ingRow}${stepRow}</div>`;
 }
 
 // Back-compat shim for any caller still using the old name.

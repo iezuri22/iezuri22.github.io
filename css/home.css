@@ -919,3 +919,49 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
 }
 
 .wp-prep-bars .bar.steps .fill { background: rgba(232, 93, 93, 0.5); }
+
+/* Stacked two-row status: Ingredients on its own line, Prep on its own */
+.wp-prep-status-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.wp-prep-row {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.wp-prep-row-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.wp-prep-row-val {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.wp-prep-row-bar {
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.wp-prep-row-bar .fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.25s ease;
+}
+
+.wp-prep-row-bar .fill.ingredients { background: var(--accent, #e85d5d); }
+.wp-prep-row-bar .fill.steps { background: rgba(255, 255, 255, 0.45); }

@@ -923,6 +923,64 @@
   font-weight: 700;
 }
 
+/* ===== PROMINENT PREP PANEL UNDER LET'S COOK ===== */
+.rd-prep-panel:active { transform: scale(0.99); }
+
+.rd-prep-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.rd-prep-row-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rd-prep-row-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  background: rgba(255,255,255,0.06);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.rd-prep-row-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.rd-prep-row-pct {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rd-prep-bar {
+  height: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.rd-prep-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.rd-prep-bar-fill.ingredients { background: var(--accent, #e85d5d); }
+.rd-prep-bar-fill.steps { background: rgba(255, 255, 255, 0.45); }
+
 /* ===== GET READY TO COOK — BOTTOM SHEET, HORIZONTAL CARDS ===== */
 .prep-reels-scrim {
   position: fixed;
