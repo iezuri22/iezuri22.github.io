@@ -477,6 +477,7 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
     : recipe.sourceType === 'imported' ? 'Imported'
     : recipe.sourceType === 'user' ? 'PotLuck'
     : '';
+  const prepStatusHtml = renderWeekPlanPrepStatus(id, dateStr, mealType);
   return `
     <div class="recipe-carousel-card" onclick="openRecipeView('${id}')">
       <div class="carousel-card-media">
@@ -497,7 +498,73 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
       <div class="carousel-card-info">
         ${sourceLabel ? `<span class="card-source">${esc(sourceLabel)}</span>` : ''}
         <h3 class="card-title">${esc(name)}</h3>
+        ${prepStatusHtml}
       </div>
+    </div>
+  `;
+}
+
+// At-a-glance prep status under each week-plan card title. Reads prep_state
+// from the meal slot if one exists; otherwise shows the dim "Get ready" cue
+// so the user knows that meal hasn't been touched yet.
+function renderWeekPlanPrepStatus(recipeId, dateStr, mealType) {
+  if (!recipeId) return '';
+  // Resolve the meal slot the prep modal would write to. For unplanned slots
+  // we still return a useful "Get ready" hint so the card looks consistent.
+  let meal = null;
+  if (dateStr && mealType && state.mealDays && state.mealDays[dateStr] && state.mealDays[dateStr].meals) {
+    meal = state.mealDays[dateStr].meals[mealType];
+  }
+  const ps = meal && meal.prep_state;
+  const items = ps && Array.isArray(ps.items) ? ps.items : [];
+  const total = items.length;
+  const done = items.filter(i => i.checked).length;
+  const blockedItem = items.find(i => i.needs_replacement);
+  const status = (meal && meal.prep_status) || 'not_started';
+
+  // Step counts (when the recipe has video clips). Mirrors the modal stats.
+  let stepTotal = 0;
+  let stepDone = 0;
+  if (typeof getRecipeVideoClips === 'function') {
+    const clips = getRecipeVideoClips(recipeId) || [];
+    stepTotal = clips.length;
+    if (ps && ps.steps_done) {
+      for (let i = 0; i < stepTotal; i++) if (ps.steps_done[i]) stepDone++;
+    }
+  }
+
+  if (blockedItem) {
+    const lbl = capitalize(blockedItem.name || 'an ingredient');
+    return `<div class="wp-prep-status is-blocked"><span class="status-dot"></span>Missing: ${esc(lbl)}</div>`;
+  }
+
+  if (status === 'ready' || (total > 0 && done === total && (stepTotal === 0 || stepDone === stepTotal))) {
+    return `<div class="wp-prep-status is-ready"><span class="status-dot"></span>Ready to cook</div>`;
+  }
+
+  // initPrepState flips prep_status to "in_progress" the moment items are
+  // populated — even before the user has checked anything. Treat 0 progress
+  // across both ingredients and steps as "Get ready" so the dim cue holds
+  // until the user actually starts.
+  if (total === 0 && stepTotal === 0) {
+    return `<div class="wp-prep-status">Get ready</div>`;
+  }
+  if (done === 0 && stepDone === 0) {
+    return `<div class="wp-prep-status">Get ready</div>`;
+  }
+
+  // In-progress detail line. If we have steps, mention them; if none, drop it.
+  const parts = [`${done}/${total} ingredients`];
+  if (stepTotal > 0) {
+    parts.push(stepDone === stepTotal ? 'prep done' : (stepDone === 0 ? 'prep pending' : `prep ${stepDone}/${stepTotal}`));
+  }
+  const ingPct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const stepPct = stepTotal > 0 ? Math.round((stepDone / stepTotal) * 100) : 0;
+  return `
+    <div class="wp-prep-status is-progress">${esc(parts.join(' · '))}</div>
+    <div class="wp-prep-bars">
+      <div class="bar"><div class="fill" style="width:${ingPct}%;"></div></div>
+      ${stepTotal > 0 ? `<div class="bar steps"><div class="fill" style="width:${stepPct}%;"></div></div>` : ''}
     </div>
   `;
 }

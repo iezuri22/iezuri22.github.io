@@ -3410,7 +3410,7 @@ function openPrepReels(recipeId) {
 }
 
 function closePrepReels() {
-  state.prepReels = { open: false, recipeId: null };
+  state.prepReels = { open: false, recipeId: null, cardIdx: 0, photoPickerFor: null, perishableMenuFor: null };
   state.prepAutoOpenContext = null;
   if (typeof document !== 'undefined' && document.body) {
     document.body.style.overflow = '';
@@ -3426,9 +3426,9 @@ function renderPrepReelsOverlay(currentRecipeId, recipe, prepCtx) {
 
   const meal = prepCtx.meal;
   const items = (meal.prep_state && meal.prep_state.items) || [];
-  const total = items.length;
-  const done = items.filter(i => i.checked).length;
-  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const ingTotal = items.length;
+  const ingDone = items.filter(i => i.checked).length;
+  const ingPct = ingTotal > 0 ? (ingDone / ingTotal) * 50 : 0;
 
   const recipeRows = recipeIngList(recipe);
   const ingredientCards = items.map((item, idx) => {
@@ -3438,23 +3438,110 @@ function renderPrepReelsOverlay(currentRecipeId, recipe, prepCtx) {
   });
 
   const clips = (typeof getRecipeVideoClips === 'function') ? getRecipeVideoClips(currentRecipeId) : [];
-  const stepCards = clips.map((clip, idx) => renderPrepReelStepCard(clip, idx, clips.length));
+  const stepTotal = clips.length;
+  const stepDone = readPrepStepDoneCount(meal, currentRecipeId, stepTotal);
+  const stepPct = stepTotal > 0 ? (stepDone / stepTotal) * 50 : 0;
+  const stepCards = clips.map((clip, idx) => renderPrepReelStepCard(clip, idx, clips.length, prepCtx, currentRecipeId));
 
   const allCards = ingredientCards.concat(stepCards);
+  const activeIdx = Math.max(0, Math.min((state.prepReels.cardIdx | 0), Math.max(0, allCards.length - 1)));
+
+  // Stats line: omit step counter when there are no steps.
+  const statsParts = [`Ingredients ${ingDone}/${ingTotal}`];
+  if (stepTotal > 0) statsParts.push(`Prep ${stepDone}/${stepTotal}`);
+
+  // Page-indicator dots — separate dot styling for ingredient vs step cards.
+  const dotsHtml = allCards.map((_, idx) => {
+    const isStep = idx >= ingredientCards.length;
+    const cls = ['prep-reels-dot', isStep ? 'is-step' : '', idx === activeIdx ? 'active' : ''].filter(Boolean).join(' ');
+    return `<span class="${cls}"></span>`;
+  }).join('');
+
+  const recipeName = (recipe.title || '').trim();
+  const photoPickerHtml = renderPrepPhotoPickerOverlay(prepCtx, recipe);
+  const perishableMenuHtml = renderPrepPerishableMenu(prepCtx, recipe);
 
   return `
-    <div class="prep-reels-overlay" id="prepReelsOverlay" role="dialog" aria-modal="true">
-      <div class="prep-reels-progress">
-        <div class="prep-reels-progress-fill" style="width:${pct}%;"></div>
+    <div class="prep-reels-scrim" onclick="closePrepReels()"></div>
+    <div class="prep-reels-sheet" id="prepReelsSheet" role="dialog" aria-modal="true">
+      <div class="prep-reels-handle" aria-hidden="true"></div>
+      <div class="prep-reels-header">
+        <div class="prep-reels-header-row1">
+          <div class="prep-reels-recipe-name">${esc(recipeName)}</div>
+          <button class="prep-reels-close" onclick="closePrepReels()" aria-label="Close">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div class="prep-reels-stats">${esc(statsParts.join(' · '))}</div>
+        <div class="prep-reels-progress">
+          <div class="prep-reels-progress-seg ingredients" style="width:${ingPct}%;"></div>
+          <div class="prep-reels-progress-seg steps" style="width:${stepPct}%;"></div>
+        </div>
       </div>
-      <button class="prep-reels-close" onclick="closePrepReels()" aria-label="Close">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-      <div class="prep-reels-stack">
+      <div class="prep-reels-stack" id="prepReelsStack" data-restore-idx="${activeIdx}" onscroll="onPrepReelsScroll(event)">
         ${allCards.length ? allCards.join('') : `<div class="prep-reel-card prep-reel-empty"><div class="prep-reel-bottom"><div class="prep-reel-name">Nothing to prep</div><div class="prep-reel-amount">This recipe has no ingredients or steps yet.</div></div></div>`}
+        <!-- 1x1 transparent GIF whose onload fires after innerHTML inserts the modal — used to snap scrollLeft back to the card the user was on so re-renders don't lose their place. -->
+        <img alt="" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" onload="restorePrepReelsCardScroll()">
       </div>
+      ${allCards.length > 1 ? `<div class="prep-reels-dots" aria-hidden="true">${dotsHtml}</div>` : `<div style="height: calc(12px + env(safe-area-inset-bottom, 0px));"></div>`}
+      ${photoPickerHtml}
+      ${perishableMenuHtml}
     </div>
   `;
+}
+
+// Restore horizontal scroll to the active card after re-renders.
+// Called by the hidden 1x1 img's onload, which fires once the stack is in
+// the DOM after innerHTML — so it runs before the user notices the jump.
+function restorePrepReelsCardScroll() {
+  if (!state.prepReels || !state.prepReels.open) return;
+  // Defer to the next frame so layout has settled — clientWidth on a
+  // brand-new element inserted via innerHTML can read 0 if asked too early.
+  requestAnimationFrame(() => {
+    const stack = document.getElementById('prepReelsStack');
+    if (!stack) return;
+    const idx = parseInt(stack.getAttribute('data-restore-idx'), 10) || 0;
+    const cardW = stack.clientWidth;
+    if (cardW > 0) stack.scrollLeft = idx * cardW;
+  });
+}
+
+// Track the active card so dots stay in sync with horizontal scroll.
+function onPrepReelsScroll(e) {
+  const stack = e.currentTarget;
+  if (!stack || !state.prepReels) return;
+  const cards = stack.querySelectorAll('.prep-reel-card');
+  if (cards.length === 0) return;
+  const cardW = stack.clientWidth;
+  const idx = Math.round(stack.scrollLeft / cardW);
+  if (idx !== state.prepReels.cardIdx) {
+    state.prepReels.cardIdx = idx;
+    // Update dots in place — avoid full re-render to preserve scroll position.
+    const dots = document.querySelectorAll('.prep-reels-dots .prep-reels-dot');
+    dots.forEach((d, i) => d.classList.toggle('active', i === idx));
+  }
+}
+
+function readPrepStepDoneCount(meal, recipeId, stepTotal) {
+  if (!meal || stepTotal === 0) return 0;
+  const seen = (meal.prep_state && meal.prep_state.steps_done) || {};
+  let n = 0;
+  for (let i = 0; i < stepTotal; i++) if (seen[i]) n++;
+  return n;
+}
+
+function togglePrepStepDone(stepIdx) {
+  if (!state.prepReels || !state.prepReels.recipeId) return;
+  const r = getRecipeById(state.prepReels.recipeId);
+  if (!r) return;
+  const ctx = resolvePrepContext(state.prepReels.recipeId, r);
+  if (!ctx || !ctx.meal || !ctx.meal.prep_state) return;
+  if (!ctx.meal.prep_state.steps_done) ctx.meal.prep_state.steps_done = {};
+  const cur = !!ctx.meal.prep_state.steps_done[stepIdx];
+  ctx.meal.prep_state.steps_done[stepIdx] = !cur;
+  ctx.meal.prep_state.updated_at = Date.now();
+  saveMealDay(ctx.dateStr);
+  if (typeof render === 'function') render();
 }
 
 function _prepReelImageFor(item, recipe) {
@@ -3522,11 +3609,29 @@ function renderPrepReelIngredientCard(item, idx, prepCtx, recipe, amount) {
     ? ''
     : (isChecked ? `onclick="undoIngredientCheck(${args})"` : `onclick="toggleNonPerishableCheck(${args})"`);
 
+  // Three-dot menu (top-right) for perishable override.
+  const menuBtn = `
+    <button class="prep-reel-corner top-right" onclick="event.stopPropagation();openPrepPerishableMenu('${esc(item.id)}')" aria-label="Options">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+    </button>`;
+
+  // Change-photo button (bottom-right) — pencil-on-photo glyph.
+  const photoBtn = `
+    <button class="prep-reel-corner bottom-right" onclick="event.stopPropagation();openPrepPhotoPicker('${esc(item.id)}')" aria-label="Change photo">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="6" width="18" height="14" rx="2"/>
+        <circle cx="12" cy="13" r="3"/>
+        <path d="M8 6l1.5-2h5L16 6"/>
+      </svg>
+    </button>`;
+
   return `
     <div class="${cardClass}" data-prep-idx="${idx}" ${cardOnclick}>
       ${bgHtml}
       <div class="prep-reel-overlay"></div>
       ${checkBadge}
+      ${menuBtn}
+      ${photoBtn}
       <div class="prep-reel-bottom">
         <div class="prep-reel-pill">${esc(item.group || 'Other')}${item.perishable ? ' · perishable' : ''}</div>
         <div class="prep-reel-name">${esc(capitalize(item.name))}</div>
@@ -3537,10 +3642,12 @@ function renderPrepReelIngredientCard(item, idx, prepCtx, recipe, amount) {
   `;
 }
 
-function renderPrepReelStepCard(clip, idx, total) {
+function renderPrepReelStepCard(clip, idx, total, prepCtx, recipeId) {
   const stepNum = idx + 1;
   const hasVideo = !!clip.cloudflareVideoId;
   const dayBefore = !!clip.day_before;
+  const meal = prepCtx ? prepCtx.meal : null;
+  const isDone = !!(meal && meal.prep_state && meal.prep_state.steps_done && meal.prep_state.steps_done[idx]);
 
   let bgHtml;
   if (hasVideo) {
@@ -3553,16 +3660,276 @@ function renderPrepReelStepCard(clip, idx, total) {
 
   const caption = (clip.caption || `Step ${stepNum}`).trim();
   const instructions = (clip.instructions || '').trim();
+  const cardClass = ['prep-reel-card', 'prep-reel-step', isDone ? 'is-checked' : ''].filter(Boolean).join(' ');
+  const checkBadge = isDone
+    ? `<div class="prep-reel-check"><svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 11 8 15 16 6"/></svg></div>`
+    : '';
+  const hint = isDone ? 'Tap card to undo' : 'Tap card when done';
 
   return `
-    <div class="prep-reel-card prep-reel-step" data-video-card>
+    <div class="${cardClass}" data-video-card onclick="togglePrepStepDone(${idx})">
       ${bgHtml}
       <div class="prep-reel-overlay"></div>
       ${dayBefore ? `<div class="prep-reel-tag">Night before</div>` : ''}
+      ${checkBadge}
       <div class="prep-reel-bottom">
         <div class="prep-reel-pill">Step ${stepNum} of ${total}</div>
         <div class="prep-reel-name">${esc(caption)}</div>
         ${instructions ? `<div class="prep-reel-amount">${esc(instructions)}</div>` : ''}
+        <div class="prep-reel-hint">${hint}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ---- Photo picker (per-ingredient override) ----
+
+function _findPrepRowForItem(recipe, itemId) {
+  // prep_state items are id-stamped as "ing_<idx>_<name-slug>"; pull the
+  // index off the front so we hit the exact row even when names dedupe.
+  if (!recipe || !Array.isArray(recipe.ingredientsRows) || !itemId) return { row: null, idx: -1 };
+  const m = String(itemId).match(/^ing_(\d+)_/);
+  if (m) {
+    const idx = parseInt(m[1], 10);
+    if (idx >= 0 && idx < recipe.ingredientsRows.length) return { row: recipe.ingredientsRows[idx], idx };
+  }
+  return { row: null, idx: -1 };
+}
+
+function openPrepPhotoPicker(itemId) {
+  if (!state.prepReels) return;
+  state.prepReels.photoPickerFor = itemId;
+  state.prepReels.perishableMenuFor = null;
+  state.prepReels.photoPickerResults = [];
+  state.prepReels.photoPickerLoading = false;
+  state.prepReels.photoPickerError = null;
+  // Auto-trigger search using the ingredient name as the query.
+  const r = getRecipeById(state.prepReels.recipeId);
+  const { row } = _findPrepRowForItem(r, itemId);
+  const q = (row && row.name) ? row.name : '';
+  if (typeof render === 'function') render();
+  if (q) prepPhotoPickerSearch(q);
+}
+
+function closePrepPhotoPicker() {
+  if (!state.prepReels) return;
+  state.prepReels.photoPickerFor = null;
+  state.prepReels.photoPickerResults = [];
+  state.prepReels.photoPickerLoading = false;
+  if (typeof render === 'function') render();
+}
+
+async function prepPhotoPickerSearch(query) {
+  if (!state.prepReels) return;
+  state.prepReels.photoPickerLoading = true;
+  state.prepReels.photoPickerError = null;
+  state.prepReels.photoPickerQuery = query;
+  if (typeof render === 'function') render();
+
+  if (!SERPER_API_KEY || SERPER_API_KEY === 'YOUR_SERPER_KEY') {
+    state.prepReels.photoPickerLoading = false;
+    state.prepReels.photoPickerError = 'Image search not configured';
+    if (typeof render === 'function') render();
+    return;
+  }
+
+  try {
+    const resp = await fetch('https://google.serper.dev/images', {
+      method: 'POST',
+      headers: { 'X-API-KEY': SERPER_API_KEY, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: (query || '') + ' food ingredient', num: 8 })
+    });
+    const data = await resp.json();
+    state.prepReels.photoPickerResults = ((data.images || []).slice(0, 8)).map(r => ({
+      thumb: r.thumbnailUrl || r.imageUrl,
+      full: r.imageUrl || r.thumbnailUrl
+    })).filter(x => x.full);
+  } catch (e) {
+    state.prepReels.photoPickerError = 'Search failed';
+    state.prepReels.photoPickerResults = [];
+  }
+  state.prepReels.photoPickerLoading = false;
+  if (typeof render === 'function') render();
+}
+
+async function prepPhotoPickerSelect(thumbUrl, fullUrl) {
+  // Download the image, upload to our storage so the saved URL is durable
+  // (Serper hot-links can disappear / block CORS), then write to the row.
+  const recipeId = state.prepReels && state.prepReels.recipeId;
+  const itemId = state.prepReels && state.prepReels.photoPickerFor;
+  if (!recipeId || !itemId) return;
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+  const { row } = _findPrepRowForItem(recipe, itemId);
+  if (!row) return;
+
+  try {
+    const sourceUrl = thumbUrl || fullUrl;
+    const resp = await fetch(sourceUrl);
+    const blob = await resp.blob();
+    const file = new File([blob], `ingredient_${Date.now()}.jpg`, { type: blob.type || 'image/jpeg' });
+    const compressed = await compressImage(file, 800, 0.8);
+    const url = await uploadPhoto(compressed);
+    if (!url) throw new Error('Upload failed');
+    await _writePrepRowPhoto(recipe, row, url);
+  } catch {
+    // Fall back to the original URL if upload fails — better than nothing.
+    await _writePrepRowPhoto(recipe, row, fullUrl || thumbUrl);
+  }
+  closePrepPhotoPicker();
+}
+
+async function prepPhotoPickerUpload(input) {
+  const file = input && input.files && input.files[0];
+  if (!file) return;
+  const recipeId = state.prepReels && state.prepReels.recipeId;
+  const itemId = state.prepReels && state.prepReels.photoPickerFor;
+  if (!recipeId || !itemId) return;
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+  const { row } = _findPrepRowForItem(recipe, itemId);
+  if (!row) return;
+  try {
+    const compressed = await compressImage(file, 800, 0.8);
+    const url = await uploadPhoto(compressed);
+    if (!url) throw new Error('Upload failed');
+    await _writePrepRowPhoto(recipe, row, url);
+  } catch {
+    if (typeof showToast === 'function') showToast('Photo upload failed', 'error');
+  }
+  closePrepPhotoPicker();
+}
+
+async function prepPhotoPickerReset() {
+  const recipeId = state.prepReels && state.prepReels.recipeId;
+  const itemId = state.prepReels && state.prepReels.photoPickerFor;
+  if (!recipeId || !itemId) return;
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+  const { row } = _findPrepRowForItem(recipe, itemId);
+  if (!row) return;
+  await _writePrepRowPhoto(recipe, row, '');
+  closePrepPhotoPicker();
+}
+
+async function _writePrepRowPhoto(recipe, row, url) {
+  row.image_url = url || '';
+  try { if (typeof storage !== 'undefined' && storage.update) await storage.update(recipe); } catch {}
+  if (typeof render === 'function') render();
+}
+
+function renderPrepPhotoPickerOverlay(prepCtx, recipe) {
+  if (!state.prepReels || !state.prepReels.photoPickerFor) return '';
+  const itemId = state.prepReels.photoPickerFor;
+  const { row } = _findPrepRowForItem(recipe, itemId);
+  const name = row ? capitalize(row.name || '') : '';
+  const hasOverride = !!(row && row.image_url);
+  const results = state.prepReels.photoPickerResults || [];
+  const loading = !!state.prepReels.photoPickerLoading;
+  const err = state.prepReels.photoPickerError;
+
+  let gridHtml;
+  if (loading) {
+    gridHtml = `<div class="prep-photo-picker-loading">Searching…</div>`;
+  } else if (err) {
+    gridHtml = `<div class="prep-photo-picker-empty">${esc(err)}</div>`;
+  } else if (results.length === 0) {
+    gridHtml = `<div class="prep-photo-picker-empty">No results yet</div>`;
+  } else {
+    gridHtml = results.map(r => `
+      <div class="prep-photo-picker-thumb" onclick="prepPhotoPickerSelect('${esc(r.thumb)}','${esc(r.full)}')">
+        <img loading="lazy" src="${esc(r.thumb || r.full)}" alt="">
+      </div>
+    `).join('');
+  }
+
+  return `
+    <div class="prep-photo-picker-overlay" onclick="if(event.target===this)closePrepPhotoPicker()">
+      <div class="prep-photo-picker-sheet">
+        <div class="prep-photo-picker-handle" aria-hidden="true"></div>
+        <div class="prep-photo-picker-title">Change photo${name ? ' — ' + esc(name) : ''}</div>
+        <div class="prep-photo-picker-sub">Pick a search result, upload your own, or reset.</div>
+        <div class="prep-photo-picker-actions">
+          <label class="prep-photo-picker-action-btn" style="cursor:pointer;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Upload
+            <input type="file" accept="image/*" style="display:none;" onchange="prepPhotoPickerUpload(this)">
+          </label>
+          ${hasOverride ? `<button class="prep-photo-picker-action-btn danger" onclick="prepPhotoPickerReset()">Reset to default</button>` : ''}
+        </div>
+        <div class="prep-photo-picker-grid">${gridHtml}</div>
+      </div>
+    </div>
+  `;
+}
+
+// ---- Perishable override menu ----
+
+function openPrepPerishableMenu(itemId) {
+  if (!state.prepReels) return;
+  state.prepReels.perishableMenuFor = (state.prepReels.perishableMenuFor === itemId) ? null : itemId;
+  state.prepReels.photoPickerFor = null;
+  if (typeof render === 'function') render();
+}
+
+function closePrepPerishableMenu() {
+  if (!state.prepReels) return;
+  state.prepReels.perishableMenuFor = null;
+  if (typeof render === 'function') render();
+}
+
+async function togglePrepPerishableOverride() {
+  const recipeId = state.prepReels && state.prepReels.recipeId;
+  const itemId = state.prepReels && state.prepReels.perishableMenuFor;
+  if (!recipeId || !itemId) return;
+  const recipe = getRecipeById(recipeId);
+  if (!recipe) return;
+  const { row } = _findPrepRowForItem(recipe, itemId);
+  if (!row) return;
+
+  const ctx = resolvePrepContext(recipeId, recipe);
+  const item = ctx && ctx.meal && ctx.meal.prep_state && ctx.meal.prep_state.items
+    ? ctx.meal.prep_state.items.find(i => i.id === itemId) : null;
+
+  // Flip whatever the effective perishable currently is.
+  const current = item ? !!item.perishable : (typeof isIngredientPerishable === 'function' ? isIngredientPerishable(row) : false);
+  const next = !current;
+  row.perishable = next;
+  if (item) item.perishable = next;
+  // If we just turned perishable OFF and the item was flagged needs_replacement,
+  // clear the replacement state so the card returns to a sane default.
+  if (item && !next) {
+    item.needs_replacement = false;
+    if (item.freshness === 'expired') item.freshness = 'unconfirmed';
+  }
+  if (ctx && ctx.meal) {
+    ctx.meal.prep_state.updated_at = Date.now();
+    if (typeof recomputePrepStatus === 'function') recomputePrepStatus(ctx.meal);
+    saveMealDay(ctx.dateStr);
+  }
+  try { if (typeof storage !== 'undefined' && storage.update) await storage.update(recipe); } catch {}
+  state.prepReels.perishableMenuFor = null;
+  if (typeof render === 'function') render();
+}
+
+function renderPrepPerishableMenu(prepCtx, recipe) {
+  if (!state.prepReels || !state.prepReels.perishableMenuFor) return '';
+  const itemId = state.prepReels.perishableMenuFor;
+  const items = (prepCtx.meal.prep_state && prepCtx.meal.prep_state.items) || [];
+  const item = items.find(i => i.id === itemId);
+  if (!item) return '';
+  const isOn = !!item.perishable;
+  return `
+    <div class="prep-photo-picker-overlay" onclick="if(event.target===this)closePrepPerishableMenu()">
+      <div class="prep-photo-picker-sheet">
+        <div class="prep-photo-picker-handle" aria-hidden="true"></div>
+        <div class="prep-photo-picker-title">Options — ${esc(capitalize(item.name))}</div>
+        <div class="prep-photo-picker-sub">Override category defaults for this ingredient.</div>
+        <button class="prep-reel-menu-item" onclick="togglePrepPerishableOverride()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v6m0 0l-3-3m3 3l3-3M5 12h14M5 16h14M5 20h14"/></svg>
+          <span>Perishable</span>
+          <span class="toggle-state ${isOn ? 'on' : ''}">${isOn ? 'On' : 'Off'}</span>
+        </button>
       </div>
     </div>
   `;
