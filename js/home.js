@@ -576,20 +576,17 @@ function computeWeekPlanPrepSummary(recipeId, dateStr, mealType) {
   const blockedItem = items.find(i => i.needs_replacement);
   const status = (meal && meal.prep_status) || 'not_started';
 
+  // PREP STEPS reflects recipe.prepSteps (structured Prep Work entries) —
+  // not cook clips or legacy instructions. Mirrors the recipe-detail panel
+  // so both surfaces tell the same story.
   let stepTotal = 0;
   let stepDone = 0;
-  if (typeof getRecipeVideoClips === 'function') {
-    const clips = getRecipeVideoClips(recipeId) || [];
-    stepTotal = clips.length;
-  }
-  if (stepTotal === 0) {
-    const recipe = (typeof getRecipeById === 'function') ? getRecipeById(recipeId) : null;
-    if (recipe && typeof parseInstructionStepEntries === 'function') {
-      stepTotal = parseInstructionStepEntries(recipe).length;
-    }
-  }
-  if (ps && ps.steps_done) {
-    for (let i = 0; i < stepTotal; i++) if (ps.steps_done[i]) stepDone++;
+  const recipe = (typeof getRecipeById === 'function') ? getRecipeById(recipeId) : null;
+  const prepStepsArr = recipe && Array.isArray(recipe.prepSteps) ? recipe.prepSteps : [];
+  stepTotal = prepStepsArr.filter(s => s && (s.text || '').trim()).length;
+  const prepDoneMap = ps && ps.prep_steps_done;
+  if (prepDoneMap) {
+    for (let i = 0; i < stepTotal; i++) if (prepDoneMap[i]) stepDone++;
   }
 
   // Derive a single bucket so both the badge and status line stay aligned.

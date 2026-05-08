@@ -3494,18 +3494,20 @@ function renderRecipeDetailPrepStats(recipeId, prepCtx, inPlanContext) {
   const done = items.filter(i => i.checked).length;
   const blockedItem = items.find(i => i.needs_replacement);
 
+  // The "PREP STEPS" row reflects the recipe's structured Prep Work entries
+  // (recipe.prepSteps[]) — not cook video clips or legacy instructions.
+  // When a recipe has no prep work, stepTotal stays 0 and the row hides.
   let stepTotal = 0;
   let stepDone = 0;
   const recipe = getRecipeById(recipeId);
-  if (typeof getRecipeVideoClips === 'function') {
-    const clips = getRecipeVideoClips(recipeId) || [];
-    stepTotal = clips.length;
-  }
-  if (stepTotal === 0 && recipe && typeof parseInstructionStepEntries === 'function') {
-    stepTotal = parseInstructionStepEntries(recipe).length;
-  }
-  if (meal && meal.prep_state && meal.prep_state.steps_done) {
-    for (let i = 0; i < stepTotal; i++) if (meal.prep_state.steps_done[i]) stepDone++;
+  const prepStepsArr = recipe && Array.isArray(recipe.prepSteps) ? recipe.prepSteps : [];
+  stepTotal = prepStepsArr.filter(s => s && (s.text || '').trim()).length;
+  // Read prep-step completion from a dedicated tracker so it doesn't conflate
+  // with meal.prep_state.steps_done (which the cook reels still indexes by
+  // cook step). Falls back to 0 until prep-step completion is wired up.
+  const prepDoneMap = meal && meal.prep_state && meal.prep_state.prep_steps_done;
+  if (prepDoneMap) {
+    for (let i = 0; i < stepTotal; i++) if (prepDoneMap[i]) stepDone++;
   }
 
   if (total === 0 && stepTotal === 0) return '';
