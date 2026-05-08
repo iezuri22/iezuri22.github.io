@@ -965,3 +965,79 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
 
 .wp-prep-row-bar .fill.ingredients { background: var(--accent, #e85d5d); }
 .wp-prep-row-bar .fill.steps { background: rgba(255, 255, 255, 0.45); }
+
+/* Stats overlay sitting on the bottom-left of the recipe photo */
+.wp-prep-overlay {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border-radius: 8px;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.wp-prep-overlay-row {
+  display: grid;
+  grid-template-columns: 32px auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.wp-prep-overlay-tag {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.wp-prep-overlay-val {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.wp-prep-overlay-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.wp-prep-overlay-bar .fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.25s ease;
+}
+
+.wp-prep-overlay-bar .fill.ingredients { background: var(--accent, #e85d5d); }
+.wp-prep-overlay-bar .fill.steps { background: rgba(255, 255, 255, 0.7); }
+
+.wp-prep-overlay-headline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.wp-prep-overlay-headline .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.wp-prep-overlay.is-ready .wp-prep-overlay-headline { color: #32d74b; }
+.wp-prep-overlay.is-blocked .wp-prep-overlay-headline { color: #ffd60a; }

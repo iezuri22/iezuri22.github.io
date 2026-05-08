@@ -479,7 +479,7 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
     : '';
   const prep = computeWeekPlanPrepSummary(id, dateStr, mealType);
   const prepBadgeHtml = renderWeekPlanPrepBadge(prep);
-  const prepStatusHtml = renderWeekPlanPrepStatusLine(prep);
+  const prepOverlayHtml = renderWeekPlanPrepPhotoOverlay(prep);
   return `
     <div class="recipe-carousel-card" onclick="openRecipeView('${id}')">
       <div class="carousel-card-media">
@@ -497,14 +497,53 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182"/></svg>
           </button>
         ` : ''}
+        ${prepOverlayHtml}
       </div>
       <div class="carousel-card-info">
         ${sourceLabel ? `<span class="card-source">${esc(sourceLabel)}</span>` : ''}
         <h3 class="card-title">${esc(name)}</h3>
-        ${prepStatusHtml}
       </div>
     </div>
   `;
+}
+
+// Compact two-row stats overlay sitting at the bottom-left of the photo on
+// each week-plan card. Same layout as the recipe-detail panel (tag + count +
+// bar per stream) so ingredients and prep stay visually separated. Skipped
+// for the not_started bucket — empty state stays clean photo.
+function renderWeekPlanPrepPhotoOverlay(prep) {
+  if (!prep || prep.bucket === 'not_started') return '';
+  if (prep.bucket === 'blocked') {
+    return `
+      <div class="wp-prep-overlay is-blocked">
+        <div class="wp-prep-overlay-headline"><span class="dot"></span>Missing: ${esc(prep.blockedName)}</div>
+      </div>
+    `;
+  }
+  if (prep.bucket === 'ready') {
+    return `
+      <div class="wp-prep-overlay is-ready">
+        <div class="wp-prep-overlay-headline"><span class="dot"></span>Ready to cook</div>
+      </div>
+    `;
+  }
+  const ingPct = prep.total > 0 ? Math.round((prep.done / prep.total) * 100) : 0;
+  const stepPct = prep.stepTotal > 0 ? Math.round((prep.stepDone / prep.stepTotal) * 100) : 0;
+  const ingRow = prep.total > 0 ? `
+    <div class="wp-prep-overlay-row">
+      <span class="wp-prep-overlay-tag">Ing</span>
+      <span class="wp-prep-overlay-val">${prep.done}/${prep.total}</span>
+      <div class="wp-prep-overlay-bar"><div class="fill ingredients" style="width:${ingPct}%;"></div></div>
+    </div>
+  ` : '';
+  const stepRow = prep.stepTotal > 0 ? `
+    <div class="wp-prep-overlay-row">
+      <span class="wp-prep-overlay-tag">Prep</span>
+      <span class="wp-prep-overlay-val">${prep.stepDone}/${prep.stepTotal}</span>
+      <div class="wp-prep-overlay-bar"><div class="fill steps" style="width:${stepPct}%;"></div></div>
+    </div>
+  ` : '';
+  return `<div class="wp-prep-overlay">${ingRow}${stepRow}</div>`;
 }
 
 // Compute a normalized prep summary for any recipe + meal slot. Both the
@@ -597,36 +636,10 @@ function renderWeekPlanPrepBadge(prep) {
   return `<span class="wp-prep-badge is-progress">${esc(text)}</span>`;
 }
 
-// Detailed status line under the title; complements (not replaces) the badge.
-function renderWeekPlanPrepStatusLine(prep) {
-  if (!prep) return '';
-  if (prep.bucket === 'blocked') {
-    return `<div class="wp-prep-status is-blocked"><span class="status-dot"></span>Missing: ${esc(prep.blockedName)}</div>`;
-  }
-  if (prep.bucket === 'ready') {
-    return `<div class="wp-prep-status is-ready"><span class="status-dot"></span>Ready to cook</div>`;
-  }
-  if (prep.bucket === 'not_started') {
-    return '';
-  }
-  const ingPct = prep.total > 0 ? Math.round((prep.done / prep.total) * 100) : 0;
-  const stepPct = prep.stepTotal > 0 ? Math.round((prep.stepDone / prep.stepTotal) * 100) : 0;
-  const ingRow = prep.total > 0 ? `
-    <div class="wp-prep-row">
-      <span class="wp-prep-row-tag">Ingredients</span>
-      <span class="wp-prep-row-val">${prep.done}/${prep.total}</span>
-      <div class="wp-prep-row-bar"><div class="fill ingredients" style="width:${ingPct}%;"></div></div>
-    </div>
-  ` : '';
-  const stepRow = prep.stepTotal > 0 ? `
-    <div class="wp-prep-row">
-      <span class="wp-prep-row-tag">Prep</span>
-      <span class="wp-prep-row-val">${prep.stepDone}/${prep.stepTotal}</span>
-      <div class="wp-prep-row-bar"><div class="fill steps" style="width:${stepPct}%;"></div></div>
-    </div>
-  ` : '';
-  return `<div class="wp-prep-status-stack">${ingRow}${stepRow}</div>`;
-}
+// Status line under the title is gone — the same data now sits as a photo
+// overlay (renderWeekPlanPrepPhotoOverlay). Kept as a no-op shim for any
+// caller that still references it.
+function renderWeekPlanPrepStatusLine(prep) { return ''; }
 
 // Back-compat shim for any caller still using the old name.
 function renderWeekPlanPrepStatus(recipeId, dateStr, mealType) {

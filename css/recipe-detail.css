@@ -1084,6 +1084,77 @@
   background: rgba(232, 93, 93, 0.45);
 }
 
+/* Two-tab switcher inside the prep modal — Ingredients vs Prep Steps */
+.prep-reels-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.prep-reels-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  text-align: left;
+}
+
+.prep-reels-tab:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.prep-reels-tab.active {
+  background: rgba(232, 93, 93, 0.12);
+  border-color: rgba(232, 93, 93, 0.55);
+  color: #fff;
+}
+
+.prep-reels-tab-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+}
+
+.prep-reels-tab-count {
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+.prep-reels-tab.active .prep-reels-tab-count { color: #fff; }
+.prep-reels-tab:not(.active) .prep-reels-tab-count { color: rgba(255, 255, 255, 0.7); }
+
+.prep-reels-tab-bar {
+  display: block;
+  width: 100%;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.prep-reels-tab-bar .fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.25s ease;
+}
+
+.prep-reels-tab-bar .fill.ingredients { background: var(--accent, #e85d5d); }
+.prep-reels-tab-bar .fill.steps { background: rgba(255, 255, 255, 0.6); }
+
 .prep-reels-close {
   width: 32px;
   height: 32px;

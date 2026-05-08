@@ -3526,7 +3526,7 @@ function openPrepReels(recipeId) {
 }
 
 function closePrepReels() {
-  state.prepReels = { open: false, recipeId: null, cardIdx: 0, photoPickerFor: null, perishableMenuFor: null };
+  state.prepReels = { open: false, recipeId: null, cardIdx: 0, tab: null, photoPickerFor: null, perishableMenuFor: null };
   state.prepAutoOpenContext = null;
   if (typeof document !== 'undefined' && document.body) {
     document.body.style.overflow = '';
@@ -3565,23 +3565,29 @@ function renderPrepReelsOverlay(currentRecipeId, recipe, prepCtx) {
   const stepPct = stepTotal > 0 ? (stepDone / stepTotal) * 50 : 0;
   const stepCards = stepEntries.map((entry, idx) => renderPrepReelStepCard(entry, idx, stepTotal, prepCtx, currentRecipeId));
 
-  const allCards = ingredientCards.concat(stepCards);
-  const activeIdx = Math.max(0, Math.min((state.prepReels.cardIdx | 0), Math.max(0, allCards.length - 1)));
+  // Two distinct views — Ingredients and Prep Steps — selected via tabs.
+  // Default to Ingredients; if all ingredients are done and steps remain,
+  // auto-jump to Prep on first open so the user sees the next thing to do.
+  if (!state.prepReels.tab) {
+    state.prepReels.tab = (ingTotal > 0 && ingDone === ingTotal && stepTotal > 0) ? 'steps' : 'ingredients';
+  }
+  const activeTab = state.prepReels.tab;
+  const tabCards = activeTab === 'steps' ? stepCards : ingredientCards;
+  // Card index is per-tab; clamp to current tab's length.
+  const activeIdx = Math.max(0, Math.min((state.prepReels.cardIdx | 0), Math.max(0, tabCards.length - 1)));
 
-  // Stats line: omit step counter when there are no steps.
-  const statsParts = [`Ingredients ${ingDone}/${ingTotal}`];
-  if (stepTotal > 0) statsParts.push(`Prep ${stepDone}/${stepTotal}`);
-
-  // Page-indicator dots — separate dot styling for ingredient vs step cards.
-  const dotsHtml = allCards.map((_, idx) => {
-    const isStep = idx >= ingredientCards.length;
-    const cls = ['prep-reels-dot', isStep ? 'is-step' : '', idx === activeIdx ? 'active' : ''].filter(Boolean).join(' ');
+  const dotsHtml = tabCards.map((_, idx) => {
+    const cls = ['prep-reels-dot', activeTab === 'steps' ? 'is-step' : '', idx === activeIdx ? 'active' : ''].filter(Boolean).join(' ');
     return `<span class="${cls}"></span>`;
   }).join('');
 
   const recipeName = (recipe.title || '').trim();
   const photoPickerHtml = renderPrepPhotoPickerOverlay(prepCtx, recipe);
   const perishableMenuHtml = renderPrepPerishableMenu(prepCtx, recipe);
+
+  const ingTabClass = ['prep-reels-tab', activeTab === 'ingredients' ? 'active' : ''].filter(Boolean).join(' ');
+  const stepTabClass = ['prep-reels-tab', activeTab === 'steps' ? 'active' : ''].filter(Boolean).join(' ');
+  const stepTabDisabled = stepTotal === 0;
 
   return `
     <div class="prep-reels-scrim" onclick="closePrepReels()"></div>
@@ -3594,32 +3600,48 @@ function renderPrepReelsOverlay(currentRecipeId, recipe, prepCtx) {
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="prep-reels-stats">${esc(statsParts.join(' · '))}</div>
-        <div class="prep-reels-progress">
-          <div class="prep-reels-progress-seg ingredients" style="width:${ingPct}%;"></div>
-          <div class="prep-reels-progress-seg steps" style="width:${stepPct}%;"></div>
+        <div class="prep-reels-tabs" role="tablist">
+          <button class="${ingTabClass}" role="tab" aria-selected="${activeTab === 'ingredients'}" onclick="switchPrepReelsTab('ingredients')">
+            <span class="prep-reels-tab-label">Ingredients</span>
+            <span class="prep-reels-tab-count">${ingDone}/${ingTotal}</span>
+            <span class="prep-reels-tab-bar"><span class="fill ingredients" style="width:${ingTotal > 0 ? Math.round((ingDone / ingTotal) * 100) : 0}%;"></span></span>
+          </button>
+          <button class="${stepTabClass}" role="tab" aria-selected="${activeTab === 'steps'}" ${stepTabDisabled ? 'disabled' : ''} onclick="switchPrepReelsTab('steps')">
+            <span class="prep-reels-tab-label">Prep Steps</span>
+            <span class="prep-reels-tab-count">${stepDone}/${stepTotal}</span>
+            <span class="prep-reels-tab-bar"><span class="fill steps" style="width:${stepTotal > 0 ? Math.round((stepDone / stepTotal) * 100) : 0}%;"></span></span>
+          </button>
         </div>
       </div>
       <div class="prep-reels-body">
         <div class="prep-reels-stack" id="prepReelsStack" data-restore-idx="${activeIdx}" onscroll="onPrepReelsScroll(event)">
-          ${allCards.length ? allCards.join('') : `<div class="prep-reel-card prep-reel-empty"><div class="prep-reel-bottom"><div class="prep-reel-name">Nothing to prep</div><div class="prep-reel-amount">This recipe has no ingredients or steps yet.</div></div></div>`}
-          <!-- 1x1 transparent GIF whose onload fires after innerHTML inserts the modal — used to snap scrollLeft back to the card the user was on so re-renders don't lose their place. -->
+          ${tabCards.length ? tabCards.join('') : `<div class="prep-reel-card prep-reel-empty"><div class="prep-reel-bottom"><div class="prep-reel-name">${activeTab === 'steps' ? 'No prep steps' : 'No ingredients'}</div><div class="prep-reel-amount">${activeTab === 'steps' ? 'This recipe has no prep steps yet.' : 'This recipe has no ingredients yet.'}</div></div></div>`}
           <img alt="" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;" src="data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==" onload="restorePrepReelsCardScroll()">
         </div>
-        ${allCards.length > 1 ? `
+        ${tabCards.length > 1 ? `
           <button class="prep-reels-nav prev" onclick="rotatePrepReels(-1)" aria-label="Previous card" ${activeIdx === 0 ? 'disabled' : ''}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </button>
-          <button class="prep-reels-nav next" onclick="rotatePrepReels(1)" aria-label="Next card" ${activeIdx === allCards.length - 1 ? 'disabled' : ''}>
+          <button class="prep-reels-nav next" onclick="rotatePrepReels(1)" aria-label="Next card" ${activeIdx === tabCards.length - 1 ? 'disabled' : ''}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </button>
         ` : ''}
       </div>
-      ${allCards.length > 1 ? `<div class="prep-reels-dots" aria-hidden="true">${dotsHtml}</div>` : `<div style="height: calc(12px + env(safe-area-inset-bottom, 0px));"></div>`}
+      ${tabCards.length > 1 ? `<div class="prep-reels-dots" aria-hidden="true">${dotsHtml}</div>` : `<div style="height: calc(12px + env(safe-area-inset-bottom, 0px));"></div>`}
       ${photoPickerHtml}
       ${perishableMenuHtml}
     </div>
   `;
+}
+
+// Tab switcher for the prep modal — reset card index so the new tab starts
+// at its first card rather than reusing the prior tab's offset.
+function switchPrepReelsTab(tab) {
+  if (!state.prepReels) return;
+  if (state.prepReels.tab === tab) return;
+  state.prepReels.tab = tab;
+  state.prepReels.cardIdx = 0;
+  if (typeof render === 'function') render();
 }
 
 // Restore horizontal scroll to the active card after re-renders.
