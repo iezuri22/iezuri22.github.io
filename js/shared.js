@@ -1551,7 +1551,18 @@ function _doPersistState() {
   saveToLS('freestyleMeals', state.freestyleMeals);
   saveToLS('seasoningBlends', state.seasoningBlends);
   saveToLS('ingredientKnowledge', state.ingredientKnowledge);
-  saveToLS('mealDays', state.mealDays);
+  // Strip orphan recipe-detail prep slots (`__recipe_*`) from the mealDays
+  // blob. They're persisted separately under `orphanPrep_<date>` keys and
+  // updated by saveMealDay(), but persistState() doesn't run on every prep
+  // edit — so leaving them here makes a stale snapshot of the synth slot
+  // mask the fresh `orphanPrep_*` row when the page reloads
+  // (resolvePrepContext only restores from `orphanPrep_*` when the slot is
+  // missing from state.mealDays).
+  const mealDaysToPersist = {};
+  for (const k of Object.keys(state.mealDays || {})) {
+    if (!k.startsWith('__')) mealDaysToPersist[k] = state.mealDays[k];
+  }
+  saveToLS('mealDays', mealDaysToPersist);
   saveToLS('swipeSettings', state.swipeSettings);
   saveToLS('expirationDefaults', state.expirationDefaults);
   saveToLS('receiptMappings', state.receiptMappings);
@@ -4226,16 +4237,30 @@ function resolvePrepContext(recipeId, recipe) {
   if (planned) return Object.assign({ fromPlan: true }, planned);
 
   // Orphan slot — keyed by recipe so prep state lives independently of any
-  // calendar slot. Persisted to localStorage only (saveMealDay routes
-  // synthetic dates to orphanPrep_<date> instead of Supabase).
+  // calendar slot. Persisted to localStorage under `orphanPrep_<date>` and
+  // (since the cross-device fix) mirrored to Supabase via saveMealDay.
   const synthDate = '__recipe_' + recipeId;
+  let restored = null;
+  try { restored = JSON.parse(localStorage.getItem('orphanPrep_' + synthDate) || 'null'); } catch {}
   if (!state.mealDays[synthDate]) {
-    let restored = null;
-    try { restored = JSON.parse(localStorage.getItem('orphanPrep_' + synthDate) || 'null'); } catch {}
     state.mealDays[synthDate] = restored || {
       date: synthDate,
       meals: { breakfast: freshMealSlot(), lunch: freshMealSlot(), dinner: freshMealSlot(), snacks: [] }
     };
+  } else if (restored && restored.meals) {
+    // Prefer whichever copy has the most recently updated prep_state. Without
+    // this, a stale in-memory slot (e.g. left over from a previous render or
+    // a Supabase load that lagged the local save) could mask the fresh
+    // localStorage copy — the user-visible "checked off ingredients reset to
+    // 0 after leaving and coming back" symptom.
+    const memMeals = state.mealDays[synthDate].meals || {};
+    for (const mt of ['breakfast', 'lunch', 'dinner']) {
+      const restoredMeal = restored.meals[mt];
+      const memMeal = memMeals[mt];
+      const restoredAt = restoredMeal && restoredMeal.prep_state ? (restoredMeal.prep_state.updated_at || 0) : 0;
+      const memAt = memMeal && memMeal.prep_state ? (memMeal.prep_state.updated_at || 0) : 0;
+      if (restoredAt > memAt) memMeals[mt] = restoredMeal;
+    }
   }
   const category = (recipe && recipe.category || '').toLowerCase();
   let mealType = 'dinner';
