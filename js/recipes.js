@@ -28,6 +28,17 @@ function setIng(i, field, value) {
   state.recipeForm.ingredientsRows[i][field] = value;
 }
 
+function cycleIngPerishable(i) {
+  ensureRecipeForm();
+  const row = state.recipeForm.ingredientsRows[i];
+  if (!row) return;
+  const cur = row.perishable;
+  if (cur === undefined || cur === null) row.perishable = true;
+  else if (cur === true) row.perishable = false;
+  else delete row.perishable;
+  render();
+}
+
 // ===== RECIPE CRUD ACTIONS =====
 
 function openNewRecipe() {
@@ -127,12 +138,16 @@ async function saveRecipeForm() {
   if (!cat) return showError('Category is required.');
 
   const rows = (state.recipeForm.ingredientsRows || [])
-    .map(r => ({
-      qty: (r.qty || '').trim(),
-      unit: (r.unit || '').trim(),
-      name: normalizeIngredientName(r.name || ''),
-      group: r.group || 'Other'
-    }))
+    .map(r => {
+      const out = {
+        qty: (r.qty || '').trim(),
+        unit: (r.unit || '').trim(),
+        name: normalizeIngredientName(r.name || ''),
+        group: r.group || 'Other'
+      };
+      if (typeof r.perishable === 'boolean') out.perishable = r.perishable;
+      return out;
+    })
     .filter(r => r.name);
 
   const isEdit = !!state.recipeForm.id;
@@ -1436,16 +1451,17 @@ function renderIngredientGrid() {
       </div>
 
       <div class="rounded overflow-hidden" style="border:1px solid rgba(255,255,255,0.08);">
-        <div class="grid" style="grid-template-columns:110px 120px 1fr 160px 56px; background:rgba(255,255,255,0.04);">
+        <div class="grid" style="grid-template-columns:110px 120px 1fr 160px 72px 56px; background:rgba(255,255,255,0.04);">
           <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;">Amt</div>
           <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;">Unit</div>
           <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;">Ingredient</div>
           <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;">Group</div>
+          <div class="p-3 font-semibold" style="color:${CONFIG.text_color}; opacity:.85;" title="Perishable: Auto (use group), Yes (force perishable), No (force shelf-stable)">Fresh?</div>
           <div class="p-3"></div>
         </div>
 
         ${(state.recipeForm.ingredientsRows || []).map((row, i) => `
-          <div class="grid items-center" style="grid-template-columns:110px 120px 1fr 160px 56px; border-top:1px solid rgba(255,255,255,0.06);">
+          <div class="grid items-center" style="grid-template-columns:110px 120px 1fr 160px 72px 56px; border-top:1px solid rgba(255,255,255,0.06);">
             <div class="p-2">
               <input class="w-full px-3 py-2 rounded border"
                 style="background:rgba(0,0,0,0.16); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.10);"
@@ -1473,6 +1489,21 @@ function renderIngredientGrid() {
                 onchange="setIng(${i},'group',this.value)">
                 ${ING_GROUPS.map(g => `<option value="${g}" ${(row.group || 'Produce') === g ? 'selected' : ''}>${g}</option>`).join('')}
               </select>
+            </div>
+
+            <div class="p-2 flex justify-center">
+              ${(() => {
+                const cur = row.perishable;
+                const auto = (cur === undefined || cur === null);
+                const effective = isIngredientPerishable(row);
+                let label, bg, color;
+                if (auto) { label = effective ? 'Auto·Y' : 'Auto·N'; bg = 'rgba(255,255,255,0.06)'; color = CONFIG.text_muted; }
+                else if (cur === true) { label = 'Yes'; bg = 'rgba(232,93,93,0.18)'; color = CONFIG.primary_action_color; }
+                else { label = 'No'; bg = 'rgba(255,255,255,0.06)'; color = CONFIG.text_tertiary; }
+                return `<button type="button" onclick="cycleIngPerishable(${i})"
+                  title="Perishable: ${auto ? 'Auto (' + (effective ? 'yes' : 'no') + ' by group)' : (cur === true ? 'Forced yes' : 'Forced no')} — tap to cycle"
+                  style="padding:6px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.08); background:${bg}; color:${color}; font-size:11px; font-weight:600; cursor:pointer; min-width:56px;">${label}</button>`;
+              })()}
             </div>
 
             <div class="p-2 flex justify-center">

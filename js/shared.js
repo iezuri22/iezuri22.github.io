@@ -204,6 +204,12 @@ const CONFIG = {
 // SECTION 2: CONSTANTS
 // ============================================================
 const ING_GROUPS = ['Produce', 'Beef', 'Poultry', 'Pork', 'Lamb & Goat', 'Seafood', 'Dairy & Eggs', 'Grains & Pasta', 'Pantry', 'Spices & Seasonings', 'Prepared', 'Other'];
+const PERISHABLE_GROUPS = new Set(['Produce', 'Beef', 'Poultry', 'Pork', 'Lamb & Goat', 'Seafood', 'Dairy & Eggs']);
+function isIngredientPerishable(ing) {
+  if (!ing) return false;
+  if (typeof ing.perishable === 'boolean') return ing.perishable;
+  return PERISHABLE_GROUPS.has(ing.group);
+}
 const INGREDIENT_CATEGORIES = ['Vegetables', 'Fruits', 'Proteins', 'Dairy', 'Grains', 'Herbs & Spices', 'Pantry', 'Other'];
 const COOKING_METHODS = ['Air Fry', 'Bake', 'Roast', 'Grill', 'Saut\u00e9', 'Pan Fry', 'Deep Fry', 'Steam', 'Boil', 'Poach', 'Braise', 'Slow Cook', 'Pressure Cook', 'Microwave', 'Raw'];
 const SEASONS = ['Spring', 'Summer', 'Fall', 'Winter', 'Year-round'];
@@ -3046,6 +3052,36 @@ function saveSmartGroceryList(list) {
 }
 function getGroceryBadgeCount() { return getSmartGroceryList().filter(i => !i.checked).length; }
 
+function addPerishableReplacementToGrocery(ingredientName, group, recipeName) {
+  if (!ingredientName) return false;
+  const list = getSmartGroceryList();
+  const canonical = canonicalIngredientName(ingredientName);
+  const existing = list.find(i => canonicalIngredientName(i.name) === canonical);
+  if (existing) {
+    if (recipeName && !existing.sourceMeals) existing.sourceMeals = [];
+    if (recipeName && !existing.sourceMeals.includes(recipeName) && existing.sourceMeals.length < 5) {
+      existing.sourceMeals.push(recipeName);
+    }
+    existing.checked = false;
+  } else {
+    const display = displayIngredientName(ingredientName) || ingredientName;
+    list.push({
+      id: 'gro_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8),
+      name: toTitleCase(display),
+      category: mapToGroceryCategory(group || 'Other'),
+      qty: '',
+      unit: '',
+      checked: false,
+      manual: false,
+      sourceMeals: recipeName ? [recipeName] : [],
+      store: '',
+      addedAt: Date.now()
+    });
+  }
+  saveSmartGroceryList(list);
+  return true;
+}
+
 function getFrequentMeals() {
   const log = getFoodLog(); const recipeCount = {};
   log.forEach(entry => { const key = entry.recipeId || entry.recipeName; if (!key) return; if (!recipeCount[key]) recipeCount[key] = { recipeId: entry.recipeId, name: entry.recipeName, image: entry.image, count: 0, wouldMakeAgain: false, ingredients: entry.ingredients || [] }; recipeCount[key].count++; if (entry.wouldMakeAgain === true) recipeCount[key].wouldMakeAgain = true; });
@@ -4328,7 +4364,11 @@ function recipeUrl(r) {
 function recipeIngList(r) {
   if (!r) return [];
   if (Array.isArray(r.ingredientsRows) && r.ingredientsRows.length) {
-    return r.ingredientsRows.map(x => ({ qty: (x.qty || '').trim(), unit: (x.unit || '').trim(), name: (x.name || '').trim(), group: x.group || 'Other' })).filter(x => x.name);
+    return r.ingredientsRows.map(x => {
+      const out = { qty: (x.qty || '').trim(), unit: (x.unit || '').trim(), name: (x.name || '').trim(), group: x.group || 'Other' };
+      if (typeof x.perishable === 'boolean') out.perishable = x.perishable;
+      return out;
+    }).filter(x => x.name);
   }
   return [];
 }

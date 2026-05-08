@@ -641,6 +641,7 @@ function renderHome() {
   return `
     ${renderHomeGreeting(greeting)}
     ${renderQuickActionsStrip()}
+    ${renderCheckFridgeCard()}
     ${renderHeroCard(heroRecipe)}
     ${renderCookAgainRow()}
     ${renderHomeWeekPlan()}
@@ -880,10 +881,354 @@ function toggleMealExpanded(mealType, dateStr) {
   const dayData = getDayData(dateStr);
   if (!dayData.meals[mealType].expanded) {
     dayData.meals[mealType].expanded = true;
+    const meal = dayData.meals[mealType];
+    const recipe = getRecipeById(meal.plannedRecipeId || meal.actualRecipeId);
+    if (recipe) {
+      const inited = initPrepState(meal, recipe);
+      if (inited) saveMealDay(dateStr);
+    }
   } else {
     dayData.meals[mealType].expanded = false;
   }
   render();
+}
+
+// ============================================================
+// PREP STATE / FRESHNESS CHECK
+// ============================================================
+function initPrepState(meal, recipe) {
+  if (!meal || !recipe) return false;
+  if (meal.prep_state && Array.isArray(meal.prep_state.items)) return false;
+  const ings = recipeIngList(recipe);
+  meal.prep_state = {
+    items: ings.map((ing, idx) => ({
+      id: `ing_${idx}_${(ing.name || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 32)}`,
+      name: ing.name,
+      group: ing.group || 'Other',
+      perishable: isIngredientPerishable(ing),
+      freshness: 'unconfirmed',
+      needs_replacement: false,
+      checked: false
+    })),
+    updated_at: Date.now()
+  };
+  if (!meal.prep_status || meal.prep_status === 'not_started') {
+    meal.prep_status = 'in_progress';
+  }
+  return true;
+}
+
+function recomputePrepStatus(meal) {
+  if (!meal || !meal.prep_state) return;
+  const items = meal.prep_state.items || [];
+  if (items.length === 0) { meal.prep_status = 'ready'; return; }
+  const blocked = items.some(i => i.needs_replacement);
+  const allChecked = items.every(i => i.checked);
+  meal.prep_status = blocked ? 'in_progress' : (allChecked ? 'ready' : 'in_progress');
+}
+
+function _prepUIKey(dateStr, mealType, itemId) { return `${dateStr}|${mealType}|${itemId}`; }
+
+function _getPrepCtx(mealType, itemId) {
+  const dateStr = state.viewingDate;
+  const day = getDayData(dateStr);
+  const meal = day.meals[mealType];
+  if (!meal || !meal.prep_state) return null;
+  const item = meal.prep_state.items.find(i => i.id === itemId);
+  return item ? { dateStr, meal, item } : null;
+}
+
+function _clearPrepUI(dateStr, mealType, itemId) {
+  if (state.prepUI) delete state.prepUI[_prepUIKey(dateStr, mealType, itemId)];
+}
+
+function startFreshnessCheck(mealType, itemId) {
+  if (!state.prepUI) state.prepUI = {};
+  state.prepUI[_prepUIKey(state.viewingDate, mealType, itemId)] = 'checking';
+  render();
+}
+
+function cancelFreshnessCheck(mealType, itemId) {
+  _clearPrepUI(state.viewingDate, mealType, itemId);
+  render();
+}
+
+function markIngredientFresh(mealType, itemId) {
+  const ctx = _getPrepCtx(mealType, itemId); if (!ctx) return;
+  ctx.item.freshness = 'fresh';
+  ctx.item.checked = true;
+  ctx.item.needs_replacement = false;
+  ctx.meal.prep_state.updated_at = Date.now();
+  recomputePrepStatus(ctx.meal);
+  _clearPrepUI(ctx.dateStr, mealType, itemId);
+  saveMealDay(ctx.dateStr);
+  render();
+}
+
+function markIngredientExpired(mealType, itemId) {
+  if (!state.prepUI) state.prepUI = {};
+  state.prepUI[_prepUIKey(state.viewingDate, mealType, itemId)] = 'deciding';
+  render();
+}
+
+function addExpiredToGrocery(mealType, itemId) {
+  const ctx = _getPrepCtx(mealType, itemId); if (!ctx) return;
+  const recipe = getRecipeById(ctx.meal.plannedRecipeId || ctx.meal.actualRecipeId);
+  const recipeName = recipe ? recipe.title : '';
+  addPerishableReplacementToGrocery(ctx.item.name, ctx.item.group, recipeName);
+  ctx.item.freshness = 'expired';
+  ctx.item.needs_replacement = true;
+  ctx.item.checked = false;
+  ctx.meal.prep_state.updated_at = Date.now();
+  recomputePrepStatus(ctx.meal);
+  _clearPrepUI(ctx.dateStr, mealType, itemId);
+  saveMealDay(ctx.dateStr);
+  if (typeof showToast === 'function') showToast('Added to grocery list', 'success');
+  render();
+}
+
+function substituteIngredient(mealType, itemId) {
+  const ctx = _getPrepCtx(mealType, itemId); if (!ctx) return;
+  ctx.item.freshness = 'substituted';
+  ctx.item.checked = true;
+  ctx.item.needs_replacement = false;
+  ctx.meal.prep_state.updated_at = Date.now();
+  recomputePrepStatus(ctx.meal);
+  _clearPrepUI(ctx.dateStr, mealType, itemId);
+  saveMealDay(ctx.dateStr);
+  render();
+}
+
+function undoIngredientCheck(mealType, itemId) {
+  const ctx = _getPrepCtx(mealType, itemId); if (!ctx) return;
+  ctx.item.freshness = 'unconfirmed';
+  ctx.item.checked = false;
+  ctx.item.needs_replacement = false;
+  ctx.meal.prep_state.updated_at = Date.now();
+  recomputePrepStatus(ctx.meal);
+  _clearPrepUI(ctx.dateStr, mealType, itemId);
+  saveMealDay(ctx.dateStr);
+  render();
+}
+
+function toggleNonPerishableCheck(mealType, itemId) {
+  const ctx = _getPrepCtx(mealType, itemId); if (!ctx) return;
+  ctx.item.checked = !ctx.item.checked;
+  ctx.meal.prep_state.updated_at = Date.now();
+  recomputePrepStatus(ctx.meal);
+  saveMealDay(ctx.dateStr);
+  render();
+}
+
+function isPrepBlocked(meal) {
+  if (!meal || !meal.prep_state || !Array.isArray(meal.prep_state.items)) return false;
+  return meal.prep_state.items.some(i => i.needs_replacement);
+}
+
+function renderPrepBlock(mealType, meal, recipe, dateStr) {
+  if (!recipe) return '';
+  if (!meal.prep_state || !Array.isArray(meal.prep_state.items) || meal.prep_state.items.length === 0) return '';
+  const items = meal.prep_state.items;
+  const total = items.length;
+  const done = items.filter(i => i.checked).length;
+  const blocked = items.some(i => i.needs_replacement);
+  let statusText, statusColor;
+  if (blocked) { statusText = 'Resolve missing items'; statusColor = CONFIG.warning_color; }
+  else if (done === total) { statusText = 'Ready'; statusColor = CONFIG.success_color; }
+  else { statusText = `${done}/${total} ready`; statusColor = CONFIG.text_muted; }
+
+  return `
+    <div style="margin-bottom: ${CONFIG.space_md};">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: ${CONFIG.space_sm};">
+        <div style="font-size: ${CONFIG.type_micro}; font-weight: 600; letter-spacing: 1px; color: ${CONFIG.text_muted}; text-transform: uppercase;">Ingredient Prep</div>
+        <div style="font-size: 11px; color: ${statusColor}; font-weight: 600;">${statusText}</div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        ${items.map(item => renderPrepItemCard(mealType, item, dateStr)).join('')}
+      </div>
+    </div>
+    <div style="height: 1px; background: ${CONFIG.divider_color}; margin-bottom: ${CONFIG.space_md};"></div>
+  `;
+}
+
+function renderPrepItemCard(mealType, item, dateStr) {
+  const uiKey = _prepUIKey(dateStr, mealType, item.id);
+  const uiState = state.prepUI ? state.prepUI[uiKey] : null;
+
+  let leftIndicator;
+  if (item.checked) {
+    leftIndicator = `<div style="width: 22px; height: 22px; border-radius: 50%; background: ${CONFIG.success_color}; display: flex; align-items: center; justify-content: center; flex-shrink: 0;"><svg width="13" height="13" viewBox="0 0 20 20" fill="none" stroke="white" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 10l3 3 7-7"/></svg></div>`;
+  } else if (item.needs_replacement) {
+    leftIndicator = `<div style="width: 22px; height: 22px; border-radius: 50%; background: ${CONFIG.warning_color}; display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: ${CONFIG.background_color}; font-size: 13px; font-weight: 700;">!</div>`;
+  } else {
+    leftIndicator = `<div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid ${CONFIG.text_tertiary}; flex-shrink: 0;"></div>`;
+  }
+
+  if (!item.perishable) {
+    const onclick = item.checked
+      ? `undoIngredientCheck('${mealType}','${item.id}')`
+      : `toggleNonPerishableCheck('${mealType}','${item.id}')`;
+    const settledStyle = item.checked ? 'opacity: 0.55;' : '';
+    return `
+      <div onclick="${onclick}" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: ${CONFIG.surface_elevated}; border-radius: 12px; cursor: pointer; ${settledStyle}">
+        ${leftIndicator}
+        <div style="flex: 1; min-width: 0;">
+          <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_body}; ${item.checked ? 'text-decoration: line-through;' : ''}">${esc(item.name)}</div>
+        </div>
+        <span style="color: ${CONFIG.text_tertiary}; font-size: 11px;">${esc(item.group)}</span>
+      </div>
+    `;
+  }
+
+  if (item.checked && (item.freshness === 'fresh' || item.freshness === 'substituted')) {
+    const tag = item.freshness === 'substituted' ? '· subbed' : '';
+    return `
+      <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: ${CONFIG.surface_elevated}; border-radius: 12px; opacity: 0.55;">
+        ${leftIndicator}
+        <div style="flex: 1; min-width: 0;">
+          <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_body}; text-decoration: line-through;">${esc(item.name)} <span style="text-decoration: none; color: ${CONFIG.text_muted}; font-size: 11px;">${tag}</span></div>
+        </div>
+        <button onclick="undoIngredientCheck('${mealType}','${item.id}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 16px; cursor: pointer; padding: 4px;" title="Undo">↩</button>
+      </div>
+    `;
+  }
+
+  if (item.needs_replacement) {
+    return `
+      <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: ${CONFIG.surface_elevated}; border-radius: 12px;">
+        ${leftIndicator}
+        <div style="flex: 1; min-width: 0;">
+          <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_body};">${esc(item.name)}</div>
+          <div style="color: ${CONFIG.warning_color}; font-size: 11px; margin-top: 2px;">Added to grocery list</div>
+        </div>
+        <button onclick="undoIngredientCheck('${mealType}','${item.id}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 16px; cursor: pointer; padding: 4px;" title="Undo">↩</button>
+      </div>
+    `;
+  }
+
+  if (uiState === 'deciding') {
+    return `
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: ${CONFIG.surface_elevated}; border-radius: 12px; border: 1px solid rgba(255,69,58,0.25);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          ${leftIndicator}
+          <div style="flex: 1; min-width: 0;">
+            <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_body};">${esc(item.name)}</div>
+            <div style="color: ${CONFIG.danger_color}; font-size: 11px; margin-top: 2px;">Marked expired / out</div>
+          </div>
+          <button onclick="cancelFreshnessCheck('${mealType}','${item.id}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 16px; cursor: pointer; padding: 4px;">×</button>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <button onclick="addExpiredToGrocery('${mealType}','${item.id}')" style="flex: 1; padding: 9px; background: ${CONFIG.primary_action_color}; color: white; border: none; border-radius: 10px; font-size: ${CONFIG.type_caption}; font-weight: 600; cursor: pointer;">Add to grocery</button>
+          <button onclick="substituteIngredient('${mealType}','${item.id}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: ${CONFIG.type_caption}; cursor: pointer; text-decoration: underline; padding: 9px 8px;">Substitute / skip</button>
+        </div>
+      </div>
+    `;
+  }
+
+  if (uiState === 'checking') {
+    return `
+      <div style="display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; background: ${CONFIG.surface_elevated}; border-radius: 12px; border: 1px solid rgba(232,93,93,0.25);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          ${leftIndicator}
+          <div style="flex: 1; min-width: 0;">
+            <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_body};">${esc(item.name)}</div>
+            <div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-top: 2px;">How does it look?</div>
+          </div>
+          <button onclick="cancelFreshnessCheck('${mealType}','${item.id}')" style="background: none; border: none; color: ${CONFIG.text_muted}; font-size: 16px; cursor: pointer; padding: 4px;">×</button>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button onclick="markIngredientFresh('${mealType}','${item.id}')" style="flex: 1; padding: 9px; background: rgba(50,215,75,0.15); color: ${CONFIG.success_color}; border: 1px solid rgba(50,215,75,0.4); border-radius: 10px; font-size: ${CONFIG.type_caption}; font-weight: 600; cursor: pointer;">Fresh</button>
+          <button onclick="markIngredientExpired('${mealType}','${item.id}')" style="flex: 1; padding: 9px; background: transparent; color: ${CONFIG.danger_color}; border: 1px solid rgba(255,69,58,0.4); border-radius: 10px; font-size: ${CONFIG.type_caption}; font-weight: 600; cursor: pointer;">Expired / Out</button>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: ${CONFIG.surface_elevated}; border-radius: 12px;">
+      ${leftIndicator}
+      <div style="flex: 1; min-width: 0;">
+        <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_body};">${esc(item.name)}</div>
+        <div style="color: ${CONFIG.text_muted}; font-size: 11px; margin-top: 2px;">${esc(item.group)} · perishable</div>
+      </div>
+      <button onclick="startFreshnessCheck('${mealType}','${item.id}')" style="background: rgba(232,93,93,0.12); color: ${CONFIG.primary_action_color}; border: 1px solid rgba(232,93,93,0.3); border-radius: 16px; padding: 5px 12px; font-size: 11px; font-weight: 600; cursor: pointer; white-space: nowrap;">Check freshness</button>
+    </div>
+  `;
+}
+
+// ============================================================
+// CHECK FRIDGE SURFACE (Tonight prep)
+// ============================================================
+function getUnconfirmedPerishableMeals() {
+  const out = [];
+  const today = getToday();
+  const tomorrow = getTomorrow();
+  const dates = [today, tomorrow];
+  for (const dateStr of dates) {
+    const day = getDayData(dateStr);
+    if (!day || !day.meals) continue;
+    for (const type of ['breakfast', 'lunch', 'dinner']) {
+      const meal = day.meals[type];
+      if (!meal) continue;
+      const rid = meal.plannedRecipeId || meal.actualRecipeId;
+      if (!rid) continue;
+      if (meal.status === 'logged') continue;
+      const recipe = getRecipeById(rid);
+      if (!recipe) continue;
+      const ings = recipeIngList(recipe);
+      const unconfirmedNames = [];
+      for (const ing of ings) {
+        if (!isIngredientPerishable(ing)) continue;
+        const item = meal.prep_state && meal.prep_state.items
+          ? meal.prep_state.items.find(i => i.name === ing.name)
+          : null;
+        const freshness = item ? item.freshness : 'unconfirmed';
+        if (freshness === 'unconfirmed') unconfirmedNames.push(ing.name);
+      }
+      if (unconfirmedNames.length > 0) {
+        out.push({ dateStr, type, recipe, unconfirmedNames });
+      }
+    }
+  }
+  return out;
+}
+
+function jumpToFridgeCheck(dateStr, mealType) {
+  state.viewingDate = dateStr;
+  const day = getDayData(dateStr);
+  if (day.meals[mealType]) {
+    day.meals[mealType].expanded = true;
+    const recipe = getRecipeById(day.meals[mealType].plannedRecipeId || day.meals[mealType].actualRecipeId);
+    if (recipe) {
+      const inited = initPrepState(day.meals[mealType], recipe);
+      if (inited) saveMealDay(dateStr);
+    }
+  }
+  if (state.currentView !== 'home') navigateTo('home');
+  else render();
+}
+
+function renderCheckFridgeCard() {
+  const list = getUnconfirmedPerishableMeals();
+  if (list.length === 0) return '';
+  const today = getToday();
+  const samples = list.slice(0, 2).map(entry => {
+    const when = entry.dateStr === today ? capitalize(entry.type) : `${capitalize(entry.type)} tomorrow`;
+    const name = entry.unconfirmedNames[0] || 'items';
+    return `${esc(name)} (${when.toLowerCase()})`;
+  }).join(', ');
+  const first = list[0];
+  const totalLabel = list.length === 1 ? '1 meal coming up has' : `${list.length} meals coming up have`;
+  return `
+    <div style="background: ${CONFIG.surface_elevated}; border-radius: ${CONFIG.border_radius}; padding: ${CONFIG.space_md}; margin: 0 ${CONFIG.space_md} ${CONFIG.space_md}; box-shadow: ${CONFIG.shadow}; display: flex; align-items: center; gap: ${CONFIG.space_md};">
+      <div style="font-size: 24px; flex-shrink: 0;">🥶</div>
+      <div style="flex: 1; min-width: 0;">
+        <div style="color: ${CONFIG.text_color}; font-size: ${CONFIG.type_header}; font-weight: 600; margin-bottom: 2px;">Check fridge</div>
+        <div style="color: ${CONFIG.text_muted}; font-size: 12px; line-height: 1.35;">${totalLabel} items that go bad: ${samples}.</div>
+      </div>
+      <button onclick="jumpToFridgeCheck('${first.dateStr}','${first.type}')" style="flex-shrink: 0; background: ${CONFIG.primary_action_color}; color: white; border: none; padding: 8px 14px; border-radius: 10px; font-size: ${CONFIG.type_caption}; font-weight: 600; cursor: pointer;">Check now</button>
+    </div>
+  `;
 }
 
 // ============================================================
@@ -1156,6 +1501,8 @@ function renderExpandedMealSection(mealType, meal, recipe, dateStr) {
   const icon = icons[mealType] || '🍽';
   const img = recipe ? recipeThumb(recipe) : null;
   const hasPhoto = !!meal.photoUrl;
+  const blocked = isPrepBlocked(meal);
+  const blockedWrapStyle = blocked ? 'opacity: 0.5; pointer-events: none;' : '';
 
   return `
     <div style="background: ${CONFIG.surface_color}; border-radius: 16px; padding: ${CONFIG.space_md}; margin-bottom: ${CONFIG.space_sm}; box-shadow: ${CONFIG.shadow};">
@@ -1182,7 +1529,11 @@ function renderExpandedMealSection(mealType, meal, recipe, dateStr) {
 
       <div style="height: 1px; background: ${CONFIG.divider_color}; margin-bottom: ${CONFIG.space_md};"></div>
 
-      <div style="margin-bottom: ${CONFIG.space_sm};">
+      ${renderPrepBlock(mealType, meal, recipe, dateStr)}
+
+      ${blocked ? `<div style="background: rgba(255,214,10,0.1); border: 1px solid rgba(255,214,10,0.25); border-radius: 10px; padding: 10px 12px; margin-bottom: ${CONFIG.space_md}; color: ${CONFIG.warning_color}; font-size: ${CONFIG.type_caption};">Resolve missing ingredients to continue.</div>` : ''}
+
+      <div style="margin-bottom: ${CONFIG.space_sm}; ${blockedWrapStyle}" ${blocked ? 'aria-disabled="true"' : ''}>
         <div style="font-size: ${CONFIG.type_micro}; font-weight: 600; letter-spacing: 1px; color: ${CONFIG.text_muted}; text-transform: uppercase; margin-bottom: ${CONFIG.space_sm};">${hasPhoto ? 'What You Ate' : 'What Did You Eat?'}</div>
 
         ${hasPhoto ? `
