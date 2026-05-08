@@ -1592,6 +1592,22 @@ function loadAllState() {
   state.seasoningBlends = loadFromLS('seasoningBlends', []);
   state.ingredientKnowledge = loadFromLS('ingredientKnowledge', []);
   state.mealDays = loadFromLS('mealDays', {});
+  // Rehydrate orphan recipe-detail prep slots (`__recipe_*`). _doPersistState
+  // strips them from yummy_mealDays so a stale snapshot can't mask fresh
+  // edits — but findPrepAnchoredSlot / computeWeekPlanPrepSummary need them
+  // in state.mealDays to surface prep progress on home + week-plan cards.
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith('orphanPrep_')) continue;
+      const dateStr = key.slice('orphanPrep_'.length);
+      if (!dateStr || !dateStr.startsWith('__')) continue;
+      let day;
+      try { day = JSON.parse(localStorage.getItem(key) || 'null'); } catch { day = null; }
+      if (!day || !day.meals) continue;
+      state.mealDays[dateStr] = day;
+    }
+  } catch (e) { console.error('[loadAllState] orphan prep rehydrate failed:', e); }
   state.swipeSettings = loadFromLS('swipeSettings', state.swipeSettings);
   state.expirationDefaults = loadFromLS('expirationDefaults', {});
   state.receiptMappings = loadFromLS('receiptMappings', {});
