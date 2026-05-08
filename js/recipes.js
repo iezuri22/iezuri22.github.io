@@ -66,10 +66,13 @@ function openEditRecipe(recipeId) {
   }
 
   const rows = Array.isArray(r.ingredientsRows) ? r.ingredientsRows : [];
+  const migrated = migrateRecipeToSteps(r);
   state.recipeForm = {
     ...newRecipeDraft(),
     ...r,
-    ingredientsRows: rows.length ? rows : [{ qty: '', unit: '', name: '', group: 'Produce' }]
+    ingredientsRows: rows.length ? rows : [{ qty: '', unit: '', name: '', group: 'Produce' }],
+    prepSteps: migrated.prepSteps,
+    cookSteps: migrated.cookSteps
   };
 
   state.currentView = 'recipe-edit';
@@ -150,6 +153,14 @@ async function saveRecipeForm() {
     })
     .filter(r => r.name);
 
+  const prepSteps = (Array.isArray(state.recipeForm.prepSteps) ? state.recipeForm.prepSteps : [])
+    .map(s => ({ ...newRecipeStep(), ...s, text: (s.text || '').trim(), caption: (s.caption || '').trim() }))
+    .filter(s => s.text || s.mediaType);
+  const cookSteps = (Array.isArray(state.recipeForm.cookSteps) ? state.recipeForm.cookSteps : [])
+    .map(s => ({ ...newRecipeStep(), ...s, text: (s.text || '').trim(), caption: (s.caption || '').trim() }))
+    .filter(s => s.text || s.mediaType);
+  const legacy = denormalizeStepsToLegacy(prepSteps, cookSteps);
+
   const isEdit = !!state.recipeForm.id;
   const payload = {
     ...state.recipeForm,
@@ -159,7 +170,10 @@ async function saveRecipeForm() {
     image_url: (state.recipeForm.image_url || '').trim(),
     tags: (state.recipeForm.tags || '').trim(),
     notes: (state.recipeForm.notes || '').trim(),
-    instructions: (state.recipeForm.instructions || '').trim(),
+    instructions: legacy.instructions,
+    videoClips: legacy.videoClips,
+    prepSteps,
+    cookSteps,
     ingredientsRows: rows,
     sourceType: state.recipeForm.sourceType || 'user',
     isDraft: state.recipeForm.isDraft || false
@@ -2599,20 +2613,8 @@ function renderRecipeEdit() {
 
 ${state.recipeForm.isTip ? '' : renderIngredientGrid()}
 
-        <div class="mt-6">
-          <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">
-            Step-by-step Instructions (optional)
-            <span style="opacity:0.7; font-weight:normal; font-size:${CONFIG.font_size * 0.85}px;"> — Enter each step on a new line</span>
-          </label>
-          <textarea class="w-full px-4 py-3 rounded border"
-            style="background:rgba(0,0,0,0.18); color:${CONFIG.text_color}; border-color:rgba(255,255,255,0.12); min-height:180px;"
-            placeholder="Step 1: Preheat oven to 350F
-Step 2: Mix dry ingredients
-Step 3: Add wet ingredients..."
-            oninput="setRecipeField('instructions', this.value)">${state.recipeForm.instructions || ''}</textarea>
-        </div>
-
-        ${renderVideoClipsEditor()}
+        ${renderStepsEditor('prep')}
+        ${renderStepsEditor('cook')}
 
         <div class="mt-6">
           <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Notes (optional)</label>
@@ -2953,88 +2955,205 @@ function initBatchVideoCarouselSwipe() {
   });
 }
 
-// ---- Video Clips Editor (Recipe Edit Form) ----
+// ---- Step Editor (Prep + Cook, Recipe Edit Form) ----
+//
+// Each step row carries text + an optional photo OR video. Two parallel
+// sections share the same shape: state.recipeForm.prepSteps and
+// state.recipeForm.cookSteps. `kind` is 'prep' | 'cook'.
 
-function renderVideoClipsEditor() {
+function _stepsArray(kind) {
+  ensureRecipeForm();
+  const key = kind === 'prep' ? 'prepSteps' : 'cookSteps';
+  if (!Array.isArray(state.recipeForm[key])) state.recipeForm[key] = [];
+  return state.recipeForm[key];
+}
+
+function renderStepsEditor(kind) {
   if (!state.recipeForm) return '';
   if (state.recipeForm.isTip) return '';
-  const clips = state.recipeForm.videoClips || [];
+  const steps = _stepsArray(kind);
+  const isPrep = kind === 'prep';
+  const title = isPrep ? 'Prep Work' : 'Cook Steps';
+  const helper = isPrep
+    ? 'Mise-en-place — what to chop, marinate, measure before the heat goes on.'
+    : 'Active cooking flow, in order.';
+  const placeholder = isPrep
+    ? 'e.g. Dice the onion fine'
+    : 'e.g. Sear the chicken until golden, about 4 min per side';
 
   return `
-    <div class="mt-6">
-      <label class="block mb-2 font-semibold" style="color:${CONFIG.text_color};">Cooking Clips</label>
-      ${clips.length > 0 ? `
-        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px;">
-          ${clips.map((clip, i) => `
-            <div style="display:flex; align-items:center; gap:8px; background:${CONFIG.surface_elevated}; border-radius:10px; padding:8px;">
-              <img src="${getStreamThumbnail(clip.cloudflareVideoId)}" style="width:48px; height:64px; object-fit:cover; border-radius:6px; background:#0a0a0b;" onerror="this.style.background='${CONFIG.surface_color}'; this.alt='?';" />
-              <div style="flex:1; min-width:0;">
-                <div style="color:${CONFIG.text_color}; font-size:13px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(clip.caption || 'No caption')}</div>
-                <div style="color:${CONFIG.text_muted}; font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(clip.cloudflareVideoId)}</div>
-                ${clip.instructions ? `<div style="color:${CONFIG.text_muted}; font-size:10px; margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">Instructions added</div>` : `<div style="color:${CONFIG.text_tertiary}; font-size:10px; margin-top:2px;">No instructions</div>`}
-              </div>
-              <button onclick="editVideoClipInstructions(${i})" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:4px;" title="Edit instructions">
-                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/></svg>
-              </button>
-              <div style="display:flex; flex-direction:column; gap:4px;">
-                ${i > 0 ? `<button onclick="moveVideoClip(${i}, -1)" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:2px;" title="Move up">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
-                </button>` : '<div style="width:16px; height:20px;"></div>'}
-                ${i < clips.length - 1 ? `<button onclick="moveVideoClip(${i}, 1)" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:2px;" title="Move down">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
-                </button>` : '<div style="width:16px; height:20px;"></div>'}
-              </div>
-              <button onclick="removeVideoClip(${i})" style="background:none; border:none; cursor:pointer; color:${CONFIG.danger_color}; padding:4px;" title="Remove clip">
-                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
-              </button>
-            </div>
-          `).join('')}
-        </div>
-      ` : ''}
-      <button type="button" onclick="showAddVideoClipForm()"
-        style="padding:10px 16px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); border-radius:10px; cursor:pointer; font-size:13px; font-weight:500; display:flex; align-items:center; gap:6px;">
+    <div class="mt-6" data-steps-kind="${kind}">
+      <label class="block mb-1 font-semibold" style="color:${CONFIG.text_color};">${title}</label>
+      <div style="color:${CONFIG.text_muted}; font-size:12px; margin-bottom:12px;">${helper}</div>
+      <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:12px;">
+        ${steps.map((s, i) => renderStepRow(kind, s, i, steps.length)).join('')}
+      </div>
+      <button type="button" onclick="addStep('${kind}')"
+        style="padding:10px 16px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; border:1px solid rgba(255,255,255,0.1); border-radius:10px; cursor:pointer; font-size:13px; font-weight:500; display:inline-flex; align-items:center; gap:6px;">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
-        Add clip
+        Add ${isPrep ? 'prep' : 'step'}
       </button>
     </div>
   `;
 }
 
-function showAddVideoClipForm() {
+function renderStepRow(kind, step, idx, total) {
+  const hasPhoto = step.mediaType === 'photo' && step.photoUrl;
+  const hasVideo = step.mediaType === 'video' && step.cloudflareVideoId;
+  const hasMedia = hasPhoto || hasVideo;
+  const mediaThumb = hasPhoto
+    ? `<img src="${esc(step.photoUrl)}" style="width:100%; height:100%; object-fit:cover;" />`
+    : hasVideo
+    ? `<img src="${getStreamThumbnail(step.cloudflareVideoId)}" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.background='${CONFIG.surface_color}'; this.alt='?';" />
+       <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.25);">
+         <svg width="22" height="22" fill="white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+       </div>`
+    : '';
+
+  return `
+    <div style="background:${CONFIG.surface_elevated}; border-radius:12px; padding:10px; display:flex; gap:10px; align-items:flex-start;">
+      <div style="display:flex; flex-direction:column; align-items:center; gap:4px; padding-top:4px;">
+        <div style="width:24px; height:24px; border-radius:12px; background:${CONFIG.surface_color}; color:${CONFIG.text_muted}; font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;">${idx + 1}</div>
+        ${idx > 0 ? `<button type="button" onclick="moveStep('${kind}', ${idx}, -1)" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:2px;" title="Move up">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 15.75l7.5-7.5 7.5 7.5"/></svg>
+        </button>` : ''}
+        ${idx < total - 1 ? `<button type="button" onclick="moveStep('${kind}', ${idx}, 1)" style="background:none; border:none; cursor:pointer; color:${CONFIG.text_muted}; padding:2px;" title="Move down">
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+        </button>` : ''}
+      </div>
+
+      <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:8px;">
+        <textarea rows="2" placeholder="${esc(idx === 0 ? (kind === 'prep' ? 'e.g. Dice the onion fine' : 'e.g. Sear the chicken until golden, about 4 min per side') : 'Describe this ' + (kind === 'prep' ? 'prep task' : 'step') + '...')}"
+          style="width:100%; padding:8px 10px; background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.08); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; resize:vertical; font-family:inherit; box-sizing:border-box;"
+          oninput="setStepText('${kind}', ${idx}, this.value)">${esc(step.text || '')}</textarea>
+
+        ${hasMedia ? `
+          <div style="display:flex; gap:8px; align-items:center;">
+            <div style="position:relative; width:64px; height:80px; border-radius:8px; overflow:hidden; background:#0a0a0b; flex-shrink:0;">
+              ${mediaThumb}
+            </div>
+            <div style="flex:1; min-width:0;">
+              <div style="color:${CONFIG.text_muted}; font-size:11px; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:2px;">${hasPhoto ? 'Photo' : 'Video'}</div>
+              <input type="text" value="${esc(step.caption || '')}" placeholder="Caption (optional)"
+                style="width:100%; padding:6px 8px; background:rgba(0,0,0,0.18); border:1px solid rgba(255,255,255,0.08); border-radius:6px; color:${CONFIG.text_color}; font-size:12px; box-sizing:border-box;"
+                oninput="setStepCaption('${kind}', ${idx}, this.value)" />
+            </div>
+            <button type="button" onclick="clearStepMedia('${kind}', ${idx})" title="Remove media"
+              style="background:none; border:none; cursor:pointer; color:${CONFIG.danger_color}; padding:6px; flex-shrink:0;">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+        ` : `
+          <div style="display:flex; gap:8px;">
+            <label style="flex:1; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px dashed rgba(255,255,255,0.15); border-radius:8px; color:${CONFIG.text_muted}; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z"/></svg>
+              Photo
+              <input type="file" accept="image/*" style="display:none;" onchange="handleStepPhotoUpload(event, '${kind}', ${idx})" />
+            </label>
+            <button type="button" onclick="showAddStepVideoForm('${kind}', ${idx})"
+              style="flex:1; padding:8px 10px; background:rgba(0,0,0,0.15); border:1px dashed rgba(255,255,255,0.15); border-radius:8px; color:${CONFIG.text_muted}; font-size:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;">
+              <svg width="14" height="14" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              Video
+            </button>
+          </div>
+        `}
+      </div>
+
+      <button type="button" onclick="removeStep('${kind}', ${idx})" title="Remove"
+        style="background:none; border:none; cursor:pointer; color:${CONFIG.danger_color}; padding:6px; flex-shrink:0;">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
+      </button>
+    </div>
+  `;
+}
+
+function addStep(kind) {
+  _stepsArray(kind).push(newRecipeStep());
+  render();
+}
+
+function removeStep(kind, idx) {
+  const arr = _stepsArray(kind);
+  if (idx < 0 || idx >= arr.length) return;
+  arr.splice(idx, 1);
+  render();
+}
+
+function moveStep(kind, idx, direction) {
+  const arr = _stepsArray(kind);
+  const newIdx = idx + direction;
+  if (newIdx < 0 || newIdx >= arr.length) return;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  render();
+}
+
+function setStepText(kind, idx, value) {
+  const arr = _stepsArray(kind);
+  if (!arr[idx]) return;
+  arr[idx].text = value;
+}
+
+function setStepCaption(kind, idx, value) {
+  const arr = _stepsArray(kind);
+  if (!arr[idx]) return;
+  arr[idx].caption = value;
+}
+
+function clearStepMedia(kind, idx) {
+  const arr = _stepsArray(kind);
+  if (!arr[idx]) return;
+  arr[idx].mediaType = null;
+  arr[idx].photoUrl = '';
+  arr[idx].cloudflareVideoId = '';
+  render();
+}
+
+async function handleStepPhotoUpload(event, kind, idx) {
+  const file = event.target?.files?.[0];
+  if (!file) return;
+  try {
+    const compressed = await compressImage(file, 1200, 0.8);
+    const url = await uploadPhoto(compressed);
+    if (!url) { event.target.value = ''; return; }
+    const arr = _stepsArray(kind);
+    if (!arr[idx]) return;
+    arr[idx].mediaType = 'photo';
+    arr[idx].photoUrl = url;
+    arr[idx].cloudflareVideoId = '';
+    render();
+  } catch (e) {
+    console.error('[handleStepPhotoUpload]', e);
+    showError('Failed to upload photo');
+  } finally {
+    if (event.target) event.target.value = '';
+  }
+}
+
+function showAddStepVideoForm(kind, idx) {
   const html = `
     <div style="color:${CONFIG.text_color};">
-      <h3 style="font-size:17px; font-weight:600; margin-bottom:16px;">Add Cooking Clip</h3>
+      <h3 style="font-size:17px; font-weight:600; margin-bottom:16px;">Attach Video</h3>
       <div style="margin-bottom:12px;">
         <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Cloudflare Video ID</label>
-        <input id="newClipVideoId" type="text" placeholder="Paste video ID from Cloudflare dashboard"
+        <input id="newStepVideoId" type="text" placeholder="Paste video ID from Cloudflare dashboard"
           style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box;"
-          oninput="previewVideoClipThumbnail(this.value)" />
+          oninput="previewStepVideoThumbnail(this.value)" />
       </div>
-      <div id="clipThumbnailPreview" style="margin-bottom:12px; display:none;">
-        <img id="clipThumbnailImg" style="width:100%; max-width:200px; border-radius:8px; background:#0a0a0b;" />
-      </div>
-      <div style="margin-bottom:12px;">
-        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Caption</label>
-        <input id="newClipCaption" type="text" placeholder="e.g. Season and sear the chicken"
-          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box;" />
-      </div>
-      <div style="margin-bottom:16px;">
-        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Instructions</label>
-        <textarea id="newClipInstructions" rows="4" placeholder="Step-by-step instructions for this clip..."
-          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box; resize:vertical; font-family:inherit;"></textarea>
+      <div id="stepVideoThumbnailPreview" style="margin-bottom:12px; display:none;">
+        <img id="stepVideoThumbnailImg" style="width:100%; max-width:200px; border-radius:8px; background:#0a0a0b;" />
       </div>
       <div style="display:flex; gap:8px;">
         <button onclick="closeModal()" style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; border:none; border-radius:10px; cursor:pointer; font-size:14px;">Cancel</button>
-        <button onclick="addVideoClipFromForm()" style="flex:1; padding:10px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:10px; cursor:pointer; font-size:14px; font-weight:600;">Add Clip</button>
+        <button onclick="attachStepVideoFromForm('${kind}', ${idx})" style="flex:1; padding:10px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:10px; cursor:pointer; font-size:14px; font-weight:600;">Attach</button>
       </div>
     </div>
   `;
   openModal(html);
 }
 
-function previewVideoClipThumbnail(videoId) {
-  const preview = document.getElementById('clipThumbnailPreview');
-  const img = document.getElementById('clipThumbnailImg');
+function previewStepVideoThumbnail(videoId) {
+  const preview = document.getElementById('stepVideoThumbnailPreview');
+  const img = document.getElementById('stepVideoThumbnailImg');
   if (!preview || !img) return;
   if (videoId && videoId.trim().length > 10) {
     img.src = getStreamThumbnail(videoId.trim());
@@ -3045,74 +3164,14 @@ function previewVideoClipThumbnail(videoId) {
   }
 }
 
-function addVideoClipFromForm() {
-  const videoId = (document.getElementById('newClipVideoId')?.value || '').trim();
-  const caption = (document.getElementById('newClipCaption')?.value || '').trim();
-  const instructions = (document.getElementById('newClipInstructions')?.value || '').trim();
+function attachStepVideoFromForm(kind, idx) {
+  const videoId = (document.getElementById('newStepVideoId')?.value || '').trim();
   if (!videoId) { showError('Video ID is required'); return; }
-  ensureRecipeForm();
-  if (!Array.isArray(state.recipeForm.videoClips)) state.recipeForm.videoClips = [];
-  const order = state.recipeForm.videoClips.length + 1;
-  state.recipeForm.videoClips.push({ cloudflareVideoId: videoId, caption, instructions, order });
-  closeModal();
-  render();
-}
-
-function removeVideoClip(idx) {
-  ensureRecipeForm();
-  if (!Array.isArray(state.recipeForm.videoClips)) return;
-  state.recipeForm.videoClips.splice(idx, 1);
-  // Reorder
-  state.recipeForm.videoClips.forEach((c, i) => { c.order = i + 1; });
-  render();
-}
-
-function moveVideoClip(idx, direction) {
-  ensureRecipeForm();
-  if (!Array.isArray(state.recipeForm.videoClips)) return;
-  const newIdx = idx + direction;
-  if (newIdx < 0 || newIdx >= state.recipeForm.videoClips.length) return;
-  const clips = state.recipeForm.videoClips;
-  [clips[idx], clips[newIdx]] = [clips[newIdx], clips[idx]];
-  clips.forEach((c, i) => { c.order = i + 1; });
-  render();
-}
-
-function editVideoClipInstructions(idx) {
-  ensureRecipeForm();
-  if (!Array.isArray(state.recipeForm.videoClips)) return;
-  const clip = state.recipeForm.videoClips[idx];
-  if (!clip) return;
-  const html = `
-    <div style="color:${CONFIG.text_color};">
-      <h3 style="font-size:17px; font-weight:600; margin-bottom:4px;">Edit Clip Instructions</h3>
-      <div style="color:${CONFIG.text_muted}; font-size:13px; margin-bottom:16px;">${esc(clip.caption || 'Clip ' + (idx + 1))}</div>
-      <div style="margin-bottom:12px;">
-        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Caption</label>
-        <input id="editClipCaption" type="text" value="${esc(clip.caption || '')}"
-          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box;" />
-      </div>
-      <div style="margin-bottom:16px;">
-        <label style="display:block; font-size:13px; color:${CONFIG.text_muted}; margin-bottom:4px;">Instructions</label>
-        <textarea id="editClipInstructions" rows="6" placeholder="Step-by-step instructions for this clip..."
-          style="width:100%; padding:10px 12px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.12); border-radius:8px; color:${CONFIG.text_color}; font-size:14px; box-sizing:border-box; resize:vertical; font-family:inherit;">${esc(clip.instructions || '')}</textarea>
-      </div>
-      <div style="display:flex; gap:8px;">
-        <button onclick="closeModal()" style="flex:1; padding:10px; background:${CONFIG.surface_elevated}; color:${CONFIG.text_color}; border:none; border-radius:10px; cursor:pointer; font-size:14px;">Cancel</button>
-        <button onclick="saveVideoClipEdit(${idx})" style="flex:1; padding:10px; background:${CONFIG.primary_action_color}; color:white; border:none; border-radius:10px; cursor:pointer; font-size:14px; font-weight:600;">Save</button>
-      </div>
-    </div>
-  `;
-  openModal(html);
-}
-
-function saveVideoClipEdit(idx) {
-  ensureRecipeForm();
-  if (!Array.isArray(state.recipeForm.videoClips)) return;
-  const clip = state.recipeForm.videoClips[idx];
-  if (!clip) return;
-  clip.caption = (document.getElementById('editClipCaption')?.value || '').trim();
-  clip.instructions = (document.getElementById('editClipInstructions')?.value || '').trim();
+  const arr = _stepsArray(kind);
+  if (!arr[idx]) return;
+  arr[idx].mediaType = 'video';
+  arr[idx].cloudflareVideoId = videoId;
+  arr[idx].photoUrl = '';
   closeModal();
   render();
 }

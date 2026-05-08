@@ -5339,7 +5339,7 @@ function _closePhotoSearch() {
 // State for the fullscreen video overlay
 if (!state.videoOverlay) state.videoOverlay = null; // { type: 'recipe'|'batch', id, sequence, currentIndex, muted }
 
-function openVideoOverlay(type, id) {
+function openVideoOverlay(type, id, startVideoId) {
   let sequence = [];
   if (type === 'recipe') {
     const clips = getRecipeVideoClips(id);
@@ -5351,7 +5351,12 @@ function openVideoOverlay(type, id) {
     if (batch) sequence = getBatchVideoSequence(batch);
   }
   if (sequence.length === 0) return;
-  state.videoOverlay = { type, id, sequence, currentIndex: 0, muted: true };
+  let startIdx = 0;
+  if (startVideoId) {
+    const found = sequence.findIndex(s => s.cloudflareVideoId === startVideoId);
+    if (found >= 0) startIdx = found;
+  }
+  state.videoOverlay = { type, id, sequence, currentIndex: startIdx, muted: true };
   document.body.style.overflow = 'hidden';
   renderVideoOverlay();
 }
@@ -6074,7 +6079,119 @@ function getBatchCoverPhoto(batch) {
 }
 
 function newRecipeDraft() {
-  return { type: 'recipe', title: '', category: 'Breakfast', tipCategory: 'Prep Techniques', recipe_url: '', image_url: '', tags: '', notes: '', instructions: '', ingredientsRows: [{ qty: '', unit: '', name: '', group: 'Produce' }], sourceType: 'user', isDraft: false, isTip: false, videoClips: [] };
+  return { type: 'recipe', title: '', category: 'Breakfast', tipCategory: 'Prep Techniques', recipe_url: '', image_url: '', tags: '', notes: '', instructions: '', ingredientsRows: [{ qty: '', unit: '', name: '', group: 'Produce' }], sourceType: 'user', isDraft: false, isTip: false, videoClips: [], prepSteps: [], cookSteps: [] };
+}
+
+function newRecipeStep(overrides = {}) {
+  return {
+    id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    text: '',
+    mediaType: null,
+    photoUrl: '',
+    cloudflareVideoId: '',
+    caption: '',
+    ...overrides
+  };
+}
+
+// Convert legacy `instructions` text + flat `videoClips[]` into structured
+// prepSteps/cookSteps. Idempotent: if the recipe already has cookSteps
+// populated, returns them unchanged. Returns a NEW object — does not mutate.
+function migrateRecipeToSteps(recipe) {
+  if (!recipe) return { prepSteps: [], cookSteps: [] };
+  const existingPrep = Array.isArray(recipe.prepSteps) ? recipe.prepSteps : [];
+  const existingCook = Array.isArray(recipe.cookSteps) ? recipe.cookSteps : [];
+  if (existingPrep.length > 0 || existingCook.length > 0) {
+    return { prepSteps: existingPrep.map(s => ({ ...newRecipeStep(), ...s })), cookSteps: existingCook.map(s => ({ ...newRecipeStep(), ...s })) };
+  }
+
+  const raw = Array.isArray(recipe.instructions) ? recipe.instructions.join('\n') : (recipe.instructions || '').trim();
+  const cookSteps = [];
+  if (raw) {
+    const lines = raw.split('\n');
+    let current = null;
+    lines.forEach(line => {
+      const t = line.trim();
+      if (!t) return;
+      if (/^\d+[\.\)]\s*/.test(t)) {
+        if (current) cookSteps.push(current);
+        current = newRecipeStep({ text: t.replace(/^\d+[\.\)]\s*/, '') });
+      } else if (current) {
+        current.text = current.text ? current.text + ' ' + t : t;
+      } else {
+        cookSteps.push(newRecipeStep({ text: t }));
+      }
+    });
+    if (current) cookSteps.push(current);
+  }
+
+  const clips = Array.isArray(recipe.videoClips) ? recipe.videoClips.slice().sort((a, b) => (a.order || 0) - (b.order || 0)) : [];
+  const orphanClips = [];
+  clips.forEach(clip => {
+    if (!clip || !clip.cloudflareVideoId) return;
+    const linked = Array.isArray(clip.linkedSteps) ? clip.linkedSteps.filter(n => n >= 1 && n <= cookSteps.length) : [];
+    if (linked.length > 0) {
+      const target = cookSteps[linked[0] - 1];
+      if (target && !target.cloudflareVideoId) {
+        target.mediaType = 'video';
+        target.cloudflareVideoId = clip.cloudflareVideoId;
+        target.caption = clip.caption || target.caption || '';
+      } else {
+        orphanClips.push(clip);
+      }
+    } else {
+      orphanClips.push(clip);
+    }
+  });
+  orphanClips.forEach(clip => {
+    cookSteps.push(newRecipeStep({
+      text: (clip.instructions || '').trim() || (clip.caption || '').trim(),
+      mediaType: 'video',
+      cloudflareVideoId: clip.cloudflareVideoId,
+      caption: clip.caption || ''
+    }));
+  });
+
+  return { prepSteps: [], cookSteps };
+}
+
+// Rebuild legacy `instructions` text and `videoClips[]` from structured steps.
+// Run on save so legacy readers (autoplan, prep reels, batch carousel,
+// admin clip editor) keep working without changes.
+function denormalizeStepsToLegacy(prepSteps, cookSteps) {
+  const cook = Array.isArray(cookSteps) ? cookSteps : [];
+  const prep = Array.isArray(prepSteps) ? prepSteps : [];
+  const instructions = cook
+    .map((s, i) => {
+      const t = (s.text || '').trim();
+      return t ? `${i + 1}. ${t}` : '';
+    })
+    .filter(Boolean)
+    .join('\n');
+  const videoClips = [];
+  cook.forEach((s, i) => {
+    if (s.mediaType === 'video' && s.cloudflareVideoId) {
+      videoClips.push({
+        cloudflareVideoId: s.cloudflareVideoId,
+        caption: s.caption || '',
+        instructions: s.text || '',
+        order: videoClips.length + 1,
+        linkedSteps: [i + 1]
+      });
+    }
+  });
+  prep.forEach(s => {
+    if (s.mediaType === 'video' && s.cloudflareVideoId) {
+      videoClips.push({
+        cloudflareVideoId: s.cloudflareVideoId,
+        caption: s.caption || '',
+        instructions: s.text || '',
+        order: videoClips.length + 1,
+        linkedSteps: []
+      });
+    }
+  });
+  return { instructions, videoClips };
 }
 
 function ensureRecipeForm() {
@@ -9180,6 +9297,34 @@ function showSuggestionsModal(filterTerm = '') {
 // SECTION 20B: RECIPE DETAIL V2 (ChefIQ-style)
 // ============================================================
 
+function _renderDetailStepRow(step, idx, kind, highlightTimes) {
+  const text = (step.text || '').trim();
+  const caption = (step.caption || '').trim();
+  const hasPhoto = step.mediaType === 'photo' && step.photoUrl;
+  const hasVideo = step.mediaType === 'video' && step.cloudflareVideoId;
+  const safeText = text ? (typeof highlightTimes === 'function' ? highlightTimes(text) : esc(text)) : '';
+
+  const mediaHtml = hasPhoto
+    ? `<div class="step-media"><img src="${esc(step.photoUrl)}" alt="${esc(caption || 'Step photo')}" onerror="this.style.display='none'" /></div>`
+    : hasVideo
+    ? `<div class="step-media step-media-video" onclick="openVideoOverlay('recipe','${esc(state.selectedRecipeViewId || '')}','${esc(step.cloudflareVideoId)}')">
+         <img src="${getStreamThumbnail(step.cloudflareVideoId)}" alt="${esc(caption || 'Step video')}" onerror="this.style.background='#0a0a0b'" />
+         <div class="step-media-play"><svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+       </div>`
+    : '';
+
+  return `
+    <div class="instruction-step instruction-step-v2">
+      <div class="step-content">
+        <div class="step-number">${kind === 'prep' ? 'Prep' : 'Step'} ${idx + 1}</div>
+        ${safeText ? `<div class="step-text">${safeText}</div>` : ''}
+        ${mediaHtml}
+        ${caption ? `<div class="step-caption">${esc(caption)}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
 function renderRecipeDetailV2(recipeId, opts = {}) {
   const r = getRecipeById(recipeId);
   if (!r) return `<div style="padding:40px 20px;text-align:center;color:var(--text-secondary);">
@@ -9210,25 +9355,15 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
   rows.forEach(x => { const g = x.group || 'Other'; if (!grouped[g]) grouped[g] = []; grouped[g].push(x); });
   const groupOrder = Object.keys(grouped);
 
-  // Parse instructions
-  const rawInstructions = Array.isArray(r.instructions) ? r.instructions.join('\n') : (r.instructions || '').trim();
-  const instructionSteps = [];
-  if (rawInstructions) {
-    const lines = rawInstructions.split('\n');
-    let currentStep = null;
-    lines.forEach(line => {
-      const trimmed = line.trim();
-      if (!trimmed) return;
-      if (/^\d+[\.\)]\s*/.test(trimmed)) {
-        if (currentStep) instructionSteps.push(currentStep);
-        currentStep = { header: trimmed, details: [] };
-      } else if (currentStep) {
-        currentStep.details.push(trimmed);
-      } else {
-        instructionSteps.push({ header: null, details: [trimmed] });
-      }
-    });
-    if (currentStep) instructionSteps.push(currentStep);
+  // Resolve structured prep/cook steps. Prefer the new fields; fall back to
+  // parsing legacy `instructions` text into cookSteps so old recipes keep
+  // rendering until they're edited (which migrates them).
+  let prepStepsView = Array.isArray(r.prepSteps) ? r.prepSteps : [];
+  let cookStepsView = Array.isArray(r.cookSteps) ? r.cookSteps : [];
+  if (prepStepsView.length === 0 && cookStepsView.length === 0) {
+    const migrated = (typeof migrateRecipeToSteps === 'function') ? migrateRecipeToSteps(r) : { prepSteps: [], cookSteps: [] };
+    prepStepsView = migrated.prepSteps;
+    cookStepsView = migrated.cookSteps;
   }
 
   // Parse tags
@@ -9453,27 +9588,23 @@ function renderRecipeDetailV2(recipeId, opts = {}) {
         `}
       </div>
 
-      <!-- INSTRUCTIONS PANEL -->
+      <!-- INSTRUCTIONS PANEL (Prep + Cook) -->
       <div id="rd-tab-instructions" style="display:${activeTab === 'instructions' ? 'block' : 'none'};">
-        ${instructionSteps.length ? `
-          <div class="instruction-phase">
-            ${instructionSteps.map((step, idx) => `
-              <div class="instruction-step">
-                <div class="step-content">
-                  <div class="step-number">Step ${idx + 1}</div>
-                  <div class="step-text">
-                    ${step.header ? highlightTimes(step.header.replace(/^\d+[\.\)]\s*/, '')) : ''}
-                    ${step.details.map(d => highlightTimes(d)).join('<br>')}
-                  </div>
-                </div>
-                <span class="step-chevron">
-                  <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
-                </span>
-              </div>
-            `).join('')}
-          </div>
-        ` : `
+        ${(prepStepsView.length === 0 && cookStepsView.length === 0) ? `
           <div style="padding:40px 20px;text-align:center;color:var(--text-tertiary);">No instructions available.</div>
+        ` : `
+          ${prepStepsView.length > 0 ? `
+            <div class="instruction-phase">
+              <div class="instruction-phase-header">Prep Work</div>
+              ${prepStepsView.map((step, idx) => _renderDetailStepRow(step, idx, 'prep', highlightTimes)).join('')}
+            </div>
+          ` : ''}
+          ${cookStepsView.length > 0 ? `
+            <div class="instruction-phase">
+              ${prepStepsView.length > 0 ? '<div class="instruction-phase-header">Cook Steps</div>' : ''}
+              ${cookStepsView.map((step, idx) => _renderDetailStepRow(step, idx, 'cook', highlightTimes)).join('')}
+            </div>
+          ` : ''}
         `}
       </div>
 
