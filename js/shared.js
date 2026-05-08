@@ -3375,6 +3375,7 @@ function renderLetsCookButton(recipeId, prepCtx, fromPlan) {
   }
 
   const onclick = `openPrepReels('${esc(recipeId)}')`;
+  const statsPanel = renderRecipeDetailPrepStats(recipeId, prepCtx);
   return `
     <div style="padding: 0 20px 16px;">
       <button class="lets-cook-btn" onclick="${onclick}">
@@ -3383,6 +3384,68 @@ function renderLetsCookButton(recipeId, prepCtx, fromPlan) {
         </svg>
         <span>${esc(label)}</span>
       </button>
+      ${statsPanel}
+    </div>
+  `;
+}
+
+// Inline progress panel on the recipe-detail page. Same numbers as the
+// modal header so users see prep state without needing to open the sheet.
+function renderRecipeDetailPrepStats(recipeId, prepCtx) {
+  if (!prepCtx) return '';
+  const meal = prepCtx.meal;
+  const items = (meal && meal.prep_state && meal.prep_state.items) || [];
+  const total = items.length;
+  const done = items.filter(i => i.checked).length;
+  const blockedItem = items.find(i => i.needs_replacement);
+
+  // Steps — match the modal: clips first, fall back to instruction parsing.
+  let stepTotal = 0;
+  let stepDone = 0;
+  const recipe = getRecipeById(recipeId);
+  if (typeof getRecipeVideoClips === 'function') {
+    const clips = getRecipeVideoClips(recipeId) || [];
+    stepTotal = clips.length;
+  }
+  if (stepTotal === 0 && recipe && typeof parseInstructionStepEntries === 'function') {
+    stepTotal = parseInstructionStepEntries(recipe).length;
+  }
+  if (meal.prep_state && meal.prep_state.steps_done) {
+    for (let i = 0; i < stepTotal; i++) if (meal.prep_state.steps_done[i]) stepDone++;
+  }
+
+  if (total === 0 && stepTotal === 0) return '';
+
+  const ingPct = total > 0 ? Math.round((done / total) * 100) : 0;
+  const stepPct = stepTotal > 0 ? Math.round((stepDone / stepTotal) * 100) : 0;
+
+  let statusLine;
+  if (blockedItem) {
+    statusLine = `<span class="rd-prep-status is-blocked"><span class="dot"></span>Missing: ${esc(capitalize(blockedItem.name || 'an ingredient'))}</span>`;
+  } else if (total > 0 && done === total && (stepTotal === 0 || stepDone === stepTotal)) {
+    statusLine = `<span class="rd-prep-status is-ready"><span class="dot"></span>Ready to cook</span>`;
+  } else if (done === 0 && stepDone === 0) {
+    statusLine = `<span class="rd-prep-status">Get ready</span>`;
+  } else {
+    const parts = [`${done}/${total} ingredients`];
+    if (stepTotal > 0) parts.push(stepDone === stepTotal ? 'prep done' : `prep ${stepDone}/${stepTotal}`);
+    statusLine = `<span class="rd-prep-status is-progress">${esc(parts.join(' · '))}</span>`;
+  }
+
+  return `
+    <div class="rd-prep-stats" onclick="openPrepReels('${esc(recipeId)}')">
+      <div class="rd-prep-stats-row">
+        <div class="rd-prep-stats-label">Prep status</div>
+        ${statusLine}
+      </div>
+      <div class="rd-prep-progress">
+        <div class="rd-prep-progress-seg ingredients" style="width:${ingPct / 2}%;"></div>
+        <div class="rd-prep-progress-seg steps" style="width:${stepPct / 2}%;"></div>
+      </div>
+      <div class="rd-prep-counts">
+        <span><strong>${done}</strong>/${total} ingredients${total === 0 ? '' : ` · ${ingPct}%`}</span>
+        ${stepTotal > 0 ? `<span><strong>${stepDone}</strong>/${stepTotal} prep steps · ${stepPct}%</span>` : ''}
+      </div>
     </div>
   `;
 }

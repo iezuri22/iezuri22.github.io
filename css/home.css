@@ -823,6 +823,54 @@ div[style*="overflow-x: auto"]::-webkit-scrollbar {
   border-radius: 6px;
 }
 
+/* ===== Prep badge overlay on This Week's Meals card media ===== */
+.wp-prep-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  z-index: 2;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+}
+
+.wp-prep-badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.wp-prep-badge.is-not-started {
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.wp-prep-badge.is-progress {
+  background: rgba(232, 93, 93, 0.92);
+  color: #fff;
+}
+
+.wp-prep-badge.is-ready {
+  background: rgba(50, 215, 75, 0.92);
+  color: #062;
+}
+
+.wp-prep-badge.is-blocked {
+  background: rgba(255, 214, 10, 0.95);
+  color: #3a2c00;
+}
+
 /* ===== Prep status line on This Week's Meals cards ===== */
 .wp-prep-status {
   display: flex;

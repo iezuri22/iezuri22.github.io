@@ -477,7 +477,9 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
     : recipe.sourceType === 'imported' ? 'Imported'
     : recipe.sourceType === 'user' ? 'PotLuck'
     : '';
-  const prepStatusHtml = renderWeekPlanPrepStatus(id, dateStr, mealType);
+  const prep = computeWeekPlanPrepSummary(id, dateStr, mealType);
+  const prepBadgeHtml = renderWeekPlanPrepBadge(prep);
+  const prepStatusHtml = renderWeekPlanPrepStatusLine(prep);
   return `
     <div class="recipe-carousel-card" onclick="openRecipeView('${id}')">
       <div class="carousel-card-media">
@@ -488,6 +490,7 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
           <div style="width:100%; height:100%; background: ${getPlaceholderGradient(recipe)};"></div>
         `}
         <span class="wp-card-meal-label">${mealLabel}</span>
+        ${prepBadgeHtml}
         ${hasSwap ? `
           <button onclick="event.stopPropagation(); handleWeekPlanSwap('${dateStr}', '${mealType}', 0)"
             style="position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; color: white; z-index: 2;">
@@ -504,13 +507,10 @@ function renderWeekPlanCard(recipe, id, mealLabel, dateStr, mealType) {
   `;
 }
 
-// At-a-glance prep status under each week-plan card title. Reads prep_state
-// from the meal slot if one exists; otherwise shows the dim "Get ready" cue
-// so the user knows that meal hasn't been touched yet.
-function renderWeekPlanPrepStatus(recipeId, dateStr, mealType) {
-  if (!recipeId) return '';
-  // Resolve the meal slot the prep modal would write to. For unplanned slots
-  // we still return a useful "Get ready" hint so the card looks consistent.
+// Compute a normalized prep summary for any recipe + meal slot. Both the
+// week-plan card (badge + status line) and the recipe-detail page (status
+// panel) consume this so they tell exactly the same story.
+function computeWeekPlanPrepSummary(recipeId, dateStr, mealType) {
   let meal = null;
   if (dateStr && mealType && state.mealDays && state.mealDays[dateStr] && state.mealDays[dateStr].meals) {
     meal = state.mealDays[dateStr].meals[mealType];
@@ -522,9 +522,6 @@ function renderWeekPlanPrepStatus(recipeId, dateStr, mealType) {
   const blockedItem = items.find(i => i.needs_replacement);
   const status = (meal && meal.prep_status) || 'not_started';
 
-  // Step counts. Mirrors the modal: prefer video clips, fall back to text
-  // steps parsed from the recipe's instructions so the line stays accurate
-  // even for recipes that don't have any uploaded prep videos.
   let stepTotal = 0;
   let stepDone = 0;
   if (typeof getRecipeVideoClips === 'function') {
@@ -541,40 +538,76 @@ function renderWeekPlanPrepStatus(recipeId, dateStr, mealType) {
     for (let i = 0; i < stepTotal; i++) if (ps.steps_done[i]) stepDone++;
   }
 
+  // Derive a single bucket so both the badge and status line stay aligned.
+  let bucket;
   if (blockedItem) {
-    const lbl = capitalize(blockedItem.name || 'an ingredient');
-    return `<div class="wp-prep-status is-blocked"><span class="status-dot"></span>Missing: ${esc(lbl)}</div>`;
+    bucket = 'blocked';
+  } else if (status === 'ready' || (total > 0 && done === total && (stepTotal === 0 || stepDone === stepTotal))) {
+    bucket = 'ready';
+  } else if (total === 0 && stepTotal === 0) {
+    bucket = 'not_started';
+  } else if (done === 0 && stepDone === 0) {
+    bucket = 'not_started';
+  } else {
+    bucket = 'in_progress';
   }
 
-  if (status === 'ready' || (total > 0 && done === total && (stepTotal === 0 || stepDone === stepTotal))) {
+  return {
+    bucket,
+    total, done,
+    stepTotal, stepDone,
+    blockedName: blockedItem ? capitalize(blockedItem.name || 'an ingredient') : ''
+  };
+}
+
+// Photo-overlay badge in the top-left corner of each week-plan card. Loud
+// enough to be scannable across a row of cards without opening anything.
+function renderWeekPlanPrepBadge(prep) {
+  if (!prep) return '';
+  if (prep.bucket === 'not_started') {
+    return `<span class="wp-prep-badge is-not-started">Get ready</span>`;
+  }
+  if (prep.bucket === 'ready') {
+    return `<span class="wp-prep-badge is-ready"><span class="dot"></span>Ready</span>`;
+  }
+  if (prep.bucket === 'blocked') {
+    return `<span class="wp-prep-badge is-blocked"><span class="dot"></span>Missing</span>`;
+  }
+  // in_progress — show fraction so the user can scan progress at a glance.
+  const text = prep.total > 0 ? `${prep.done}/${prep.total}` : 'In prep';
+  return `<span class="wp-prep-badge is-progress">${esc(text)}</span>`;
+}
+
+// Detailed status line under the title; complements (not replaces) the badge.
+function renderWeekPlanPrepStatusLine(prep) {
+  if (!prep) return '';
+  if (prep.bucket === 'blocked') {
+    return `<div class="wp-prep-status is-blocked"><span class="status-dot"></span>Missing: ${esc(prep.blockedName)}</div>`;
+  }
+  if (prep.bucket === 'ready') {
     return `<div class="wp-prep-status is-ready"><span class="status-dot"></span>Ready to cook</div>`;
   }
-
-  // initPrepState flips prep_status to "in_progress" the moment items are
-  // populated — even before the user has checked anything. Treat 0 progress
-  // across both ingredients and steps as "Get ready" so the dim cue holds
-  // until the user actually starts.
-  if (total === 0 && stepTotal === 0) {
+  if (prep.bucket === 'not_started') {
     return `<div class="wp-prep-status">Get ready</div>`;
   }
-  if (done === 0 && stepDone === 0) {
-    return `<div class="wp-prep-status">Get ready</div>`;
+  const parts = [`${prep.done}/${prep.total} ingredients`];
+  if (prep.stepTotal > 0) {
+    parts.push(prep.stepDone === prep.stepTotal ? 'prep done' : (prep.stepDone === 0 ? 'prep pending' : `prep ${prep.stepDone}/${prep.stepTotal}`));
   }
-
-  // In-progress detail line. If we have steps, mention them; if none, drop it.
-  const parts = [`${done}/${total} ingredients`];
-  if (stepTotal > 0) {
-    parts.push(stepDone === stepTotal ? 'prep done' : (stepDone === 0 ? 'prep pending' : `prep ${stepDone}/${stepTotal}`));
-  }
-  const ingPct = total > 0 ? Math.round((done / total) * 100) : 0;
-  const stepPct = stepTotal > 0 ? Math.round((stepDone / stepTotal) * 100) : 0;
+  const ingPct = prep.total > 0 ? Math.round((prep.done / prep.total) * 100) : 0;
+  const stepPct = prep.stepTotal > 0 ? Math.round((prep.stepDone / prep.stepTotal) * 100) : 0;
   return `
     <div class="wp-prep-status is-progress">${esc(parts.join(' · '))}</div>
     <div class="wp-prep-bars">
       <div class="bar"><div class="fill" style="width:${ingPct}%;"></div></div>
-      ${stepTotal > 0 ? `<div class="bar steps"><div class="fill" style="width:${stepPct}%;"></div></div>` : ''}
+      ${prep.stepTotal > 0 ? `<div class="bar steps"><div class="fill" style="width:${stepPct}%;"></div></div>` : ''}
     </div>
   `;
+}
+
+// Back-compat shim for any caller still using the old name.
+function renderWeekPlanPrepStatus(recipeId, dateStr, mealType) {
+  return renderWeekPlanPrepStatusLine(computeWeekPlanPrepSummary(recipeId, dateStr, mealType));
 }
 
 // Targeted update of the week plan section only (avoids full DOM rebuild / video restart)
