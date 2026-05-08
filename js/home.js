@@ -3354,6 +3354,13 @@ function renderManageSlotCard(slotEntry, dateStr, mealType, optionIndex, isToday
     ? '<svg width="14" height="14" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clip-rule="evenodd"/></svg>'
     : '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 12.75v6.75a2.25 2.25 0 002.25 2.25z"/></svg>';
 
+  // Prep stats — only meaningful for actual recipes (combos / takeout / manual
+  // entries don't have prep_state). Mirror the home carousel's badge +
+  // photo-overlay so the week-plan view tells the same story.
+  const prep = recipeId ? computeWeekPlanPrepSummary(recipeId, dateStr, mealType) : null;
+  const prepBadgeHtml = prep ? renderWeekPlanPrepBadge(prep) : '';
+  const prepOverlayHtml = prep ? renderWeekPlanPrepPhotoOverlay(prep) : '';
+
   return `
     <div class="recipe-carousel-card manage-card ${locked ? 'is-locked' : ''} ${isToday ? 'is-today' : ''}" ${cardClickAttr}>
       <div class="carousel-card-media">
@@ -3362,6 +3369,8 @@ function renderManageSlotCard(slotEntry, dateStr, mealType, optionIndex, isToday
           : `<div style="width:100%;height:100%;background:${getPlaceholderGradient(placeholderObj)};"></div>`
         }
         <span class="wp-card-meal-label">${mealLabel}</span>
+        ${prepBadgeHtml}
+        ${prepOverlayHtml}
         <div class="manage-card-actions">
           <button onclick="event.stopPropagation(); lockWeekMealSlot('${dateStr}', '${mealType}', ${optionIndex}); render();"
             class="manage-card-icon-btn ${locked ? 'is-locked' : ''}" aria-label="${locked ? 'Unlock' : 'Lock'}">
