@@ -584,7 +584,7 @@ function computeWeekPlanPrepSummary(recipeId, dateStr, mealType) {
 function renderWeekPlanPrepBadge(prep) {
   if (!prep) return '';
   if (prep.bucket === 'not_started') {
-    return `<span class="wp-prep-badge is-not-started">Get ready</span>`;
+    return '';
   }
   if (prep.bucket === 'ready') {
     return `<span class="wp-prep-badge is-ready"><span class="dot"></span>Ready</span>`;
@@ -607,7 +607,7 @@ function renderWeekPlanPrepStatusLine(prep) {
     return `<div class="wp-prep-status is-ready"><span class="status-dot"></span>Ready to cook</div>`;
   }
   if (prep.bucket === 'not_started') {
-    return `<div class="wp-prep-status">Get ready</div>`;
+    return '';
   }
   const parts = [];
   if (prep.total > 0) parts.push(`${prep.done}/${prep.total} ingredients`);
