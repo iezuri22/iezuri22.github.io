@@ -703,9 +703,29 @@ const GROCERY_DIRTY_KEY = 'smartGroceryList_v1_dirty';
 // that never reached Supabase) would let the next pull silently clobber the
 // user's pending change. Stored under `<rowId>_dirty` localStorage keys so
 // the flag survives page reload and only clears after successful sync.
-function markBlobDirty(rowId) { try { localStorage.setItem(rowId + '_dirty', '1'); } catch {} }
-function clearBlobDirty(rowId) { try { localStorage.removeItem(rowId + '_dirty'); } catch {} }
+// markBlobDirty stamps a monotonically-increasing version. clearBlobDirty
+// only clears when the version matches what was dirty when the sync started
+// (passed via expectedVersion). Without this, a slow sync that completes
+// after a newer save would clear the flag and strand the newer data.
+function markBlobDirty(rowId) {
+  try {
+    const v = (parseInt(localStorage.getItem(rowId + '_dirty') || '0', 10) || 0) + 1;
+    localStorage.setItem(rowId + '_dirty', String(v));
+    return v;
+  } catch { return 0; }
+}
+function clearBlobDirty(rowId, expectedVersion) {
+  try {
+    if (expectedVersion != null) {
+      const cur = parseInt(localStorage.getItem(rowId + '_dirty') || '0', 10) || 0;
+      if (cur !== expectedVersion) return false;
+    }
+    localStorage.removeItem(rowId + '_dirty');
+    return true;
+  } catch { return false; }
+}
 function isBlobDirty(rowId) { try { return !!localStorage.getItem(rowId + '_dirty'); } catch { return false; } }
+function getBlobDirtyVersion(rowId) { try { return parseInt(localStorage.getItem(rowId + '_dirty') || '0', 10) || 0; } catch { return 0; } }
 const GROCERY_CATEGORIES = [
   'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Pantry & Dry Goods',
   'Spices & Seasonings', 'Frozen', 'Household', 'Other'
@@ -912,22 +932,24 @@ async function syncGroceryStoresToSupabase(stores) {
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
+    const v = getBlobDirtyVersion('groceryStores_data');
     const { error } = await window.supabaseClient.from('meal_planner_data')
       .upsert({ id: 'groceryStores_data', user_id: session.user.id, data: { id: 'groceryStores_data', type: 'groceryStores', stores } }, { onConflict: 'id' });
     if (error) throw error;
-    clearBlobDirty('groceryStores_data');
-  } catch (e) { console.error('Sync grocery stores failed:', e); }
+    clearBlobDirty('groceryStores_data', v);
+  } catch (e) { console.error('Sync grocery stores failed:', e); throw e; }
 }
 async function syncFrequencyItemsToSupabase(items) {
   if (!window.supabaseClient) return;
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
+    const v = getBlobDirtyVersion('groceryFrequency_data');
     const { error } = await window.supabaseClient.from('meal_planner_data')
       .upsert({ id: 'groceryFrequency_data', user_id: session.user.id, data: { id: 'groceryFrequency_data', type: 'groceryFrequency', items } }, { onConflict: 'id' });
     if (error) throw error;
-    clearBlobDirty('groceryFrequency_data');
-  } catch (e) { console.error('Sync frequency items failed:', e); }
+    clearBlobDirty('groceryFrequency_data', v);
+  } catch (e) { console.error('Sync frequency items failed:', e); throw e; }
 }
 
 async function syncWeekPlanToSupabase(plan) {
@@ -937,13 +959,14 @@ async function syncWeekPlanToSupabase(plan) {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
     const id = 'weekPlan_' + plan.weekStart;
+    const v = getBlobDirtyVersion(id);
     const item = { id, type: 'weekPlan', weekStart: plan.weekStart, generatedAt: plan.generatedAt, days: plan.days || {} };
     const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id, user_id: session.user.id, data: item }, { onConflict: 'id' });
     if (error) throw error;
-    clearBlobDirty(id);
-  } catch (e) { console.error('Sync week plan failed:', e); }
+    clearBlobDirty(id, v);
+  } catch (e) { console.error('Sync week plan failed:', e); throw e; }
 }
 
 const SAVED_RECIPES_KEY = 'savedRecipes';
@@ -1051,36 +1074,39 @@ async function syncRecipeRatingsToSupabase(ratings) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('recipeRatings_data');
   const item = { id: 'recipeRatings_data', type: 'recipeRatings', ratings: ratings || {} };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync ratings failed:', error); throw error; }
-  clearBlobDirty('recipeRatings_data');
+  clearBlobDirty('recipeRatings_data', v);
 }
 
 async function syncRecipeCommentsToSupabase(comments) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('recipeComments_data');
   const item = { id: 'recipeComments_data', type: 'recipeComments', comments: comments || {} };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync comments failed:', error); throw error; }
-  clearBlobDirty('recipeComments_data');
+  clearBlobDirty('recipeComments_data', v);
 }
 
 async function syncAutoPlanToSupabase(plan) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('autoplan_data');
   const item = { id: 'autoplan_data', type: 'autoplan', plan: plan || null };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync autoplan failed:', error); throw error; }
-  clearBlobDirty('autoplan_data');
+  clearBlobDirty('autoplan_data', v);
 }
 
 // ============================================================
@@ -1151,24 +1177,26 @@ async function syncPlateNotesToSupabase(notes) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('plateNotes_data');
   const item = { id: 'plateNotes_data', type: 'plateNotes', notes: notes || {} };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync plate notes failed:', error); throw error; }
-  clearBlobDirty('plateNotes_data');
+  clearBlobDirty('plateNotes_data', v);
 }
 
 async function syncPlateCoversToSupabase(covers) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('plateCovers_data');
   const item = { id: 'plateCovers_data', type: 'plateCovers', covers: covers || {} };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync plate covers failed:', error); throw error; }
-  clearBlobDirty('plateCovers_data');
+  clearBlobDirty('plateCovers_data', v);
 }
 
 // ============================================================
@@ -1287,60 +1315,65 @@ async function syncCustomKitchenToSupabase(list) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('customKitchenIngredients_data');
   const item = { id: 'customKitchenIngredients_data', type: 'customKitchenIngredients', items: list || [] };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync custom kitchen failed:', error); throw error; }
-  clearBlobDirty('customKitchenIngredients_data');
+  clearBlobDirty('customKitchenIngredients_data', v);
 }
 
 async function syncHiddenKitchenToSupabase(list) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('hiddenKitchenIngredients_data');
   const item = { id: 'hiddenKitchenIngredients_data', type: 'hiddenKitchenIngredients', names: list || [] };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync hidden kitchen failed:', error); throw error; }
-  clearBlobDirty('hiddenKitchenIngredients_data');
+  clearBlobDirty('hiddenKitchenIngredients_data', v);
 }
 
 async function syncKitchenLinksToSupabase(linksByIngredient) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('kitchenRecipeLinks_data');
   const item = { id: 'kitchenRecipeLinks_data', type: 'kitchenRecipeLinks', links: linksByIngredient || {} };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync kitchen links failed:', error); throw error; }
-  clearBlobDirty('kitchenRecipeLinks_data');
+  clearBlobDirty('kitchenRecipeLinks_data', v);
 }
 
 async function syncKitchenTipsToSupabase(tipsByIngredient) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('kitchenCustomTips_data');
   const item = { id: 'kitchenCustomTips_data', type: 'kitchenCustomTips', tips: tipsByIngredient || {} };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync kitchen tips failed:', error); throw error; }
-  clearBlobDirty('kitchenCustomTips_data');
+  clearBlobDirty('kitchenCustomTips_data', v);
 }
 
 async function syncGroceryWeekTrackingToSupabase(tracking) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('groceryAddedThisWeek_data');
   const item = { id: 'groceryAddedThisWeek_data', type: 'groceryAddedThisWeek', tracking: tracking || null };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync grocery week tracking failed:', error); throw error; }
-  clearBlobDirty('groceryAddedThisWeek_data');
+  clearBlobDirty('groceryAddedThisWeek_data', v);
 }
 
 // ============================================================
@@ -2598,13 +2631,14 @@ async function syncSavedRecipesToSupabase(saved) {
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
+    const v = getBlobDirtyVersion('savedRecipes_list');
     const item = { id: 'savedRecipes_list', type: 'savedRecipes', recipeIds: saved };
     const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
     if (error) throw error;
-    clearBlobDirty('savedRecipes_list');
-  } catch (e) { console.error('Sync saved recipes failed:', e); }
+    clearBlobDirty('savedRecipes_list', v);
+  } catch (e) { console.error('Sync saved recipes failed:', e); throw e; }
 }
 function isRecipeSaved(recipeId) { return getSavedRecipes().includes(recipeId); }
 
@@ -2615,19 +2649,21 @@ async function syncFoodLogToSupabase(log) {
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
+    const v = getBlobDirtyVersion('foodLog_list');
     const item = { id: 'foodLog_list', type: 'foodLog', entries: log };
     const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
     if (error) throw error;
-    clearBlobDirty('foodLog_list');
-  } catch (e) { console.error('Sync food log failed:', e); }
+    clearBlobDirty('foodLog_list', v);
+  } catch (e) { console.error('Sync food log failed:', e); throw e; }
 }
 
 async function syncGroceryListToSupabase(list) {
   if (!window.supabaseClient) return;
   const { data: { session } } = await window.supabaseClient.auth.getSession();
   if (!session?.user) return;
+  const v = getBlobDirtyVersion('groceryList_list');
   const item = { id: 'groceryList_list', type: 'groceryList', entries: list };
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
@@ -2636,7 +2672,8 @@ async function syncGroceryListToSupabase(list) {
     console.error('Sync grocery list failed:', error);
     throw error;
   }
-  try { localStorage.removeItem(GROCERY_DIRTY_KEY); } catch {}
+  // Only clear dirty if no newer save happened mid-flight (version match).
+  clearBlobDirty('groceryList_list', v);
 }
 
 // Photos are stored as one big blob row. A blind upsert of `ingredientPhotos`
@@ -2714,6 +2751,7 @@ async function syncIngredientLibraryOverridesToSupabase() {
     type: 'ingredientLibraryOverrides',
     aliases, masterNames, custom, hidden
   };
+  const v = getBlobDirtyVersion('ingredientLibrary_overrides');
   const { error } = await window.supabaseClient
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
@@ -2721,7 +2759,7 @@ async function syncIngredientLibraryOverridesToSupabase() {
     console.error('Sync ingredient library overrides failed:', error);
     throw error;
   }
-  clearBlobDirty('ingredientLibrary_overrides');
+  clearBlobDirty('ingredientLibrary_overrides', v);
 }
 
 // Save+sync wrapper used by grocery.js _libSave* helpers. Sets the realtime
@@ -2746,13 +2784,14 @@ async function syncCustomImagestoSupabase() {
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
+    const v = getBlobDirtyVersion('customImages_data');
     const item = { id: 'customImages_data', type: 'customImages', images: customIngredientImages };
     const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
     if (error) throw error;
-    clearBlobDirty('customImages_data');
-  } catch (e) { console.error('Sync custom images failed:', e); }
+    clearBlobDirty('customImages_data', v);
+  } catch (e) { console.error('Sync custom images failed:', e); throw e; }
 }
 
 async function syncEffortLevelsToSupabase(levels) {
@@ -2760,13 +2799,14 @@ async function syncEffortLevelsToSupabase(levels) {
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
+    const v = getBlobDirtyVersion('effortLevels_data');
     const item = { id: 'effortLevels_data', type: 'effortLevels', levels: levels };
     const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
     if (error) throw error;
-    clearBlobDirty('effortLevels_data');
-  } catch (e) { console.error('Sync effort levels failed:', e); }
+    clearBlobDirty('effortLevels_data', v);
+  } catch (e) { console.error('Sync effort levels failed:', e); throw e; }
 }
 
 // Push every localStorage-only blob up to Supabase. Safe to run any time after
@@ -2833,11 +2873,35 @@ async function manualSyncRefresh() {
   try {
     state.ignoreRealtimeUntil = Date.now() + 8000;
     await pushLocalOnlyDataToSupabase();
+    // Also push any dirty blobs the periodic retry loop tracks. Keeps manual
+    // sync as the user's reliable escape hatch when something's stuck.
+    await _retryDirtyBlobs();
     state.ignoreRealtimeUntil = 0;
     await loadDataFromSupabase();
     loadIngredientPhotos();
     if (typeof render === 'function') render();
-    if (typeof showToast === 'function') showToast('Synced', 'success');
+    // Report accurate status: if anything remains dirty, the user needs to know
+    // their data isn't on Supabase yet (otherwise "Synced" is a lie).
+    const stillDirty = [];
+    for (const rowId of Object.keys(_DIRTY_BLOB_PUSHERS)) {
+      if (isBlobDirty(rowId)) stillDirty.push(rowId);
+    }
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.endsWith('_dirty')) continue;
+        const rowId = key.slice(0, -'_dirty'.length);
+        if (rowId.startsWith('weekPlan_')) stillDirty.push(rowId);
+      }
+    } catch {}
+    if (stillDirty.length > 0) {
+      console.warn('[manual sync] still dirty after push:', stillDirty);
+      if (typeof showToast === 'function') {
+        showToast(`Sync incomplete — ${stillDirty.length} item${stillDirty.length === 1 ? '' : 's'} pending. Will retry automatically.`, 'error');
+      }
+    } else {
+      if (typeof showToast === 'function') showToast('Synced', 'success');
+    }
   } catch (e) {
     console.error('[manual sync] failed:', e);
     if (typeof showToast === 'function') showToast('Sync failed — try again', 'error');
@@ -8132,22 +8196,136 @@ function _stopSyncPolling() {
   if (_syncPollTimer) { clearInterval(_syncPollTimer); _syncPollTimer = null; }
 }
 
+// Periodic retry of any blob whose dirty flag is still set. Without this, a
+// single sync failure (network blip, transient error, expired session) would
+// strand the local edit forever — applySupabaseData refuses to overwrite
+// dirty data, so the device stays out of sync until the user manually saves
+// again. The loop is the eventual-consistency safety net: every 30s while
+// visible, walk the known dirty blobs and try to push them again.
+const _DIRTY_BLOB_PUSHERS = {
+  'groceryList_list': () => syncGroceryListToSupabase(getSmartGroceryList()),
+  'foodLog_list': () => syncFoodLogToSupabase(getFoodLog()),
+  'savedRecipes_list': () => syncSavedRecipesToSupabase(getSavedRecipes()),
+  'effortLevels_data': () => syncEffortLevelsToSupabase(getRecipeEffortLevels()),
+  'groceryStores_data': () => syncGroceryStoresToSupabase(getGroceryStores()),
+  'groceryFrequency_data': () => syncFrequencyItemsToSupabase(getFrequencyItems()),
+  'recipeRatings_data': () => {
+    let r = {}; try { r = JSON.parse(localStorage.getItem(RATINGS_KEY) || '{}'); } catch {}
+    return syncRecipeRatingsToSupabase(r);
+  },
+  'recipeComments_data': () => {
+    let c = {}; try { c = JSON.parse(localStorage.getItem(COMMENTS_KEY) || '{}'); } catch {}
+    return syncRecipeCommentsToSupabase(c);
+  },
+  'plateNotes_data': () => syncPlateNotesToSupabase(getPlateNotes()),
+  'plateCovers_data': () => syncPlateCoversToSupabase(getPlateCovers()),
+  'customKitchenIngredients_data': () => syncCustomKitchenToSupabase(getCustomKitchenIngredientsList()),
+  'hiddenKitchenIngredients_data': () => syncHiddenKitchenToSupabase(getHiddenKitchenList()),
+  'kitchenRecipeLinks_data': () => syncKitchenLinksToSupabase(getAllKitchenRecipeLinks()),
+  'kitchenCustomTips_data': () => syncKitchenTipsToSupabase(getAllKitchenTips()),
+  'customImages_data': () => syncCustomImagestoSupabase(),
+  'autoplan_data': () => {
+    let p = null; try { p = JSON.parse(localStorage.getItem('yummy_autoplan') || 'null'); } catch {}
+    return syncAutoPlanToSupabase(p);
+  },
+  'ingredientLibrary_overrides': () => syncIngredientLibraryOverridesToSupabase(),
+  'groceryAddedThisWeek_data': () => {
+    let t = null; try { t = JSON.parse(localStorage.getItem('groceryAddedThisWeek_v1') || 'null'); } catch {}
+    return syncGroceryWeekTrackingToSupabase(t);
+  },
+};
+
+let _dirtyRetryTimer = null;
+let _dirtyRetryInFlight = false;
+const DIRTY_RETRY_INTERVAL_MS = 30000;
+
+async function _retryDirtyBlobs() {
+  if (_dirtyRetryInFlight) return;
+  if (document.visibilityState !== 'visible') return;
+  if (!window.supabaseClient) return;
+  let session;
+  try {
+    const r = await window.supabaseClient.auth.getSession();
+    session = r?.data?.session;
+  } catch { return; }
+  if (!session?.user) return;
+
+  _dirtyRetryInFlight = true;
+  try {
+    // Collect all dirty rows: known fixed-id blobs + any weekPlan_<weekStart>.
+    const dirtyKnown = Object.keys(_DIRTY_BLOB_PUSHERS).filter(rowId => isBlobDirty(rowId));
+    const dirtyWeekPlans = [];
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key || !key.endsWith('_dirty')) continue;
+        const rowId = key.slice(0, -'_dirty'.length);
+        if (rowId.startsWith('weekPlan_')) dirtyWeekPlans.push(rowId);
+      }
+    } catch {}
+
+    if (dirtyKnown.length === 0 && dirtyWeekPlans.length === 0) return;
+    debugLog('[dirty-retry] pushing', dirtyKnown.length + dirtyWeekPlans.length, 'blobs');
+
+    for (const rowId of dirtyKnown) {
+      try {
+        await _DIRTY_BLOB_PUSHERS[rowId]();
+      } catch (e) {
+        // Stays dirty; will retry next tick.
+        debugLog('[dirty-retry]', rowId, 'failed:', e?.message || e);
+      }
+    }
+    for (const rowId of dirtyWeekPlans) {
+      try {
+        const weekStart = rowId.slice('weekPlan_'.length);
+        const lsKey = weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + weekStart;
+        const plan = JSON.parse(localStorage.getItem(lsKey) || 'null');
+        if (plan && typeof syncWeekPlanToSupabase === 'function') {
+          await syncWeekPlanToSupabase(plan);
+        } else {
+          // No local plan but flag is set — abandon to avoid infinite retry.
+          clearBlobDirty(rowId);
+        }
+      } catch (e) {
+        debugLog('[dirty-retry]', rowId, 'failed:', e?.message || e);
+      }
+    }
+  } finally {
+    _dirtyRetryInFlight = false;
+  }
+}
+
+function _startDirtyRetryLoop() {
+  if (_dirtyRetryTimer) return;
+  _dirtyRetryTimer = setInterval(_retryDirtyBlobs, DIRTY_RETRY_INTERVAL_MS);
+  // Also fire one shortly after start so we don't wait the full 30s on boot.
+  setTimeout(_retryDirtyBlobs, 5000);
+}
+
+function _stopDirtyRetryLoop() {
+  if (_dirtyRetryTimer) { clearInterval(_dirtyRetryTimer); _dirtyRetryTimer = null; }
+}
+
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
     const wasHiddenFor = _hiddenAt ? Date.now() - _hiddenAt : 0;
     _hiddenAt = 0;
     revalidateFromSupabase('visibilitychange', wasHiddenFor > RESUBSCRIBE_AFTER_HIDDEN_MS);
     _startSyncPolling();
+    _startDirtyRetryLoop();
+    _retryDirtyBlobs();  // immediate attempt on focus
   } else {
     _hiddenAt = Date.now();
     _stopSyncPolling();
+    _stopDirtyRetryLoop();
   }
 });
-window.addEventListener('focus', () => revalidateFromSupabase('focus'));
-window.addEventListener('online', () => revalidateFromSupabase('online', true));
+window.addEventListener('focus', () => { revalidateFromSupabase('focus'); _retryDirtyBlobs(); });
+window.addEventListener('online', () => { revalidateFromSupabase('online', true); _retryDirtyBlobs(); });
 
 if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
   _startSyncPolling();
+  _startDirtyRetryLoop();
 }
 
 function showClearDataModal() {
