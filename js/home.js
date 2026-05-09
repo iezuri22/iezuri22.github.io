@@ -603,10 +603,6 @@ function computeWeekPlanPrepSummary(recipeId, dateStr, mealType) {
     bucket = 'in_progress';
   }
 
-  if (typeof console !== 'undefined') {
-    console.log('[weekPlanCard read]', { recipeId, dateStr, mealType, resolvedFrom, total, done, stepTotal, stepDone, bucket, prep_status: status });
-  }
-
   return {
     bucket,
     total, done,

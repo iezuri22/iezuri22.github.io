@@ -694,6 +694,18 @@ const DEFAULT_EXPIRATION_DAYS = {
 
 const GROCERY_KEY = 'smartGroceryList_v1';
 const GROCERY_DIRTY_KEY = 'smartGroceryList_v1_dirty';
+
+// Dirty-flag helpers for single-row Supabase blobs. Pattern: every save site
+// calls markBlobDirty(supabaseRowId) before/after writing localStorage; every
+// successful sync calls clearBlobDirty(supabaseRowId); applySupabaseData
+// checks isBlobDirty(supabaseRowId) before overwriting localStorage with the
+// remote copy. Without this, a slow upsert + reload race (or an offline edit
+// that never reached Supabase) would let the next pull silently clobber the
+// user's pending change. Stored under `<rowId>_dirty` localStorage keys so
+// the flag survives page reload and only clears after successful sync.
+function markBlobDirty(rowId) { try { localStorage.setItem(rowId + '_dirty', '1'); } catch {} }
+function clearBlobDirty(rowId) { try { localStorage.removeItem(rowId + '_dirty'); } catch {} }
+function isBlobDirty(rowId) { try { return !!localStorage.getItem(rowId + '_dirty'); } catch { return false; } }
 const GROCERY_CATEGORIES = [
   'Produce', 'Meat & Seafood', 'Dairy & Eggs', 'Pantry & Dry Goods',
   'Spices & Seasonings', 'Frozen', 'Household', 'Other'
@@ -759,6 +771,7 @@ function getGroceryStores() {
 }
 function saveGroceryStores(stores) {
   localStorage.setItem(GROCERY_STORES_KEY, JSON.stringify(stores));
+  markBlobDirty('groceryStores_data');
   syncGroceryStoresToSupabase(stores);
 }
 function addGroceryStore(name) {
@@ -792,6 +805,7 @@ function getFrequencyItems() {
 }
 function saveFrequencyItems(items) {
   localStorage.setItem(GROCERY_FREQUENCY_KEY, JSON.stringify(items));
+  markBlobDirty('groceryFrequency_data');
   syncFrequencyItemsToSupabase(items);
 }
 function addFrequencyItem(name, frequency, store, category) {
@@ -898,8 +912,10 @@ async function syncGroceryStoresToSupabase(stores) {
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
-    await window.supabaseClient.from('meal_planner_data')
+    const { error } = await window.supabaseClient.from('meal_planner_data')
       .upsert({ id: 'groceryStores_data', user_id: session.user.id, data: { id: 'groceryStores_data', type: 'groceryStores', stores } }, { onConflict: 'id' });
+    if (error) throw error;
+    clearBlobDirty('groceryStores_data');
   } catch (e) { console.error('Sync grocery stores failed:', e); }
 }
 async function syncFrequencyItemsToSupabase(items) {
@@ -907,8 +923,10 @@ async function syncFrequencyItemsToSupabase(items) {
   try {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
-    await window.supabaseClient.from('meal_planner_data')
+    const { error } = await window.supabaseClient.from('meal_planner_data')
       .upsert({ id: 'groceryFrequency_data', user_id: session.user.id, data: { id: 'groceryFrequency_data', type: 'groceryFrequency', items } }, { onConflict: 'id' });
+    if (error) throw error;
+    clearBlobDirty('groceryFrequency_data');
   } catch (e) { console.error('Sync frequency items failed:', e); }
 }
 
@@ -920,9 +938,11 @@ async function syncWeekPlanToSupabase(plan) {
     if (!session?.user) return;
     const id = 'weekPlan_' + plan.weekStart;
     const item = { id, type: 'weekPlan', weekStart: plan.weekStart, generatedAt: plan.generatedAt, days: plan.days || {} };
-    await window.supabaseClient
+    const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+    if (error) throw error;
+    clearBlobDirty(id);
   } catch (e) { console.error('Sync week plan failed:', e); }
 }
 
@@ -941,6 +961,7 @@ function setRecipeEffort(recipeId, level) {
   const levels = getRecipeEffortLevels();
   if (level && EFFORT_LEVELS[level]) { levels[recipeId] = level; } else { delete levels[recipeId]; }
   localStorage.setItem(EFFORT_LEVELS_KEY, JSON.stringify(levels));
+  markBlobDirty('effortLevels_data');
   syncEffortLevelsToSupabase(levels);
 }
 function renderEffortPill(level, size) {
@@ -983,6 +1004,7 @@ function saveRecipeRating(recipeId, stars) {
   const sum = dist.reduce((a, b, i) => a + b * (i + 1), 0);
   data.averageRating = total > 0 ? (sum / total).toFixed(1) : 0;
   localStorage.setItem(RATINGS_KEY, JSON.stringify(all));
+  markBlobDirty('recipeRatings_data');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncRecipeRatingsToSupabase(all).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -1013,6 +1035,7 @@ function addRecipeComment(recipeId, text, photoUrl) {
     likes: 0
   });
   localStorage.setItem(COMMENTS_KEY, JSON.stringify(all));
+  markBlobDirty('recipeComments_data');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncRecipeCommentsToSupabase(all).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -1033,6 +1056,7 @@ async function syncRecipeRatingsToSupabase(ratings) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync ratings failed:', error); throw error; }
+  clearBlobDirty('recipeRatings_data');
 }
 
 async function syncRecipeCommentsToSupabase(comments) {
@@ -1044,6 +1068,7 @@ async function syncRecipeCommentsToSupabase(comments) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync comments failed:', error); throw error; }
+  clearBlobDirty('recipeComments_data');
 }
 
 async function syncAutoPlanToSupabase(plan) {
@@ -1055,6 +1080,7 @@ async function syncAutoPlanToSupabase(plan) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync autoplan failed:', error); throw error; }
+  clearBlobDirty('autoplan_data');
 }
 
 // ============================================================
@@ -1071,6 +1097,7 @@ function getPlateNotes() {
 function _persistPlateNotes(notes) {
   try { localStorage.setItem(PLATE_NOTES_KEY, JSON.stringify(notes)); }
   catch (e) { console.error('[plateNotes] localStorage write failed:', e); }
+  markBlobDirty('plateNotes_data');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncPlateNotesToSupabase(notes).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -1096,6 +1123,7 @@ function getPlateCovers() {
 function _persistPlateCovers(covers) {
   try { localStorage.setItem(PLATE_COVERS_KEY, JSON.stringify(covers)); }
   catch (e) { console.error('[plateCovers] localStorage write failed:', e); }
+  markBlobDirty('plateCovers_data');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncPlateCoversToSupabase(covers).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -1128,6 +1156,7 @@ async function syncPlateNotesToSupabase(notes) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync plate notes failed:', error); throw error; }
+  clearBlobDirty('plateNotes_data');
 }
 
 async function syncPlateCoversToSupabase(covers) {
@@ -1139,6 +1168,7 @@ async function syncPlateCoversToSupabase(covers) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync plate covers failed:', error); throw error; }
+  clearBlobDirty('plateCovers_data');
 }
 
 // ============================================================
@@ -1159,6 +1189,7 @@ function getCustomKitchenIngredientsList() {
 function setCustomKitchenIngredientsList(list) {
   try { localStorage.setItem(CUSTOM_KITCHEN_KEY, JSON.stringify(list || [])); }
   catch (e) { console.error('[kitchen-custom] localStorage write failed:', e); }
+  markBlobDirty('customKitchenIngredients_data');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncCustomKitchenToSupabase(list).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -1175,6 +1206,7 @@ function getHiddenKitchenList() {
 function setHiddenKitchenList(list) {
   try { localStorage.setItem(HIDDEN_KITCHEN_KEY, JSON.stringify(list || [])); }
   catch (e) { console.error('[kitchen-hidden] localStorage write failed:', e); }
+  markBlobDirty('hiddenKitchenIngredients_data');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncHiddenKitchenToSupabase(list).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -1207,6 +1239,7 @@ function deleteKitchenLinksFor(ingredientName) {
 function _persistKitchenLinks(all) {
   try { localStorage.setItem(KITCHEN_LINKS_KEY, JSON.stringify(all)); }
   catch (e) { console.error('[kitchen-links] localStorage write failed:', e); }
+  markBlobDirty('kitchenRecipeLinks_data');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncKitchenLinksToSupabase(all).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -1239,6 +1272,7 @@ function deleteKitchenTipsFor(ingredientName) {
 function _persistKitchenTips(all) {
   try { localStorage.setItem(KITCHEN_TIPS_KEY, JSON.stringify(all)); }
   catch (e) { console.error('[kitchen-tips] localStorage write failed:', e); }
+  markBlobDirty('kitchenCustomTips_data');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncKitchenTipsToSupabase(all).then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -1258,6 +1292,7 @@ async function syncCustomKitchenToSupabase(list) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync custom kitchen failed:', error); throw error; }
+  clearBlobDirty('customKitchenIngredients_data');
 }
 
 async function syncHiddenKitchenToSupabase(list) {
@@ -1269,6 +1304,7 @@ async function syncHiddenKitchenToSupabase(list) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync hidden kitchen failed:', error); throw error; }
+  clearBlobDirty('hiddenKitchenIngredients_data');
 }
 
 async function syncKitchenLinksToSupabase(linksByIngredient) {
@@ -1280,6 +1316,7 @@ async function syncKitchenLinksToSupabase(linksByIngredient) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync kitchen links failed:', error); throw error; }
+  clearBlobDirty('kitchenRecipeLinks_data');
 }
 
 async function syncKitchenTipsToSupabase(tipsByIngredient) {
@@ -1291,6 +1328,7 @@ async function syncKitchenTipsToSupabase(tipsByIngredient) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync kitchen tips failed:', error); throw error; }
+  clearBlobDirty('kitchenCustomTips_data');
 }
 
 async function syncGroceryWeekTrackingToSupabase(tracking) {
@@ -1302,6 +1340,7 @@ async function syncGroceryWeekTrackingToSupabase(tracking) {
     .from('meal_planner_data')
     .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
   if (error) { console.error('Sync grocery week tracking failed:', error); throw error; }
+  clearBlobDirty('groceryAddedThisWeek_data');
 }
 
 // ============================================================
@@ -1967,15 +2006,6 @@ async function saveMealDay(dateStr) {
   if (dateStr && dateStr.startsWith('__')) {
     const day = state.mealDays[dateStr] || null;
     try { localStorage.setItem('orphanPrep_' + dateStr, JSON.stringify(day)); } catch {}
-    if (typeof console !== 'undefined') {
-      const meals = day && day.meals ? day.meals : {};
-      const snap = {};
-      for (const mt of ['breakfast', 'lunch', 'dinner']) {
-        const m = meals[mt];
-        if (m) snap[mt] = { plannedRecipeId: m.plannedRecipeId, prep_status: m.prep_status, prep_state: m.prep_state };
-      }
-      console.log('[saveMealDay:orphan]', dateStr, snap);
-    }
     if (window.supabaseClient && day) {
       try {
         const { data: { session } } = await window.supabaseClient.auth.getSession();
@@ -1998,14 +2028,6 @@ async function saveMealDay(dateStr) {
     date: dateStr,
     meals: day.meals
   };
-  if (typeof console !== 'undefined') {
-    const snap = {};
-    for (const mt of ['breakfast', 'lunch', 'dinner']) {
-      const m = day.meals[mt];
-      if (m) snap[mt] = { plannedRecipeId: m.plannedRecipeId, prep_status: m.prep_status, prep_state: m.prep_state };
-    }
-    console.log('[saveMealDay] row=' + record.id, snap);
-  }
   state.ignoreRealtimeUntil = Date.now() + 3000;
   const result = await storage.update(record);
   if (!result?.isOk) {
@@ -2062,6 +2084,7 @@ function loadCustomIngredientImages() {
 
 function saveCustomIngredientImages() {
   localStorage.setItem('custom_ingredient_images', JSON.stringify(customIngredientImages));
+  markBlobDirty('customImages_data');
   syncCustomImagestoSupabase();
 }
 
@@ -2565,6 +2588,7 @@ function toggleSaveRecipe(recipeId) {
   if (saved.includes(recipeId)) { saved = saved.filter(id => id !== recipeId); showToast('Removed from saved', 'success'); }
   else { saved.push(recipeId); showToast('Saved!', 'success'); }
   localStorage.setItem(SAVED_RECIPES_KEY, JSON.stringify(saved));
+  markBlobDirty('savedRecipes_list');
   syncSavedRecipesToSupabase(saved);
   if (typeof render === 'function') render();
 }
@@ -2575,9 +2599,11 @@ async function syncSavedRecipesToSupabase(saved) {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
     const item = { id: 'savedRecipes_list', type: 'savedRecipes', recipeIds: saved };
-    await window.supabaseClient
+    const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+    if (error) throw error;
+    clearBlobDirty('savedRecipes_list');
   } catch (e) { console.error('Sync saved recipes failed:', e); }
 }
 function isRecipeSaved(recipeId) { return getSavedRecipes().includes(recipeId); }
@@ -2590,9 +2616,11 @@ async function syncFoodLogToSupabase(log) {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
     const item = { id: 'foodLog_list', type: 'foodLog', entries: log };
-    await window.supabaseClient
+    const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+    if (error) throw error;
+    clearBlobDirty('foodLog_list');
   } catch (e) { console.error('Sync food log failed:', e); }
 }
 
@@ -2693,12 +2721,14 @@ async function syncIngredientLibraryOverridesToSupabase() {
     console.error('Sync ingredient library overrides failed:', error);
     throw error;
   }
+  clearBlobDirty('ingredientLibrary_overrides');
 }
 
 // Save+sync wrapper used by grocery.js _libSave* helpers. Sets the realtime
 // guard so an in-flight echo can't pull stale overrides over our write before
 // the upsert lands.
 function persistIngredientLibraryOverrides() {
+  markBlobDirty('ingredientLibrary_overrides');
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncIngredientLibraryOverridesToSupabase().then(() => {
     state.ignoreRealtimeUntil = Math.max(state.ignoreRealtimeUntil || 0, Date.now() + 3000);
@@ -2717,9 +2747,11 @@ async function syncCustomImagestoSupabase() {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
     const item = { id: 'customImages_data', type: 'customImages', images: customIngredientImages };
-    await window.supabaseClient
+    const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+    if (error) throw error;
+    clearBlobDirty('customImages_data');
   } catch (e) { console.error('Sync custom images failed:', e); }
 }
 
@@ -2729,9 +2761,11 @@ async function syncEffortLevelsToSupabase(levels) {
     const { data: { session } } = await window.supabaseClient.auth.getSession();
     if (!session?.user) return;
     const item = { id: 'effortLevels_data', type: 'effortLevels', levels: levels };
-    await window.supabaseClient
+    const { error } = await window.supabaseClient
       .from('meal_planner_data')
       .upsert({ id: item.id, user_id: session.user.id, data: item }, { onConflict: 'id' });
+    if (error) throw error;
+    clearBlobDirty('effortLevels_data');
   } catch (e) { console.error('Sync effort levels failed:', e); }
 }
 
@@ -2813,7 +2847,7 @@ async function manualSyncRefresh() {
 }
 
 function getFoodLog() { try { return JSON.parse(localStorage.getItem(FOOD_LOG_KEY) || '[]'); } catch { return []; } }
-function saveFoodLog(log) { localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(log)); syncFoodLogToSupabase(log); }
+function saveFoodLog(log) { localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(log)); markBlobDirty('foodLog_list'); syncFoodLogToSupabase(log); }
 
 function addFoodLogEntry(entry) {
   const log = getFoodLog();
@@ -7731,6 +7765,8 @@ function applySupabaseData(data) {
   const weekPlanRows = data.filter(d => d.id && d.id.startsWith('weekPlan_'));
   for (const row of weekPlanRows) {
     if (!row.weekStart || !row.days) continue;
+    // Skip when this specific week's plan is dirty locally (unsynced edit).
+    if (isBlobDirty('weekPlan_' + row.weekStart)) continue;
     const key = row.weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + row.weekStart;
     localStorage.setItem(key, JSON.stringify({
       weekStart: row.weekStart,
@@ -7738,7 +7774,6 @@ function applySupabaseData(data) {
       days: row.days
     }));
   }
-  state.planData = [];
 
   state.mealSelections = data.filter(d => d.id && d.id.startsWith('mealSel_'));
   state.groceryItems = data.filter(d => d.ingredientKey);
@@ -7772,15 +7807,19 @@ function applySupabaseData(data) {
   }
 
   // Load saved recipe IDs from Supabase
-  const savedRecipesRow = data.find(d => d.id === 'savedRecipes_list');
-  if (savedRecipesRow && Array.isArray(savedRecipesRow.recipeIds)) {
-    localStorage.setItem(SAVED_RECIPES_KEY, JSON.stringify(savedRecipesRow.recipeIds));
+  if (!isBlobDirty('savedRecipes_list')) {
+    const savedRecipesRow = data.find(d => d.id === 'savedRecipes_list');
+    if (savedRecipesRow && Array.isArray(savedRecipesRow.recipeIds)) {
+      localStorage.setItem(SAVED_RECIPES_KEY, JSON.stringify(savedRecipesRow.recipeIds));
+    }
   }
 
   // Load food log from Supabase
-  const foodLogRow = data.find(d => d.id === 'foodLog_list');
-  if (foodLogRow && Array.isArray(foodLogRow.entries)) {
-    localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(foodLogRow.entries));
+  if (!isBlobDirty('foodLog_list')) {
+    const foodLogRow = data.find(d => d.id === 'foodLog_list');
+    if (foodLogRow && Array.isArray(foodLogRow.entries)) {
+      localStorage.setItem(FOOD_LOG_KEY, JSON.stringify(foodLogRow.entries));
+    }
   }
 
   // Load grocery list from Supabase. Skip when local has pending unsynced
@@ -7808,110 +7847,139 @@ function applySupabaseData(data) {
 
   // Load ingredient-library overrides (rename/merge/custom/hidden) from
   // Supabase. Remote is authoritative once it exists — the four blobs were
-  // written together, so we don't need a per-key merge. Only restore from
-  // remote if the row exists; otherwise leave localStorage as-is so a brand-
-  // new fetch doesn't wipe pre-sync state.
-  const libOverridesRow = data.find(d => d.id === 'ingredientLibrary_overrides');
-  if (libOverridesRow) {
-    try {
-      if (libOverridesRow.aliases && typeof libOverridesRow.aliases === 'object') {
-        localStorage.setItem('ingredientLibraryAliases_v1', JSON.stringify(libOverridesRow.aliases));
-      }
-      if (libOverridesRow.masterNames && typeof libOverridesRow.masterNames === 'object') {
-        localStorage.setItem('ingredientLibraryMasterNames_v1', JSON.stringify(libOverridesRow.masterNames));
-      }
-      if (Array.isArray(libOverridesRow.custom)) {
-        localStorage.setItem('ingredientLibraryCustom_v1', JSON.stringify(libOverridesRow.custom));
-      }
-      if (Array.isArray(libOverridesRow.hidden)) {
-        localStorage.setItem('ingredientLibraryHidden_v1', JSON.stringify(libOverridesRow.hidden));
-      }
-    } catch (e) { console.error('[libOverrides] load failed:', e); }
+  // written together, so we don't need a per-key merge. Skip when local has
+  // pending unsynced edits (dirty flag).
+  if (!isBlobDirty('ingredientLibrary_overrides')) {
+    const libOverridesRow = data.find(d => d.id === 'ingredientLibrary_overrides');
+    if (libOverridesRow) {
+      try {
+        if (libOverridesRow.aliases && typeof libOverridesRow.aliases === 'object') {
+          localStorage.setItem('ingredientLibraryAliases_v1', JSON.stringify(libOverridesRow.aliases));
+        }
+        if (libOverridesRow.masterNames && typeof libOverridesRow.masterNames === 'object') {
+          localStorage.setItem('ingredientLibraryMasterNames_v1', JSON.stringify(libOverridesRow.masterNames));
+        }
+        if (Array.isArray(libOverridesRow.custom)) {
+          localStorage.setItem('ingredientLibraryCustom_v1', JSON.stringify(libOverridesRow.custom));
+        }
+        if (Array.isArray(libOverridesRow.hidden)) {
+          localStorage.setItem('ingredientLibraryHidden_v1', JSON.stringify(libOverridesRow.hidden));
+        }
+      } catch (e) { console.error('[libOverrides] load failed:', e); }
+    }
   }
 
   // Load custom ingredient images from Supabase
-  const customImagesRow = data.find(d => d.id === 'customImages_data');
-  if (customImagesRow && customImagesRow.images && typeof customImagesRow.images === 'object') {
-    customIngredientImages = customImagesRow.images;
-    localStorage.setItem('custom_ingredient_images', JSON.stringify(customIngredientImages));
+  if (!isBlobDirty('customImages_data')) {
+    const customImagesRow = data.find(d => d.id === 'customImages_data');
+    if (customImagesRow && customImagesRow.images && typeof customImagesRow.images === 'object') {
+      customIngredientImages = customImagesRow.images;
+      localStorage.setItem('custom_ingredient_images', JSON.stringify(customIngredientImages));
+    }
   }
 
   // Load recipe effort levels from Supabase
-  const effortLevelsRow = data.find(d => d.id === 'effortLevels_data');
-  if (effortLevelsRow && effortLevelsRow.levels && typeof effortLevelsRow.levels === 'object') {
-    localStorage.setItem(EFFORT_LEVELS_KEY, JSON.stringify(effortLevelsRow.levels));
+  if (!isBlobDirty('effortLevels_data')) {
+    const effortLevelsRow = data.find(d => d.id === 'effortLevels_data');
+    if (effortLevelsRow && effortLevelsRow.levels && typeof effortLevelsRow.levels === 'object') {
+      localStorage.setItem(EFFORT_LEVELS_KEY, JSON.stringify(effortLevelsRow.levels));
+    }
   }
 
   // Load grocery stores from Supabase
-  const groceryStoresRow = data.find(d => d.id === 'groceryStores_data');
-  if (groceryStoresRow && Array.isArray(groceryStoresRow.stores)) {
-    localStorage.setItem(GROCERY_STORES_KEY, JSON.stringify(groceryStoresRow.stores));
+  if (!isBlobDirty('groceryStores_data')) {
+    const groceryStoresRow = data.find(d => d.id === 'groceryStores_data');
+    if (groceryStoresRow && Array.isArray(groceryStoresRow.stores)) {
+      localStorage.setItem(GROCERY_STORES_KEY, JSON.stringify(groceryStoresRow.stores));
+    }
   }
 
   // Load frequency items from Supabase
-  const groceryFreqRow = data.find(d => d.id === 'groceryFrequency_data');
-  if (groceryFreqRow && Array.isArray(groceryFreqRow.items)) {
-    localStorage.setItem(GROCERY_FREQUENCY_KEY, JSON.stringify(groceryFreqRow.items));
+  if (!isBlobDirty('groceryFrequency_data')) {
+    const groceryFreqRow = data.find(d => d.id === 'groceryFrequency_data');
+    if (groceryFreqRow && Array.isArray(groceryFreqRow.items)) {
+      localStorage.setItem(GROCERY_FREQUENCY_KEY, JSON.stringify(groceryFreqRow.items));
+    }
   }
 
   // Load recipe ratings from Supabase
-  const ratingsRow = data.find(d => d.id === 'recipeRatings_data');
-  if (ratingsRow && ratingsRow.ratings && typeof ratingsRow.ratings === 'object') {
-    localStorage.setItem(RATINGS_KEY, JSON.stringify(ratingsRow.ratings));
+  if (!isBlobDirty('recipeRatings_data')) {
+    const ratingsRow = data.find(d => d.id === 'recipeRatings_data');
+    if (ratingsRow && ratingsRow.ratings && typeof ratingsRow.ratings === 'object') {
+      localStorage.setItem(RATINGS_KEY, JSON.stringify(ratingsRow.ratings));
+    }
   }
 
   // Load recipe comments from Supabase
-  const commentsRow = data.find(d => d.id === 'recipeComments_data');
-  if (commentsRow && commentsRow.comments && typeof commentsRow.comments === 'object') {
-    localStorage.setItem(COMMENTS_KEY, JSON.stringify(commentsRow.comments));
+  if (!isBlobDirty('recipeComments_data')) {
+    const commentsRow = data.find(d => d.id === 'recipeComments_data');
+    if (commentsRow && commentsRow.comments && typeof commentsRow.comments === 'object') {
+      localStorage.setItem(COMMENTS_KEY, JSON.stringify(commentsRow.comments));
+    }
   }
 
   // Load auto-plan from Supabase
-  const autoplanRow = data.find(d => d.id === 'autoplan_data');
-  if (autoplanRow && autoplanRow.plan) {
-    localStorage.setItem('yummy_autoplan', JSON.stringify(autoplanRow.plan));
+  if (!isBlobDirty('autoplan_data')) {
+    const autoplanRow = data.find(d => d.id === 'autoplan_data');
+    if (autoplanRow && autoplanRow.plan) {
+      localStorage.setItem('yummy_autoplan', JSON.stringify(autoplanRow.plan));
+    }
   }
 
   // Load plate notes from Supabase
-  const plateNotesRow = data.find(d => d.id === 'plateNotes_data');
-  if (plateNotesRow && plateNotesRow.notes && typeof plateNotesRow.notes === 'object') {
-    localStorage.setItem(PLATE_NOTES_KEY, JSON.stringify(plateNotesRow.notes));
+  if (!isBlobDirty('plateNotes_data')) {
+    const plateNotesRow = data.find(d => d.id === 'plateNotes_data');
+    if (plateNotesRow && plateNotesRow.notes && typeof plateNotesRow.notes === 'object') {
+      localStorage.setItem(PLATE_NOTES_KEY, JSON.stringify(plateNotesRow.notes));
+    }
   }
 
   // Load plate covers from Supabase
-  const plateCoversRow = data.find(d => d.id === 'plateCovers_data');
-  if (plateCoversRow && plateCoversRow.covers && typeof plateCoversRow.covers === 'object') {
-    localStorage.setItem(PLATE_COVERS_KEY, JSON.stringify(plateCoversRow.covers));
+  if (!isBlobDirty('plateCovers_data')) {
+    const plateCoversRow = data.find(d => d.id === 'plateCovers_data');
+    if (plateCoversRow && plateCoversRow.covers && typeof plateCoversRow.covers === 'object') {
+      localStorage.setItem(PLATE_COVERS_KEY, JSON.stringify(plateCoversRow.covers));
+    }
   }
 
   // Load custom kitchen ingredients from Supabase
-  const customKitchenRow = data.find(d => d.id === 'customKitchenIngredients_data');
-  if (customKitchenRow && Array.isArray(customKitchenRow.items)) {
-    localStorage.setItem(CUSTOM_KITCHEN_KEY, JSON.stringify(customKitchenRow.items));
+  if (!isBlobDirty('customKitchenIngredients_data')) {
+    const customKitchenRow = data.find(d => d.id === 'customKitchenIngredients_data');
+    if (customKitchenRow && Array.isArray(customKitchenRow.items)) {
+      localStorage.setItem(CUSTOM_KITCHEN_KEY, JSON.stringify(customKitchenRow.items));
+    }
   }
 
   // Load hidden kitchen ingredients from Supabase
-  const hiddenKitchenRow = data.find(d => d.id === 'hiddenKitchenIngredients_data');
-  if (hiddenKitchenRow && Array.isArray(hiddenKitchenRow.names)) {
-    localStorage.setItem(HIDDEN_KITCHEN_KEY, JSON.stringify(hiddenKitchenRow.names));
+  if (!isBlobDirty('hiddenKitchenIngredients_data')) {
+    const hiddenKitchenRow = data.find(d => d.id === 'hiddenKitchenIngredients_data');
+    if (hiddenKitchenRow && Array.isArray(hiddenKitchenRow.names)) {
+      localStorage.setItem(HIDDEN_KITCHEN_KEY, JSON.stringify(hiddenKitchenRow.names));
+    }
   }
 
   // Load kitchen recipe links from Supabase
-  const kitchenLinksRow = data.find(d => d.id === 'kitchenRecipeLinks_data');
-  if (kitchenLinksRow && kitchenLinksRow.links && typeof kitchenLinksRow.links === 'object') {
-    localStorage.setItem(KITCHEN_LINKS_KEY, JSON.stringify(kitchenLinksRow.links));
+  if (!isBlobDirty('kitchenRecipeLinks_data')) {
+    const kitchenLinksRow = data.find(d => d.id === 'kitchenRecipeLinks_data');
+    if (kitchenLinksRow && kitchenLinksRow.links && typeof kitchenLinksRow.links === 'object') {
+      localStorage.setItem(KITCHEN_LINKS_KEY, JSON.stringify(kitchenLinksRow.links));
+    }
   }
 
   // Load kitchen custom tips from Supabase
-  const kitchenTipsRow = data.find(d => d.id === 'kitchenCustomTips_data');
-  if (kitchenTipsRow && kitchenTipsRow.tips && typeof kitchenTipsRow.tips === 'object') {
-    localStorage.setItem(KITCHEN_TIPS_KEY, JSON.stringify(kitchenTipsRow.tips));
+  if (!isBlobDirty('kitchenCustomTips_data')) {
+    const kitchenTipsRow = data.find(d => d.id === 'kitchenCustomTips_data');
+    if (kitchenTipsRow && kitchenTipsRow.tips && typeof kitchenTipsRow.tips === 'object') {
+      localStorage.setItem(KITCHEN_TIPS_KEY, JSON.stringify(kitchenTipsRow.tips));
+    }
   }
 
   // Load grocery week-added tracking from Supabase
-  const groceryWeekRow = data.find(d => d.id === 'groceryAddedThisWeek_data');
-  if (groceryWeekRow && groceryWeekRow.tracking) {
-    localStorage.setItem('groceryAddedThisWeek_v1', JSON.stringify(groceryWeekRow.tracking));
+  if (!isBlobDirty('groceryAddedThisWeek_data')) {
+    const groceryWeekRow = data.find(d => d.id === 'groceryAddedThisWeek_data');
+    if (groceryWeekRow && groceryWeekRow.tracking) {
+      localStorage.setItem('groceryAddedThisWeek_v1', JSON.stringify(groceryWeekRow.tracking));
+    }
   }
 
   // Load mealDays (last 90 days)
@@ -7970,7 +8038,11 @@ function _scheduleGroceryRender(delayMs) {
   clearTimeout(_groceryRenderTimer);
   clearTimeout(_realtimeDebounceTimer);
   _groceryRenderTimer = setTimeout(() => {
-    if (['grocery-list'].includes(state.currentView) && typeof render === 'function') {
+    // Render any grocery sub-view (list / ingredients / library / select-meals)
+    // — toggling an item from grocery-ingredients used to be invisible because
+    // the gate only allowed grocery-list through.
+    const groceryViews = ['grocery-list', 'grocery-ingredients', 'grocery-library', 'grocery-select-meals'];
+    if (groceryViews.includes(state.currentView) && typeof render === 'function') {
       const scrollEl = document.getElementById('app');
       const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
       render();

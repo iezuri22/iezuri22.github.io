@@ -151,6 +151,7 @@ function getAutoPlan() {
 function saveAutoPlan(plan) {
   try { localStorage.setItem('yummy_autoplan', JSON.stringify(plan)); }
   catch (e) { console.error('[autoplan] localStorage write failed:', e); }
+  if (typeof markBlobDirty === 'function') markBlobDirty('autoplan_data');
   if (typeof syncAutoPlanToSupabase !== 'function') return;
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncAutoPlanToSupabase(plan).then(() => {
@@ -1631,6 +1632,7 @@ function saveWeekPlanPersist(plan) {
   if (!plan?.weekStart) return;
   const key = plan.weekStart === state.currentWeekStartDate ? 'yummy_weekplan' : 'yummy_weekplan_' + plan.weekStart;
   localStorage.setItem(key, JSON.stringify(plan));
+  if (typeof markBlobDirty === 'function') markBlobDirty('weekPlan_' + plan.weekStart);
   if (typeof syncWeekPlanToSupabase === 'function') syncWeekPlanToSupabase(plan);
 }
 

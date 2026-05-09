@@ -1039,6 +1039,11 @@ async function toggleMealIngredient(ingredientKey) {
         sel = newSel;
       }
 
+      // Persist mealSelections to localStorage RIGHT AWAY so a page navigation
+      // within the 500ms debounce below doesn't lose the new selection. The
+      // Supabase upsert stays debounced to batch rapid toggles into one write.
+      saveToLS('mealSelections', state.mealSelections);
+
       // Block real-time updates
       state.ignoreRealtimeUntil = Date.now() + 5000;
 
@@ -1255,9 +1260,11 @@ function toggleGroceryItem(ingredientKey) {
       state.ignoreRealtimeUntil = Date.now() + 3000;
 
       // Debounced full render (to move items between checked/unchecked sections)
+      // — covers all grocery sub-views.
       clearTimeout(state._groceryRenderTimeout);
       state._groceryRenderTimeout = setTimeout(() => {
-        if (state.currentView === 'grocery-list') {
+        const groceryViews = ['grocery-list', 'grocery-ingredients', 'grocery-library', 'grocery-select-meals'];
+        if (groceryViews.includes(state.currentView)) {
           const scrollEl = document.getElementById('app');
           const scrollPos = scrollEl ? scrollEl.scrollTop : window.scrollY;
           render();
@@ -1333,10 +1340,11 @@ async function removeFromGroceryList(ingredientKey) {
       _updateGroceryStats();
       showToast('Ingredient removed from grocery list', 'success');
 
-      // Debounced full render to fix layout
+      // Debounced full render to fix layout — covers all grocery sub-views.
       clearTimeout(state._groceryRenderTimeout);
       state._groceryRenderTimeout = setTimeout(() => {
-        if (state.currentView === 'grocery-list') render();
+        const groceryViews = ['grocery-list', 'grocery-ingredients', 'grocery-library', 'grocery-select-meals'];
+        if (groceryViews.includes(state.currentView)) render();
       }, 800);
 
       // Save to database in background
@@ -2130,6 +2138,7 @@ function getWeekAddedTracking() {
 function _saveWeekAddedTracking(tracking) {
   try { localStorage.setItem(GROCERY_WEEK_TRACKING_KEY, JSON.stringify(tracking)); }
   catch (e) { console.error('[groceryWeekTracking] localStorage write failed:', e); }
+  if (typeof markBlobDirty === 'function') markBlobDirty('groceryAddedThisWeek_data');
   if (typeof syncGroceryWeekTrackingToSupabase !== 'function') return;
   state.ignoreRealtimeUntil = Date.now() + 10000;
   syncGroceryWeekTrackingToSupabase(tracking).then(() => {
